@@ -13,6 +13,7 @@ import {
   Mail,
   Moon,
   PackageCheck,
+  ClipboardCopy,
   Play,
   RefreshCw,
   Repeat,
@@ -73,6 +74,7 @@ function App() {
   const [today, setToday] = useState(() => getBangkokParts());
   const [summary, setSummary] = useState(() => COURIERS.map((courier) => ({ courier, count: 0 })));
   const [recentRows, setRecentRows] = useState([]);
+  const [showAllRecentRows, setShowAllRecentRows] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [theme, setTheme] = useState(() => localStorage.getItem(THEME_KEY) || 'light');
   const [scanMethod, setScanMethod] = useState('manual');
@@ -106,6 +108,7 @@ function App() {
     () => summary.find((item) => item.courier === selectedCourier)?.count ?? 0,
     [selectedCourier, summary],
   );
+  const displayedRecentRows = showAllRecentRows ? recentRows : recentRows.slice(0, 3);
   const sheetUrl = config?.sheets?.[selectedCourier]?.webViewLink;
 
   useEffect(() => {
@@ -181,6 +184,10 @@ function App() {
 
     refreshSelectedCourierRows();
   }, [selectedCourier, today.date, isSignedIn]);
+
+  useEffect(() => {
+    setShowAllRecentRows(false);
+  }, [selectedCourier, today.date]);
 
   function playTone(type) {
     if (!soundEnabled) {
@@ -656,6 +663,60 @@ function App() {
     return reportMonth;
   }
 
+  function buildReportText(data = reportData) {
+    if (!data) {
+      return '';
+    }
+
+    const generatedAt = getBangkokParts();
+    const modeLabel = data.mode === 'daily' ? 'รายวัน' : data.mode === 'range' ? 'ช่วงวันที่' : 'รายเดือน';
+    const lines = [
+      `รายงานสแกนพัสดุ (${modeLabel})`,
+      `ช่วงรายงาน: ${data.label}`,
+      `ยอดรวมทั้งหมด: ${data.total} รายการ`,
+      '',
+      'ยอดแยกตามขนส่ง',
+      ...COURIERS.map((courier) => {
+        const count = data.couriers?.find((item) => item.courier === courier)?.count ?? 0;
+        return `${courier}: ${count} รายการ`;
+      }),
+    ];
+
+    if (data.days?.length > 1) {
+      lines.push('', 'สรุปตามวันที่');
+      data.days.forEach((day) => {
+        lines.push(`${day.date}: ${day.total} รายการ`);
+      });
+    }
+
+    lines.push('', `สร้างจากระบบ Scan to Sheet เวลา ${generatedAt.date} ${generatedAt.time}`);
+    return lines.join('\n');
+  }
+
+  async function copyReport() {
+    if (!reportData) {
+      return;
+    }
+
+    const text = buildReportText(reportData);
+    try {
+      await navigator.clipboard.writeText(text);
+      setStatus({
+        type: 'success',
+        title: 'คัดลอกรายงานแล้ว',
+        message: 'นำไปวางใน Gmail, LINE หรือช่องทางที่ต้องการได้เลย',
+      });
+      playTone('success');
+    } catch {
+      setStatus({
+        type: 'error',
+        title: 'คัดลอกไม่สำเร็จ',
+        message: 'เบราว์เซอร์ไม่อนุญาตให้เข้าถึง Clipboard ลองกดคัดลอกใหม่อีกครั้ง',
+      });
+      playTone('error');
+    }
+  }
+
   return (
     <main className="app-shell">
       <section className="topbar">
@@ -957,11 +1018,18 @@ function App() {
 
           <div className="recent-header">
             <h3>รายการล่าสุด</h3>
-            {sheetUrl && (
-              <a href={sheetUrl} target="_blank" rel="noreferrer">
-                เปิด Sheet <ExternalLink size={14} />
-              </a>
-            )}
+            <div className="recent-actions">
+              {recentRows.length > 3 && (
+                <button className="text-button" type="button" onClick={() => setShowAllRecentRows((value) => !value)}>
+                  {showAllRecentRows ? 'ย่อกลับ' : `ดูเพิ่มเติม (${recentRows.length})`}
+                </button>
+              )}
+              {sheetUrl && (
+                <a href={sheetUrl} target="_blank" rel="noreferrer">
+                  เปิด Sheet <ExternalLink size={14} />
+                </a>
+              )}
+            </div>
           </div>
 
           <div className="table-wrap">
@@ -983,7 +1051,7 @@ function App() {
                     </td>
                   </tr>
                 ) : (
-                  recentRows.slice(0, 12).map((row) => (
+                  displayedRecentRows.map((row) => (
                     <tr key={`${row.no}-${row.code}-${row.time}`}>
                       <td>{row.no}</td>
                       <td>{row.time}</td>
@@ -1054,6 +1122,11 @@ function App() {
           <button className="secondary-button report-button" type="button" onClick={generateReport} disabled={!isSignedIn || reportBusy}>
             {reportBusy ? <RefreshCw size={16} className="spin" /> : <CalendarDays size={16} />}
             <span>สร้างรายงาน</span>
+          </button>
+
+          <button className="ghost-button report-button" type="button" onClick={copyReport} disabled={!reportData}>
+            <ClipboardCopy size={16} />
+            <span>คัดลอกรายงาน</span>
           </button>
         </div>
 
