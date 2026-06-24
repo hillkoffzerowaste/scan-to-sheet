@@ -54,10 +54,43 @@ const EMPTY_USER = {
   name: '',
 };
 const THEME_KEY = 'scan-to-sheet-theme';
+const GOOGLE_SESSION_KEY = 'scan-to-sheet-google-session-v1';
 const CAMERA_REGION_ID = 'camera-reader';
 const CAMERA_COOLDOWN_MS = 2500;
 const ISSUE_CUSTOMER_CANCELLED = 'ลูกค้ายกเลิก';
-const PACKERS = ['กิต', 'มาย', 'ยุทธ', 'หล้า', 'มุก'];
+const PACKER_UNASSIGNED = 'ยังไม่ระบุ';
+const PACKERS = [PACKER_UNASSIGNED, 'กิต', 'มาย', 'ยุทธ', 'หล้า', 'มุก'];
+
+function loadStoredGoogleSession() {
+  try {
+    return JSON.parse(localStorage.getItem(GOOGLE_SESSION_KEY)) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function saveStoredGoogleSession(session) {
+  localStorage.setItem(GOOGLE_SESSION_KEY, JSON.stringify(session));
+}
+
+function clearStoredGoogleSession() {
+  localStorage.removeItem(GOOGLE_SESSION_KEY);
+}
+
+async function apiJson(url, options = {}) {
+  const response = await fetch(url, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(options.headers ?? {}),
+    },
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || `API error ${response.status}`);
+  }
+  return data;
+}
 
 function App() {
   const [token, setToken] = useState(null);
@@ -65,7 +98,7 @@ function App() {
   const [config, setConfig] = useState(() => loadGoogleConfig());
   const [selectedCourier, setSelectedCourier] = useState(COURIERS[0]);
   const [scanValue, setScanValue] = useState('');
-  const [selectedPacker, setSelectedPacker] = useState(PACKERS[0]);
+  const [selectedPacker, setSelectedPacker] = useState(PACKER_UNASSIGNED);
   const [scanRemark, setScanRemark] = useState('');
   const [status, setStatus] = useState(() => ({
     type: GOOGLE_CLIENT_ID ? 'idle' : 'warning',
@@ -128,16 +161,17 @@ function App() {
   }, [theme]);
 
   useEffect(() => {
-    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
-    const accessToken = hash.get('access_token');
-    const error = hash.get('error');
-    const errorDescription = hash.get('error_description');
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code');
+    const error = params.get('error');
+    const errorDescription = params.get('error_description');
 
-    if (!accessToken && !error) {
+    if (!code && !error) {
+      restoreGoogleSession();
       return;
     }
 
-    window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
+    window.history.replaceState(null, '', window.location.pathname);
 
     if (error) {
       setStatus({
@@ -149,7 +183,7 @@ function App() {
       return;
     }
 
-    completeGoogleSignIn(accessToken);
+    completeGoogleSignIn(code);
   }, []);
 
   useEffect(() => {
@@ -242,9 +276,10 @@ function App() {
     const params = new URLSearchParams({
       client_id: GOOGLE_CLIENT_ID,
       redirect_uri: redirectUri,
-      response_type: 'token',
+      response_type: 'code',
       scope: SCOPES,
       include_granted_scopes: 'true',
+      access_type: 'offline',
       prompt: 'consent',
     });
 
@@ -252,22 +287,19 @@ function App() {
     window.location.assign(`https://accounts.google.com/o/oauth2/v2/auth?${params}`);
   }
 
-  async function completeGoogleSignIn(accessToken) {
+  async function completeGoogleSignIn(code) {
     try {
       setBusy(true);
-      setToken(accessToken);
-      const profile = await fetchGoogleProfile(accessToken);
-      const prepared = await prepareGoogleSheets(accessToken);
-      setUser({
-        email: profile.email ?? 'google-user',
-        name: profile.name ?? 'Google User',
+      const redirectUri = `${window.location.origin}${window.location.pathname}`;
+      const data = await apiJson('/api/google-auth', {
+        method: 'POST',
+        body: JSON.stringify({ code, redirectUri }),
       });
-      setConfig(prepared);
-      await refreshAllCounts(accessToken, prepared);
+      await activateGoogleSession(data);
       setStatus({
         type: 'success',
         title: 'เชื่อม Google Sheet แล้ว',
-        message: 'ระบบเตรียมโฟลเดอร์และไฟล์ขนส่งทั้ง 8 รายการเรียบร้อย',
+        message: 'ระบบเตรียม Google Sheet Master เรียบร้อย',
       });
     } catch (error) {
       setStatus({
@@ -280,7 +312,77 @@ function App() {
     }
   }
 
-  function signOut() {
+  async function restoreGoogleSession() {
+    const stored = loadStoredGoogleSession();
+    if (stored?.accessToken && stored.expiresAt > Date.now() + 60_000) {
+      try {
+        setBusy(true);
+        setToken(stored.accessToken);
+        setUser(stored.user ?? EMPTY_USER);
+        const prepared = stored.config ?? (await prepareGoogleSheets(stored.accessToken));
+        setConfig(prepared);
+        saveStoredGoogleSession({ ...stored, config: prepared });
+        await refreshAllCounts(stored.accessToken, prepared);
+        setStatus({
+          type: 'success',
+          title: 'กลับมาใช้งานต่อได้',
+          message: 'ใช้ session เดิมจาก browser',
+        });
+        return;
+      } catch {
+        clearStoredGoogleSession();
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    await refreshGoogleSessionFromServer();
+  }
+
+  async function refreshGoogleSessionFromServer() {
+    try {
+      setBusy(true);
+      const data = await apiJson('/api/google-token');
+      await activateGoogleSession(data);
+      setStatus({
+        type: 'success',
+        title: 'ต่ออายุ Login แล้ว',
+        message: 'ดึง session จาก Vercel KV สำเร็จ',
+      });
+    } catch {
+      clearStoredGoogleSession();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function activateGoogleSession(data) {
+    const accessToken = data.accessToken;
+    const profile = data.profile ?? (await fetchGoogleProfile(accessToken));
+    const prepared = await prepareGoogleSheets(accessToken);
+    const nextUser = {
+      email: profile.email ?? 'google-user',
+      name: profile.name ?? 'Google User',
+    };
+    setToken(accessToken);
+    setUser(nextUser);
+    setConfig(prepared);
+    saveStoredGoogleSession({
+      accessToken,
+      expiresAt: Date.now() + Math.max((data.expiresIn ?? 3600) - 60, 60) * 1000,
+      user: nextUser,
+      config: prepared,
+    });
+    await refreshAllCounts(accessToken, prepared);
+  }
+
+  async function signOut() {
+    try {
+      await fetch('/api/google-logout', { method: 'POST' });
+    } catch {
+      // Local sign-out still clears browser state even if the server is unreachable.
+    }
+    clearStoredGoogleSession();
     setToken(null);
     setUser(EMPTY_USER);
     setSummary(COURIERS.map((courier) => ({ courier, count: 0 })));
@@ -370,7 +472,7 @@ function App() {
         courier: selectedCourier,
         code: validation.code,
         email: user.email,
-        packer: selectedPacker,
+        packer: selectedPacker === PACKER_UNASSIGNED ? '' : selectedPacker,
         note: scanRemark,
       });
 
@@ -383,7 +485,16 @@ function App() {
       setRecentRows(result.rows ?? []);
       setSummary((current) => updateSummary(current, selectedCourier, result.count));
 
-      if (result.status === 'duplicate') {
+      if (result.status === 'cancelled') {
+        setStatus({
+          type: 'success',
+          title: 'บันทึกยกเลิกแล้ว',
+          message: `${result.code} ถูกทำเครื่องหมาย ${ISSUE_CUSTOMER_CANCELLED} ใน ${selectedCourier}`,
+        });
+        setCameraMessage(`${result.code} ยกเลิกแล้ว`);
+        playTone('success');
+        setScanRemark('');
+      } else if (result.status === 'duplicate') {
         setStatus({
           type: 'duplicate',
           title: 'เลขซ้ำ',

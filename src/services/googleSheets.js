@@ -363,6 +363,20 @@ async function readDailyRows({ token, spreadsheetId, date }) {
   return data.values ?? [];
 }
 
+async function updateDailyRow({ token, spreadsheetId, date, rowNumber, row }) {
+  const range = `${escapeSheetName(date)}!A${rowNumber}:J${rowNumber}`;
+  await apiFetch(
+    `${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`,
+    token,
+    {
+      method: 'PUT',
+      body: JSON.stringify({
+        values: [row],
+      }),
+    },
+  );
+}
+
 export async function getTodayRowsGoogle({ token, config, courier, date = getBangkokParts().date }) {
   const sheet = config?.master;
   if (!sheet?.id) {
@@ -508,6 +522,7 @@ export function listDatesInMonth(yearMonth) {
 
 export async function appendScanGoogle({ token, config, courier, code, email, packer = '', note = '' }) {
   const normalizedCode = normalizeCode(code);
+  const isCancelled = note === 'ลูกค้ายกเลิก';
   const sheet = config?.master;
   if (!sheet?.id) {
     throw new Error('ไม่พบ Google Sheet Master');
@@ -518,7 +533,38 @@ export async function appendScanGoogle({ token, config, courier, code, email, pa
   const rows = await readDailyRows({ token, spreadsheetId: sheet.id, date });
   const parsedRows = rows.map(rowFromSheet);
   const courierRows = parsedRows.filter((row) => row.courier === courier);
-  const duplicate = courierRows.some((row) => normalizeScanCode(row.code) === normalizeScanCode(normalizedCode));
+  const duplicateRow = courierRows.find((row) => normalizeScanCode(row.code) === normalizeScanCode(normalizedCode));
+  const duplicate = Boolean(duplicateRow);
+
+  if (duplicateRow && isCancelled) {
+    const updatedRow = [
+      duplicateRow.no,
+      duplicateRow.courierNo,
+      duplicateRow.date,
+      duplicateRow.time,
+      duplicateRow.courier,
+      duplicateRow.code,
+      duplicateRow.email,
+      duplicateRow.packer,
+      'Cancelled',
+      note,
+    ];
+    await updateDailyRow({ token, spreadsheetId: sheet.id, date, rowNumber: Number(duplicateRow.no) + 1, row: updatedRow });
+    const nextRows = parsedRows
+      .map((row) => (row.no === duplicateRow.no ? rowFromSheet(updatedRow) : row))
+      .filter((row) => row.courier === courier)
+      .reverse();
+    return {
+      status: 'cancelled',
+      courier,
+      date,
+      time,
+      code: normalizedCode,
+      count: courierRows.length,
+      rows: nextRows,
+      sheetUrl: sheet.webViewLink,
+    };
+  }
 
   if (duplicate) {
     return {
@@ -542,7 +588,7 @@ export async function appendScanGoogle({ token, config, courier, code, email, pa
     normalizedCode,
     email,
     packer,
-    'Success',
+    isCancelled ? 'Cancelled' : 'Success',
     note,
   ];
   const range = `${escapeSheetName(date)}!A:J`;

@@ -93,6 +93,8 @@ https://www.googleapis.com/auth/spreadsheets
 
 ```text
 VITE_GOOGLE_CLIENT_ID=your-web-oauth-client-id.apps.googleusercontent.com
+GOOGLE_CLIENT_ID=your-web-oauth-client-id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=your-web-oauth-client-secret
 ```
 
 แล้วรัน:
@@ -108,6 +110,10 @@ npm run dev
 
 ```text
 VITE_GOOGLE_CLIENT_ID=your-web-oauth-client-id.apps.googleusercontent.com
+GOOGLE_CLIENT_ID=your-web-oauth-client-id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=your-web-oauth-client-secret
+KV_REST_API_URL=from-vercel-kv-or-upstash
+KV_REST_API_TOKEN=from-vercel-kv-or-upstash
 ```
 
 หลังเพิ่มหรือแก้ environment variable ต้อง redeploy ใหม่
@@ -127,8 +133,8 @@ VITE_GOOGLE_CLIENT_ID=your-web-oauth-client-id.apps.googleusercontent.com
 - Lazada Flash รับเฉพาะเลขที่ขึ้นต้นด้วย `TH`
 - ถ้าอ่านเจอบาร์โค้ดอื่นในใบปะหน้า ระบบจะแจ้งว่าไม่ใช่บาร์โค้ดหลักและไม่บันทึกลง Sheet
 - รายการล่าสุดแสดง 3 รายการแรกของวันนี้ก่อน และกดดูเพิ่มเติมได้เมื่อต้องไล่รายการยาวขึ้น
-- เลือก Packer ก่อนสแกนจากรายชื่อ `กิต`, `มาย`, `ยุทธ`, `หล้า`, `มุก` แล้วระบบจะบันทึกลงคอลัมน์ `Packer`
-- กดปุ่ม `ลูกค้ายกเลิก` ก่อนสแกนเพื่อบันทึกลงคอลัมน์ `Remark / Issue` ของรายการถัดไป
+- เลือก Packer ก่อนสแกนจากรายชื่อ `กิต`, `มาย`, `ยุทธ`, `หล้า`, `มุก`; ค่าเริ่มต้นคือ `ยังไม่ระบุ`
+- กดปุ่ม `ลูกค้ายกเลิก` ก่อนสแกน ถ้าเลขมีอยู่แล้วระบบจะอัปเดตแถวเดิมเป็น `Cancelled`; ถ้ายังไม่มีจะบันทึกแถวใหม่เป็นข้อมูลยกเลิก
 
 ## Parcel lookup
 
