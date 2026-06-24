@@ -17,8 +17,10 @@ export const COURIERS = [
 
 export const SCAN_HEADERS = [
   'No.',
+  'Courier No.',
   'Scan Date',
   'Scan Time',
+  'Courier',
   'Tracking / Barcode',
   'Scanner Email',
   'Status',
@@ -36,8 +38,9 @@ export const COURIER_RULES = {
   },
 };
 
-const CONFIG_KEY = 'scan-to-sheet-google-config-v1';
+const CONFIG_KEY = 'scan-to-sheet-google-config-v2';
 const FOLDER_NAME = 'Scan to Sheet';
+const MASTER_SHEET_NAME = 'Scan to Sheet Master';
 const TIMEZONE = 'Asia/Bangkok';
 
 export function getBangkokParts(now = new Date()) {
@@ -185,30 +188,25 @@ export async function prepareGoogleSheets(token) {
     folder = await createDriveItem({ token, name: FOLDER_NAME, mimeType: MIME_FOLDER });
   }
 
-  const sheets = {};
-  for (const courier of COURIERS) {
-    let file = await findDriveItem({
+  let master = await findDriveItem({
+    token,
+    name: MASTER_SHEET_NAME,
+    mimeType: MIME_SHEET,
+    parentId: folder.id,
+  });
+
+  if (!master) {
+    master = await createDriveItem({
       token,
-      name: courier,
+      name: MASTER_SHEET_NAME,
       mimeType: MIME_SHEET,
       parentId: folder.id,
     });
-
-    if (!file) {
-      file = await createDriveItem({
-        token,
-        name: courier,
-        mimeType: MIME_SHEET,
-        parentId: folder.id,
-      });
-    }
-
-    sheets[courier] = file;
   }
 
   const config = {
     folder,
-    sheets,
+    master,
     preparedAt: new Date().toISOString(),
   };
   saveGoogleConfig(config);
@@ -258,9 +256,12 @@ async function ensureDailyWorksheet({ token, spreadsheetId, date }) {
     });
 
     await writeHeaders({ token, spreadsheetId, date });
-    return getSpreadsheet(token, spreadsheetId).then((data) =>
-      data.sheets.find((sheet) => sheet.properties.title === date)?.properties,
-    );
+    const updatedSpreadsheet = await getSpreadsheet(token, spreadsheetId);
+    const worksheet = updatedSpreadsheet.sheets.find((sheet) => sheet.properties.title === date)?.properties;
+    if (worksheet) {
+      await formatDailyWorksheet({ token, spreadsheetId, sheetId: worksheet.sheetId });
+    }
+    return worksheet;
   }
 
   await apiFetch(`${SHEETS_API}/${spreadsheetId}:batchUpdate`, token, {
@@ -284,14 +285,17 @@ async function ensureDailyWorksheet({ token, spreadsheetId, date }) {
 
   await writeHeaders({ token, spreadsheetId, date });
 
-  return getSpreadsheet(token, spreadsheetId).then((data) =>
-    data.sheets.find((sheet) => sheet.properties.title === date)?.properties,
-  );
+  const updatedSpreadsheet = await getSpreadsheet(token, spreadsheetId);
+  const worksheet = updatedSpreadsheet.sheets.find((sheet) => sheet.properties.title === date)?.properties;
+  if (worksheet) {
+    await formatDailyWorksheet({ token, spreadsheetId, sheetId: worksheet.sheetId });
+  }
+  return worksheet;
 }
 
 async function writeHeaders({ token, spreadsheetId, date }) {
   await apiFetch(
-    `${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent(`${date}!A1:G1`)}?valueInputOption=RAW`,
+    `${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent(`${date}!A1:I1`)}?valueInputOption=RAW`,
     token,
     {
       method: 'PUT',
@@ -302,8 +306,42 @@ async function writeHeaders({ token, spreadsheetId, date }) {
   );
 }
 
+async function formatDailyWorksheet({ token, spreadsheetId, sheetId }) {
+  await apiFetch(`${SHEETS_API}/${spreadsheetId}:batchUpdate`, token, {
+    method: 'POST',
+    body: JSON.stringify({
+      requests: [
+        {
+          updateSheetProperties: {
+            properties: {
+              sheetId,
+              gridProperties: {
+                frozenRowCount: 1,
+                columnCount: SCAN_HEADERS.length,
+              },
+            },
+            fields: 'gridProperties(frozenRowCount,columnCount)',
+          },
+        },
+        {
+          setBasicFilter: {
+            filter: {
+              range: {
+                sheetId,
+                startRowIndex: 0,
+                startColumnIndex: 0,
+                endColumnIndex: SCAN_HEADERS.length,
+              },
+            },
+          },
+        },
+      ],
+    }),
+  });
+}
+
 async function readDailyRows({ token, spreadsheetId, date }) {
-  const range = `${escapeSheetName(date)}!A2:G`;
+  const range = `${escapeSheetName(date)}!A2:I`;
   const params = new URLSearchParams({
     majorDimension: 'ROWS',
   });
@@ -315,9 +353,9 @@ async function readDailyRows({ token, spreadsheetId, date }) {
 }
 
 export async function getTodayRowsGoogle({ token, config, courier, date = getBangkokParts().date }) {
-  const sheet = config?.sheets?.[courier];
+  const sheet = config?.master;
   if (!sheet?.id) {
-    throw new Error(`ไม่พบ Google Sheet ของ ${courier}`);
+    throw new Error('ไม่พบ Google Sheet Master');
   }
 
   const spreadsheet = await getSpreadsheet(token, sheet.id);
@@ -327,7 +365,7 @@ export async function getTodayRowsGoogle({ token, config, courier, date = getBan
   }
 
   const rows = await readDailyRows({ token, spreadsheetId: sheet.id, date });
-  return rows.map(rowFromSheet).reverse();
+  return rows.map(rowFromSheet).filter((row) => row.courier === courier).reverse();
 }
 
 export async function getScanReportGoogle({ token, config, dates }) {
@@ -343,30 +381,32 @@ export async function getScanReportGoogle({ token, config, dates }) {
     ]),
   );
   const courierTotals = COURIERS.map((courier) => ({ courier, count: 0 }));
+  const sheet = config?.master;
+  if (!sheet?.id) {
+    throw new Error('ไม่พบ Google Sheet Master');
+  }
 
-  for (const courier of COURIERS) {
-    const sheet = config?.sheets?.[courier];
-    if (!sheet?.id) {
-      throw new Error(`ไม่พบ Google Sheet ของ ${courier}`);
+  const spreadsheet = await getSpreadsheet(token, sheet.id);
+  const sheetTitles = new Set(spreadsheet.sheets?.map((item) => item.properties.title) ?? []);
+
+  for (const date of uniqueDates) {
+    if (!sheetTitles.has(date)) {
+      continue;
     }
 
-    const spreadsheet = await getSpreadsheet(token, sheet.id);
-    const sheetTitles = new Set(spreadsheet.sheets?.map((item) => item.properties.title) ?? []);
+    const rows = (await readDailyRows({ token, spreadsheetId: sheet.id, date })).map(rowFromSheet);
+    const day = dayMap.get(date);
 
-    for (const date of uniqueDates) {
-      if (!sheetTitles.has(date)) {
+    for (const row of rows) {
+      const dayCourier = day.couriers.find((item) => item.courier === row.courier);
+      const totalCourier = courierTotals.find((item) => item.courier === row.courier);
+      if (!dayCourier || !totalCourier) {
         continue;
       }
 
-      const rows = await readDailyRows({ token, spreadsheetId: sheet.id, date });
-      const count = rows.length;
-      const day = dayMap.get(date);
-      const dayCourier = day.couriers.find((item) => item.courier === courier);
-      const totalCourier = courierTotals.find((item) => item.courier === courier);
-
-      dayCourier.count = count;
-      totalCourier.count += count;
-      day.total += count;
+      dayCourier.count += 1;
+      totalCourier.count += 1;
+      day.total += 1;
     }
   }
 
@@ -386,31 +426,28 @@ export async function searchScansGoogle({ token, config, query, couriers = COURI
   }
 
   const results = [];
+  const sheet = config?.master;
+  if (!sheet?.id) {
+    throw new Error('ไม่พบ Google Sheet Master');
+  }
 
-  for (const courier of couriers) {
-    const sheet = config?.sheets?.[courier];
-    if (!sheet?.id) {
-      throw new Error(`ไม่พบ Google Sheet ของ ${courier}`);
-    }
+  const courierSet = new Set(couriers);
+  const spreadsheet = await getSpreadsheet(token, sheet.id);
+  const sheetTitles = spreadsheet.sheets?.map((item) => item.properties.title) ?? [];
+  const searchDates = dates
+    ? dates.filter((date) => sheetTitles.includes(date))
+    : sheetTitles.filter((title) => /^\d{4}-\d{2}-\d{2}$/.test(title));
 
-    const spreadsheet = await getSpreadsheet(token, sheet.id);
-    const sheetTitles = spreadsheet.sheets?.map((item) => item.properties.title) ?? [];
-    const searchDates = dates
-      ? dates.filter((date) => sheetTitles.includes(date))
-      : sheetTitles.filter((title) => /^\d{4}-\d{2}-\d{2}$/.test(title));
-
-    for (const date of searchDates) {
-      const rows = await readDailyRows({ token, spreadsheetId: sheet.id, date });
-      for (const row of rows) {
-        const item = rowFromSheet(row);
-        const code = normalizeScanCode(item.code);
-        if (code.includes(normalizedQuery)) {
-          results.push({
-            ...item,
-            courier,
-            sheetUrl: sheet.webViewLink,
-          });
-        }
+  for (const date of searchDates) {
+    const rows = await readDailyRows({ token, spreadsheetId: sheet.id, date });
+    for (const row of rows) {
+      const item = rowFromSheet(row);
+      const code = normalizeScanCode(item.code);
+      if (courierSet.has(item.courier) && code.includes(normalizedQuery)) {
+        results.push({
+          ...item,
+          sheetUrl: sheet.webViewLink,
+        });
       }
     }
   }
@@ -460,15 +497,17 @@ export function listDatesInMonth(yearMonth) {
 
 export async function appendScanGoogle({ token, config, courier, code, email, note = '' }) {
   const normalizedCode = normalizeCode(code);
-  const sheet = config?.sheets?.[courier];
+  const sheet = config?.master;
   if (!sheet?.id) {
-    throw new Error(`ไม่พบ Google Sheet ของ ${courier}`);
+    throw new Error('ไม่พบ Google Sheet Master');
   }
 
   const { date, time } = getBangkokParts();
   await ensureDailyWorksheet({ token, spreadsheetId: sheet.id, date });
   const rows = await readDailyRows({ token, spreadsheetId: sheet.id, date });
-  const duplicate = rows.some((row) => String(row[3] ?? '').trim().toLowerCase() === normalizedCode.toLowerCase());
+  const parsedRows = rows.map(rowFromSheet);
+  const courierRows = parsedRows.filter((row) => row.courier === courier);
+  const duplicate = courierRows.some((row) => normalizeScanCode(row.code) === normalizeScanCode(normalizedCode));
 
   if (duplicate) {
     return {
@@ -477,22 +516,24 @@ export async function appendScanGoogle({ token, config, courier, code, email, no
       date,
       time,
       code: normalizedCode,
-      count: rows.length,
-      rows: rows.map(rowFromSheet).reverse(),
+      count: courierRows.length,
+      rows: courierRows.reverse(),
       sheetUrl: sheet.webViewLink,
     };
   }
 
   const row = [
     rows.length + 1,
+    courierRows.length + 1,
     date,
     time,
+    courier,
     normalizedCode,
     email,
     'Success',
     note,
   ];
-  const range = `${escapeSheetName(date)}!A:G`;
+  const range = `${escapeSheetName(date)}!A:I`;
   await apiFetch(
     `${SHEETS_API}/${sheet.id}/values/${encodeURIComponent(range)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
     token,
@@ -510,9 +551,9 @@ export async function appendScanGoogle({ token, config, courier, code, email, no
     date,
     time,
     code: normalizedCode,
-    count: rows.length + 1,
+    count: courierRows.length + 1,
     row: rowFromSheet(row),
-    rows: [rowFromSheet(row), ...rows.map(rowFromSheet).reverse()].slice(0, 20),
+    rows: [rowFromSheet(row), ...courierRows.reverse()].slice(0, 20),
     sheetUrl: sheet.webViewLink,
   };
 }
@@ -520,12 +561,14 @@ export async function appendScanGoogle({ token, config, courier, code, email, no
 function rowFromSheet(row) {
   return {
     no: row[0],
-    date: row[1],
-    time: row[2],
-    code: row[3],
-    email: row[4],
-    status: row[5],
-    note: row[6] ?? '',
+    courierNo: row[1],
+    date: row[2],
+    time: row[3],
+    courier: row[4],
+    code: row[5],
+    email: row[6],
+    status: row[7],
+    note: row[8] ?? '',
   };
 }
 

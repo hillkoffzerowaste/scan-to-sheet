@@ -109,7 +109,7 @@ function App() {
     [selectedCourier, summary],
   );
   const displayedRecentRows = showAllRecentRows ? recentRows : recentRows.slice(0, 3);
-  const sheetUrl = config?.sheets?.[selectedCourier]?.webViewLink;
+  const sheetUrl = config?.master?.webViewLink;
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -1036,7 +1036,7 @@ function App() {
             <table>
               <thead>
                 <tr>
-                  <th>No.</th>
+                  <th>Courier No.</th>
                   <th>เวลา</th>
                   <th>Tracking / Barcode</th>
                   <th>ผู้สแกน</th>
@@ -1052,8 +1052,8 @@ function App() {
                   </tr>
                 ) : (
                   displayedRecentRows.map((row) => (
-                    <tr key={`${row.no}-${row.code}-${row.time}`}>
-                      <td>{row.no}</td>
+                    <tr key={`${row.no}-${row.courierNo}-${row.code}-${row.time}`}>
+                      <td>{row.courierNo}</td>
                       <td>{row.time}</td>
                       <td className="code-cell">{row.code}</td>
                       <td>{row.email}</td>
