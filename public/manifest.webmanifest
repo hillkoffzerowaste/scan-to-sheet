@@ -1,0 +1,28 @@
+{
+  "name": "Scan to Sheet",
+  "short_name": "Scan Sheet",
+  "description": "Scan parcel labels into daily Google Sheets by courier.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f3f6f8",
+  "theme_color": "#18776f",
+  "categories": ["business", "productivity"],
+  "icons": [
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Open Scanner",
+      "short_name": "Scan",
+      "url": "/",
+      "description": "Open the Scan to Sheet scanner"
+    }
+  ]
+}

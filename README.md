@@ -113,3 +113,9 @@ VITE_GOOGLE_CLIENT_ID=your-web-oauth-client-id.apps.googleusercontent.com
 ```
 
 หลังเพิ่มหรือแก้ environment variable ต้อง redeploy ใหม่
+
+## UI และ PWA
+
+- มีปุ่มเลือก Light/Dark mode และจำค่าด้วย `localStorage`
+- Layout ออกแบบแบบ mobile-first สำหรับใช้งานบนมือถือหรือเครื่องยิงสแกน
+- มี Web App Manifest และ Service Worker สำหรับติดตั้งเป็น PWA

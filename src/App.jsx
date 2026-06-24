@@ -8,10 +8,12 @@ import {
   LogIn,
   LogOut,
   Mail,
+  Moon,
   PackageCheck,
   Play,
   RefreshCw,
   ScanLine,
+  Sun,
   Truck,
   Volume2,
 } from 'lucide-react';
@@ -38,6 +40,7 @@ const EMPTY_USER = {
   email: 'ยังไม่ได้เข้าสู่ระบบ',
   name: '',
 };
+const THEME_KEY = 'scan-to-sheet-theme';
 
 function App() {
   const [token, setToken] = useState(null);
@@ -57,6 +60,7 @@ function App() {
   const [summary, setSummary] = useState(() => COURIERS.map((courier) => ({ courier, count: 0 })));
   const [recentRows, setRecentRows] = useState([]);
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [theme, setTheme] = useState(() => localStorage.getItem(THEME_KEY) || 'light');
   const inputRef = useRef(null);
   const audioContextRef = useRef(null);
 
@@ -67,6 +71,17 @@ function App() {
     [selectedCourier, summary],
   );
   const sheetUrl = config?.sheets?.[selectedCourier]?.webViewLink;
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    document.documentElement.style.colorScheme = theme;
+    localStorage.setItem(THEME_KEY, theme);
+
+    const themeColor = document.querySelector('meta[name="theme-color"]');
+    if (themeColor) {
+      themeColor.setAttribute('content', theme === 'dark' ? '#111816' : '#f3f6f8');
+    }
+  }, [theme]);
 
   useEffect(() => {
     const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
@@ -330,6 +345,26 @@ function App() {
           <div className="account-pill">
             <Mail size={16} />
             <span>{user.email}</span>
+          </div>
+          <div className="theme-toggle" aria-label="เลือกโหมดสี">
+            <button
+              className={theme === 'light' ? 'active' : ''}
+              type="button"
+              onClick={() => setTheme('light')}
+              title="Light mode"
+            >
+              <Sun size={16} />
+              <span>Light</span>
+            </button>
+            <button
+              className={theme === 'dark' ? 'active' : ''}
+              type="button"
+              onClick={() => setTheme('dark')}
+              title="Dark mode"
+            >
+              <Moon size={16} />
+              <span>Dark</span>
+            </button>
           </div>
           <button className="icon-button" type="button" onClick={() => setSoundEnabled((value) => !value)} title="เปิด/ปิดเสียง">
             <Volume2 size={18} />
