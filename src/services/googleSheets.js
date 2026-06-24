@@ -280,6 +280,93 @@ export async function getTodayRowsGoogle({ token, config, courier, date = getBan
   return rows.map(rowFromSheet).reverse();
 }
 
+export async function getScanReportGoogle({ token, config, dates }) {
+  const uniqueDates = [...new Set(dates)].filter(Boolean).sort();
+  const dayMap = new Map(
+    uniqueDates.map((date) => [
+      date,
+      {
+        date,
+        total: 0,
+        couriers: COURIERS.map((courier) => ({ courier, count: 0 })),
+      },
+    ]),
+  );
+  const courierTotals = COURIERS.map((courier) => ({ courier, count: 0 }));
+
+  for (const courier of COURIERS) {
+    const sheet = config?.sheets?.[courier];
+    if (!sheet?.id) {
+      throw new Error(`ไม่พบ Google Sheet ของ ${courier}`);
+    }
+
+    const spreadsheet = await getSpreadsheet(token, sheet.id);
+    const sheetTitles = new Set(spreadsheet.sheets?.map((item) => item.properties.title) ?? []);
+
+    for (const date of uniqueDates) {
+      if (!sheetTitles.has(date)) {
+        continue;
+      }
+
+      const rows = await readDailyRows({ token, spreadsheetId: sheet.id, date });
+      const count = rows.length;
+      const day = dayMap.get(date);
+      const dayCourier = day.couriers.find((item) => item.courier === courier);
+      const totalCourier = courierTotals.find((item) => item.courier === courier);
+
+      dayCourier.count = count;
+      totalCourier.count += count;
+      day.total += count;
+    }
+  }
+
+  const days = [...dayMap.values()];
+  return {
+    days,
+    couriers: courierTotals,
+    total: courierTotals.reduce((sum, item) => sum + item.count, 0),
+    generatedAt: new Date().toISOString(),
+  };
+}
+
+export function listDatesBetween(startDate, endDate) {
+  if (!startDate || !endDate) {
+    return [];
+  }
+
+  const start = parseDateOnly(startDate);
+  const end = parseDateOnly(endDate);
+  if (!start || !end || start > end) {
+    return [];
+  }
+
+  const dates = [];
+  const cursor = new Date(start);
+  while (cursor <= end) {
+    dates.push(formatDateOnly(cursor));
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return dates;
+}
+
+export function listDatesInMonth(yearMonth) {
+  if (!/^\d{4}-\d{2}$/.test(yearMonth ?? '')) {
+    return [];
+  }
+
+  const [year, month] = yearMonth.split('-').map(Number);
+  const first = new Date(Date.UTC(year, month - 1, 1));
+  const dates = [];
+  const cursor = new Date(first);
+
+  while (cursor.getUTCFullYear() === year && cursor.getUTCMonth() === month - 1) {
+    dates.push(formatDateOnly(cursor));
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+
+  return dates;
+}
+
 export async function appendScanGoogle({ token, config, courier, code, email, note = '' }) {
   const normalizedCode = normalizeCode(code);
   const sheet = config?.sheets?.[courier];
@@ -349,4 +436,19 @@ function rowFromSheet(row) {
     status: row[5],
     note: row[6] ?? '',
   };
+}
+
+function parseDateOnly(date) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  if (!match) {
+    return null;
+  }
+  return new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+}
+
+function formatDateOnly(date) {
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }

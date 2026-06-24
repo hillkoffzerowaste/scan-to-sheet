@@ -119,3 +119,10 @@ VITE_GOOGLE_CLIENT_ID=your-web-oauth-client-id.apps.googleusercontent.com
 - มีปุ่มเลือก Light/Dark mode และจำค่าด้วย `localStorage`
 - Layout ออกแบบแบบ mobile-first สำหรับใช้งานบนมือถือหรือเครื่องยิงสแกน
 - มี Web App Manifest และ Service Worker สำหรับติดตั้งเป็น PWA
+
+## Reports
+
+- รายงานประจำวัน เลือกวันที่เดียวแล้วสรุปยอดทุกขนส่ง
+- รายงานช่วงวันที่ เลือกวันเริ่มต้นและวันสิ้นสุด
+- รายงานรายเดือน เลือกเดือนแล้วสรุปยอดทั้งเดือน
+- รายงานดึงข้อมูลจาก Google Sheet ของขนส่งทั้ง 8 ไฟล์โดยตรง

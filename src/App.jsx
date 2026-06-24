@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
+  BarChart3,
+  CalendarDays,
   CheckCircle2,
   Clock3,
   ExternalLink,
@@ -22,7 +24,10 @@ import {
   appendScanGoogle,
   fetchGoogleProfile,
   getBangkokParts,
+  getScanReportGoogle,
   getTodayRowsGoogle,
+  listDatesBetween,
+  listDatesInMonth,
   loadGoogleConfig,
   prepareGoogleSheets,
 } from './services/googleSheets.js';
@@ -61,6 +66,13 @@ function App() {
   const [recentRows, setRecentRows] = useState([]);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [theme, setTheme] = useState(() => localStorage.getItem(THEME_KEY) || 'light');
+  const [reportMode, setReportMode] = useState('daily');
+  const [reportDate, setReportDate] = useState(() => getBangkokParts().date);
+  const [reportStartDate, setReportStartDate] = useState(() => getBangkokParts().date);
+  const [reportEndDate, setReportEndDate] = useState(() => getBangkokParts().date);
+  const [reportMonth, setReportMonth] = useState(() => getBangkokParts().date.slice(0, 7));
+  const [reportBusy, setReportBusy] = useState(false);
+  const [reportData, setReportData] = useState(null);
   const inputRef = useRef(null);
   const audioContextRef = useRef(null);
 
@@ -334,6 +346,69 @@ function App() {
     }
   }
 
+  async function generateReport() {
+    if (!isSignedIn) {
+      setStatus({
+        type: 'warning',
+        title: 'ต้องเข้าสู่ระบบก่อน',
+        message: 'Login with Google ก่อนดูรายงานจาก Google Sheet',
+      });
+      return;
+    }
+
+    const dates = getReportDates();
+    if (dates.length === 0) {
+      setStatus({
+        type: 'warning',
+        title: 'ช่วงวันที่ไม่ถูกต้อง',
+        message: 'เลือกวันที่เริ่มต้นและสิ้นสุดให้ถูกต้องก่อนสร้างรายงาน',
+      });
+      return;
+    }
+
+    setReportBusy(true);
+    try {
+      const data = await getScanReportGoogle({ token, config, dates });
+      setReportData({
+        ...data,
+        mode: reportMode,
+        label: getReportLabel(dates),
+      });
+    } catch (error) {
+      setStatus({
+        type: 'error',
+        title: 'สร้างรายงานไม่สำเร็จ',
+        message: error.message,
+      });
+    } finally {
+      setReportBusy(false);
+    }
+  }
+
+  function getReportDates() {
+    if (reportMode === 'daily') {
+      return reportDate ? [reportDate] : [];
+    }
+
+    if (reportMode === 'range') {
+      return listDatesBetween(reportStartDate, reportEndDate);
+    }
+
+    return listDatesInMonth(reportMonth);
+  }
+
+  function getReportLabel(dates) {
+    if (reportMode === 'daily') {
+      return reportDate;
+    }
+
+    if (reportMode === 'range') {
+      return `${dates[0]} ถึง ${dates[dates.length - 1]}`;
+    }
+
+    return reportMonth;
+  }
+
   return (
     <main className="app-shell">
       <section className="topbar">
@@ -510,6 +585,128 @@ function App() {
             </table>
           </div>
         </section>
+      </section>
+
+      <section className="report-panel">
+        <div className="report-header">
+          <div>
+            <p className="eyebrow">Reports</p>
+            <h2>รายงานสแกน</h2>
+          </div>
+          <div className="report-badge">
+            <BarChart3 size={18} />
+            <span>{reportData ? `${reportData.total} รายการ` : 'รอสร้างรายงาน'}</span>
+          </div>
+        </div>
+
+        <div className="report-controls">
+          <div className="segmented-control">
+            <button className={reportMode === 'daily' ? 'active' : ''} type="button" onClick={() => setReportMode('daily')}>
+              รายวัน
+            </button>
+            <button className={reportMode === 'range' ? 'active' : ''} type="button" onClick={() => setReportMode('range')}>
+              ช่วงวันที่
+            </button>
+            <button className={reportMode === 'month' ? 'active' : ''} type="button" onClick={() => setReportMode('month')}>
+              รายเดือน
+            </button>
+          </div>
+
+          {reportMode === 'daily' && (
+            <label className="field-control">
+              <span>วันที่</span>
+              <input type="date" value={reportDate} onChange={(event) => setReportDate(event.target.value)} />
+            </label>
+          )}
+
+          {reportMode === 'range' && (
+            <div className="range-fields">
+              <label className="field-control">
+                <span>เริ่มต้น</span>
+                <input type="date" value={reportStartDate} onChange={(event) => setReportStartDate(event.target.value)} />
+              </label>
+              <label className="field-control">
+                <span>สิ้นสุด</span>
+                <input type="date" value={reportEndDate} onChange={(event) => setReportEndDate(event.target.value)} />
+              </label>
+            </div>
+          )}
+
+          {reportMode === 'month' && (
+            <label className="field-control">
+              <span>เดือน</span>
+              <input type="month" value={reportMonth} onChange={(event) => setReportMonth(event.target.value)} />
+            </label>
+          )}
+
+          <button className="secondary-button report-button" type="button" onClick={generateReport} disabled={!isSignedIn || reportBusy}>
+            {reportBusy ? <RefreshCw size={16} className="spin" /> : <CalendarDays size={16} />}
+            <span>สร้างรายงาน</span>
+          </button>
+        </div>
+
+        <div className="report-summary">
+          <div>
+            <span>ช่วงรายงาน</span>
+            <strong>{reportData?.label ?? '-'}</strong>
+          </div>
+          <div>
+            <span>รวมทั้งหมด</span>
+            <strong>{reportData?.total ?? 0}</strong>
+          </div>
+          <div>
+            <span>จำนวนวัน</span>
+            <strong>{reportData?.days?.length ?? 0}</strong>
+          </div>
+        </div>
+
+        <div className="report-grid">
+          {COURIERS.map((courier) => {
+            const count = reportData?.couriers?.find((item) => item.courier === courier)?.count ?? 0;
+            return (
+              <div className="report-card" key={courier}>
+                <span>{courier}</span>
+                <strong>{count}</strong>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="recent-header">
+          <h3>สรุปตามวันที่</h3>
+        </div>
+        <div className="table-wrap report-table">
+          <table>
+            <thead>
+              <tr>
+                <th>วันที่</th>
+                <th>รวม</th>
+                {COURIERS.map((courier) => (
+                  <th key={courier}>{courier}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {!reportData ? (
+                <tr>
+                  <td colSpan={COURIERS.length + 2} className="empty-cell">
+                    เลือกรูปแบบรายงานแล้วกดสร้างรายงาน
+                  </td>
+                </tr>
+              ) : (
+                reportData.days.map((day) => (
+                  <tr key={day.date}>
+                    <td>{day.date}</td>
+                    <td>{day.total}</td>
+                    {COURIERS.map((courier) => (
+                      <td key={courier}>{day.couriers.find((item) => item.courier === courier)?.count ?? 0}</td>
+                    ))}
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </section>
     </main>
   );
