@@ -48,11 +48,12 @@ Scan Time
 Courier
 Tracking / Barcode
 Scanner Email
+Packer
 Status
-Note
+Remark / Issue
 ```
 
-แผ่นงานรายวันจะ freeze แถวหัวตาราง และเปิด filter อัตโนมัติ เพื่อกรองคอลัมน์ `Courier` ใน Google Sheet ได้ทันที โดย `No.` เป็นลำดับรวมทั้งวัน และ `Courier No.` เป็นลำดับเฉพาะขนส่งนั้นในวันเดียวกัน
+แผ่นงานรายวันจะ freeze แถวหัวตาราง และเปิด filter อัตโนมัติ เพื่อกรองคอลัมน์ `Courier` ใน Google Sheet ได้ทันที โดย `No.` เป็นลำดับรวมทั้งวัน, `Courier No.` เป็นลำดับเฉพาะขนส่งนั้นในวันเดียวกัน, `Packer` เตรียมไว้สำหรับอนาคต และ `Remark / Issue` ใช้บันทึกปัญหา เช่น `ลูกค้ายกเลิก`
 
 ## Google Cloud setup
 
@@ -126,6 +127,7 @@ VITE_GOOGLE_CLIENT_ID=your-web-oauth-client-id.apps.googleusercontent.com
 - Lazada Flash รับเฉพาะเลขที่ขึ้นต้นด้วย `TH`
 - ถ้าอ่านเจอบาร์โค้ดอื่นในใบปะหน้า ระบบจะแจ้งว่าไม่ใช่บาร์โค้ดหลักและไม่บันทึกลง Sheet
 - รายการล่าสุดแสดง 3 รายการแรกของวันนี้ก่อน และกดดูเพิ่มเติมได้เมื่อต้องไล่รายการยาวขึ้น
+- กดปุ่ม `ลูกค้ายกเลิก` ก่อนสแกนเพื่อบันทึกลงคอลัมน์ `Remark / Issue` ของรายการถัดไป
 
 ## Parcel lookup
 

@@ -56,6 +56,7 @@ const EMPTY_USER = {
 const THEME_KEY = 'scan-to-sheet-theme';
 const CAMERA_REGION_ID = 'camera-reader';
 const CAMERA_COOLDOWN_MS = 2500;
+const ISSUE_CUSTOMER_CANCELLED = 'ลูกค้ายกเลิก';
 
 function App() {
   const [token, setToken] = useState(null);
@@ -63,6 +64,7 @@ function App() {
   const [config, setConfig] = useState(() => loadGoogleConfig());
   const [selectedCourier, setSelectedCourier] = useState(COURIERS[0]);
   const [scanValue, setScanValue] = useState('');
+  const [scanRemark, setScanRemark] = useState('');
   const [status, setStatus] = useState(() => ({
     type: GOOGLE_CLIENT_ID ? 'idle' : 'warning',
     title: GOOGLE_CLIENT_ID ? 'พร้อมเชื่อม Google' : 'ต้องใส่ OAuth Client ID',
@@ -108,6 +110,7 @@ function App() {
     () => summary.find((item) => item.courier === selectedCourier)?.count ?? 0,
     [selectedCourier, summary],
   );
+  const totalTodayCount = useMemo(() => summary.reduce((sum, item) => sum + item.count, 0), [summary]);
   const displayedRecentRows = showAllRecentRows ? recentRows : recentRows.slice(0, 3);
   const sheetUrl = config?.master?.webViewLink;
 
@@ -365,6 +368,7 @@ function App() {
         courier: selectedCourier,
         code: validation.code,
         email: user.email,
+        note: scanRemark,
       });
 
       if (source === 'manual') {
@@ -388,10 +392,11 @@ function App() {
         setStatus({
           type: 'success',
           title: 'สแกนสำเร็จ',
-          message: `${result.code} ถูกบันทึกเข้า ${selectedCourier} วันที่ ${result.date}`,
+          message: `${result.code} ถูกบันทึกเข้า ${selectedCourier} วันที่ ${result.date}${scanRemark ? ` (${scanRemark})` : ''}`,
         });
         setCameraMessage(`${result.code} บันทึกสำเร็จ`);
         playTone('success');
+        setScanRemark('');
       }
       return { ...result, status: result.status };
     } catch (error) {
@@ -729,6 +734,12 @@ function App() {
             <Mail size={16} />
             <span>{user.email}</span>
           </div>
+          {sheetUrl && (
+            <a className="ghost-button master-sheet-link" href={sheetUrl} target="_blank" rel="noreferrer">
+              <FileSpreadsheet size={16} />
+              <span>Master Sheet</span>
+            </a>
+          )}
           <div className="theme-toggle" aria-label="เลือกโหมดสี">
             <button
               className={theme === 'light' ? 'active' : ''}
@@ -952,6 +963,20 @@ function App() {
             </div>
           </div>
 
+          <div className={`issue-bar ${scanRemark ? 'active' : ''}`}>
+            <button
+              className={scanRemark === ISSUE_CUSTOMER_CANCELLED ? 'active' : ''}
+              type="button"
+              onClick={() =>
+                setScanRemark((value) => (value === ISSUE_CUSTOMER_CANCELLED ? '' : ISSUE_CUSTOMER_CANCELLED))
+              }
+              disabled={!isSignedIn || busy}
+            >
+              {ISSUE_CUSTOMER_CANCELLED}
+            </button>
+            <span>{scanRemark ? `Remark ถัดไป: ${scanRemark}` : 'สแกนปกติ ไม่มี Remark'}</span>
+          </div>
+
           {scanMethod === 'camera' ? (
             <div className="camera-panel">
               <div className={`camera-stage ${cameraActive ? 'active' : ''}`}>
@@ -1003,7 +1028,11 @@ function App() {
 
           <div className="metric-row">
             <div>
-              <span>ยอดวันนี้</span>
+              <span>รวมวันนี้ทั้งหมด</span>
+              <strong>{totalTodayCount}</strong>
+            </div>
+            <div>
+              <span>{selectedCourier} วันนี้</span>
               <strong>{selectedCount}</strong>
             </div>
             <div>

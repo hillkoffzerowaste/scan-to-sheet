@@ -23,8 +23,9 @@ export const SCAN_HEADERS = [
   'Courier',
   'Tracking / Barcode',
   'Scanner Email',
+  'Packer',
   'Status',
-  'Note',
+  'Remark / Issue',
 ];
 
 export const COURIER_RULES = {
@@ -42,6 +43,7 @@ const CONFIG_KEY = 'scan-to-sheet-google-config-v2';
 const FOLDER_NAME = 'Scan to Sheet';
 const MASTER_SHEET_NAME = 'Scan to Sheet Master';
 const TIMEZONE = 'Asia/Bangkok';
+const formattedWorksheetKeys = new Set();
 
 export function getBangkokParts(now = new Date()) {
   const parts = new Intl.DateTimeFormat('en-CA', {
@@ -224,6 +226,7 @@ async function ensureDailyWorksheet({ token, spreadsheetId, date }) {
   const spreadsheet = await getSpreadsheet(token, spreadsheetId);
   const existing = spreadsheet.sheets?.find((sheet) => sheet.properties.title === date);
   if (existing) {
+    await ensureWorksheetReady({ token, spreadsheetId, date, sheetId: existing.properties.sheetId });
     return existing.properties;
   }
 
@@ -255,11 +258,10 @@ async function ensureDailyWorksheet({ token, spreadsheetId, date }) {
       }),
     });
 
-    await writeHeaders({ token, spreadsheetId, date });
     const updatedSpreadsheet = await getSpreadsheet(token, spreadsheetId);
     const worksheet = updatedSpreadsheet.sheets.find((sheet) => sheet.properties.title === date)?.properties;
     if (worksheet) {
-      await formatDailyWorksheet({ token, spreadsheetId, sheetId: worksheet.sheetId });
+      await ensureWorksheetReady({ token, spreadsheetId, date, sheetId: worksheet.sheetId });
     }
     return worksheet;
   }
@@ -283,19 +285,28 @@ async function ensureDailyWorksheet({ token, spreadsheetId, date }) {
     }),
   });
 
-  await writeHeaders({ token, spreadsheetId, date });
-
   const updatedSpreadsheet = await getSpreadsheet(token, spreadsheetId);
   const worksheet = updatedSpreadsheet.sheets.find((sheet) => sheet.properties.title === date)?.properties;
   if (worksheet) {
-    await formatDailyWorksheet({ token, spreadsheetId, sheetId: worksheet.sheetId });
+    await ensureWorksheetReady({ token, spreadsheetId, date, sheetId: worksheet.sheetId });
   }
   return worksheet;
 }
 
+async function ensureWorksheetReady({ token, spreadsheetId, date, sheetId }) {
+  const key = `${spreadsheetId}:${date}`;
+  if (formattedWorksheetKeys.has(key)) {
+    return;
+  }
+
+  await writeHeaders({ token, spreadsheetId, date });
+  await formatDailyWorksheet({ token, spreadsheetId, sheetId });
+  formattedWorksheetKeys.add(key);
+}
+
 async function writeHeaders({ token, spreadsheetId, date }) {
   await apiFetch(
-    `${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent(`${date}!A1:I1`)}?valueInputOption=RAW`,
+    `${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent(`${date}!A1:J1`)}?valueInputOption=RAW`,
     token,
     {
       method: 'PUT',
@@ -341,7 +352,7 @@ async function formatDailyWorksheet({ token, spreadsheetId, sheetId }) {
 }
 
 async function readDailyRows({ token, spreadsheetId, date }) {
-  const range = `${escapeSheetName(date)}!A2:I`;
+  const range = `${escapeSheetName(date)}!A2:J`;
   const params = new URLSearchParams({
     majorDimension: 'ROWS',
   });
@@ -530,10 +541,11 @@ export async function appendScanGoogle({ token, config, courier, code, email, no
     courier,
     normalizedCode,
     email,
+    '',
     'Success',
     note,
   ];
-  const range = `${escapeSheetName(date)}!A:I`;
+  const range = `${escapeSheetName(date)}!A:J`;
   await apiFetch(
     `${SHEETS_API}/${sheet.id}/values/${encodeURIComponent(range)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
     token,
@@ -559,6 +571,7 @@ export async function appendScanGoogle({ token, config, courier, code, email, no
 }
 
 function rowFromSheet(row) {
+  const hasPackerColumn = row.length >= 10;
   return {
     no: row[0],
     courierNo: row[1],
@@ -567,8 +580,9 @@ function rowFromSheet(row) {
     courier: row[4],
     code: row[5],
     email: row[6],
-    status: row[7],
-    note: row[8] ?? '',
+    packer: hasPackerColumn ? row[7] : '',
+    status: hasPackerColumn ? row[8] : row[7],
+    note: hasPackerColumn ? row[9] ?? '' : row[8] ?? '',
   };
 }
 

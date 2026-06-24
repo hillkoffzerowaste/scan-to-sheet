@@ -203,6 +203,10 @@ h3 {
   color: var(--primary-strong);
 }
 
+.master-sheet-link {
+  text-decoration: none;
+}
+
 .side-panel,
 .scan-panel,
 .report-panel {
@@ -416,6 +420,43 @@ h3 {
   grid-template-columns: 1fr;
   gap: 10px;
   margin-top: 18px;
+}
+
+.issue-bar {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  align-items: center;
+  margin-top: 12px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+
+.issue-bar button {
+  min-height: 42px;
+  border: 1px solid var(--warning-line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--warning);
+  font-weight: 900;
+}
+
+.issue-bar button.active {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
+.issue-bar span {
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.issue-bar.active {
+  border-color: var(--warning-line);
+  background: var(--warning-bg);
 }
 
 .scan-controls .segmented-control {
@@ -830,7 +871,7 @@ th {
 
 @media (min-width: 560px) {
   .account-strip {
-    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-columns: minmax(0, 1fr) auto auto auto;
   }
 
   .account-pill {
@@ -838,7 +879,7 @@ th {
   }
 
   .metric-row {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .report-header {
@@ -870,6 +911,10 @@ th {
 
   .scan-input-row button {
     grid-column: auto;
+  }
+
+  .issue-bar {
+    grid-template-columns: minmax(160px, auto) minmax(0, 1fr);
   }
 }
 
@@ -934,5 +979,9 @@ th {
   .scan-header {
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
+  }
+
+  .metric-row {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
