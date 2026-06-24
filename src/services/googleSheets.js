@@ -1,5 +1,4 @@
 const DRIVE_API = 'https://www.googleapis.com/drive/v3';
-const DRIVE_UPLOAD_API = 'https://www.googleapis.com/upload/drive/v3';
 const SHEETS_API = 'https://sheets.googleapis.com/v4/spreadsheets';
 const USERINFO_API = 'https://www.googleapis.com/oauth2/v3/userinfo';
 const MIME_FOLDER = 'application/vnd.google-apps.folder';
@@ -26,7 +25,6 @@ export const SCAN_HEADERS = [
   'Note',
 ];
 
-const STORAGE_KEY = 'scan-to-sheet-demo-v1';
 const CONFIG_KEY = 'scan-to-sheet-google-config-v1';
 const FOLDER_NAME = 'Scan to Sheet';
 const TIMEZONE = 'Asia/Bangkok';
@@ -50,18 +48,6 @@ export function getBangkokParts(now = new Date()) {
   };
 }
 
-export function loadLocalState() {
-  try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY)) ?? {};
-  } catch {
-    return {};
-  }
-}
-
-export function saveLocalState(state) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-}
-
 export function loadGoogleConfig() {
   try {
     return JSON.parse(localStorage.getItem(CONFIG_KEY)) ?? null;
@@ -74,81 +60,12 @@ export function saveGoogleConfig(config) {
   localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
 }
 
-export function resetDemoData() {
-  localStorage.removeItem(STORAGE_KEY);
-}
-
 export async function fetchGoogleProfile(token) {
   return apiFetch(USERINFO_API, token);
 }
 
 function normalizeCode(value) {
   return String(value ?? '').trim();
-}
-
-function getSheetRows(state, courier, date) {
-  return state?.[courier]?.[date] ?? [];
-}
-
-export async function appendScanLocal({ courier, code, email, note = '' }) {
-  const normalizedCode = normalizeCode(code);
-  const { date, time } = getBangkokParts();
-  const state = loadLocalState();
-  const courierState = state[courier] ?? {};
-  const rows = courierState[date] ?? [];
-  const duplicate = rows.some((row) => row.code.toLowerCase() === normalizedCode.toLowerCase());
-
-  if (duplicate) {
-    return {
-      status: 'duplicate',
-      courier,
-      date,
-      time,
-      code: normalizedCode,
-      count: rows.length,
-      rows,
-    };
-  }
-
-  const row = {
-    no: rows.length + 1,
-    date,
-    time,
-    code: normalizedCode,
-    email,
-    status: 'Success',
-    note,
-  };
-
-  const nextRows = [row, ...rows];
-  state[courier] = {
-    ...courierState,
-    [date]: nextRows,
-  };
-  saveLocalState(state);
-
-  return {
-    status: 'success',
-    courier,
-    date,
-    time,
-    code: normalizedCode,
-    count: nextRows.length,
-    row,
-    rows: nextRows,
-  };
-}
-
-export function getLocalSummary(date = getBangkokParts().date) {
-  const state = loadLocalState();
-  return COURIERS.map((courier) => ({
-    courier,
-    count: getSheetRows(state, courier, date).length,
-  }));
-}
-
-export function getLocalRows(courier, date = getBangkokParts().date) {
-  return getSheetRows(loadLocalState(), courier, date);
 }
 
 async function apiFetch(url, token, options = {}) {
@@ -212,53 +129,6 @@ async function createDriveItem({ token, name, mimeType, parentId }) {
   });
 }
 
-async function createSpreadsheetInFolder({ token, name, parentId }) {
-  const { body, contentType } = buildMultipartBody({
-    metadata: {
-      name,
-      mimeType: MIME_SHEET,
-      parents: [parentId],
-    },
-    content: '',
-  });
-
-  const response = await fetch(`${DRIVE_UPLOAD_API}/files?uploadType=multipart&fields=id,name,webViewLink`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': contentType,
-    },
-    body,
-  });
-
-  if (!response.ok) {
-    const detail = await response.text();
-    throw new Error(`Google API error ${response.status}: ${detail}`);
-  }
-
-  return response.json();
-}
-
-function buildMultipartBody({ metadata, content }) {
-  const boundary = `scan_to_sheet_${Date.now()}`;
-  const delimiter = `\r\n--${boundary}\r\n`;
-  const closeDelimiter = `\r\n--${boundary}--`;
-  const body =
-    `${delimiter}Content-Type: application/json; charset=UTF-8\r\n\r\n` +
-    `${JSON.stringify(metadata)}` +
-    `${delimiter}Content-Type: text/plain\r\n\r\n` +
-    `${content}` +
-    closeDelimiter;
-
-  const blob = new Blob([body], {
-    type: `multipart/related; boundary=${boundary}`,
-  });
-  return {
-    body: blob,
-    contentType: `multipart/related; boundary=${boundary}`,
-  };
-}
-
 export async function prepareGoogleSheets(token) {
   let folder = await findDriveItem({ token, name: FOLDER_NAME, mimeType: MIME_FOLDER });
   if (!folder) {
@@ -275,9 +145,10 @@ export async function prepareGoogleSheets(token) {
     });
 
     if (!file) {
-      file = await createSpreadsheetInFolder({
+      file = await createDriveItem({
         token,
         name: courier,
+        mimeType: MIME_SHEET,
         parentId: folder.id,
       });
     }
@@ -353,6 +224,22 @@ async function readDailyRows({ token, spreadsheetId, date }) {
     token,
   );
   return data.values ?? [];
+}
+
+export async function getTodayRowsGoogle({ token, config, courier, date = getBangkokParts().date }) {
+  const sheet = config?.sheets?.[courier];
+  if (!sheet?.id) {
+    throw new Error(`ไม่พบ Google Sheet ของ ${courier}`);
+  }
+
+  const spreadsheet = await getSpreadsheet(token, sheet.id);
+  const worksheet = spreadsheet.sheets?.find((item) => item.properties.title === date);
+  if (!worksheet) {
+    return [];
+  }
+
+  const rows = await readDailyRows({ token, spreadsheetId: sheet.id, date });
+  return rows.map(rowFromSheet).reverse();
 }
 
 export async function appendScanGoogle({ token, config, courier, code, email, note = '' }) {

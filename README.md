@@ -1,6 +1,6 @@
 # Scan to Sheet
 
-เว็บแอพสำหรับสแกนเลขใบปะหน้าพัสดุเข้า Google Sheet โดยผู้ใช้เลือกขนส่งเองก่อนสแกน ระบบจะแยกไฟล์ตามขนส่ง 8 รายการ และสร้างแผ่นงานตามวันที่ปัจจุบันอัตโนมัติเมื่อมีการสแกนครั้งแรกของวัน
+เว็บแอพสำหรับสแกนเลขใบปะหน้าพัสดุเข้า Google Sheet จริงผ่าน Google Login ผู้ใช้เลือกขนส่งเองก่อนสแกน ระบบจะแยกไฟล์ตามขนส่ง 8 รายการ และสร้างแผ่นงานตามวันที่ปัจจุบันอัตโนมัติเมื่อมีการสแกนครั้งแรกของวัน
 
 ## ขนส่งที่รองรับ
 
@@ -17,7 +17,7 @@
 
 ```text
 เปิดเว็บแอพ
-  -> Login ด้วย Google Mail หรือใช้ demo mode
+  -> Login ด้วย Google Mail
   -> ระบบเตรียมโฟลเดอร์ Scan to Sheet
   -> ระบบเตรียม Google Sheet ของขนส่งทั้ง 8 ไฟล์
   -> ผู้ใช้เลือกขนส่ง
@@ -57,16 +57,7 @@ Status
 Note
 ```
 
-## Run locally
-
-```bash
-npm install
-npm run dev
-```
-
-ถ้ายังไม่ใส่ค่า `VITE_GOOGLE_CLIENT_ID` แอพจะทำงานใน demo mode และเก็บข้อมูลใน browser `localStorage` เพื่อทดลอง flow ได้ก่อน
-
-## เปิดใช้ Google mode ภายหลัง
+## Google Cloud setup
 
 สร้าง OAuth client ใน Google Cloud Console:
 
@@ -74,6 +65,7 @@ npm run dev
 Application type: Web application
 Authorized JavaScript origins:
   http://127.0.0.1:5173
+  https://scan-to-sheet-ten.vercel.app
 ```
 
 เปิด API:
@@ -83,10 +75,37 @@ Google Drive API
 Google Sheets API
 ```
 
-เพิ่มไฟล์ `.env`:
+Scopes ที่ใช้:
+
+```text
+openid
+email
+profile
+https://www.googleapis.com/auth/drive.file
+https://www.googleapis.com/auth/spreadsheets
+```
+
+## Run locally
+
+สร้างไฟล์ `.env`:
 
 ```text
 VITE_GOOGLE_CLIENT_ID=your-web-oauth-client-id.apps.googleusercontent.com
 ```
 
-แล้ว restart dev server
+แล้วรัน:
+
+```bash
+npm install
+npm run dev
+```
+
+## Deploy on Vercel
+
+ตั้ง Environment Variable ใน Vercel:
+
+```text
+VITE_GOOGLE_CLIENT_ID=your-web-oauth-client-id.apps.googleusercontent.com
+```
+
+หลังเพิ่มหรือแก้ environment variable ต้อง redeploy ใหม่

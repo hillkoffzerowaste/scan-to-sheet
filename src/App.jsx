@@ -3,29 +3,26 @@ import {
   AlertTriangle,
   CheckCircle2,
   Clock3,
-  Eraser,
   ExternalLink,
   FileSpreadsheet,
+  LogIn,
+  LogOut,
   Mail,
   PackageCheck,
   Play,
   RefreshCw,
   ScanLine,
   Truck,
-  UserRound,
   Volume2,
 } from 'lucide-react';
 import {
   COURIERS,
   appendScanGoogle,
-  appendScanLocal,
-  getBangkokParts,
-  getLocalRows,
-  getLocalSummary,
   fetchGoogleProfile,
+  getBangkokParts,
+  getTodayRowsGoogle,
   loadGoogleConfig,
   prepareGoogleSheets,
-  resetDemoData,
 } from './services/googleSheets.js';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
@@ -37,35 +34,39 @@ const SCOPES = [
   'https://www.googleapis.com/auth/spreadsheets',
 ].join(' ');
 
-const DEFAULT_USER = {
-  email: 'demo@scan-to-sheet.local',
-  name: 'Demo User',
+const EMPTY_USER = {
+  email: 'ยังไม่ได้เข้าสู่ระบบ',
+  name: '',
 };
 
 function App() {
-  const [mode, setMode] = useState(GOOGLE_CLIENT_ID ? 'google-ready' : 'demo');
   const [token, setToken] = useState(null);
-  const [user, setUser] = useState(DEFAULT_USER);
+  const [user, setUser] = useState(EMPTY_USER);
   const [config, setConfig] = useState(() => loadGoogleConfig());
   const [selectedCourier, setSelectedCourier] = useState(COURIERS[0]);
   const [scanValue, setScanValue] = useState('');
-  const [status, setStatus] = useState({
-    type: 'idle',
-    title: 'พร้อมสแกน',
-    message: 'เลือกขนส่ง แล้วสแกนบาร์โค้ดหรือ QR ได้ทันที',
-  });
+  const [status, setStatus] = useState(() => ({
+    type: GOOGLE_CLIENT_ID ? 'idle' : 'warning',
+    title: GOOGLE_CLIENT_ID ? 'พร้อมเชื่อม Google' : 'ต้องใส่ OAuth Client ID',
+    message: GOOGLE_CLIENT_ID
+      ? 'เข้าสู่ระบบด้วย Google ก่อนเริ่มสแกนจริง'
+      : 'เพิ่ม VITE_GOOGLE_CLIENT_ID ใน Vercel Environment Variables แล้ว deploy ใหม่',
+  }));
   const [busy, setBusy] = useState(false);
   const [today, setToday] = useState(() => getBangkokParts());
-  const [summary, setSummary] = useState(() => getLocalSummary());
-  const [recentRows, setRecentRows] = useState(() => getLocalRows(COURIERS[0]));
+  const [summary, setSummary] = useState(() => COURIERS.map((courier) => ({ courier, count: 0 })));
+  const [recentRows, setRecentRows] = useState([]);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const inputRef = useRef(null);
   const audioContextRef = useRef(null);
 
+  const isGoogleReady = Boolean(GOOGLE_CLIENT_ID);
+  const isSignedIn = Boolean(token && config);
   const selectedCount = useMemo(
     () => summary.find((item) => item.courier === selectedCourier)?.count ?? 0,
     [selectedCourier, summary],
   );
+  const sheetUrl = config?.sheets?.[selectedCourier]?.webViewLink;
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -75,15 +76,19 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (mode === 'demo') {
-      setSummary(getLocalSummary(today.date));
-      setRecentRows(getLocalRows(selectedCourier, today.date));
+    if (isSignedIn) {
+      inputRef.current?.focus();
     }
-  }, [mode, selectedCourier, today.date]);
+  }, [isSignedIn, selectedCourier, busy]);
 
   useEffect(() => {
-    inputRef.current?.focus();
-  }, [selectedCourier, busy]);
+    if (!isSignedIn) {
+      setRecentRows([]);
+      return;
+    }
+
+    refreshSelectedCourierRows();
+  }, [selectedCourier, today.date, isSignedIn]);
 
   function playTone(type) {
     if (!soundEnabled) {
@@ -97,7 +102,6 @@ function App() {
 
     const context = audioContextRef.current ?? new AudioContext();
     audioContextRef.current = context;
-
     const oscillator = context.createOscillator();
     const gain = context.createGain();
     const now = context.currentTime;
@@ -115,16 +119,16 @@ function App() {
 
   async function signInWithGoogle() {
     if (!GOOGLE_CLIENT_ID) {
-      setMode('demo');
       setStatus({
         type: 'warning',
-        title: 'ยังไม่ได้ใส่ Google Client ID',
-        message: 'ตอนนี้ใช้งานโหมด demo ได้ก่อน แล้วค่อยใส่ Web OAuth client ภายหลัง',
+        title: 'ยังไม่ได้ใส่ OAuth Client ID',
+        message: 'ตั้งค่า VITE_GOOGLE_CLIENT_ID บน Vercel แล้ว deploy ใหม่ก่อนใช้งานจริง',
       });
       return;
     }
 
     try {
+      setBusy(true);
       await loadGoogleIdentityScript();
       const tokenClient = window.google.accounts.oauth2.initTokenClient({
         client_id: GOOGLE_CLIENT_ID,
@@ -132,19 +136,25 @@ function App() {
         prompt: 'consent',
         callback: async (response) => {
           if (response.error) {
-            throw new Error(response.error);
+            setBusy(false);
+            setStatus({
+              type: 'error',
+              title: 'เข้าสู่ระบบไม่สำเร็จ',
+              message: response.error,
+            });
+            return;
           }
 
-          setBusy(true);
-          setToken(response.access_token);
-          setMode('google');
-          const profile = await fetchGoogleProfile(response.access_token);
+          const accessToken = response.access_token;
+          setToken(accessToken);
+          const profile = await fetchGoogleProfile(accessToken);
+          const prepared = await prepareGoogleSheets(accessToken);
           setUser({
-            email: profile.email ?? DEFAULT_USER.email,
+            email: profile.email ?? 'google-user',
             name: profile.name ?? 'Google User',
           });
-          const prepared = await prepareGoogleSheets(response.access_token);
           setConfig(prepared);
+          await refreshAllCounts(accessToken, prepared);
           setStatus({
             type: 'success',
             title: 'เชื่อม Google Sheet แล้ว',
@@ -164,8 +174,77 @@ function App() {
     }
   }
 
+  function signOut() {
+    setToken(null);
+    setUser(EMPTY_USER);
+    setSummary(COURIERS.map((courier) => ({ courier, count: 0 })));
+    setRecentRows([]);
+    setStatus({
+      type: 'idle',
+      title: 'ออกจากระบบแล้ว',
+      message: 'เข้าสู่ระบบด้วย Google อีกครั้งเมื่อต้องการสแกน',
+    });
+  }
+
+  async function refreshAllCounts(accessToken = token, googleConfig = config) {
+    if (!accessToken || !googleConfig) {
+      return;
+    }
+
+    const date = getBangkokParts().date;
+    const rowsByCourier = await Promise.all(
+      COURIERS.map(async (courier) => {
+        const rows = await getTodayRowsGoogle({
+          token: accessToken,
+          config: googleConfig,
+          courier,
+          date,
+        });
+        return { courier, rows };
+      }),
+    );
+
+    setSummary(rowsByCourier.map(({ courier, rows }) => ({ courier, count: rows.length })));
+    const selected = rowsByCourier.find((item) => item.courier === selectedCourier);
+    setRecentRows(selected?.rows ?? []);
+  }
+
+  async function refreshSelectedCourierRows() {
+    if (!token || !config) {
+      return;
+    }
+
+    try {
+      const rows = await getTodayRowsGoogle({
+        token,
+        config,
+        courier: selectedCourier,
+        date: today.date,
+      });
+      setRecentRows(rows);
+      setSummary((current) => updateSummary(current, selectedCourier, rows.length));
+    } catch (error) {
+      setStatus({
+        type: 'error',
+        title: 'โหลดรายการไม่สำเร็จ',
+        message: error.message,
+      });
+    }
+  }
+
   async function handleScanSubmit(event) {
     event.preventDefault();
+
+    if (!isSignedIn) {
+      setStatus({
+        type: 'warning',
+        title: 'ต้องเข้าสู่ระบบก่อน',
+        message: 'กด Login with Google เพื่อบันทึกเข้า Google Sheet จริง',
+      });
+      playTone('error');
+      return;
+    }
+
     const code = scanValue.trim();
     if (!code) {
       setStatus({
@@ -179,25 +258,18 @@ function App() {
 
     setBusy(true);
     try {
-      const result =
-        mode === 'google' && token && config
-          ? await appendScanGoogle({
-              token,
-              config,
-              courier: selectedCourier,
-              code,
-              email: user.email,
-            })
-          : await appendScanLocal({
-              courier: selectedCourier,
-              code,
-              email: user.email,
-            });
+      const result = await appendScanGoogle({
+        token,
+        config,
+        courier: selectedCourier,
+        code,
+        email: user.email,
+      });
 
       setScanValue('');
       setToday({ date: result.date, time: result.time });
       setRecentRows(result.rows ?? []);
-      setSummary(mode === 'demo' ? getLocalSummary(result.date) : updateSummary(summary, selectedCourier, result.count));
+      setSummary((current) => updateSummary(current, selectedCourier, result.count));
 
       if (result.status === 'duplicate') {
         setStatus({
@@ -226,19 +298,6 @@ function App() {
       window.setTimeout(() => inputRef.current?.focus(), 30);
     }
   }
-
-  function clearDemo() {
-    resetDemoData();
-    setSummary(getLocalSummary(today.date));
-    setRecentRows([]);
-    setStatus({
-      type: 'idle',
-      title: 'ล้างข้อมูล demo แล้ว',
-      message: 'ข้อมูลจริงบน Google Sheet จะไม่ถูกแตะ',
-    });
-  }
-
-  const sheetUrl = config?.sheets?.[selectedCourier]?.webViewLink;
 
   return (
     <main className="app-shell">
@@ -272,6 +331,7 @@ function App() {
                 key={courier}
                 type="button"
                 onClick={() => setSelectedCourier(courier)}
+                disabled={!isSignedIn}
               >
                 <span>{courier}</span>
                 <strong>{summary.find((item) => item.courier === courier)?.count ?? 0}</strong>
@@ -282,21 +342,22 @@ function App() {
           <div className="connect-box">
             <div className="connect-title">
               <FileSpreadsheet size={18} />
-              <span>{mode === 'google' ? 'Google พร้อมใช้งาน' : 'Demo mode'}</span>
+              <span>{isSignedIn ? 'Google พร้อมใช้งาน' : 'Google ยังไม่เชื่อม'}</span>
             </div>
             <p>
-              {mode === 'google'
+              {isSignedIn
                 ? 'กำลังบันทึกเข้า Google Drive และ Google Sheet จริง'
-                : 'ทดลอง flow ได้ทันที ข้อมูลเก็บใน browser ก่อนใส่ Web OAuth client'}
+                : 'ระบบนี้ใช้ Google Sheet จริงเท่านั้น'}
             </p>
-            <button className="secondary-button" type="button" onClick={signInWithGoogle} disabled={busy}>
-              <UserRound size={16} />
-              <span>{GOOGLE_CLIENT_ID ? 'Login with Google' : 'รอใส่ OAuth Client ID'}</span>
-            </button>
-            {mode === 'demo' && (
-              <button className="ghost-button" type="button" onClick={clearDemo}>
-                <Eraser size={16} />
-                <span>ล้างข้อมูล demo</span>
+            {isSignedIn ? (
+              <button className="ghost-button" type="button" onClick={signOut}>
+                <LogOut size={16} />
+                <span>ออกจากระบบ</span>
+              </button>
+            ) : (
+              <button className="secondary-button" type="button" onClick={signInWithGoogle} disabled={busy || !isGoogleReady}>
+                {busy ? <RefreshCw size={16} className="spin" /> : <LogIn size={16} />}
+                <span>{isGoogleReady ? 'Login with Google' : 'รอใส่ OAuth Client ID'}</span>
               </button>
             )}
           </div>
@@ -324,11 +385,11 @@ function App() {
                 ref={inputRef}
                 value={scanValue}
                 onChange={(event) => setScanValue(event.target.value)}
-                placeholder="ยิงบาร์โค้ดหรือ QR แล้วกด Enter"
+                placeholder={isSignedIn ? 'ยิงบาร์โค้ดหรือ QR แล้วกด Enter' : 'Login with Google ก่อนเริ่มสแกน'}
                 autoComplete="off"
-                disabled={busy}
+                disabled={busy || !isSignedIn}
               />
-              <button type="submit" disabled={busy}>
+              <button type="submit" disabled={busy || !isSignedIn}>
                 {busy ? <RefreshCw size={18} className="spin" /> : <Play size={18} />}
                 <span>บันทึก</span>
               </button>
@@ -348,7 +409,7 @@ function App() {
             </div>
             <div>
               <span>สถานะ</span>
-              <strong>{mode === 'google' ? 'Google Sheet' : 'Demo'}</strong>
+              <strong>{isSignedIn ? 'Google Sheet' : 'รอ Login'}</strong>
             </div>
           </div>
 
@@ -376,7 +437,7 @@ function App() {
                 {recentRows.length === 0 ? (
                   <tr>
                     <td colSpan="5" className="empty-cell">
-                      ยังไม่มีรายการของวันนี้
+                      {isSignedIn ? 'ยังไม่มีรายการของวันนี้' : 'เข้าสู่ระบบเพื่อโหลดรายการจาก Google Sheet'}
                     </td>
                   </tr>
                 ) : (
