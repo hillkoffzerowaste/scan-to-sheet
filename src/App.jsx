@@ -69,6 +69,31 @@ function App() {
   const sheetUrl = config?.sheets?.[selectedCourier]?.webViewLink;
 
   useEffect(() => {
+    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    const accessToken = hash.get('access_token');
+    const error = hash.get('error');
+    const errorDescription = hash.get('error_description');
+
+    if (!accessToken && !error) {
+      return;
+    }
+
+    window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
+
+    if (error) {
+      setStatus({
+        type: 'error',
+        title: 'เข้าสู่ระบบไม่สำเร็จ',
+        message: errorDescription || error,
+      });
+      setBusy(false);
+      return;
+    }
+
+    completeGoogleSignIn(accessToken);
+  }, []);
+
+  useEffect(() => {
     const timer = window.setInterval(() => {
       setToday(getBangkokParts());
     }, 1000);
@@ -127,50 +152,45 @@ function App() {
       return;
     }
 
+    const redirectUri = `${window.location.origin}${window.location.pathname}`;
+    const params = new URLSearchParams({
+      client_id: GOOGLE_CLIENT_ID,
+      redirect_uri: redirectUri,
+      response_type: 'token',
+      scope: SCOPES,
+      include_granted_scopes: 'true',
+      prompt: 'consent',
+    });
+
+    setBusy(true);
+    window.location.assign(`https://accounts.google.com/o/oauth2/v2/auth?${params}`);
+  }
+
+  async function completeGoogleSignIn(accessToken) {
     try {
       setBusy(true);
-      await loadGoogleIdentityScript();
-      const tokenClient = window.google.accounts.oauth2.initTokenClient({
-        client_id: GOOGLE_CLIENT_ID,
-        scope: SCOPES,
-        prompt: 'consent',
-        callback: async (response) => {
-          if (response.error) {
-            setBusy(false);
-            setStatus({
-              type: 'error',
-              title: 'เข้าสู่ระบบไม่สำเร็จ',
-              message: response.error,
-            });
-            return;
-          }
-
-          const accessToken = response.access_token;
-          setToken(accessToken);
-          const profile = await fetchGoogleProfile(accessToken);
-          const prepared = await prepareGoogleSheets(accessToken);
-          setUser({
-            email: profile.email ?? 'google-user',
-            name: profile.name ?? 'Google User',
-          });
-          setConfig(prepared);
-          await refreshAllCounts(accessToken, prepared);
-          setStatus({
-            type: 'success',
-            title: 'เชื่อม Google Sheet แล้ว',
-            message: 'ระบบเตรียมโฟลเดอร์และไฟล์ขนส่งทั้ง 8 รายการเรียบร้อย',
-          });
-          setBusy(false);
-        },
+      setToken(accessToken);
+      const profile = await fetchGoogleProfile(accessToken);
+      const prepared = await prepareGoogleSheets(accessToken);
+      setUser({
+        email: profile.email ?? 'google-user',
+        name: profile.name ?? 'Google User',
       });
-      tokenClient.requestAccessToken();
+      setConfig(prepared);
+      await refreshAllCounts(accessToken, prepared);
+      setStatus({
+        type: 'success',
+        title: 'เชื่อม Google Sheet แล้ว',
+        message: 'ระบบเตรียมโฟลเดอร์และไฟล์ขนส่งทั้ง 8 รายการเรียบร้อย',
+      });
     } catch (error) {
-      setBusy(false);
       setStatus({
         type: 'error',
         title: 'เชื่อม Google ไม่สำเร็จ',
         message: error.message,
       });
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -475,22 +495,6 @@ function StatusBanner({ status }) {
 
 function updateSummary(summary, courier, count) {
   return summary.map((item) => (item.courier === courier ? { ...item, count } : item));
-}
-
-function loadGoogleIdentityScript() {
-  if (window.google?.accounts?.oauth2) {
-    return Promise.resolve();
-  }
-
-  return new Promise((resolve, reject) => {
-    const script = document.createElement('script');
-    script.src = 'https://accounts.google.com/gsi/client';
-    script.async = true;
-    script.defer = true;
-    script.onload = resolve;
-    script.onerror = () => reject(new Error('โหลด Google Identity Services ไม่สำเร็จ'));
-    document.head.appendChild(script);
-  });
 }
 
 export default App;

@@ -66,6 +66,10 @@ Application type: Web application
 Authorized JavaScript origins:
   http://127.0.0.1:5173
   https://scan-to-sheet-ten.vercel.app
+
+Authorized redirect URIs:
+  http://127.0.0.1:5173/
+  https://scan-to-sheet-ten.vercel.app/
 ```
 
 เปิด API:
