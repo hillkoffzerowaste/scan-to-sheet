@@ -330,6 +330,87 @@ h3 {
   font-size: 0.82rem;
 }
 
+.search-panel {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+
+.search-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.search-heading span {
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.search-form {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.search-input-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-height: 46px;
+  padding: 0 11px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.search-input-row input {
+  width: 100%;
+  min-height: 44px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+}
+
+.search-scope-control {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.search-date-control {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.search-button {
+  min-height: 44px;
+}
+
+.search-results {
+  display: grid;
+  gap: 8px;
+}
+
+.empty-search {
+  padding: 12px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 8px;
+  color: var(--muted);
+  text-align: center;
+  font-weight: 800;
+}
+
+.search-table table {
+  min-width: 760px;
+}
+
 .scan-controls {
   display: grid;
   grid-template-columns: 1fr;
@@ -756,6 +837,15 @@ th {
 
   .report-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .search-form {
+    grid-template-columns: minmax(220px, 1.2fr) minmax(150px, 0.7fr) minmax(180px, 0.9fr) auto;
+    align-items: end;
+  }
+
+  .search-range {
+    grid-column: 1 / -1;
   }
 
   .scan-input-row {

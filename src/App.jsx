@@ -17,6 +17,7 @@ import {
   RefreshCw,
   Repeat,
   ScanLine,
+  Search,
   Square,
   Sun,
   Truck,
@@ -34,6 +35,7 @@ import {
   listDatesInMonth,
   loadGoogleConfig,
   prepareGoogleSheets,
+  searchScansGoogle,
   validateScanCode,
 } from './services/googleSheets.js';
 
@@ -77,6 +79,13 @@ function App() {
   const [scanMode, setScanMode] = useState('single');
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraMessage, setCameraMessage] = useState('เปิดกล้อง แล้วเล็งบาร์โค้ดหลักให้อยู่ในกรอบ');
+  const [searchValue, setSearchValue] = useState('');
+  const [searchScope, setSearchScope] = useState('selected');
+  const [searchMode, setSearchMode] = useState('today');
+  const [searchStartDate, setSearchStartDate] = useState(() => getBangkokParts().date);
+  const [searchEndDate, setSearchEndDate] = useState(() => getBangkokParts().date);
+  const [searchBusy, setSearchBusy] = useState(false);
+  const [searchResults, setSearchResults] = useState(null);
   const [reportMode, setReportMode] = useState('daily');
   const [reportDate, setReportDate] = useState(() => getBangkokParts().date);
   const [reportStartDate, setReportStartDate] = useState(() => getBangkokParts().date);
@@ -511,6 +520,79 @@ function App() {
     }
   }
 
+  async function handleSearchSubmit(event) {
+    event.preventDefault();
+
+    if (!isSignedIn) {
+      setStatus({
+        type: 'warning',
+        title: 'ต้องเข้าสู่ระบบก่อน',
+        message: 'Login with Google ก่อนค้นหาเลขพัสดุจาก Google Sheet',
+      });
+      return;
+    }
+
+    const query = searchValue.trim();
+    if (!query) {
+      setStatus({
+        type: 'warning',
+        title: 'กรอกเลขที่ต้องการค้นหา',
+        message: 'พิมพ์เลขพัสดุหรือบางส่วนของเลขก่อนกดค้นหา',
+      });
+      return;
+    }
+
+    const dates = getSearchDates();
+    if (searchMode !== 'all' && dates.length === 0) {
+      setStatus({
+        type: 'warning',
+        title: 'ช่วงวันที่ไม่ถูกต้อง',
+        message: 'เลือกวันที่เริ่มต้นและสิ้นสุดให้ถูกต้องก่อนค้นหา',
+      });
+      return;
+    }
+
+    setSearchBusy(true);
+    try {
+      const results = await searchScansGoogle({
+        token,
+        config,
+        query,
+        couriers: searchScope === 'all' ? COURIERS : [selectedCourier],
+        dates: searchMode === 'all' ? null : dates,
+      });
+      setSearchResults(results);
+      setStatus({
+        type: results.length > 0 ? 'success' : 'warning',
+        title: results.length > 0 ? 'พบเลขพัสดุ' : 'ไม่พบเลขพัสดุ',
+        message:
+          results.length > 0
+            ? `พบ ${results.length} รายการจาก Google Sheet`
+            : `${query} ยังไม่พบในเงื่อนไขที่เลือก`,
+      });
+    } catch (error) {
+      setStatus({
+        type: 'error',
+        title: 'ค้นหาไม่สำเร็จ',
+        message: error.message,
+      });
+    } finally {
+      setSearchBusy(false);
+    }
+  }
+
+  function getSearchDates() {
+    if (searchMode === 'today') {
+      return [today.date];
+    }
+
+    if (searchMode === 'range') {
+      return listDatesBetween(searchStartDate, searchEndDate);
+    }
+
+    return [];
+  }
+
   async function generateReport() {
     if (!isSignedIn) {
       setStatus({
@@ -670,6 +752,104 @@ function App() {
               <strong>{today.time}</strong>
             </div>
           </div>
+
+          <section className="search-panel" aria-label="ค้นหาเลขพัสดุ">
+            <div className="search-heading">
+              <div>
+                <p className="eyebrow">Lookup</p>
+                <h3>ค้นหาเลขพัสดุ</h3>
+              </div>
+              <span>{searchResults ? `${searchResults.length} รายการ` : 'ยังไม่ได้ค้นหา'}</span>
+            </div>
+
+            <form className="search-form" onSubmit={handleSearchSubmit}>
+              <label className="field-control search-code-field">
+                <span>เลขพัสดุ</span>
+                <div className="search-input-row">
+                  <Search size={20} />
+                  <input
+                    value={searchValue}
+                    onChange={(event) => setSearchValue(event.target.value)}
+                    placeholder="พิมพ์เลขพัสดุหรือบางส่วนของเลข"
+                    autoComplete="off"
+                    disabled={searchBusy || !isSignedIn}
+                  />
+                </div>
+              </label>
+
+              <div className="segmented-control search-scope-control">
+                <button className={searchScope === 'selected' ? 'active' : ''} type="button" onClick={() => setSearchScope('selected')}>
+                  ขนส่งนี้
+                </button>
+                <button className={searchScope === 'all' ? 'active' : ''} type="button" onClick={() => setSearchScope('all')}>
+                  ทุกขนส่ง
+                </button>
+              </div>
+
+              <div className="segmented-control search-date-control">
+                <button className={searchMode === 'today' ? 'active' : ''} type="button" onClick={() => setSearchMode('today')}>
+                  วันนี้
+                </button>
+                <button className={searchMode === 'range' ? 'active' : ''} type="button" onClick={() => setSearchMode('range')}>
+                  ช่วงวันที่
+                </button>
+                <button className={searchMode === 'all' ? 'active' : ''} type="button" onClick={() => setSearchMode('all')}>
+                  ทุกวัน
+                </button>
+              </div>
+
+              {searchMode === 'range' && (
+                <div className="range-fields search-range">
+                  <label className="field-control">
+                    <span>เริ่มต้น</span>
+                    <input type="date" value={searchStartDate} onChange={(event) => setSearchStartDate(event.target.value)} />
+                  </label>
+                  <label className="field-control">
+                    <span>สิ้นสุด</span>
+                    <input type="date" value={searchEndDate} onChange={(event) => setSearchEndDate(event.target.value)} />
+                  </label>
+                </div>
+              )}
+
+              <button className="secondary-button search-button" type="submit" disabled={searchBusy || !isSignedIn}>
+                {searchBusy ? <RefreshCw size={16} className="spin" /> : <Search size={16} />}
+                <span>ค้นหา</span>
+              </button>
+            </form>
+
+            {searchResults && (
+              <div className="search-results">
+                {searchResults.length === 0 ? (
+                  <div className="empty-search">ไม่พบเลขพัสดุในเงื่อนไขที่เลือก</div>
+                ) : (
+                  <div className="table-wrap search-table">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>ขนส่ง</th>
+                          <th>วันที่</th>
+                          <th>เวลา</th>
+                          <th>Tracking / Barcode</th>
+                          <th>ผู้สแกน</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {searchResults.map((row) => (
+                          <tr key={`${row.courier}-${row.date}-${row.no}-${row.code}`}>
+                            <td>{row.courier}</td>
+                            <td>{row.date}</td>
+                            <td>{row.time}</td>
+                            <td className="code-cell">{row.code}</td>
+                            <td>{row.email}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
 
           <div className="scan-controls" aria-label="เลือกวิธีสแกน">
             <div className="segmented-control">

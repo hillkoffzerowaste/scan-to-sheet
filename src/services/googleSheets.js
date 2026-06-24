@@ -379,6 +379,47 @@ export async function getScanReportGoogle({ token, config, dates }) {
   };
 }
 
+export async function searchScansGoogle({ token, config, query, couriers = COURIERS, dates = null, limit = 50 }) {
+  const normalizedQuery = normalizeScanCode(query);
+  if (!normalizedQuery) {
+    return [];
+  }
+
+  const results = [];
+
+  for (const courier of couriers) {
+    const sheet = config?.sheets?.[courier];
+    if (!sheet?.id) {
+      throw new Error(`ไม่พบ Google Sheet ของ ${courier}`);
+    }
+
+    const spreadsheet = await getSpreadsheet(token, sheet.id);
+    const sheetTitles = spreadsheet.sheets?.map((item) => item.properties.title) ?? [];
+    const searchDates = dates
+      ? dates.filter((date) => sheetTitles.includes(date))
+      : sheetTitles.filter((title) => /^\d{4}-\d{2}-\d{2}$/.test(title));
+
+    for (const date of searchDates) {
+      const rows = await readDailyRows({ token, spreadsheetId: sheet.id, date });
+      for (const row of rows) {
+        const item = rowFromSheet(row);
+        const code = normalizeScanCode(item.code);
+        if (code.includes(normalizedQuery)) {
+          results.push({
+            ...item,
+            courier,
+            sheetUrl: sheet.webViewLink,
+          });
+        }
+      }
+    }
+  }
+
+  return results
+    .sort((a, b) => `${b.date} ${b.time}`.localeCompare(`${a.date} ${a.time}`))
+    .slice(0, limit);
+}
+
 export function listDatesBetween(startDate, endDate) {
   if (!startDate || !endDate) {
     return [];
