@@ -25,6 +25,17 @@ export const SCAN_HEADERS = [
   'Note',
 ];
 
+export const COURIER_RULES = {
+  Lazada: {
+    label: 'เลข Lazada ต้องขึ้นต้นด้วย LEX',
+    valid: /^LEX[A-Z0-9]{8,35}$/i,
+  },
+  'Lazada Flash': {
+    label: 'เลข Lazada Flash ต้องขึ้นต้นด้วย TH',
+    valid: /^TH[A-Z0-9]{8,18}$/i,
+  },
+};
+
 const CONFIG_KEY = 'scan-to-sheet-google-config-v1';
 const FOLDER_NAME = 'Scan to Sheet';
 const TIMEZONE = 'Asia/Bangkok';
@@ -66,6 +77,45 @@ export async function fetchGoogleProfile(token) {
 
 function normalizeCode(value) {
   return String(value ?? '').trim();
+}
+
+export function normalizeScanCode(value) {
+  return normalizeCode(value).toUpperCase();
+}
+
+export function validateScanCode(courier, value) {
+  const normalizedCode = normalizeScanCode(value);
+  const rule = COURIER_RULES[courier];
+
+  if (!normalizedCode) {
+    return {
+      ok: false,
+      code: normalizedCode,
+      reason: 'ยังไม่มีเลขสแกน',
+    };
+  }
+
+  if (!rule) {
+    return {
+      ok: true,
+      code: normalizedCode,
+      reason: '',
+    };
+  }
+
+  if (!rule.valid.test(normalizedCode)) {
+    return {
+      ok: false,
+      code: normalizedCode,
+      reason: `${normalizedCode} ไม่ใช่บาร์โค้ดหลักของ ${courier} (${rule.label})`,
+    };
+  }
+
+  return {
+    ok: true,
+    code: normalizedCode,
+    reason: '',
+  };
 }
 
 async function apiFetch(url, token, options = {}) {

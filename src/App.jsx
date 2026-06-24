@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   BarChart3,
+  Camera,
   CalendarDays,
   CheckCircle2,
   Clock3,
@@ -14,11 +15,14 @@ import {
   PackageCheck,
   Play,
   RefreshCw,
+  Repeat,
   ScanLine,
+  Square,
   Sun,
   Truck,
   Volume2,
 } from 'lucide-react';
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import {
   COURIERS,
   appendScanGoogle,
@@ -30,6 +34,7 @@ import {
   listDatesInMonth,
   loadGoogleConfig,
   prepareGoogleSheets,
+  validateScanCode,
 } from './services/googleSheets.js';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
@@ -46,6 +51,8 @@ const EMPTY_USER = {
   name: '',
 };
 const THEME_KEY = 'scan-to-sheet-theme';
+const CAMERA_REGION_ID = 'camera-reader';
+const CAMERA_COOLDOWN_MS = 2500;
 
 function App() {
   const [token, setToken] = useState(null);
@@ -66,6 +73,10 @@ function App() {
   const [recentRows, setRecentRows] = useState([]);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [theme, setTheme] = useState(() => localStorage.getItem(THEME_KEY) || 'light');
+  const [scanMethod, setScanMethod] = useState('manual');
+  const [scanMode, setScanMode] = useState('single');
+  const [cameraActive, setCameraActive] = useState(false);
+  const [cameraMessage, setCameraMessage] = useState('เปิดกล้อง แล้วเล็งบาร์โค้ดหลักให้อยู่ในกรอบ');
   const [reportMode, setReportMode] = useState('daily');
   const [reportDate, setReportDate] = useState(() => getBangkokParts().date);
   const [reportStartDate, setReportStartDate] = useState(() => getBangkokParts().date);
@@ -75,6 +86,10 @@ function App() {
   const [reportData, setReportData] = useState(null);
   const inputRef = useRef(null);
   const audioContextRef = useRef(null);
+  const cameraRef = useRef(null);
+  const scanModeRef = useRef(scanMode);
+  const lastCameraScanRef = useRef({ code: '', time: 0 });
+  const cameraSavingRef = useRef(false);
 
   const isGoogleReady = Boolean(GOOGLE_CLIENT_ID);
   const isSignedIn = Boolean(token && config);
@@ -134,6 +149,22 @@ function App() {
   }, [isSignedIn, selectedCourier, busy]);
 
   useEffect(() => {
+    if (!isSignedIn || scanMethod !== 'camera') {
+      stopCamera();
+    }
+  }, [isSignedIn, scanMethod]);
+
+  useEffect(() => {
+    scanModeRef.current = scanMode;
+  }, [scanMode]);
+
+  useEffect(() => {
+    return () => {
+      stopCamera();
+    };
+  }, []);
+
+  useEffect(() => {
     if (!isSignedIn) {
       setRecentRows([]);
       return;
@@ -157,16 +188,23 @@ function App() {
     const oscillator = context.createOscillator();
     const gain = context.createGain();
     const now = context.currentTime;
+    const tones = {
+      success: { frequency: 980, peak: 0.18, duration: 0.14 },
+      duplicate: { frequency: 260, peak: 0.25, duration: 0.4 },
+      ignored: { frequency: 520, peak: 0.2, duration: 0.18 },
+      error: { frequency: 180, peak: 0.25, duration: 0.4 },
+    };
+    const tone = tones[type] ?? tones.error;
 
     oscillator.type = 'sine';
-    oscillator.frequency.value = type === 'success' ? 980 : type === 'duplicate' ? 260 : 180;
+    oscillator.frequency.value = tone.frequency;
     gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.exponentialRampToValueAtTime(type === 'success' ? 0.18 : 0.25, now + 0.015);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + (type === 'success' ? 0.12 : 0.38));
+    gain.gain.exponentialRampToValueAtTime(tone.peak, now + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + Math.max(tone.duration - 0.02, 0.1));
     oscillator.connect(gain);
     gain.connect(context.destination);
     oscillator.start(now);
-    oscillator.stop(now + (type === 'success' ? 0.14 : 0.4));
+    oscillator.stop(now + tone.duration);
   }
 
   async function signInWithGoogle() {
@@ -279,9 +317,7 @@ function App() {
     }
   }
 
-  async function handleScanSubmit(event) {
-    event.preventDefault();
-
+  async function saveScannedCode(rawCode, source = 'manual') {
     if (!isSignedIn) {
       setStatus({
         type: 'warning',
@@ -289,18 +325,20 @@ function App() {
         message: 'กด Login with Google เพื่อบันทึกเข้า Google Sheet จริง',
       });
       playTone('error');
-      return;
+      return { status: 'error' };
     }
 
-    const code = scanValue.trim();
-    if (!code) {
+    const validation = validateScanCode(selectedCourier, rawCode);
+    if (!validation.ok) {
+      const isEmpty = !validation.code;
       setStatus({
-        type: 'warning',
-        title: 'ยังไม่มีเลขสแกน',
-        message: 'ยิงบาร์โค้ดหรือกรอกเลขก่อนบันทึก',
+        type: isEmpty ? 'warning' : 'ignored',
+        title: isEmpty ? 'ยังไม่มีเลขสแกน' : 'ไม่ใช่บาร์โค้ดหลัก',
+        message: validation.reason,
       });
-      playTone('error');
-      return;
+      setCameraMessage(validation.reason);
+      playTone(isEmpty ? 'error' : 'ignored');
+      return { status: isEmpty ? 'error' : 'ignored', code: validation.code };
     }
 
     setBusy(true);
@@ -309,11 +347,15 @@ function App() {
         token,
         config,
         courier: selectedCourier,
-        code,
+        code: validation.code,
         email: user.email,
       });
 
-      setScanValue('');
+      if (source === 'manual') {
+        setScanValue('');
+      } else {
+        setScanValue(result.code);
+      }
       setToday({ date: result.date, time: result.time });
       setRecentRows(result.rows ?? []);
       setSummary((current) => updateSummary(current, selectedCourier, result.count));
@@ -324,6 +366,7 @@ function App() {
           title: 'เลขซ้ำ',
           message: `${result.code} มีอยู่แล้วใน ${selectedCourier} วันที่ ${result.date}`,
         });
+        setCameraMessage(`${result.code} ซ้ำใน ${selectedCourier}`);
         playTone('duplicate');
       } else {
         setStatus({
@@ -331,18 +374,140 @@ function App() {
           title: 'สแกนสำเร็จ',
           message: `${result.code} ถูกบันทึกเข้า ${selectedCourier} วันที่ ${result.date}`,
         });
+        setCameraMessage(`${result.code} บันทึกสำเร็จ`);
         playTone('success');
       }
+      return { ...result, status: result.status };
     } catch (error) {
       setStatus({
         type: 'error',
         title: 'บันทึกไม่สำเร็จ',
         message: error.message,
       });
+      setCameraMessage(error.message);
       playTone('error');
+      return { status: 'error', message: error.message };
     } finally {
       setBusy(false);
+      cameraSavingRef.current = false;
       window.setTimeout(() => inputRef.current?.focus(), 30);
+    }
+  }
+
+  async function handleScanSubmit(event) {
+    event.preventDefault();
+    await saveScannedCode(scanValue, 'manual');
+  }
+
+  async function stopCamera() {
+    const scanner = cameraRef.current;
+    cameraRef.current = null;
+    cameraSavingRef.current = false;
+    lastCameraScanRef.current = { code: '', time: 0 };
+
+    if (scanner) {
+      try {
+        if (scanner.isScanning) {
+          await scanner.stop();
+        }
+        await scanner.clear();
+      } catch {
+        // Camera cleanup can throw if the stream has already stopped.
+      }
+    }
+
+    setCameraActive(false);
+  }
+
+  async function handleCameraDetected(decodedText) {
+    const code = String(decodedText ?? '').trim();
+    if (!code || cameraSavingRef.current) {
+      return;
+    }
+
+    const now = Date.now();
+    const lastScan = lastCameraScanRef.current;
+    if (lastScan.code === code && now - lastScan.time < CAMERA_COOLDOWN_MS) {
+      return;
+    }
+
+    lastCameraScanRef.current = { code, time: now };
+    cameraSavingRef.current = true;
+    setCameraMessage(`อ่านได้: ${code}`);
+
+    const result = await saveScannedCode(code, 'camera');
+    if (scanModeRef.current === 'single') {
+      await stopCamera();
+      if (result.status === 'ignored') {
+        setCameraMessage('หยุดแล้ว: โค้ดที่อ่านได้ไม่ตรงกฎของขนส่งที่เลือก');
+      } else if (result.status === 'error') {
+        setCameraMessage('หยุดแล้ว: บันทึกไม่สำเร็จ');
+      } else {
+        setCameraMessage('หยุดแล้ว: สแกนทีละรายการเสร็จ');
+      }
+    }
+  }
+
+  async function startCamera() {
+    if (!isSignedIn) {
+      setStatus({
+        type: 'warning',
+        title: 'ต้องเข้าสู่ระบบก่อน',
+        message: 'Login with Google ก่อนเปิดกล้องสแกน',
+      });
+      playTone('error');
+      return;
+    }
+
+    if (cameraActive || cameraRef.current) {
+      return;
+    }
+
+    try {
+      setCameraMessage('กำลังเปิดกล้อง...');
+      const scanner = new Html5Qrcode(CAMERA_REGION_ID, {
+        formatsToSupport: [
+          Html5QrcodeSupportedFormats.QR_CODE,
+          Html5QrcodeSupportedFormats.CODE_128,
+          Html5QrcodeSupportedFormats.CODE_39,
+          Html5QrcodeSupportedFormats.EAN_13,
+          Html5QrcodeSupportedFormats.EAN_8,
+          Html5QrcodeSupportedFormats.UPC_A,
+          Html5QrcodeSupportedFormats.UPC_E,
+          Html5QrcodeSupportedFormats.ITF,
+        ],
+        verbose: false,
+      });
+      cameraRef.current = scanner;
+
+      await scanner.start(
+        { facingMode: 'environment' },
+        {
+          fps: 8,
+          qrbox: (viewfinderWidth, viewfinderHeight) => {
+            const width = Math.floor(Math.min(viewfinderWidth * 0.86, 420));
+            const height = Math.floor(Math.min(viewfinderHeight * 0.34, 170));
+            return { width, height };
+          },
+          aspectRatio: 1.7777778,
+          disableFlip: true,
+        },
+        handleCameraDetected,
+        () => {},
+      );
+
+      setCameraActive(true);
+      setCameraMessage('เล็งบาร์โค้ดหลักให้อยู่ในกรอบกลาง');
+    } catch (error) {
+      cameraRef.current = null;
+      setCameraActive(false);
+      setCameraMessage(error.message);
+      setStatus({
+        type: 'error',
+        title: 'เปิดกล้องไม่สำเร็จ',
+        message: error.message,
+      });
+      playTone('error');
     }
   }
 
@@ -461,7 +626,7 @@ function App() {
                 key={courier}
                 type="button"
                 onClick={() => setSelectedCourier(courier)}
-                disabled={!isSignedIn}
+                disabled={!isSignedIn || cameraActive}
               >
                 <span>{courier}</span>
                 <strong>{summary.find((item) => item.courier === courier)?.count ?? 0}</strong>
@@ -506,25 +671,92 @@ function App() {
             </div>
           </div>
 
-          <form className="scan-form" onSubmit={handleScanSubmit}>
-            <label htmlFor="scan-input">Tracking / Barcode</label>
-            <div className="scan-input-row">
-              <ScanLine size={24} />
-              <input
-                id="scan-input"
-                ref={inputRef}
-                value={scanValue}
-                onChange={(event) => setScanValue(event.target.value)}
-                placeholder={isSignedIn ? 'ยิงบาร์โค้ดหรือ QR แล้วกด Enter' : 'Login with Google ก่อนเริ่มสแกน'}
-                autoComplete="off"
-                disabled={busy || !isSignedIn}
-              />
-              <button type="submit" disabled={busy || !isSignedIn}>
-                {busy ? <RefreshCw size={18} className="spin" /> : <Play size={18} />}
-                <span>บันทึก</span>
+          <div className="scan-controls" aria-label="เลือกวิธีสแกน">
+            <div className="segmented-control">
+              <button
+                className={scanMethod === 'manual' ? 'active' : ''}
+                type="button"
+                onClick={() => setScanMethod('manual')}
+              >
+                <ScanLine size={16} />
+                <span>เครื่องยิง/พิมพ์</span>
+              </button>
+              <button
+                className={scanMethod === 'camera' ? 'active' : ''}
+                type="button"
+                onClick={() => setScanMethod('camera')}
+              >
+                <Camera size={16} />
+                <span>กล้องมือถือ</span>
               </button>
             </div>
-          </form>
+
+            <div className="segmented-control">
+              <button
+                className={scanMode === 'single' ? 'active' : ''}
+                type="button"
+                onClick={() => setScanMode('single')}
+              >
+                <Square size={15} />
+                <span>ทีละรายการ</span>
+              </button>
+              <button
+                className={scanMode === 'continuous' ? 'active' : ''}
+                type="button"
+                onClick={() => setScanMode('continuous')}
+              >
+                <Repeat size={15} />
+                <span>ต่อเนื่อง</span>
+              </button>
+            </div>
+          </div>
+
+          {scanMethod === 'camera' ? (
+            <div className="camera-panel">
+              <div className={`camera-stage ${cameraActive ? 'active' : ''}`}>
+                <div id={CAMERA_REGION_ID} className="camera-reader" />
+                <div className="scan-frame" aria-hidden="true">
+                  <span />
+                </div>
+              </div>
+              <div className="camera-footer">
+                <p>{cameraMessage}</p>
+                <div className="camera-actions">
+                  {cameraActive ? (
+                    <button className="ghost-button" type="button" onClick={stopCamera}>
+                      <Square size={16} />
+                      <span>หยุดกล้อง</span>
+                    </button>
+                  ) : (
+                    <button className="secondary-button" type="button" onClick={startCamera} disabled={busy || !isSignedIn}>
+                      <Camera size={16} />
+                      <span>เปิดกล้อง</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <form className="scan-form" onSubmit={handleScanSubmit}>
+              <label htmlFor="scan-input">Tracking / Barcode</label>
+              <div className="scan-input-row">
+                <ScanLine size={24} />
+                <input
+                  id="scan-input"
+                  ref={inputRef}
+                  value={scanValue}
+                  onChange={(event) => setScanValue(event.target.value)}
+                  placeholder={isSignedIn ? 'ยิงบาร์โค้ดหรือ QR แล้วกด Enter' : 'Login with Google ก่อนเริ่มสแกน'}
+                  autoComplete="off"
+                  disabled={busy || !isSignedIn}
+                />
+                <button type="submit" disabled={busy || !isSignedIn}>
+                  {busy ? <RefreshCw size={18} className="spin" /> : <Play size={18} />}
+                  <span>บันทึก</span>
+                </button>
+              </div>
+            </form>
+          )}
 
           <StatusBanner status={status} />
 
