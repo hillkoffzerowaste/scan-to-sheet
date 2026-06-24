@@ -434,6 +434,29 @@ h3 {
   background: var(--surface-soft);
 }
 
+.packer-control {
+  display: grid;
+  gap: 5px;
+}
+
+.packer-control span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.packer-control select {
+  min-height: 42px;
+  width: 100%;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  padding: 0 10px;
+  font-weight: 900;
+}
+
 .issue-bar button {
   min-height: 42px;
   border: 1px solid var(--warning-line);
@@ -914,7 +937,7 @@ th {
   }
 
   .issue-bar {
-    grid-template-columns: minmax(160px, auto) minmax(0, 1fr);
+    grid-template-columns: minmax(130px, 0.7fr) minmax(150px, auto) minmax(0, 1fr);
   }
 }
 

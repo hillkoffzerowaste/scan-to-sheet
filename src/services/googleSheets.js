@@ -506,7 +506,7 @@ export function listDatesInMonth(yearMonth) {
   return dates;
 }
 
-export async function appendScanGoogle({ token, config, courier, code, email, note = '' }) {
+export async function appendScanGoogle({ token, config, courier, code, email, packer = '', note = '' }) {
   const normalizedCode = normalizeCode(code);
   const sheet = config?.master;
   if (!sheet?.id) {
@@ -541,7 +541,7 @@ export async function appendScanGoogle({ token, config, courier, code, email, no
     courier,
     normalizedCode,
     email,
-    '',
+    packer,
     'Success',
     note,
   ];

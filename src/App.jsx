@@ -57,6 +57,7 @@ const THEME_KEY = 'scan-to-sheet-theme';
 const CAMERA_REGION_ID = 'camera-reader';
 const CAMERA_COOLDOWN_MS = 2500;
 const ISSUE_CUSTOMER_CANCELLED = 'ลูกค้ายกเลิก';
+const PACKERS = ['กิต', 'มาย', 'ยุทธ', 'หล้า', 'มุก'];
 
 function App() {
   const [token, setToken] = useState(null);
@@ -64,6 +65,7 @@ function App() {
   const [config, setConfig] = useState(() => loadGoogleConfig());
   const [selectedCourier, setSelectedCourier] = useState(COURIERS[0]);
   const [scanValue, setScanValue] = useState('');
+  const [selectedPacker, setSelectedPacker] = useState(PACKERS[0]);
   const [scanRemark, setScanRemark] = useState('');
   const [status, setStatus] = useState(() => ({
     type: GOOGLE_CLIENT_ID ? 'idle' : 'warning',
@@ -368,6 +370,7 @@ function App() {
         courier: selectedCourier,
         code: validation.code,
         email: user.email,
+        packer: selectedPacker,
         note: scanRemark,
       });
 
@@ -392,7 +395,7 @@ function App() {
         setStatus({
           type: 'success',
           title: 'สแกนสำเร็จ',
-          message: `${result.code} ถูกบันทึกเข้า ${selectedCourier} วันที่ ${result.date}${scanRemark ? ` (${scanRemark})` : ''}`,
+          message: `${result.code} ถูกบันทึกเข้า ${selectedCourier} โดย ${selectedPacker} วันที่ ${result.date}${scanRemark ? ` (${scanRemark})` : ''}`,
         });
         setCameraMessage(`${result.code} บันทึกสำเร็จ`);
         playTone('success');
@@ -964,6 +967,16 @@ function App() {
           </div>
 
           <div className={`issue-bar ${scanRemark ? 'active' : ''}`}>
+            <label className="packer-control">
+              <span>Packer</span>
+              <select value={selectedPacker} onChange={(event) => setSelectedPacker(event.target.value)} disabled={!isSignedIn || busy}>
+                {PACKERS.map((packer) => (
+                  <option key={packer} value={packer}>
+                    {packer}
+                  </option>
+                ))}
+              </select>
+            </label>
             <button
               className={scanRemark === ISSUE_CUSTOMER_CANCELLED ? 'active' : ''}
               type="button"
@@ -974,7 +987,11 @@ function App() {
             >
               {ISSUE_CUSTOMER_CANCELLED}
             </button>
-            <span>{scanRemark ? `Remark ถัดไป: ${scanRemark}` : 'สแกนปกติ ไม่มี Remark'}</span>
+            <span>
+              {scanRemark
+                ? `รายการถัดไป: ${selectedPacker} / ${scanRemark}`
+                : `รายการถัดไปบันทึก Packer: ${selectedPacker}`}
+            </span>
           </div>
 
           {scanMethod === 'camera' ? (
