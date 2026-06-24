@@ -179,6 +179,40 @@ async function ensureDailyWorksheet({ token, spreadsheetId, date }) {
     return existing.properties;
   }
 
+  const reusableDefaultSheet = spreadsheet.sheets?.find((sheet) => {
+    const title = sheet.properties.title;
+    const rowCount = sheet.properties.gridProperties?.rowCount ?? 0;
+    return spreadsheet.sheets.length === 1 && rowCount <= 1000 && ['Sheet1', 'ชีต1'].includes(title);
+  });
+
+  if (reusableDefaultSheet) {
+    await apiFetch(`${SHEETS_API}/${spreadsheetId}:batchUpdate`, token, {
+      method: 'POST',
+      body: JSON.stringify({
+        requests: [
+          {
+            updateSheetProperties: {
+              properties: {
+                sheetId: reusableDefaultSheet.properties.sheetId,
+                title: date,
+                gridProperties: {
+                  rowCount: 1000,
+                  columnCount: SCAN_HEADERS.length,
+                },
+              },
+              fields: 'title,gridProperties(rowCount,columnCount)',
+            },
+          },
+        ],
+      }),
+    });
+
+    await writeHeaders({ token, spreadsheetId, date });
+    return getSpreadsheet(token, spreadsheetId).then((data) =>
+      data.sheets.find((sheet) => sheet.properties.title === date)?.properties,
+    );
+  }
+
   await apiFetch(`${SHEETS_API}/${spreadsheetId}:batchUpdate`, token, {
     method: 'POST',
     body: JSON.stringify({
@@ -198,6 +232,14 @@ async function ensureDailyWorksheet({ token, spreadsheetId, date }) {
     }),
   });
 
+  await writeHeaders({ token, spreadsheetId, date });
+
+  return getSpreadsheet(token, spreadsheetId).then((data) =>
+    data.sheets.find((sheet) => sheet.properties.title === date)?.properties,
+  );
+}
+
+async function writeHeaders({ token, spreadsheetId, date }) {
   await apiFetch(
     `${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent(`${date}!A1:G1`)}?valueInputOption=RAW`,
     token,
@@ -207,10 +249,6 @@ async function ensureDailyWorksheet({ token, spreadsheetId, date }) {
         values: [SCAN_HEADERS],
       }),
     },
-  );
-
-  return getSpreadsheet(token, spreadsheetId).then((data) =>
-    data.sheets.find((sheet) => sheet.properties.title === date)?.properties,
   );
 }
 
