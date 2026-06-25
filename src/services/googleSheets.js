@@ -401,11 +401,13 @@ export async function getScanReportGoogle({ token, config, dates }) {
       {
         date,
         total: 0,
+        cancelledTotal: 0,
         couriers: COURIERS.map((courier) => ({ courier, count: 0 })),
       },
     ]),
   );
   const courierTotals = COURIERS.map((courier) => ({ courier, count: 0 }));
+  const cancelledRows = [];
   const sheet = config?.master;
   if (!sheet?.id) {
     throw new Error('ไม่พบ Google Sheet Master');
@@ -423,6 +425,13 @@ export async function getScanReportGoogle({ token, config, dates }) {
     const day = dayMap.get(date);
 
     for (const row of rows) {
+      const isCancelled = row.status === 'Cancelled' || row.note === 'ลูกค้ายกเลิก';
+      if (isCancelled) {
+        day.cancelledTotal += 1;
+        cancelledRows.push(row);
+        continue;
+      }
+
       const dayCourier = day.couriers.find((item) => item.courier === row.courier);
       const totalCourier = courierTotals.find((item) => item.courier === row.courier);
       if (!dayCourier || !totalCourier) {
@@ -440,6 +449,8 @@ export async function getScanReportGoogle({ token, config, dates }) {
     days,
     couriers: courierTotals,
     total: courierTotals.reduce((sum, item) => sum + item.count, 0),
+    cancelledTotal: cancelledRows.length,
+    cancelledRows: cancelledRows.sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`)),
     generatedAt: new Date().toISOString(),
   };
 }

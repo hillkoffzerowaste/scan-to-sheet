@@ -244,21 +244,21 @@ function App() {
     const now = context.currentTime;
     const patterns = {
       success: [
-        { frequency: 1320, duration: 0.12, offset: 0, peak: 0.42, wave: 'square' },
-        { frequency: 1760, duration: 0.16, offset: 0.14, peak: 0.46, wave: 'square' },
+        { frequency: 1320, duration: 0.18, offset: 0, peak: 0.62, wave: 'square' },
+        { frequency: 1760, duration: 0.24, offset: 0.2, peak: 0.66, wave: 'square' },
       ],
       duplicate: [
-        { frequency: 220, duration: 0.22, offset: 0, peak: 0.55, wave: 'sawtooth' },
-        { frequency: 160, duration: 0.22, offset: 0.24, peak: 0.55, wave: 'sawtooth' },
-        { frequency: 220, duration: 0.26, offset: 0.48, peak: 0.55, wave: 'sawtooth' },
+        { frequency: 220, duration: 0.3, offset: 0, peak: 0.72, wave: 'sawtooth' },
+        { frequency: 160, duration: 0.32, offset: 0.32, peak: 0.72, wave: 'sawtooth' },
+        { frequency: 220, duration: 0.34, offset: 0.66, peak: 0.72, wave: 'sawtooth' },
       ],
       ignored: [
-        { frequency: 420, duration: 0.16, offset: 0, peak: 0.4, wave: 'square' },
-        { frequency: 320, duration: 0.2, offset: 0.18, peak: 0.44, wave: 'square' },
+        { frequency: 420, duration: 0.22, offset: 0, peak: 0.58, wave: 'square' },
+        { frequency: 320, duration: 0.26, offset: 0.24, peak: 0.62, wave: 'square' },
       ],
       error: [
-        { frequency: 180, duration: 0.28, offset: 0, peak: 0.58, wave: 'sawtooth' },
-        { frequency: 120, duration: 0.34, offset: 0.3, peak: 0.58, wave: 'sawtooth' },
+        { frequency: 180, duration: 0.38, offset: 0, peak: 0.74, wave: 'sawtooth' },
+        { frequency: 120, duration: 0.44, offset: 0.4, peak: 0.74, wave: 'sawtooth' },
       ],
     };
     const pattern = patterns[type] ?? patterns.error;
@@ -822,7 +822,8 @@ function App() {
     const lines = [
       `รายงานสแกนพัสดุ (${modeLabel})`,
       `ช่วงรายงาน: ${data.label}`,
-      `ยอดรวมทั้งหมด: ${data.total} รายการ`,
+      `ยอดส่งจริง: ${data.total} รายการ`,
+      `ยกเลิก: ${data.cancelledTotal ?? 0} รายการ`,
       '',
       'ยอดแยกตามขนส่ง',
       ...COURIERS.map((courier) => {
@@ -835,6 +836,13 @@ function App() {
       lines.push('', 'สรุปตามวันที่');
       data.days.forEach((day) => {
         lines.push(`${day.date}: ${day.total} รายการ`);
+      });
+    }
+
+    if (data.cancelledRows?.length > 0) {
+      lines.push('', 'รายการยกเลิก');
+      data.cancelledRows.forEach((row) => {
+        lines.push(`${row.date} ${row.time} | ${row.courier} | ${row.code}`);
       });
     }
 
@@ -1319,8 +1327,12 @@ function App() {
             <strong>{reportData?.label ?? '-'}</strong>
           </div>
           <div>
-            <span>รวมทั้งหมด</span>
+            <span>ยอดส่งจริง</span>
             <strong>{reportData?.total ?? 0}</strong>
+          </div>
+          <div>
+            <span>ยกเลิก</span>
+            <strong>{reportData?.cancelledTotal ?? 0}</strong>
           </div>
           <div>
             <span>จำนวนวัน</span>
@@ -1348,7 +1360,8 @@ function App() {
             <thead>
               <tr>
                 <th>วันที่</th>
-                <th>รวม</th>
+                <th>ส่งจริง</th>
+                <th>ยกเลิก</th>
                 {COURIERS.map((courier) => (
                   <th key={courier}>{courier}</th>
                 ))}
@@ -1357,7 +1370,7 @@ function App() {
             <tbody>
               {!reportData ? (
                 <tr>
-                  <td colSpan={COURIERS.length + 2} className="empty-cell">
+                  <td colSpan={COURIERS.length + 3} className="empty-cell">
                     เลือกรูปแบบรายงานแล้วกดสร้างรายงาน
                   </td>
                 </tr>
@@ -1366,11 +1379,52 @@ function App() {
                   <tr key={day.date}>
                     <td>{day.date}</td>
                     <td>{day.total}</td>
+                    <td>{day.cancelledTotal ?? 0}</td>
                     {COURIERS.map((courier) => (
                       <td key={courier}>{day.couriers.find((item) => item.courier === courier)?.count ?? 0}</td>
                     ))}
                   </tr>
                 ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="recent-header">
+          <h3>รายการยกเลิก</h3>
+        </div>
+        <div className="table-wrap report-table">
+          <table>
+            <thead>
+              <tr>
+                <th>วันที่</th>
+                <th>เวลา</th>
+                <th>ขนส่ง</th>
+                <th>Tracking / Barcode</th>
+              </tr>
+            </thead>
+            <tbody>
+              {!reportData ? (
+                <tr>
+                  <td colSpan={4} className="empty-cell">
+                    เลือกรูปแบบรายงานแล้วกดสร้างรายงาน
+                  </td>
+                </tr>
+              ) : reportData.cancelledRows?.length > 0 ? (
+                reportData.cancelledRows.map((row) => (
+                  <tr key={`${row.date}-${row.time}-${row.courier}-${row.code}`}>
+                    <td>{row.date}</td>
+                    <td>{row.time}</td>
+                    <td>{row.courier}</td>
+                    <td className="code-cell">{row.code}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={4} className="empty-cell">
+                    ไม่มีรายการยกเลิกในช่วงนี้
+                  </td>
+                </tr>
               )}
             </tbody>
           </table>
