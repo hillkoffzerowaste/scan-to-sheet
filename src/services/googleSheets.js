@@ -163,6 +163,11 @@ function escapeSheetName(sheetName) {
 }
 
 async function findDriveItem({ token, name, mimeType, parentId }) {
+  const items = await listDriveItems({ token, name, mimeType, parentId, pageSize: 1 });
+  return items[0] ?? null;
+}
+
+async function listDriveItems({ token, name, mimeType, parentId, pageSize = 50 }) {
   const clauses = [
     `name='${escapeQuery(name)}'`,
     `mimeType='${mimeType}'`,
@@ -175,11 +180,46 @@ async function findDriveItem({ token, name, mimeType, parentId }) {
   const params = new URLSearchParams({
     q: clauses.join(' and '),
     fields: 'files(id,name,webViewLink)',
-    pageSize: '1',
+    pageSize: String(pageSize),
   });
 
   const data = await apiFetch(`${DRIVE_API}/files?${params}`, token);
-  return data.files?.[0] ?? null;
+  return data.files ?? [];
+}
+
+async function chooseBestMasterSheet({ token, candidates }) {
+  const uniqueCandidates = [...new Map(candidates.filter(Boolean).map((item) => [item.id, item])).values()];
+  if (uniqueCandidates.length <= 1) {
+    return uniqueCandidates[0] ?? null;
+  }
+
+  const scoredCandidates = await Promise.all(
+    uniqueCandidates.map(async (candidate) => {
+      try {
+        const spreadsheet = await getSpreadsheet(token, candidate.id);
+        const dateSheets =
+          spreadsheet.sheets?.filter((sheet) => /^\d{4}-\d{2}-\d{2}$/.test(sheet.properties.title)) ?? [];
+        const latestDate = dateSheets.map((sheet) => sheet.properties.title).sort().at(-1) ?? '';
+        const rowCounts = await Promise.all(
+          dateSheets.map(async (sheet) => {
+            const rows = await readDailyRows({ token, spreadsheetId: candidate.id, date: sheet.properties.title });
+            return rows.filter((row) => row.some((cell) => String(cell ?? '').trim())).length;
+          }),
+        );
+        const rowCount = rowCounts.reduce((sum, count) => sum + count, 0);
+        return {
+          candidate,
+          score: dateSheets.length * 100000 + rowCount,
+          latestDate,
+        };
+      } catch {
+        return { candidate, score: 0, latestDate: '' };
+      }
+    }),
+  );
+
+  scoredCandidates.sort((a, b) => b.score - a.score || b.latestDate.localeCompare(a.latestDate));
+  return scoredCandidates[0]?.candidate ?? null;
 }
 
 async function createDriveItem({ token, name, mimeType, parentId }) {
@@ -199,11 +239,20 @@ export async function prepareGoogleSheets(token) {
     folder = await createDriveItem({ token, name: FOLDER_NAME, mimeType: MIME_FOLDER });
   }
 
-  let master = await findDriveItem({
+  const folderMasters = await listDriveItems({
     token,
     name: MASTER_SHEET_NAME,
     mimeType: MIME_SHEET,
     parentId: folder.id,
+  });
+  const allMasters = await listDriveItems({
+    token,
+    name: MASTER_SHEET_NAME,
+    mimeType: MIME_SHEET,
+  });
+  let master = await chooseBestMasterSheet({
+    token,
+    candidates: [...folderMasters, ...allMasters],
   });
 
   if (!master) {

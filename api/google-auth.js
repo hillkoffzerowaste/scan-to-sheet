@@ -2,6 +2,7 @@ import {
   createSessionId,
   exchangeCode,
   fetchProfile,
+  getStoredSheetConfig,
   sendJson,
   setSession,
   setSessionCookie,
@@ -23,11 +24,13 @@ export default async function handler(req, res) {
     const tokenData = await exchangeCode({ code, redirectUri });
     const profile = await fetchProfile(tokenData.access_token);
     const sessionId = createSessionId();
+    const sheetConfig = await getStoredSheetConfig(profile.email);
 
     await setSession(sessionId, {
       email: profile.email,
       name: profile.name,
       refreshToken: tokenData.refresh_token,
+      sheetConfig,
       createdAt: new Date().toISOString(),
     });
     setSessionCookie(res, sessionId);
@@ -36,6 +39,7 @@ export default async function handler(req, res) {
       accessToken: tokenData.access_token,
       expiresIn: tokenData.expires_in,
       profile,
+      config: sheetConfig,
     });
   } catch (error) {
     sendJson(res, 500, { error: error.message });

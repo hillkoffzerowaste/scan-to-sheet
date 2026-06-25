@@ -95,6 +95,22 @@ async function apiJson(url, options = {}) {
   return data;
 }
 
+async function loadServerGoogleConfig() {
+  const data = await apiJson('/api/google-config');
+  return data.config ?? null;
+}
+
+async function saveServerGoogleConfig(config) {
+  if (!config?.master?.id) {
+    return;
+  }
+
+  await apiJson('/api/google-config', {
+    method: 'POST',
+    body: JSON.stringify({ config }),
+  });
+}
+
 function App() {
   const [token, setToken] = useState(null);
   const [user, setUser] = useState(EMPTY_USER);
@@ -348,9 +364,11 @@ function App() {
         setBusy(true);
         setToken(stored.accessToken);
         setUser(stored.user ?? EMPTY_USER);
-        const prepared = stored.config ?? (await prepareGoogleSheets(stored.accessToken));
+        const serverConfig = await loadServerGoogleConfig().catch(() => null);
+        const prepared = serverConfig ?? (await prepareGoogleSheets(stored.accessToken));
         setConfig(prepared);
         saveStoredGoogleSession({ ...stored, config: prepared });
+        await saveServerGoogleConfig(prepared).catch(() => {});
         await refreshAllCounts(stored.accessToken, prepared);
         setStatus({
           type: 'success',
@@ -392,7 +410,8 @@ function App() {
   async function activateGoogleSession(data) {
     const accessToken = data.accessToken;
     const profile = data.profile ?? (await fetchGoogleProfile(accessToken));
-    const prepared = await prepareGoogleSheets(accessToken);
+    const serverConfig = data.config ?? (await loadServerGoogleConfig().catch(() => null));
+    const prepared = serverConfig ?? (await prepareGoogleSheets(accessToken));
     const nextUser = {
       email: profile.email ?? 'google-user',
       name: profile.name ?? 'Google User',
@@ -406,6 +425,7 @@ function App() {
       user: nextUser,
       config: prepared,
     });
+    await saveServerGoogleConfig(prepared).catch(() => {});
     await refreshAllCounts(accessToken, prepared);
     return { accessToken, config: prepared, user: nextUser };
   }

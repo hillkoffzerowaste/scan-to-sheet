@@ -71,6 +71,23 @@ export async function deleteSession(sessionId) {
   }
 }
 
+export async function getStoredSheetConfig(email) {
+  if (!email) {
+    return null;
+  }
+
+  const value = await redisCommand(['GET', sheetConfigKey(email)]);
+  return value ? JSON.parse(value) : null;
+}
+
+export async function setStoredSheetConfig(email, config) {
+  if (!email || !config?.master?.id) {
+    return;
+  }
+
+  await redisCommand(['SET', sheetConfigKey(email), JSON.stringify(config)]);
+}
+
 export function createSessionId() {
   return crypto.randomBytes(32).toString('hex');
 }
@@ -133,6 +150,10 @@ export function sendJson(res, status, payload) {
 
 function sessionKey(sessionId) {
   return `scan-to-sheet:session:${sessionId}`;
+}
+
+function sheetConfigKey(email) {
+  return `scan-to-sheet:google-config:${String(email).trim().toLowerCase()}`;
 }
 
 function readCookie(req, name) {
