@@ -860,6 +860,23 @@ function App() {
             <Mail size={16} />
             <span>{user.email}</span>
           </div>
+          <div className="top-connect-box">
+            <div className="connect-title">
+              <FileSpreadsheet size={18} />
+              <span>{isSignedIn ? 'Google พร้อมใช้งาน' : 'Google ยังไม่เชื่อม'}</span>
+            </div>
+            {isSignedIn ? (
+              <button className="ghost-button" type="button" onClick={signOut}>
+                <LogOut size={16} />
+                <span>ออกจากระบบ</span>
+              </button>
+            ) : (
+              <button className="secondary-button" type="button" onClick={signInWithGoogle} disabled={busy || !isGoogleReady}>
+                {busy ? <RefreshCw size={16} className="spin" /> : <LogIn size={16} />}
+                <span>{isGoogleReady ? 'Login with Google' : 'รอใส่ OAuth Client ID'}</span>
+              </button>
+            )}
+          </div>
           {sheetUrl && (
             <a className="ghost-button master-sheet-link" href={sheetUrl} target="_blank" rel="noreferrer">
               <FileSpreadsheet size={16} />
@@ -914,27 +931,25 @@ function App() {
             ))}
           </div>
 
-          <div className="connect-box">
-            <div className="connect-title">
-              <FileSpreadsheet size={18} />
-              <span>{isSignedIn ? 'Google พร้อมใช้งาน' : 'Google ยังไม่เชื่อม'}</span>
+          <div className="scan-tool-panel" aria-label="เลือกวิธีสแกน">
+            <div className="segmented-control">
+              <button
+                className={scanMethod === 'manual' ? 'active' : ''}
+                type="button"
+                onClick={() => setScanMethod('manual')}
+              >
+                <ScanLine size={16} />
+                <span>เครื่องยิง/พิมพ์</span>
+              </button>
+              <button
+                className={scanMethod === 'camera' ? 'active' : ''}
+                type="button"
+                onClick={() => setScanMethod('camera')}
+              >
+                <Camera size={16} />
+                <span>กล้องมือถือ</span>
+              </button>
             </div>
-            <p>
-              {isSignedIn
-                ? 'กำลังบันทึกเข้า Google Drive และ Google Sheet จริง'
-                : 'ระบบนี้ใช้ Google Sheet จริงเท่านั้น'}
-            </p>
-            {isSignedIn ? (
-              <button className="ghost-button" type="button" onClick={signOut}>
-                <LogOut size={16} />
-                <span>ออกจากระบบ</span>
-              </button>
-            ) : (
-              <button className="secondary-button" type="button" onClick={signInWithGoogle} disabled={busy || !isGoogleReady}>
-                {busy ? <RefreshCw size={16} className="spin" /> : <LogIn size={16} />}
-                <span>{isGoogleReady ? 'Login with Google' : 'รอใส่ OAuth Client ID'}</span>
-              </button>
-            )}
           </div>
         </aside>
 
@@ -950,6 +965,102 @@ function App() {
               <strong>{today.time}</strong>
             </div>
           </div>
+
+          <div className="scan-controls" aria-label="เลือกโหมดสแกน">
+            <div className="segmented-control">
+              <button
+                className={scanMode === 'single' ? 'active' : ''}
+                type="button"
+                onClick={() => setScanMode('single')}
+              >
+                <Square size={15} />
+                <span>ทีละรายการ</span>
+              </button>
+              <button
+                className={scanMode === 'continuous' ? 'active' : ''}
+                type="button"
+                onClick={() => setScanMode('continuous')}
+              >
+                <Repeat size={15} />
+                <span>ต่อเนื่อง</span>
+              </button>
+            </div>
+          </div>
+
+          <div className={`issue-bar ${scanRemark ? 'active' : ''}`}>
+            <label className="packer-control">
+              <span>Packer</span>
+              <select value={selectedPacker} onChange={(event) => setSelectedPacker(event.target.value)} disabled={!isSignedIn || busy}>
+                {PACKERS.map((packer) => (
+                  <option key={packer} value={packer}>
+                    {packer}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              className={scanRemark === ISSUE_CUSTOMER_CANCELLED ? 'active' : ''}
+              type="button"
+              onClick={() =>
+                setScanRemark((value) => (value === ISSUE_CUSTOMER_CANCELLED ? '' : ISSUE_CUSTOMER_CANCELLED))
+              }
+              disabled={!isSignedIn || busy}
+            >
+              {ISSUE_CUSTOMER_CANCELLED}
+            </button>
+            <span>
+              {scanRemark
+                ? `รายการถัดไป: ${selectedPacker} / ${scanRemark}`
+                : `รายการถัดไปบันทึก Packer: ${selectedPacker}`}
+            </span>
+          </div>
+
+          {scanMethod === 'camera' ? (
+            <div className="camera-panel">
+              <div className={`camera-stage ${cameraActive ? 'active' : ''}`}>
+                <div id={CAMERA_REGION_ID} className="camera-reader" />
+                <div className="scan-frame" aria-hidden="true">
+                  <span />
+                </div>
+              </div>
+              <div className="camera-footer">
+                <p>{cameraMessage}</p>
+                <div className="camera-actions">
+                  {cameraActive ? (
+                    <button className="ghost-button" type="button" onClick={stopCamera}>
+                      <Square size={16} />
+                      <span>หยุดกล้อง</span>
+                    </button>
+                  ) : (
+                    <button className="secondary-button" type="button" onClick={startCamera} disabled={busy || !isSignedIn}>
+                      <Camera size={16} />
+                      <span>เปิดกล้อง</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <form className="scan-form" onSubmit={handleScanSubmit}>
+              <label htmlFor="scan-input">Tracking / Barcode</label>
+              <div className="scan-input-row">
+                <ScanLine size={24} />
+                <input
+                  id="scan-input"
+                  ref={inputRef}
+                  value={scanValue}
+                  onChange={(event) => setScanValue(event.target.value)}
+                  placeholder={isSignedIn ? 'ยิงบาร์โค้ดหรือ QR แล้วกด Enter' : 'Login with Google ก่อนเริ่มสแกน'}
+                  autoComplete="off"
+                  disabled={busy || !isSignedIn}
+                />
+                <button type="submit" disabled={busy || !isSignedIn}>
+                  {busy ? <RefreshCw size={18} className="spin" /> : <Play size={18} />}
+                  <span>บันทึก</span>
+                </button>
+              </div>
+            </form>
+          )}
 
           <section className="search-panel" aria-label="ค้นหาเลขพัสดุ">
             <div className="search-heading">
@@ -1048,121 +1159,6 @@ function App() {
               </div>
             )}
           </section>
-
-          <div className="scan-controls" aria-label="เลือกวิธีสแกน">
-            <div className="segmented-control">
-              <button
-                className={scanMethod === 'manual' ? 'active' : ''}
-                type="button"
-                onClick={() => setScanMethod('manual')}
-              >
-                <ScanLine size={16} />
-                <span>เครื่องยิง/พิมพ์</span>
-              </button>
-              <button
-                className={scanMethod === 'camera' ? 'active' : ''}
-                type="button"
-                onClick={() => setScanMethod('camera')}
-              >
-                <Camera size={16} />
-                <span>กล้องมือถือ</span>
-              </button>
-            </div>
-
-            <div className="segmented-control">
-              <button
-                className={scanMode === 'single' ? 'active' : ''}
-                type="button"
-                onClick={() => setScanMode('single')}
-              >
-                <Square size={15} />
-                <span>ทีละรายการ</span>
-              </button>
-              <button
-                className={scanMode === 'continuous' ? 'active' : ''}
-                type="button"
-                onClick={() => setScanMode('continuous')}
-              >
-                <Repeat size={15} />
-                <span>ต่อเนื่อง</span>
-              </button>
-            </div>
-          </div>
-
-          <div className={`issue-bar ${scanRemark ? 'active' : ''}`}>
-            <label className="packer-control">
-              <span>Packer</span>
-              <select value={selectedPacker} onChange={(event) => setSelectedPacker(event.target.value)} disabled={!isSignedIn || busy}>
-                {PACKERS.map((packer) => (
-                  <option key={packer} value={packer}>
-                    {packer}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <button
-              className={scanRemark === ISSUE_CUSTOMER_CANCELLED ? 'active' : ''}
-              type="button"
-              onClick={() =>
-                setScanRemark((value) => (value === ISSUE_CUSTOMER_CANCELLED ? '' : ISSUE_CUSTOMER_CANCELLED))
-              }
-              disabled={!isSignedIn || busy}
-            >
-              {ISSUE_CUSTOMER_CANCELLED}
-            </button>
-            <span>
-              {scanRemark
-                ? `รายการถัดไป: ${selectedPacker} / ${scanRemark}`
-                : `รายการถัดไปบันทึก Packer: ${selectedPacker}`}
-            </span>
-          </div>
-
-          {scanMethod === 'camera' ? (
-            <div className="camera-panel">
-              <div className={`camera-stage ${cameraActive ? 'active' : ''}`}>
-                <div id={CAMERA_REGION_ID} className="camera-reader" />
-                <div className="scan-frame" aria-hidden="true">
-                  <span />
-                </div>
-              </div>
-              <div className="camera-footer">
-                <p>{cameraMessage}</p>
-                <div className="camera-actions">
-                  {cameraActive ? (
-                    <button className="ghost-button" type="button" onClick={stopCamera}>
-                      <Square size={16} />
-                      <span>หยุดกล้อง</span>
-                    </button>
-                  ) : (
-                    <button className="secondary-button" type="button" onClick={startCamera} disabled={busy || !isSignedIn}>
-                      <Camera size={16} />
-                      <span>เปิดกล้อง</span>
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          ) : (
-            <form className="scan-form" onSubmit={handleScanSubmit}>
-              <label htmlFor="scan-input">Tracking / Barcode</label>
-              <div className="scan-input-row">
-                <ScanLine size={24} />
-                <input
-                  id="scan-input"
-                  ref={inputRef}
-                  value={scanValue}
-                  onChange={(event) => setScanValue(event.target.value)}
-                  placeholder={isSignedIn ? 'ยิงบาร์โค้ดหรือ QR แล้วกด Enter' : 'Login with Google ก่อนเริ่มสแกน'}
-                  autoComplete="off"
-                  disabled={busy || !isSignedIn}
-                />
-                <button type="submit" disabled={busy || !isSignedIn}>
-                  {busy ? <RefreshCw size={18} className="spin" /> : <Play size={18} />}
-                  <span>บันทึก</span>
-                </button>
-              </div>
-            </form>
-          )}
 
           <StatusBanner status={status} />
 

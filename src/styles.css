@@ -140,7 +140,7 @@ h3 {
 
 .account-strip {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 1fr;
   gap: 8px;
 }
 
@@ -156,7 +156,6 @@ h3 {
 }
 
 .account-pill {
-  grid-column: 1 / -1;
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -168,6 +167,36 @@ h3 {
 .account-pill span {
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.top-connect-box {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 8px 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.top-connect-box .connect-title {
+  min-width: 0;
+}
+
+.top-connect-box .connect-title span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.top-connect-box .secondary-button,
+.top-connect-box .ghost-button {
+  width: auto;
+  min-height: 32px;
+  padding: 0 10px;
   white-space: nowrap;
 }
 
@@ -274,6 +303,17 @@ h3 {
 .courier-button.active strong {
   background: var(--primary);
   color: #ffffff;
+}
+
+.scan-tool-panel {
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+
+.scan-tool-panel .segmented-control {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .connect-box {
@@ -906,7 +946,8 @@ th {
 
 @media (min-width: 560px) {
   .account-strip {
-    grid-template-columns: minmax(0, 1fr) auto auto auto;
+    grid-template-columns: minmax(0, 1fr) minmax(240px, auto) auto auto auto;
+    align-items: center;
   }
 
   .account-pill {
