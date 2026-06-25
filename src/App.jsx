@@ -241,26 +241,44 @@ function App() {
 
     const context = audioContextRef.current ?? new AudioContext();
     audioContextRef.current = context;
-    const oscillator = context.createOscillator();
-    const gain = context.createGain();
     const now = context.currentTime;
-    const tones = {
-      success: { frequency: 980, peak: 0.18, duration: 0.14 },
-      duplicate: { frequency: 260, peak: 0.25, duration: 0.4 },
-      ignored: { frequency: 520, peak: 0.2, duration: 0.18 },
-      error: { frequency: 180, peak: 0.25, duration: 0.4 },
+    const patterns = {
+      success: [
+        { frequency: 1320, duration: 0.12, offset: 0, peak: 0.42, wave: 'square' },
+        { frequency: 1760, duration: 0.16, offset: 0.14, peak: 0.46, wave: 'square' },
+      ],
+      duplicate: [
+        { frequency: 220, duration: 0.22, offset: 0, peak: 0.55, wave: 'sawtooth' },
+        { frequency: 160, duration: 0.22, offset: 0.24, peak: 0.55, wave: 'sawtooth' },
+        { frequency: 220, duration: 0.26, offset: 0.48, peak: 0.55, wave: 'sawtooth' },
+      ],
+      ignored: [
+        { frequency: 420, duration: 0.16, offset: 0, peak: 0.4, wave: 'square' },
+        { frequency: 320, duration: 0.2, offset: 0.18, peak: 0.44, wave: 'square' },
+      ],
+      error: [
+        { frequency: 180, duration: 0.28, offset: 0, peak: 0.58, wave: 'sawtooth' },
+        { frequency: 120, duration: 0.34, offset: 0.3, peak: 0.58, wave: 'sawtooth' },
+      ],
     };
-    const tone = tones[type] ?? tones.error;
+    const pattern = patterns[type] ?? patterns.error;
 
-    oscillator.type = 'sine';
-    oscillator.frequency.value = tone.frequency;
-    gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.exponentialRampToValueAtTime(tone.peak, now + 0.015);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + Math.max(tone.duration - 0.02, 0.1));
-    oscillator.connect(gain);
-    gain.connect(context.destination);
-    oscillator.start(now);
-    oscillator.stop(now + tone.duration);
+    pattern.forEach((tone) => {
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      const startsAt = now + tone.offset;
+      const endsAt = startsAt + tone.duration;
+
+      oscillator.type = tone.wave;
+      oscillator.frequency.setValueAtTime(tone.frequency, startsAt);
+      gain.gain.setValueAtTime(0.0001, startsAt);
+      gain.gain.exponentialRampToValueAtTime(tone.peak, startsAt + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.0001, endsAt - 0.02);
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.start(startsAt);
+      oscillator.stop(endsAt);
+    });
   }
 
   async function signInWithGoogle() {
