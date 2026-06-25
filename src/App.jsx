@@ -620,13 +620,6 @@ function App() {
 
       const scanConfig = {
         fps: CAMERA_SCAN_FPS,
-        qrbox: (viewfinderWidth, viewfinderHeight) => {
-          const width = Math.floor(Math.min(viewfinderWidth * 0.94, 720));
-          const preferredHeight = Math.max(viewfinderHeight * 0.38, 150);
-          const height = Math.floor(Math.min(preferredHeight, width * 0.48, 240));
-          return { width, height };
-        },
-        aspectRatio: 1.7777778,
         disableFlip: true,
       };
 
@@ -634,7 +627,7 @@ function App() {
 
       await improveCameraFocus(scanner);
       setCameraActive(true);
-      setCameraMessage('เล็งให้เห็นบาร์โค้ดหลักครบทั้งแถบในกรอบ ถอยห่างเล็กน้อยถ้ายังไม่ติด');
+      setCameraMessage('ให้ QR หรือบาร์โค้ดอยู่ในภาพชัดๆ ไม่ต้องตรงกรอบเป๊ะ ถอยห่างเล็กน้อยถ้ายังไม่ติด');
     } catch (error) {
       cameraRef.current = null;
       setCameraActive(false);
@@ -655,12 +648,6 @@ function App() {
 
       if (Array.isArray(capabilities.focusMode) && capabilities.focusMode.includes('continuous')) {
         constraints.focusMode = 'continuous';
-      }
-
-      if (capabilities.zoom?.max && capabilities.zoom.max > 1) {
-        const minZoom = capabilities.zoom.min ?? 1;
-        const barcodeZoom = Math.min(Math.max(1.25, minZoom), capabilities.zoom.max, 1.8);
-        constraints.zoom = barcodeZoom;
       }
 
       if (Object.keys(constraints).length > 0) {
