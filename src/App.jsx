@@ -630,21 +630,7 @@ function App() {
         disableFlip: true,
       };
 
-      try {
-        await scanner.start(
-          {
-            facingMode: { ideal: 'environment' },
-            width: { ideal: 1920 },
-            height: { ideal: 1080 },
-            advanced: [{ focusMode: 'continuous' }],
-          },
-          scanConfig,
-          handleCameraDetected,
-          () => {},
-        );
-      } catch {
-        await scanner.start({ facingMode: 'environment' }, scanConfig, handleCameraDetected, () => {});
-      }
+      await scanner.start({ facingMode: 'environment' }, scanConfig, handleCameraDetected, () => {});
 
       await improveCameraFocus(scanner);
       setCameraActive(true);
