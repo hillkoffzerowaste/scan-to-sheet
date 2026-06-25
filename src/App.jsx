@@ -58,7 +58,7 @@ const THEME_KEY = 'scan-to-sheet-theme';
 const GOOGLE_SESSION_KEY = 'scan-to-sheet-google-session-v1';
 const CAMERA_REGION_ID = 'camera-reader';
 const CAMERA_COOLDOWN_MS = 2500;
-const CAMERA_SCAN_FPS = 15;
+const CAMERA_SCAN_FPS = 18;
 const ISSUE_CUSTOMER_CANCELLED = 'ลูกค้ายกเลิก';
 const ISSUE_DAMAGED = 'สินค้าเสียหาย';
 const PACKER_UNASSIGNED = 'ยังไม่ระบุ';
@@ -679,10 +679,6 @@ function App() {
           Html5QrcodeSupportedFormats.CODE_128,
           Html5QrcodeSupportedFormats.CODE_39,
           Html5QrcodeSupportedFormats.CODE_93,
-          Html5QrcodeSupportedFormats.EAN_13,
-          Html5QrcodeSupportedFormats.EAN_8,
-          Html5QrcodeSupportedFormats.UPC_A,
-          Html5QrcodeSupportedFormats.UPC_E,
           Html5QrcodeSupportedFormats.ITF,
         ],
         verbose: false,
@@ -691,6 +687,10 @@ function App() {
 
       const scanConfig = {
         fps: CAMERA_SCAN_FPS,
+        qrbox: (viewfinderWidth, viewfinderHeight) => ({
+          width: Math.floor(Math.min(viewfinderWidth * 0.92, 680)),
+          height: Math.floor(Math.min(viewfinderHeight * 0.72, 360)),
+        }),
         disableFlip: true,
       };
 
@@ -698,7 +698,7 @@ function App() {
 
       await improveCameraFocus(scanner);
       setCameraActive(true);
-      showCameraMessage('ให้ QR หรือบาร์โค้ดอยู่ในภาพชัดๆ ไม่ต้องตรงกรอบเป๊ะ ถอยห่างเล็กน้อยถ้ายังไม่ติด', 'idle');
+      showCameraMessage('เล็ง QR หรือบาร์โค้ดหลักให้อยู่ในกรอบใหญ่ ถอยห่างเล็กน้อยให้เห็นโค้ดครบทั้งแถบ', 'idle');
     } catch (error) {
       cameraRef.current = null;
       setCameraActive(false);
