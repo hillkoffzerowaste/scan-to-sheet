@@ -57,6 +57,7 @@ const THEME_KEY = 'scan-to-sheet-theme';
 const GOOGLE_SESSION_KEY = 'scan-to-sheet-google-session-v1';
 const CAMERA_REGION_ID = 'camera-reader';
 const CAMERA_COOLDOWN_MS = 2500;
+const CAMERA_SCAN_FPS = 15;
 const ISSUE_CUSTOMER_CANCELLED = 'ลูกค้ายกเลิก';
 const PACKER_UNASSIGNED = 'ยังไม่ระบุ';
 const PACKERS = [PACKER_UNASSIGNED, 'กิต', 'มาย', 'ยุทธ', 'หล้า', 'มุก'];
@@ -601,10 +602,12 @@ function App() {
     try {
       setCameraMessage('กำลังเปิดกล้อง...');
       const scanner = new Html5Qrcode(CAMERA_REGION_ID, {
+        useBarCodeDetectorIfSupported: true,
         formatsToSupport: [
           Html5QrcodeSupportedFormats.QR_CODE,
           Html5QrcodeSupportedFormats.CODE_128,
           Html5QrcodeSupportedFormats.CODE_39,
+          Html5QrcodeSupportedFormats.CODE_93,
           Html5QrcodeSupportedFormats.EAN_13,
           Html5QrcodeSupportedFormats.EAN_8,
           Html5QrcodeSupportedFormats.UPC_A,
@@ -615,24 +618,37 @@ function App() {
       });
       cameraRef.current = scanner;
 
-      await scanner.start(
-        { facingMode: 'environment' },
-        {
-          fps: 8,
-          qrbox: (viewfinderWidth, viewfinderHeight) => {
-            const width = Math.floor(Math.min(viewfinderWidth * 0.86, 420));
-            const height = Math.floor(Math.min(viewfinderHeight * 0.34, 170));
-            return { width, height };
-          },
-          aspectRatio: 1.7777778,
-          disableFlip: true,
+      const scanConfig = {
+        fps: CAMERA_SCAN_FPS,
+        qrbox: (viewfinderWidth, viewfinderHeight) => {
+          const width = Math.floor(Math.min(viewfinderWidth * 0.94, 720));
+          const preferredHeight = Math.max(viewfinderHeight * 0.38, 150);
+          const height = Math.floor(Math.min(preferredHeight, width * 0.48, 240));
+          return { width, height };
         },
-        handleCameraDetected,
-        () => {},
-      );
+        aspectRatio: 1.7777778,
+        disableFlip: true,
+      };
 
+      try {
+        await scanner.start(
+          {
+            facingMode: { ideal: 'environment' },
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+            advanced: [{ focusMode: 'continuous' }],
+          },
+          scanConfig,
+          handleCameraDetected,
+          () => {},
+        );
+      } catch {
+        await scanner.start({ facingMode: 'environment' }, scanConfig, handleCameraDetected, () => {});
+      }
+
+      await improveCameraFocus(scanner);
       setCameraActive(true);
-      setCameraMessage('เล็งบาร์โค้ดหลักให้อยู่ในกรอบกลาง');
+      setCameraMessage('เล็งให้เห็นบาร์โค้ดหลักครบทั้งแถบในกรอบ ถอยห่างเล็กน้อยถ้ายังไม่ติด');
     } catch (error) {
       cameraRef.current = null;
       setCameraActive(false);
@@ -643,6 +659,29 @@ function App() {
         message: error.message,
       });
       playTone('error');
+    }
+  }
+
+  async function improveCameraFocus(scanner) {
+    try {
+      const capabilities = scanner.getRunningTrackCapabilities?.() ?? {};
+      const constraints = {};
+
+      if (Array.isArray(capabilities.focusMode) && capabilities.focusMode.includes('continuous')) {
+        constraints.focusMode = 'continuous';
+      }
+
+      if (capabilities.zoom?.max && capabilities.zoom.max > 1) {
+        const minZoom = capabilities.zoom.min ?? 1;
+        const barcodeZoom = Math.min(Math.max(1.25, minZoom), capabilities.zoom.max, 1.8);
+        constraints.zoom = barcodeZoom;
+      }
+
+      if (Object.keys(constraints).length > 0) {
+        await scanner.applyVideoConstraints(constraints);
+      }
+    } catch {
+      // Some mobile browsers reject advanced camera constraints; scanning can continue normally.
     }
   }
 
