@@ -117,10 +117,11 @@ function App() {
   const [showAllRecentRows, setShowAllRecentRows] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [theme, setTheme] = useState(() => localStorage.getItem(THEME_KEY) || 'light');
-  const [scanMethod, setScanMethod] = useState('manual');
+  const [scanMethod, setScanMethod] = useState('camera');
   const [scanMode, setScanMode] = useState('single');
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraMessage, setCameraMessage] = useState('เปิดกล้อง แล้วเล็งบาร์โค้ดหลักให้อยู่ในกรอบ');
+  const [cameraMessageType, setCameraMessageType] = useState('idle');
   const [searchValue, setSearchValue] = useState('');
   const [searchScope, setSearchScope] = useState('selected');
   const [searchMode, setSearchMode] = useState('today');
@@ -248,21 +249,21 @@ function App() {
     const now = context.currentTime;
     const patterns = {
       success: [
-        { frequency: 1320, duration: 0.18, offset: 0, peak: 0.62, wave: 'square' },
-        { frequency: 1760, duration: 0.24, offset: 0.2, peak: 0.66, wave: 'square' },
+        { frequency: 1320, duration: 0.22, offset: 0, peak: 0.82, wave: 'square' },
+        { frequency: 1760, duration: 0.28, offset: 0.24, peak: 0.86, wave: 'square' },
       ],
       duplicate: [
-        { frequency: 220, duration: 0.3, offset: 0, peak: 0.72, wave: 'sawtooth' },
-        { frequency: 160, duration: 0.32, offset: 0.32, peak: 0.72, wave: 'sawtooth' },
-        { frequency: 220, duration: 0.34, offset: 0.66, peak: 0.72, wave: 'sawtooth' },
+        { frequency: 220, duration: 0.38, offset: 0, peak: 0.9, wave: 'sawtooth' },
+        { frequency: 150, duration: 0.38, offset: 0.4, peak: 0.9, wave: 'sawtooth' },
+        { frequency: 220, duration: 0.42, offset: 0.82, peak: 0.9, wave: 'sawtooth' },
       ],
       ignored: [
-        { frequency: 420, duration: 0.22, offset: 0, peak: 0.58, wave: 'square' },
-        { frequency: 320, duration: 0.26, offset: 0.24, peak: 0.62, wave: 'square' },
+        { frequency: 420, duration: 0.28, offset: 0, peak: 0.78, wave: 'square' },
+        { frequency: 300, duration: 0.32, offset: 0.3, peak: 0.82, wave: 'square' },
       ],
       error: [
-        { frequency: 180, duration: 0.38, offset: 0, peak: 0.74, wave: 'sawtooth' },
-        { frequency: 120, duration: 0.44, offset: 0.4, peak: 0.74, wave: 'sawtooth' },
+        { frequency: 180, duration: 0.46, offset: 0, peak: 0.92, wave: 'sawtooth' },
+        { frequency: 120, duration: 0.52, offset: 0.48, peak: 0.92, wave: 'sawtooth' },
       ],
     };
     const pattern = patterns[type] ?? patterns.error;
@@ -283,6 +284,11 @@ function App() {
       oscillator.start(startsAt);
       oscillator.stop(endsAt);
     });
+  }
+
+  function showCameraMessage(message, type = 'idle') {
+    setCameraMessage(message);
+    setCameraMessageType(type);
   }
 
   async function signInWithGoogle() {
@@ -514,7 +520,7 @@ function App() {
         title: 'เลือก Packer ก่อนสแกน',
         message: 'ต้องเลือกชื่อผู้แพ็คก่อนบันทึกออเดอร์ปกติ',
       });
-      setCameraMessage('เลือก Packer ก่อนสแกน');
+      showCameraMessage('เลือก Packer ก่อนสแกน', 'error');
       playTone('error');
       return { status: 'error' };
     }
@@ -527,7 +533,7 @@ function App() {
         title: isEmpty ? 'ยังไม่มีเลขสแกน' : 'ไม่ใช่บาร์โค้ดหลัก',
         message: validation.reason,
       });
-      setCameraMessage(validation.reason);
+      showCameraMessage(validation.reason, isEmpty ? 'error' : 'ignored');
       playTone(isEmpty ? 'error' : 'ignored');
       return { status: isEmpty ? 'error' : 'ignored', code: validation.code };
     }
@@ -561,7 +567,7 @@ function App() {
           title: 'บันทึกยกเลิกแล้ว',
           message: `${result.code} ถูกทำเครื่องหมาย ${ISSUE_CUSTOMER_CANCELLED} ใน ${selectedCourier}`,
         });
-        setCameraMessage(`${result.code} ยกเลิกแล้ว`);
+        showCameraMessage(`${result.code} ยกเลิกแล้ว`, 'success');
         playTone('success');
         setScanRemark('');
       } else if (result.status === 'duplicate') {
@@ -570,7 +576,7 @@ function App() {
           title: 'เลขซ้ำ',
           message: `${result.code} มีอยู่แล้วใน ${selectedCourier} วันที่ ${result.date}`,
         });
-        setCameraMessage(`${result.code} ซ้ำใน ${selectedCourier}`);
+        showCameraMessage(`เลขซ้ำ: ${result.code}`, 'duplicate');
         playTone('duplicate');
       } else {
         setStatus({
@@ -578,7 +584,7 @@ function App() {
           title: 'สแกนสำเร็จ',
           message: `${result.code} ถูกบันทึกเข้า ${selectedCourier} โดย ${selectedPacker} วันที่ ${result.date}${scanRemark ? ` (${scanRemark})` : ''}`,
         });
-        setCameraMessage(`${result.code} บันทึกสำเร็จ`);
+        showCameraMessage(`${result.code} บันทึกสำเร็จ`, 'success');
         playTone('success');
         setScanRemark('');
       }
@@ -589,7 +595,7 @@ function App() {
         title: 'บันทึกไม่สำเร็จ',
         message: error.message,
       });
-      setCameraMessage(error.message);
+      showCameraMessage(error.message, 'error');
       playTone('error');
       return { status: 'error', message: error.message };
     } finally {
@@ -638,17 +644,13 @@ function App() {
 
     lastCameraScanRef.current = { code, time: now };
     cameraSavingRef.current = true;
-    setCameraMessage(`อ่านได้: ${code}`);
+    showCameraMessage(`อ่านได้: ${code}`, 'idle');
 
     const result = await saveScannedCode(code, 'camera');
     if (scanModeRef.current === 'single') {
       await stopCamera();
-      if (result.status === 'ignored') {
-        setCameraMessage('หยุดแล้ว: โค้ดที่อ่านได้ไม่ตรงกฎของขนส่งที่เลือก');
-      } else if (result.status === 'error') {
-        setCameraMessage('หยุดแล้ว: บันทึกไม่สำเร็จ');
-      } else {
-        setCameraMessage('หยุดแล้ว: สแกนทีละรายการเสร็จ');
+      if (result.status === 'success' || result.status === 'cancelled') {
+        showCameraMessage('หยุดแล้ว: สแกนทีละรายการเสร็จ', 'success');
       }
     }
   }
@@ -669,7 +671,7 @@ function App() {
     }
 
     try {
-      setCameraMessage('กำลังเปิดกล้อง...');
+      showCameraMessage('กำลังเปิดกล้อง...', 'idle');
       const scanner = new Html5Qrcode(CAMERA_REGION_ID, {
         useBarCodeDetectorIfSupported: true,
         formatsToSupport: [
@@ -696,11 +698,11 @@ function App() {
 
       await improveCameraFocus(scanner);
       setCameraActive(true);
-      setCameraMessage('ให้ QR หรือบาร์โค้ดอยู่ในภาพชัดๆ ไม่ต้องตรงกรอบเป๊ะ ถอยห่างเล็กน้อยถ้ายังไม่ติด');
+      showCameraMessage('ให้ QR หรือบาร์โค้ดอยู่ในภาพชัดๆ ไม่ต้องตรงกรอบเป๊ะ ถอยห่างเล็กน้อยถ้ายังไม่ติด', 'idle');
     } catch (error) {
       cameraRef.current = null;
       setCameraActive(false);
-      setCameraMessage(error.message);
+      showCameraMessage(error.message, 'error');
       setStatus({
         type: 'error',
         title: 'เปิดกล้องไม่สำเร็จ',
@@ -1156,7 +1158,7 @@ function App() {
                 </div>
               </div>
               <div className="camera-footer">
-                <p>{cameraMessage}</p>
+                <p className={`camera-message ${cameraMessageType}`}>{cameraMessage}</p>
                 <div className="camera-actions">
                   {cameraActive ? (
                     <button className="ghost-button" type="button" onClick={stopCamera}>

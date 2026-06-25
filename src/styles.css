@@ -621,10 +621,35 @@ h3 {
   gap: 10px;
 }
 
-.camera-footer p {
+.camera-message {
   margin-bottom: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--surface-soft);
   color: var(--muted);
+  padding: 12px;
+  font-size: 1rem;
   font-weight: 800;
+  line-height: 1.35;
+}
+
+.camera-message.success {
+  border-color: var(--success-line);
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.camera-message.duplicate,
+.camera-message.ignored {
+  border-color: var(--warning-line);
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
+.camera-message.error {
+  border-color: var(--danger-line);
+  background: var(--danger-bg);
+  color: var(--danger);
 }
 
 .camera-actions {
