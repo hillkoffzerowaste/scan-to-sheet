@@ -37,6 +37,7 @@ import {
   loadGoogleConfig,
   prepareGoogleSheets,
   searchScansGoogle,
+  updateScanIssueGoogle,
   validateScanCode,
 } from './services/googleSheets.js';
 
@@ -59,6 +60,7 @@ const CAMERA_REGION_ID = 'camera-reader';
 const CAMERA_COOLDOWN_MS = 2500;
 const CAMERA_SCAN_FPS = 15;
 const ISSUE_CUSTOMER_CANCELLED = 'ลูกค้ายกเลิก';
+const ISSUE_DAMAGED = 'สินค้าเสียหาย';
 const PACKER_UNASSIGNED = 'ยังไม่ระบุ';
 const PACKERS = [PACKER_UNASSIGNED, 'กิต', 'มาย', 'ยุทธ', 'หล้า', 'มุก'];
 
@@ -149,6 +151,8 @@ function App() {
   const totalTodayCount = useMemo(() => summary.reduce((sum, item) => sum + item.count, 0), [summary]);
   const displayedRecentRows = showAllRecentRows ? recentRows : recentRows.slice(0, 3);
   const sheetUrl = config?.master?.webViewLink;
+  const requiresPacker = scanRemark !== ISSUE_CUSTOMER_CANCELLED;
+  const isPackerReady = !requiresPacker || selectedPacker !== PACKER_UNASSIGNED;
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -358,18 +362,22 @@ function App() {
     await refreshGoogleSessionFromServer();
   }
 
-  async function refreshGoogleSessionFromServer() {
+  async function refreshGoogleSessionFromServer({ silent = false } = {}) {
     try {
       setBusy(true);
       const data = await apiJson('/api/google-token');
-      await activateGoogleSession(data);
-      setStatus({
-        type: 'success',
-        title: 'ต่ออายุ Login แล้ว',
-        message: 'ดึง session จาก Vercel KV สำเร็จ',
-      });
+      const session = await activateGoogleSession(data);
+      if (!silent) {
+        setStatus({
+          type: 'success',
+          title: 'ต่ออายุ Login แล้ว',
+          message: 'ดึง session จาก Vercel KV สำเร็จ',
+        });
+      }
+      return session;
     } catch {
       clearStoredGoogleSession();
+      return null;
     } finally {
       setBusy(false);
     }
@@ -393,6 +401,34 @@ function App() {
       config: prepared,
     });
     await refreshAllCounts(accessToken, prepared);
+    return { accessToken, config: prepared, user: nextUser };
+  }
+
+  async function runWithGoogleRetry(action) {
+    try {
+      return await action(token, config);
+    } catch (error) {
+      if (!isGoogleAuthError(error)) {
+        throw error;
+      }
+
+      const session = await refreshGoogleSessionFromServer({ silent: true });
+      if (!session?.accessToken || !session?.config) {
+        throw error;
+      }
+
+      return action(session.accessToken, session.config);
+    }
+  }
+
+  function isGoogleAuthError(error) {
+    const message = String(error?.message ?? '').toLowerCase();
+    return (
+      message.includes('401') ||
+      message.includes('invalid authentication') ||
+      message.includes('invalid credentials') ||
+      message.includes('unauthorized')
+    );
   }
 
   async function signOut() {
@@ -442,12 +478,14 @@ function App() {
     }
 
     try {
-      const rows = await getTodayRowsGoogle({
-        token,
-        config,
-        courier: selectedCourier,
-        date: today.date,
-      });
+      const rows = await runWithGoogleRetry((accessToken, googleConfig) =>
+        getTodayRowsGoogle({
+          token: accessToken,
+          config: googleConfig,
+          courier: selectedCourier,
+          date: today.date,
+        }),
+      );
       setRecentRows(rows);
       setSummary((current) => updateSummary(current, selectedCourier, rows.length));
     } catch (error) {
@@ -470,6 +508,17 @@ function App() {
       return { status: 'error' };
     }
 
+    if (scanRemark !== ISSUE_CUSTOMER_CANCELLED && selectedPacker === PACKER_UNASSIGNED) {
+      setStatus({
+        type: 'warning',
+        title: 'เลือก Packer ก่อนสแกน',
+        message: 'ต้องเลือกชื่อผู้แพ็คก่อนบันทึกออเดอร์ปกติ',
+      });
+      setCameraMessage('เลือก Packer ก่อนสแกน');
+      playTone('error');
+      return { status: 'error' };
+    }
+
     const validation = validateScanCode(selectedCourier, rawCode);
     if (!validation.ok) {
       const isEmpty = !validation.code;
@@ -485,15 +534,17 @@ function App() {
 
     setBusy(true);
     try {
-      const result = await appendScanGoogle({
-        token,
-        config,
-        courier: selectedCourier,
-        code: validation.code,
-        email: user.email,
-        packer: selectedPacker === PACKER_UNASSIGNED ? '' : selectedPacker,
-        note: scanRemark,
-      });
+      const result = await runWithGoogleRetry((accessToken, googleConfig) =>
+        appendScanGoogle({
+          token: accessToken,
+          config: googleConfig,
+          courier: selectedCourier,
+          code: validation.code,
+          email: user.email,
+          packer: selectedPacker === PACKER_UNASSIGNED ? '' : selectedPacker,
+          note: scanRemark,
+        }),
+      );
 
       if (source === 'manual') {
         setScanValue('');
@@ -710,13 +761,15 @@ function App() {
 
     setSearchBusy(true);
     try {
-      const results = await searchScansGoogle({
-        token,
-        config,
-        query,
-        couriers: searchScope === 'all' ? COURIERS : [selectedCourier],
-        dates: searchMode === 'all' ? null : dates,
-      });
+      const results = await runWithGoogleRetry((accessToken, googleConfig) =>
+        searchScansGoogle({
+          token: accessToken,
+          config: googleConfig,
+          query,
+          couriers: searchScope === 'all' ? COURIERS : [selectedCourier],
+          dates: searchMode === 'all' ? null : dates,
+        }),
+      );
       setSearchResults(results);
       setStatus({
         type: results.length > 0 ? 'success' : 'warning',
@@ -732,6 +785,47 @@ function App() {
         title: 'ค้นหาไม่สำเร็จ',
         message: error.message,
       });
+    } finally {
+      setSearchBusy(false);
+    }
+  }
+
+  async function markSearchResultDamaged(row) {
+    if (!isSignedIn || !row) {
+      return;
+    }
+
+    setSearchBusy(true);
+    try {
+      const updatedRow = await runWithGoogleRetry((accessToken, googleConfig) =>
+        updateScanIssueGoogle({
+          token: accessToken,
+          config: googleConfig,
+          row,
+          issue: ISSUE_DAMAGED,
+        }),
+      );
+      setSearchResults((current) =>
+        current?.map((item) =>
+          item.date === row.date && item.no === row.no && item.code === row.code ? { ...item, ...updatedRow } : item,
+        ) ?? null,
+      );
+      if (updatedRow.date === today.date && updatedRow.courier === selectedCourier) {
+        await refreshSelectedCourierRows();
+      }
+      setStatus({
+        type: 'success',
+        title: 'บันทึกสินค้าเสียหายแล้ว',
+        message: `${updatedRow.code} ถูกบันทึกใน Remark / Issue`,
+      });
+      playTone('success');
+    } catch (error) {
+      setStatus({
+        type: 'error',
+        title: 'บันทึกสินค้าเสียหายไม่สำเร็จ',
+        message: error.message,
+      });
+      playTone('error');
     } finally {
       setSearchBusy(false);
     }
@@ -771,7 +865,9 @@ function App() {
 
     setReportBusy(true);
     try {
-      const data = await getScanReportGoogle({ token, config, dates });
+      const data = await runWithGoogleRetry((accessToken, googleConfig) =>
+        getScanReportGoogle({ token: accessToken, config: googleConfig, dates }),
+      );
       setReportData({
         ...data,
         mode: reportMode,
@@ -824,6 +920,7 @@ function App() {
       `ช่วงรายงาน: ${data.label}`,
       `ยอดส่งจริง: ${data.total} รายการ`,
       `ยกเลิก: ${data.cancelledTotal ?? 0} รายการ`,
+      `สินค้าเสียหาย: ${data.damagedTotal ?? 0} รายการ`,
       '',
       'ยอดแยกตามขนส่ง',
       ...COURIERS.map((courier) => {
@@ -842,6 +939,13 @@ function App() {
     if (data.cancelledRows?.length > 0) {
       lines.push('', 'รายการยกเลิก');
       data.cancelledRows.forEach((row) => {
+        lines.push(`${row.date} ${row.time} | ${row.courier} | ${row.code}`);
+      });
+    }
+
+    if (data.damagedRows?.length > 0) {
+      lines.push('', 'รายการสินค้าเสียหาย');
+      data.damagedRows.forEach((row) => {
         lines.push(`${row.date} ${row.time} | ${row.courier} | ${row.code}`);
       });
     }
@@ -1037,7 +1141,9 @@ function App() {
             <span>
               {scanRemark
                 ? `รายการถัดไป: ${selectedPacker} / ${scanRemark}`
-                : `รายการถัดไปบันทึก Packer: ${selectedPacker}`}
+                : selectedPacker === PACKER_UNASSIGNED
+                  ? 'ต้องเลือก Packer ก่อนสแกน'
+                  : `รายการถัดไปบันทึก Packer: ${selectedPacker}`}
             </span>
           </div>
 
@@ -1058,7 +1164,7 @@ function App() {
                       <span>หยุดกล้อง</span>
                     </button>
                   ) : (
-                    <button className="secondary-button" type="button" onClick={startCamera} disabled={busy || !isSignedIn}>
+                    <button className="secondary-button" type="button" onClick={startCamera} disabled={busy || !isSignedIn || !isPackerReady}>
                       <Camera size={16} />
                       <span>เปิดกล้อง</span>
                     </button>
@@ -1076,11 +1182,17 @@ function App() {
                   ref={inputRef}
                   value={scanValue}
                   onChange={(event) => setScanValue(event.target.value)}
-                  placeholder={isSignedIn ? 'ยิงบาร์โค้ดหรือ QR แล้วกด Enter' : 'Login with Google ก่อนเริ่มสแกน'}
+                  placeholder={
+                    isSignedIn
+                      ? isPackerReady
+                        ? 'ยิงบาร์โค้ดหรือ QR แล้วกด Enter'
+                        : 'เลือก Packer ก่อนเริ่มสแกน'
+                      : 'Login with Google ก่อนเริ่มสแกน'
+                  }
                   autoComplete="off"
-                  disabled={busy || !isSignedIn}
+                  disabled={busy || !isSignedIn || !isPackerReady}
                 />
-                <button type="submit" disabled={busy || !isSignedIn}>
+                <button type="submit" disabled={busy || !isSignedIn || !isPackerReady}>
                   {busy ? <RefreshCw size={18} className="spin" /> : <Play size={18} />}
                   <span>บันทึก</span>
                 </button>
@@ -1165,7 +1277,10 @@ function App() {
                           <th>วันที่</th>
                           <th>เวลา</th>
                           <th>Tracking / Barcode</th>
+                          <th>Status</th>
+                          <th>Remark / Issue</th>
                           <th>ผู้สแกน</th>
+                          <th>หมายเหตุ</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1175,7 +1290,29 @@ function App() {
                             <td>{row.date}</td>
                             <td>{row.time}</td>
                             <td className="code-cell">{row.code}</td>
+                            <td>{row.status}</td>
+                            <td>{row.note || '-'}</td>
                             <td>{row.email}</td>
+                            <td>
+                              <button
+                                className="table-action-button"
+                                type="button"
+                                onClick={() => markSearchResultDamaged(row)}
+                                disabled={
+                                  searchBusy ||
+                                  row.note === ISSUE_DAMAGED ||
+                                  row.status === 'Damaged' ||
+                                  row.note === ISSUE_CUSTOMER_CANCELLED ||
+                                  row.status === 'Cancelled'
+                                }
+                              >
+                                {row.note === ISSUE_DAMAGED || row.status === 'Damaged'
+                                  ? 'บันทึกแล้ว'
+                                  : row.note === ISSUE_CUSTOMER_CANCELLED || row.status === 'Cancelled'
+                                    ? 'ยกเลิกแล้ว'
+                                    : ISSUE_DAMAGED}
+                              </button>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -1335,6 +1472,10 @@ function App() {
             <strong>{reportData?.cancelledTotal ?? 0}</strong>
           </div>
           <div>
+            <span>สินค้าเสียหาย</span>
+            <strong>{reportData?.damagedTotal ?? 0}</strong>
+          </div>
+          <div>
             <span>จำนวนวัน</span>
             <strong>{reportData?.days?.length ?? 0}</strong>
           </div>
@@ -1362,6 +1503,7 @@ function App() {
                 <th>วันที่</th>
                 <th>ส่งจริง</th>
                 <th>ยกเลิก</th>
+                <th>เสียหาย</th>
                 {COURIERS.map((courier) => (
                   <th key={courier}>{courier}</th>
                 ))}
@@ -1370,7 +1512,7 @@ function App() {
             <tbody>
               {!reportData ? (
                 <tr>
-                  <td colSpan={COURIERS.length + 3} className="empty-cell">
+                  <td colSpan={COURIERS.length + 4} className="empty-cell">
                     เลือกรูปแบบรายงานแล้วกดสร้างรายงาน
                   </td>
                 </tr>
@@ -1380,11 +1522,52 @@ function App() {
                     <td>{day.date}</td>
                     <td>{day.total}</td>
                     <td>{day.cancelledTotal ?? 0}</td>
+                    <td>{day.damagedTotal ?? 0}</td>
                     {COURIERS.map((courier) => (
                       <td key={courier}>{day.couriers.find((item) => item.courier === courier)?.count ?? 0}</td>
                     ))}
                   </tr>
                 ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="recent-header">
+          <h3>รายการสินค้าเสียหาย</h3>
+        </div>
+        <div className="table-wrap report-table">
+          <table>
+            <thead>
+              <tr>
+                <th>วันที่</th>
+                <th>เวลา</th>
+                <th>ขนส่ง</th>
+                <th>Tracking / Barcode</th>
+              </tr>
+            </thead>
+            <tbody>
+              {!reportData ? (
+                <tr>
+                  <td colSpan={4} className="empty-cell">
+                    เลือกรูปแบบรายงานแล้วกดสร้างรายงาน
+                  </td>
+                </tr>
+              ) : reportData.damagedRows?.length > 0 ? (
+                reportData.damagedRows.map((row) => (
+                  <tr key={`${row.date}-${row.time}-${row.courier}-${row.code}`}>
+                    <td>{row.date}</td>
+                    <td>{row.time}</td>
+                    <td>{row.courier}</td>
+                    <td className="code-cell">{row.code}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={4} className="empty-cell">
+                    ไม่มีรายการสินค้าเสียหายในช่วงนี้
+                  </td>
+                </tr>
               )}
             </tbody>
           </table>

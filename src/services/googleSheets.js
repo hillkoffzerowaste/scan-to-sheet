@@ -8,6 +8,7 @@ export const COURIERS = [
   'Shopee',
   'Shopee Drop Off',
   'Lazada',
+  'KEX Lazada',
   'Lazada Flash',
   'J&T',
   'Flash',
@@ -33,9 +34,17 @@ export const COURIER_RULES = {
     label: 'เลข Lazada ต้องขึ้นต้นด้วย LEX',
     valid: /^LEX[A-Z0-9]{8,35}$/i,
   },
+  'KEX Lazada': {
+    label: 'เลข KEX Lazada ต้องขึ้นต้นด้วย KEXLM แล้วตามด้วยตัวเลข',
+    valid: /^KEXLM\d{8,20}$/i,
+  },
   'Lazada Flash': {
     label: 'เลข Lazada Flash ต้องขึ้นต้นด้วย TH',
     valid: /^TH[A-Z0-9]{8,18}$/i,
+  },
+  'J&T': {
+    label: 'เลข J&T ต้องเป็นตัวเลข 12 หลัก',
+    valid: /^\d{12}$/,
   },
 };
 
@@ -402,12 +411,14 @@ export async function getScanReportGoogle({ token, config, dates }) {
         date,
         total: 0,
         cancelledTotal: 0,
+        damagedTotal: 0,
         couriers: COURIERS.map((courier) => ({ courier, count: 0 })),
       },
     ]),
   );
   const courierTotals = COURIERS.map((courier) => ({ courier, count: 0 }));
   const cancelledRows = [];
+  const damagedRows = [];
   const sheet = config?.master;
   if (!sheet?.id) {
     throw new Error('ไม่พบ Google Sheet Master');
@@ -432,6 +443,13 @@ export async function getScanReportGoogle({ token, config, dates }) {
         continue;
       }
 
+      const isDamaged = row.status === 'Damaged' || row.note === 'สินค้าเสียหาย';
+      if (isDamaged) {
+        day.damagedTotal += 1;
+        damagedRows.push(row);
+        continue;
+      }
+
       const dayCourier = day.couriers.find((item) => item.courier === row.courier);
       const totalCourier = courierTotals.find((item) => item.courier === row.courier);
       if (!dayCourier || !totalCourier) {
@@ -451,6 +469,8 @@ export async function getScanReportGoogle({ token, config, dates }) {
     total: courierTotals.reduce((sum, item) => sum + item.count, 0),
     cancelledTotal: cancelledRows.length,
     cancelledRows: cancelledRows.sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`)),
+    damagedTotal: damagedRows.length,
+    damagedRows: damagedRows.sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`)),
     generatedAt: new Date().toISOString(),
   };
 }
@@ -560,7 +580,13 @@ export async function appendScanGoogle({ token, config, courier, code, email, pa
       'Cancelled',
       note,
     ];
-    await updateDailyRow({ token, spreadsheetId: sheet.id, date, rowNumber: Number(duplicateRow.no) + 1, row: updatedRow });
+    await updateDailyRow({
+      token,
+      spreadsheetId: sheet.id,
+      date,
+      rowNumber: duplicateRow.sheetRowNumber ?? Number(duplicateRow.no) + 1,
+      row: updatedRow,
+    });
     const nextRows = parsedRows
       .map((row) => (row.no === duplicateRow.no ? rowFromSheet(updatedRow) : row))
       .filter((row) => row.courier === courier)
@@ -627,10 +653,49 @@ export async function appendScanGoogle({ token, config, courier, code, email, pa
   };
 }
 
-function rowFromSheet(row) {
+export async function updateScanIssueGoogle({ token, config, row, issue }) {
+  const sheet = config?.master;
+  if (!sheet?.id) {
+    throw new Error('ไม่พบ Google Sheet Master');
+  }
+
+  if (!row?.date || !row?.no) {
+    throw new Error('ไม่พบตำแหน่งแถวใน Google Sheet');
+  }
+
+  const status = issue === 'สินค้าเสียหาย' ? 'Damaged' : issue === 'ลูกค้ายกเลิก' ? 'Cancelled' : 'Issue';
+  const updatedRow = [
+    row.no,
+    row.courierNo,
+    row.date,
+    row.time,
+    row.courier,
+    row.code,
+    row.email,
+    row.packer,
+    status,
+    issue,
+  ];
+
+  await updateDailyRow({
+    token,
+    spreadsheetId: sheet.id,
+    date: row.date,
+    rowNumber: row.sheetRowNumber ?? Number(row.no) + 1,
+    row: updatedRow,
+  });
+
+  return {
+    ...rowFromSheet(updatedRow),
+    sheetUrl: sheet.webViewLink,
+  };
+}
+
+function rowFromSheet(row, index = null) {
   const hasPackerColumn = row.length >= 10;
   return {
     no: row[0],
+    sheetRowNumber: index === null ? null : index + 2,
     courierNo: row[1],
     date: row[2],
     time: row[3],

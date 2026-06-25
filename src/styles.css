@@ -452,7 +452,21 @@ h3 {
 }
 
 .search-table table {
-  min-width: 760px;
+  min-width: 980px;
+}
+
+.table-action-button {
+  min-height: 34px;
+  border: 1px solid var(--warning-line);
+  border-radius: 6px;
+  background: var(--warning-bg);
+  color: var(--warning);
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.table-action-button:disabled {
+  opacity: 0.64;
 }
 
 .scan-controls {
