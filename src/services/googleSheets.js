@@ -234,10 +234,33 @@ async function createDriveItem({ token, name, mimeType, parentId }) {
 }
 
 export async function prepareGoogleSheets(token) {
+  // --- BEGIN FIX: Bug 4 — prevent concurrent duplicate folder creation ---
+  // When two machines call prepareGoogleSheets at the same time, both see
+  // no folder → both create one.  We re-read right before creating to
+  // catch any folder that another machine just created.
   let folder = await findDriveItem({ token, name: FOLDER_NAME, mimeType: MIME_FOLDER });
   if (!folder) {
-    folder = await createDriveItem({ token, name: FOLDER_NAME, mimeType: MIME_FOLDER });
+    // Re-check immediately before creating to avoid a race window.
+    const preCreateFolder = await findDriveItem({ token, name: FOLDER_NAME, mimeType: MIME_FOLDER });
+    if (preCreateFolder) {
+      folder = preCreateFolder;
+    } else {
+      try {
+        folder = await createDriveItem({ token, name: FOLDER_NAME, mimeType: MIME_FOLDER });
+      } catch (error) {
+        // If another machine created the folder between our re-check and
+        // our create call, Google may return a conflict.  Look it up once
+        // more and use whichever folder exists.
+        if (String(error).includes('409') || String(error).includes('already exists')) {
+          folder = await findDriveItem({ token, name: FOLDER_NAME, mimeType: MIME_FOLDER });
+        }
+        if (!folder) {
+          throw error;
+        }
+      }
+    }
   }
+  // --- END FIX ---
 
   const folderMasters = await listDriveItems({
     token,
@@ -281,74 +304,99 @@ async function getSpreadsheet(token, spreadsheetId) {
 }
 
 async function ensureDailyWorksheet({ token, spreadsheetId, date }) {
-  const spreadsheet = await getSpreadsheet(token, spreadsheetId);
-  const existing = spreadsheet.sheets?.find((sheet) => sheet.properties.title === date);
-  if (existing) {
-    await ensureWorksheetReady({ token, spreadsheetId, date, sheetId: existing.properties.sheetId });
-    return existing.properties;
+  // --- BEGIN FIX: Bug 3 — prevent concurrent duplicate worksheet creation ---
+  // Re-read the spreadsheet immediately before creating a new sheet so we
+  // catch any sheet that another machine just created between our last read
+  // and this write.  Google Sheets allows duplicate sheet titles, so we
+  // *must* check right before adding.
+  const preCreateSpreadsheet = await getSpreadsheet(token, spreadsheetId);
+  const preExisting = preCreateSpreadsheet.sheets?.find((sheet) => sheet.properties.title === date);
+  if (preExisting) {
+    await ensureWorksheetReady({ token, spreadsheetId, date, sheetId: preExisting.properties.sheetId });
+    return preExisting.properties;
   }
 
-  const reusableDefaultSheet = spreadsheet.sheets?.find((sheet) => {
+  const reusableDefaultSheet = preCreateSpreadsheet.sheets?.find((sheet) => {
     const title = sheet.properties.title;
     const rowCount = sheet.properties.gridProperties?.rowCount ?? 0;
-    return spreadsheet.sheets.length === 1 && rowCount <= 1000 && ['Sheet1', 'ชีต1'].includes(title);
+    return preCreateSpreadsheet.sheets.length === 1 && rowCount <= 1000 && ['Sheet1', 'ชีต1'].includes(title);
   });
 
   if (reusableDefaultSheet) {
-    await apiFetch(`${SHEETS_API}/${spreadsheetId}:batchUpdate`, token, {
-      method: 'POST',
-      body: JSON.stringify({
-        requests: [
-          {
-            updateSheetProperties: {
-              properties: {
-                sheetId: reusableDefaultSheet.properties.sheetId,
-                title: date,
-                gridProperties: {
-                  rowCount: 1000,
-                  columnCount: SCAN_HEADERS.length,
+    try {
+      await apiFetch(`${SHEETS_API}/${spreadsheetId}:batchUpdate`, token, {
+        method: 'POST',
+        body: JSON.stringify({
+          requests: [
+            {
+              updateSheetProperties: {
+                properties: {
+                  sheetId: reusableDefaultSheet.properties.sheetId,
+                  title: date,
+                  gridProperties: {
+                    rowCount: 1000,
+                    columnCount: SCAN_HEADERS.length,
+                  },
                 },
+                fields: 'title,gridProperties(rowCount,columnCount)',
               },
-              fields: 'title,gridProperties(rowCount,columnCount)',
             },
-          },
-        ],
-      }),
-    });
+          ],
+        }),
+      });
+    } catch (error) {
+      // If another machine renamed the default sheet at the same time,
+      // the rename will fail.  Fall back to find-or-add below.
+      if (!String(error).includes('already exists') && !String(error).includes('duplicate')) {
+        throw error;
+      }
+    }
 
-    const updatedSpreadsheet = await getSpreadsheet(token, spreadsheetId);
-    const worksheet = updatedSpreadsheet.sheets.find((sheet) => sheet.properties.title === date)?.properties;
+    const postRenameSpreadsheet = await getSpreadsheet(token, spreadsheetId);
+    const worksheet = postRenameSpreadsheet.sheets.find((sheet) => sheet.properties.title === date)?.properties;
     if (worksheet) {
       await ensureWorksheetReady({ token, spreadsheetId, date, sheetId: worksheet.sheetId });
     }
     return worksheet;
   }
 
-  await apiFetch(`${SHEETS_API}/${spreadsheetId}:batchUpdate`, token, {
-    method: 'POST',
-    body: JSON.stringify({
-      requests: [
-        {
-          addSheet: {
-            properties: {
-              title: date,
-              gridProperties: {
-                rowCount: 1000,
-                columnCount: SCAN_HEADERS.length,
+  try {
+    await apiFetch(`${SHEETS_API}/${spreadsheetId}:batchUpdate`, token, {
+      method: 'POST',
+      body: JSON.stringify({
+        requests: [
+          {
+            addSheet: {
+              properties: {
+                title: date,
+                gridProperties: {
+                  rowCount: 1000,
+                  columnCount: SCAN_HEADERS.length,
+                },
               },
             },
           },
-        },
-      ],
-    }),
-  });
+        ],
+      }),
+    });
+  } catch (error) {
+    // If Google already created a sheet with this title (unlikely with
+    // our re-check above, but possible under extreme concurrency), look
+    // it up again and use the existing one.
+    if (!String(error).includes('already exists') && !String(error).includes('duplicate')) {
+      throw error;
+    }
+  }
 
-  const updatedSpreadsheet = await getSpreadsheet(token, spreadsheetId);
-  const worksheet = updatedSpreadsheet.sheets.find((sheet) => sheet.properties.title === date)?.properties;
+  // Final re-read to pick up whichever sheet ended up with the target
+  // date title (ours or another machine’s).
+  const postCreateSpreadsheet = await getSpreadsheet(token, spreadsheetId);
+  const worksheet = postCreateSpreadsheet.sheets.find((sheet) => sheet.properties.title === date)?.properties;
   if (worksheet) {
     await ensureWorksheetReady({ token, spreadsheetId, date, sheetId: worksheet.sheetId });
   }
   return worksheet;
+  // --- END FIX ---
 }
 
 async function ensureWorksheetReady({ token, spreadsheetId, date, sheetId }) {
@@ -665,9 +713,17 @@ export async function appendScanGoogle({ token, config, courier, code, email, pa
     };
   }
 
-  const row = [
-    rows.length + 1,
-    courierRows.length + 1,
+  // --- BEGIN FIX: Bug 1 & 2 — race-condition-safe append ---
+  //
+  // Use a unique placeholder for No. and Courier No. so we can find our row
+  // after the append and compute the correct sequence numbers from the
+  // sheet’s real state.  This prevents concurrent machines from assigning
+  // the same No./Courier No. and also lets us detect concurrent duplicates.
+  const placeholder = `_TEMP_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+  const placeholderRow = [
+    placeholder,
+    placeholder,
     date,
     time,
     courier,
@@ -677,6 +733,7 @@ export async function appendScanGoogle({ token, config, courier, code, email, pa
     isCancelled ? 'Cancelled' : 'Success',
     note,
   ];
+
   const range = `${escapeSheetName(date)}!A:J`;
   await apiFetch(
     `${SHEETS_API}/${sheet.id}/values/${encodeURIComponent(range)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
@@ -684,22 +741,94 @@ export async function appendScanGoogle({ token, config, courier, code, email, pa
     {
       method: 'POST',
       body: JSON.stringify({
-        values: [row],
+        values: [placeholderRow],
       }),
     },
   );
 
+  // Re-read the sheet to determine the actual position of the row we just
+  // inserted.  This eliminates the race condition where two machines read
+  // the same row-count and then both assign the same No.
+  const updatedRows = await readDailyRows({ token, spreadsheetId: sheet.id, date });
+  const updatedParsedRows = updatedRows.map((row, idx) => rowFromSheet(row, idx));
+  const insertedIdx = updatedParsedRows.findIndex((row) => String(row.no) === placeholder);
+
+  if (insertedIdx === -1) {
+    // Fallback — should not happen.  Return a best-effort result using the
+    // current sheet state.
+    const courierCount = updatedParsedRows.filter((row) => row.courier === courier).length;
+    return {
+      status: 'success',
+      courier,
+      date,
+      time,
+      code: normalizedCode,
+      count: courierCount,
+      rows: updatedParsedRows.filter((row) => row.courier === courier).reverse().slice(0, 20),
+      sheetUrl: sheet.webViewLink,
+    };
+  }
+
+  const updatedCourierRows = updatedParsedRows.filter((row) => row.courier === courier);
+
+  // Check whether another machine appended the same tracking code between
+  // our initial read and our append (concurrent duplicate).
+  const concurrentCodes = updatedCourierRows.filter(
+    (row) => normalizeScanCode(row.code) === normalizeScanCode(normalizedCode),
+  );
+
+  const concurrentDuplicate = concurrentCodes.length > 1;
+
+  // Calculate the correct No. (1-based overall row index in this date sheet)
+  // and Courier No. (1-based index among this courier’s rows).
+  const correctNo = insertedIdx + 1;
+  const correctCourierNo =
+    updatedCourierRows.findIndex((row) => String(row.no) === placeholder) + 1;
+
+  const correctedRow = [
+    correctNo,
+    correctCourierNo,
+    date,
+    time,
+    courier,
+    normalizedCode,
+    email,
+    packer,
+    concurrentDuplicate ? 'Duplicate' : isCancelled ? 'Cancelled' : 'Success',
+    concurrentDuplicate ? 'Duplicate (concurrent scan)' : note,
+  ];
+
+  // Update the placeholder row with the real sequence numbers.
+  await updateDailyRow({
+    token,
+    spreadsheetId: sheet.id,
+    date,
+    rowNumber: insertedIdx + 2, // +1 header row, +1 zero-based index
+    row: correctedRow,
+  });
+
+  // Build the return payload from the in-memory corrected state so we avoid
+  // a third round-trip.
+  const resultRows = updatedParsedRows
+    .filter((row) => row.courier === courier)
+    .map((row) => (String(row.no) === placeholder ? rowFromSheet(correctedRow) : row))
+    .reverse()
+    .slice(0, 20);
+
   return {
-    status: 'success',
+    status: concurrentDuplicate ? 'duplicate' : 'success',
     courier,
     date,
     time,
     code: normalizedCode,
-    count: courierRows.length + 1,
-    row: rowFromSheet(row),
-    rows: [rowFromSheet(row), ...courierRows.reverse()].slice(0, 20),
+    count: concurrentDuplicate
+      ? updatedCourierRows.length
+      : updatedCourierRows.filter((row) => normalizeScanCode(row.code) !== placeholder).length + 1,
+    row: rowFromSheet(correctedRow),
+    rows: resultRows,
     sheetUrl: sheet.webViewLink,
   };
+  // --- END FIX ---
 }
 
 export async function updateScanIssueGoogle({ token, config, row, issue }) {

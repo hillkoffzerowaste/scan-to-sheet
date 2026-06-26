@@ -324,6 +324,12 @@ function App() {
       response_type: 'code',
       scope: SCOPES,
       include_granted_scopes: 'true',
+      // access_type=offline + prompt=consent ensures each login receives a
+      // refresh token.  Google allows up to 50 valid refresh tokens per
+      // account+client, which is enough for several machines scanning
+      // simultaneously.  Each browser’s session stores its own refresh
+      // token independently in Vercel KV, so concurrent logins do not
+      // invalidate other devices.
       access_type: 'offline',
       prompt: 'consent',
     });
