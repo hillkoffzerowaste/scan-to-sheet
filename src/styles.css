@@ -604,6 +604,7 @@ select:hover {
   color: var(--muted);
   font-weight: 700;
   font-size: 0.9rem;
+  cursor: pointer;
   transition: all 0.25s ease;
 }
 .popup-cancel-btn.active {
