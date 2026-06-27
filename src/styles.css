@@ -97,7 +97,8 @@ body {
   min-width: 320px;
   min-height: 100vh;
   background:
-    linear-gradient(135deg, var(--page) 0%, var(--page-soft) 40%, #d1fae5 100%);
+    linear-gradient(165deg, #f0fdfa 0%, #e6faf6 25%, #d1fae5 55%, #ccfbf1 80%, #f0fdfa 100%);
+  background-attachment: fixed;
   color: var(--text);
 }
 
@@ -107,14 +108,38 @@ body::before {
   inset: 0;
   background:
     /* large soft glow top-left */
-    radial-gradient(ellipse 60% 50% at 20% 10%, rgba(13,148,136,0.07) 0%, transparent 70%),
-    /* large soft glow bottom-right */
-    radial-gradient(ellipse 50% 60% at 80% 90%, rgba(5,150,105,0.05) 0%, transparent 70%),
-    /* subtle dot grid */
-    repeating-linear-gradient(0deg, transparent, transparent 19px, rgba(13,148,136,0.03) 19px, rgba(13,148,136,0.03) 20px),
-    repeating-linear-gradient(90deg, transparent, transparent 19px, rgba(13,148,136,0.03) 19px, rgba(13,148,136,0.03) 20px);
+    radial-gradient(ellipse 60% 50% at 15% 5%, rgba(13,148,136,0.08) 0%, transparent 60%),
+    /* medium glow center-right */
+    radial-gradient(ellipse 40% 40% at 75% 40%, rgba(5,150,105,0.06) 0%, transparent 60%),
+    /* large soft glow bottom */
+    radial-gradient(ellipse 70% 40% at 50% 95%, rgba(13,148,136,0.05) 0%, transparent 60%),
+    /* dot grid */
+    repeating-linear-gradient(0deg, transparent, transparent 23px, rgba(13,148,136,0.025) 23px, rgba(13,148,136,0.025) 24px),
+    repeating-linear-gradient(90deg, transparent, transparent 23px, rgba(13,148,136,0.025) 23px, rgba(13,148,136,0.025) 24px);
   pointer-events: none;
   z-index: -1;
+}
+
+/* floating background orbs */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(circle 300px at 25% 30%, rgba(13,148,136,0.04) 0%, transparent 100%),
+    radial-gradient(circle 200px at 70% 15%, rgba(5,150,105,0.03) 0%, transparent 100%),
+    radial-gradient(circle 250px at 80% 70%, rgba(13,148,136,0.04) 0%, transparent 100%),
+    radial-gradient(circle 180px at 10% 80%, rgba(5,150,105,0.03) 0%, transparent 100%);
+  pointer-events: none;
+  z-index: -1;
+  animation: float-orbs 20s ease-in-out infinite;
+}
+
+@keyframes float-orbs {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  25% { transform: translate(1%, -0.5%) scale(1.02); }
+  50% { transform: translate(-0.5%, 1%) scale(0.98); }
+  75% { transform: translate(0.5%, -1%) scale(1.01); }
 }
 
 button,
@@ -312,13 +337,27 @@ h3 {
 .side-panel,
 .scan-panel,
 .report-panel {
-  border: 1px solid var(--line);
+  border: 1px solid rgba(255,255,255,0.6);
   border-radius: var(--radius-lg);
   background: var(--surface-raised);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  box-shadow: var(--shadow);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow:
+    0 1px 0 rgba(255,255,255,0.6) inset,
+    0 2px 8px rgba(15,23,42,0.04),
+    0 8px 24px rgba(15,23,42,0.06);
   min-width: 0;
+  transition: box-shadow 0.3s ease, transform 0.3s ease;
+}
+
+.side-panel:hover,
+.scan-panel:hover,
+.report-panel:hover {
+  box-shadow:
+    0 1px 0 rgba(255,255,255,0.6) inset,
+    0 4px 16px rgba(15,23,42,0.06),
+    0 12px 32px rgba(15,23,42,0.08);
+  transform: translateY(-1px);
 }
 
 .side-panel,
@@ -433,13 +472,39 @@ h3 {
 }
 
 .secondary-button {
-  background: var(--primary);
+  background: linear-gradient(180deg, #14b8a6 0%, var(--primary) 100%);
   color: #ffffff;
-  border-color: var(--primary);
+  border-color: transparent;
+  box-shadow: 0 2px 4px rgba(13,148,136,0.25), 0 0 0 1px rgba(255,255,255,0.15) inset, 0 4px 0 #0b7d73;
+  transform: translateY(0);
+  transition: all 0.15s ease;
+}
+
+.secondary-button:not(:disabled):hover {
+  filter: none;
+  box-shadow: 0 3px 6px rgba(13,148,136,0.3), 0 0 0 1px rgba(255,255,255,0.2) inset, 0 5px 0 #0b7d73;
+  transform: translateY(-1px);
+}
+
+.secondary-button:not(:disabled):active {
+  box-shadow: 0 1px 2px rgba(13,148,136,0.2), 0 0 0 1px rgba(255,255,255,0.1) inset, 0 1px 0 #0b7d73;
+  transform: translateY(3px);
 }
 
 .ghost-button {
-  background: var(--surface);
+  background: linear-gradient(180deg, var(--surface) 0%, var(--surface-soft) 100%);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+
+.ghost-button:not(:disabled):hover {
+  filter: none;
+  box-shadow: 0 3px 8px rgba(0,0,0,0.08);
+  transform: translateY(-1px);
+}
+
+.ghost-button:not(:disabled):active {
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  transform: translateY(1px);
 }
 
 .date-box {
