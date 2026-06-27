@@ -882,7 +882,7 @@ export async function appendScanGoogle({ token, config, courier, code, email, pa
     .slice(0, 20);
 
   return {
-    status: concurrentDuplicate ? 'duplicate' : 'success',
+    status: concurrentDuplicate ? 'duplicate' : isCancelled ? 'cancelled' : 'success',
     courier,
     date,
     time,
