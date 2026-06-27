@@ -46,6 +46,26 @@ export const COURIER_RULES = {
     label: 'เลข J&T ต้องเป็นตัวเลข 12 หลัก',
     valid: /^\d{12}$/,
   },
+  Shopee: {
+    label: 'เลข Shopee ต้องขึ้นต้นด้วย TH แล้วตามด้วยตัวเลข 10-14 หลัก',
+    valid: /^TH\d{10,14}[A-Z]?$/i,
+  },
+  'Shopee Drop Off': {
+    label: 'เลข Shopee Drop Off ต้องขึ้นต้นด้วย TH แล้วตามด้วยตัวเลข 10-14 หลัก',
+    valid: /^TH\d{10,14}[A-Z]?$/i,
+  },
+  Flash: {
+    label: 'เลข Flash ต้องขึ้นต้นด้วย TH',
+    valid: /^TH[A-Z0-9]{10,16}$/i,
+  },
+  Best: {
+    label: 'เลข Best ต้องเป็นตัวเลข 10-18 หลัก',
+    valid: /^\d{10,18}$/,
+  },
+  Ratika: {
+    label: 'เลข Ratika ต้องเป็นตัวอักษรหรือตัวเลข 6-30 ตัว',
+    valid: /^[A-Z0-9]{6,30}$/i,
+  },
 };
 
 const CONFIG_KEY = 'scan-to-sheet-google-config-v2';
