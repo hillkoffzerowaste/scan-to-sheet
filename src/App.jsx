@@ -457,6 +457,23 @@ function App() {
       email: profile.email ?? 'google-user',
       name: profile.name ?? 'Google User',
     };
+    // Defer all persistence until API calls succeed.
+    await saveServerGoogleConfig(prepared).catch(() => {});
+
+    // Verify API access before updating any state to avoid 401 loops.
+    await refreshAllCounts(accessToken, prepared);
+
+    saveStoredGoogleSession({
+      accessToken,
+      expiresAt: Date.now() + Math.max((data.expiresIn ?? 3600) - 60, 60) * 1000,
+      user: nextUser,
+      config: prepared,
+    });
+    setToken(accessToken);
+    setUser(nextUser);
+    setConfig(prepared);
+    setConfig(prepared);
+  }
     // Save to localStorage but defer React state until API calls succeed.
     saveStoredGoogleSession({
       accessToken,
@@ -504,6 +521,8 @@ function App() {
   async function signOut() {
     // Mark logout intent so page refresh won't auto-restore session.
     localStorage.setItem(LOGGED_OUT_FLAG, '1');
+    clearTimeout(refreshTimerRef.current);
+    refreshTimerRef.current = null;
 
     try {
       await fetch('/api/google-logout', { method: 'POST' });
