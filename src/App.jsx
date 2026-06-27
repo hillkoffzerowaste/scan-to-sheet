@@ -1368,7 +1368,7 @@ function App() {
                             <td>{row.date}</td>
                             <td>{row.time}</td>
                             <td className="code-cell">{row.code}</td>
-                            <td>{row.status}</td>
+                            <td><span className={`status-badge ${(row.status || '').toLowerCase()}`}>{row.status}</span></td>
                             <td>{row.note || '-'}</td>
                             <td>{row.email}</td>
                             <td>
@@ -1487,7 +1487,7 @@ function App() {
                       <td>{row.time}</td>
                       <td className="code-cell">{row.code}</td>
                       <td>{row.email}</td>
-                      <td>{row.status}</td>
+                      <td><span className={`status-badge ${(row.status || '').toLowerCase()}`}>{row.status}</span></td>
                     </tr>
                   ))
                 )}
