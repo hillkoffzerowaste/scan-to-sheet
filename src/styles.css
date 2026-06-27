@@ -96,19 +96,23 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background: linear-gradient(135deg, var(--page) 0%, var(--page-soft) 50%, #ecfdf5 100%);
+  background:
+    linear-gradient(135deg, var(--page) 0%, var(--page-soft) 40%, #d1fae5 100%);
   color: var(--text);
 }
 
 body::before {
   content: '';
   position: fixed;
-  top: -50%;
-  left: -50%;
-  width: 200%;
-  height: 200%;
-  background: radial-gradient(ellipse at 30% 20%, rgba(13,148,136,0.04) 0%, transparent 60%),
-              radial-gradient(ellipse at 70% 80%, rgba(5,150,105,0.03) 0%, transparent 60%);
+  inset: 0;
+  background:
+    /* large soft glow top-left */
+    radial-gradient(ellipse 60% 50% at 20% 10%, rgba(13,148,136,0.07) 0%, transparent 70%),
+    /* large soft glow bottom-right */
+    radial-gradient(ellipse 50% 60% at 80% 90%, rgba(5,150,105,0.05) 0%, transparent 70%),
+    /* subtle dot grid */
+    repeating-linear-gradient(0deg, transparent, transparent 19px, rgba(13,148,136,0.03) 19px, rgba(13,148,136,0.03) 20px),
+    repeating-linear-gradient(90deg, transparent, transparent 19px, rgba(13,148,136,0.03) 19px, rgba(13,148,136,0.03) 20px);
   pointer-events: none;
   z-index: -1;
 }
