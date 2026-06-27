@@ -594,6 +594,29 @@ select:hover {
   opacity: 0.5;
 }
 
+.popup-cancel-btn {
+  width: 100%;
+  min-height: 40px;
+  margin: 8px 0 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface-soft);
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 0.9rem;
+  transition: all 0.25s ease;
+}
+.popup-cancel-btn.active {
+  border-color: var(--warning-line);
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+.popup-cancel-btn:not(:disabled):hover {
+  border-color: var(--warning-line);
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
 .scan-popup-close {
   width: 100%;
   min-height: 48px;

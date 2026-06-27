@@ -1738,15 +1738,34 @@ function App() {
               <strong>{selectedCourier}</strong>
             </div>
 
+            <button
+              className={`popup-cancel-btn ${scanRemark === ISSUE_CUSTOMER_CANCELLED ? 'active' : ''}`}
+              type="button"
+              onClick={() => setScanRemark((v) => (v === ISSUE_CUSTOMER_CANCELLED ? '' : ISSUE_CUSTOMER_CANCELLED))}
+              disabled={!isSignedIn || busy}
+            >
+              {scanRemark === ISSUE_CUSTOMER_CANCELLED ? '✓ ลูกค้ายกเลิก' : 'ลูกค้ายกเลิก'}
+            </button>
+
             <div className="scan-controls">
               <div className="segmented-control">
                 <button className={scanMethod === 'manual' ? 'active' : ''} type="button" onClick={() => setScanMethod('manual')}>
-                  <ScanLine size={16} />
+                  <ScanLine size={15} />
                   <span>เครื่องยิง</span>
                 </button>
                 <button className={scanMethod === 'camera' ? 'active' : ''} type="button" onClick={() => setScanMethod('camera')}>
-                  <Camera size={16} />
+                  <Camera size={15} />
                   <span>กล้อง</span>
+                </button>
+              </div>
+              <div className="segmented-control">
+                <button className={scanMode === 'single' ? 'active' : ''} type="button" onClick={() => setScanMode('single')}>
+                  <Square size={14} />
+                  <span>ทีละชิ้น</span>
+                </button>
+                <button className={scanMode === 'continuous' ? 'active' : ''} type="button" onClick={() => setScanMode('continuous')}>
+                  <Repeat size={14} />
+                  <span>ต่อเนื่อง</span>
                 </button>
               </div>
             </div>
