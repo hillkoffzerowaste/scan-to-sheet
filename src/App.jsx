@@ -183,7 +183,7 @@ function App() {
 
     const themeColor = document.querySelector('meta[name="theme-color"]');
     if (themeColor) {
-      themeColor.setAttribute('content', theme === 'dark' ? '#0f172a' : '#f8fafc');
+      themeColor.setAttribute('content', theme === 'dark' ? '#000000' : '#f2f2f7');
     }
   }, [theme]);
 
