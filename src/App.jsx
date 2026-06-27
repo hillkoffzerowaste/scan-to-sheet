@@ -137,6 +137,7 @@ function App() {
     PACKERS.filter((p) => p !== PACKER_UNASSIGNED).map((p) => ({ packer: p, count: 0 })),
   );
   const [scanFlash, setScanFlash] = useState(false);
+  const [scanPopupOpen, setScanPopupOpen] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [theme, setTheme] = useState(() => localStorage.getItem(THEME_KEY) || 'light');
   const [scanMethod, setScanMethod] = useState('camera');
@@ -1126,7 +1127,10 @@ function App() {
                 className={`courier-button ${courier === selectedCourier ? 'active' : ''}`}
                 key={courier}
                 type="button"
-                onClick={() => setSelectedCourier(courier)}
+                onClick={() => {
+                  setSelectedCourier(courier);
+                  setScanPopupOpen(true);
+                }}
                 disabled={!isSignedIn || cameraActive}
               >
                 <span>{courier}</span>
@@ -1717,6 +1721,93 @@ function App() {
           </table>
         </div>
       </section>
+
+      {scanPopupOpen && (
+        <div className="scan-popup-overlay" onClick={() => setScanPopupOpen(false)}>
+          <div className="scan-popup-sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="scan-popup-handle" />
+
+            <div className="current-courier-badge">
+              <Truck size={18} />
+              <span>กำลังสแกน</span>
+              <strong>{selectedCourier}</strong>
+            </div>
+
+            <div className="scan-controls">
+              <div className="segmented-control">
+                <button className={scanMethod === 'manual' ? 'active' : ''} type="button" onClick={() => setScanMethod('manual')}>
+                  <ScanLine size={16} />
+                  <span>เครื่องยิง</span>
+                </button>
+                <button className={scanMethod === 'camera' ? 'active' : ''} type="button" onClick={() => setScanMethod('camera')}>
+                  <Camera size={16} />
+                  <span>กล้อง</span>
+                </button>
+              </div>
+            </div>
+
+            <div className={`issue-bar ${scanRemark ? 'active' : ''}`}>
+              <label className="packer-control">
+                <span>Packer</span>
+                <select value={selectedPacker} onChange={(e) => setSelectedPacker(e.target.value)} disabled={!isSignedIn || busy}>
+                  {PACKERS.map((p) => <option key={p} value={p}>{p}</option>)}
+                </select>
+              </label>
+              <button className={scanRemark === ISSUE_CUSTOMER_CANCELLED ? 'active' : ''} type="button"
+                onClick={() => setScanRemark((v) => (v === ISSUE_CUSTOMER_CANCELLED ? '' : ISSUE_CUSTOMER_CANCELLED))}
+                disabled={!isSignedIn || busy}>
+                ลูกค้ายกเลิก
+              </button>
+            </div>
+
+            {scanMethod === 'camera' ? (
+              <div className="camera-panel">
+                <div className={`camera-stage ${cameraActive ? 'active' : ''}`}>
+                  <div id={CAMERA_REGION_ID} className="camera-reader" />
+                  <div className="scan-frame" aria-hidden="true"><span /></div>
+                </div>
+                <div className="camera-footer">
+                  <p className={`camera-message ${cameraMessageType}`}>{cameraMessage}</p>
+                  <div className="camera-actions">
+                    {cameraActive ? (
+                      <button className="ghost-button" type="button" onClick={stopCamera}>
+                        <Square size={16} /><span>หยุดกล้อง</span>
+                      </button>
+                    ) : (
+                      <button className="secondary-button" type="button" onClick={startCamera} disabled={busy || !isSignedIn || !isPackerReady}>
+                        <Camera size={16} /><span>เปิดกล้อง</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <form className="scan-form" onSubmit={handleScanSubmit}>
+                <div className={`scan-input-row ${scanFlash ? 'flash' : ''}`}>
+                  <ScanLine size={24} />
+                  <input
+                    ref={inputRef}
+                    value={scanValue}
+                    onChange={(e) => setScanValue(e.target.value)}
+                    placeholder={isPackerReady ? 'ยิงบาร์โค้ด แล้วกด Enter' : 'เลือก Packer ก่อน'}
+                    autoComplete="off"
+                    disabled={busy || !isSignedIn || !isPackerReady}
+                  />
+                  <button type="submit" disabled={busy || !isSignedIn || !isPackerReady}>
+                    {busy ? <RefreshCw size={18} className="spin" /> : <Play size={18} />}
+                    <span>บันทึก</span>
+                  </button>
+                </div>
+              </form>
+            )}
+
+            <button className="scan-popup-close" type="button" onClick={() => setScanPopupOpen(false)}>
+              ปิด
+            </button>
+          </div>
+        </div>
+      )}
+
     </main>
   );
 }
