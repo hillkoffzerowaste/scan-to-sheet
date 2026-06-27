@@ -347,8 +347,163 @@ h3 {
   color: var(--primary-strong);
 }
 
-.master-sheet-link {
+/* ── Universal micro-interactions ── */
+
+a, .master-sheet-link {
   text-decoration: none;
+  transition: all 0.25s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+a:hover, .master-sheet-link:hover {
+  opacity: 0.8;
+  transform: translateY(-0.5px);
+}
+
+select:hover {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.1);
+  cursor: pointer;
+}
+
+.date-box {
+  transition: all 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
+  cursor: default;
+}
+
+.date-box:hover {
+  border-color: var(--line-strong);
+  box-shadow: 0 3px 12px rgba(0,0,0,0.06);
+  transform: translateY(-1px);
+}
+
+.search-input-row {
+  transition: all 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+.search-input-row:hover {
+  border-color: var(--line-strong);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.search-input-row:focus-within {
+  box-shadow: 0 0 0 4px rgba(0, 122, 255, 0.18);
+  border-color: var(--primary);
+  transform: translateY(-1px);
+}
+
+.issue-bar button {
+  transition: all 0.25s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+.issue-bar button:not(:disabled):hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 10px rgba(255,149,0,0.2);
+}
+
+.issue-bar button:not(:disabled):active {
+  transform: scale(0.96);
+}
+
+.issue-bar select {
+  transition: all 0.25s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+.issue-bar select:hover {
+  border-color: var(--primary);
+}
+
+.table-action-button {
+  transition: all 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+.table-action-button:not(:disabled):hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 10px rgba(255,149,0,0.15);
+}
+
+.table-action-button:not(:disabled):active {
+  transform: scale(0.95);
+}
+
+.segmented-control button {
+  transition: all 0.25s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+.segmented-control button:not(.active):hover {
+  background: rgba(0,122,255,0.06);
+  color: var(--primary);
+}
+
+.icon-button {
+  transition: all 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+.icon-button:not(:disabled):hover {
+  background: var(--primary-soft);
+  color: var(--primary);
+  transform: rotate(-5deg) scale(1.1);
+}
+
+.icon-button:not(:disabled):active {
+  transform: rotate(5deg) scale(0.95);
+}
+
+.empty-search {
+  transition: all 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+.empty-search:hover {
+  border-color: var(--line-strong);
+  background: var(--surface);
+}
+
+.report-badge {
+  transition: all 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+.report-badge:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+}
+
+.camera-message {
+  transition: all 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+.status-badge {
+  transition: all 0.25s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+.status-badge:hover {
+  transform: scale(1.05);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+.current-courier-badge {
+  transition: all 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+.current-courier-badge:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(0,122,255,0.15);
+}
+
+.field-control input {
+  transition: all 0.25s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+.field-control input:hover {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.08);
+}
+
+.account-pill {
+  transition: all 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+.account-pill:hover {
+  box-shadow: 0 3px 12px rgba(0,0,0,0.06);
+  transform: translateY(-0.5px);
 }
 
 .side-panel,
