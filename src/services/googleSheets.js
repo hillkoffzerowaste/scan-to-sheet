@@ -547,40 +547,45 @@ export async function getTodayRowsGoogle({ token, config, courier, date = getBan
 }
 
 export async function fetchTodayPackerCounts({ token, config }) {
+  const data = await fetchTodaySummary({ token, config });
+  return data?.packerCounts ?? [];
+}
+
+export async function fetchTodaySummary({ token, config }) {
   const sheet = config?.master;
   if (!sheet?.id) {
-    return [];
+    return null;
   }
 
   const date = getBangkokParts().date;
   const spreadsheet = await getSpreadsheet(token, sheet.id);
   const worksheet = spreadsheet.sheets?.find((item) => item.properties.title === date);
   if (!worksheet) {
-    return [];
+    return { courierCounts: [], packerCounts: [], recentRows: [] };
   }
 
-  // Read only the Packer (H) and Status (I) columns for today
-  const range = `${escapeSheetName(date)}!H2:I`;
-  const params = new URLSearchParams({ majorDimension: 'ROWS' });
-  const data = await apiFetch(
-    `${SHEETS_API}/${sheet.id}/values/${encodeURIComponent(range)}?${params}`,
-    token,
-  );
-  const rows = data.values ?? [];
+  // Read ALL rows for today in a single API call
+  const rows = await readDailyRows({ token, spreadsheetId: sheet.id, date });
+  const parsedRows = rows.map(rowFromSheet);
 
+  // Courier counts (Success only)
+  const courierCounts = COURIERS.map((courier) => ({
+    courier,
+    count: parsedRows.filter((r) => r.courier === courier && r.status === 'Success').length,
+  }));
+
+  // Packer counts (Success only)
   const packerMap = Object.fromEntries(
     PACKERS.filter((p) => p !== PACKER_UNASSIGNED).map((p) => [p, 0]),
   );
-
-  for (const row of rows) {
-    const packer = row[0]; // Column H
-    const status = row[1]; // Column I
-    if (status === 'Success' && packer && packerMap[packer] !== undefined) {
-      packerMap[packer] += 1;
+  for (const row of parsedRows) {
+    if (row.status === 'Success' && row.packer && packerMap[row.packer] !== undefined) {
+      packerMap[row.packer] += 1;
     }
   }
+  const packerCounts = Object.entries(packerMap).map(([packer, count]) => ({ packer, count }));
 
-  return Object.entries(packerMap).map(([packer, count]) => ({ packer, count }));
+  return { courierCounts, packerCounts };
 }
 
 export async function getScanReportGoogle({ token, config, dates }) {

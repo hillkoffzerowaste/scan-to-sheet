@@ -30,6 +30,7 @@ import {
   appendScanGoogle,
   fetchGoogleProfile,
   fetchTodayPackerCounts,
+  fetchTodaySummary,
   getBangkokParts,
   getScanReportGoogle,
   getTodayRowsGoogle,
@@ -497,32 +498,18 @@ function App() {
       return;
     }
 
-    const date = getBangkokParts().date;
-    const results = await Promise.allSettled(
-      COURIERS.map(async (courier) => {
-        const rows = await getTodayRowsGoogle({
-          token: accessToken,
-          config: googleConfig,
-          courier,
-          date,
-        });
-        return { courier, rows };
-      }),
-    );
+    // Single API call — reads all today's rows, computes courier + packer counts
+    const data = await fetchTodaySummary({ token: accessToken, config: googleConfig });
+    if (data) {
+      setSummary(data.courierCounts);
+      setPackerCounts(data.packerCounts);
+    }
 
-    const rowsByCourier = results
-      .filter((r) => r.status === 'fulfilled')
-      .map((r) => r.value);
-
-    setSummary(rowsByCourier.map(({ courier, rows }) => ({ courier, count: rows.length })));
-
-    // Fetch real packer counts from today's sheet (reflects all machines)
-    fetchTodayPackerCounts({ token: accessToken, config: googleConfig })
-      .then(setPackerCounts)
-      .catch(() => {});
-
-    const selected = rowsByCourier.find((item) => item.courier === selectedCourier);
-    setRecentRows(selected?.rows ?? []);
+    // Refresh selected courier rows
+    const courierRows = await runWithGoogleRetry((t, c) =>
+      getTodayRowsGoogle({ token: t, config: c, courier: selectedCourier, date: getBangkokParts().date }),
+    ).catch(() => []);
+    setRecentRows(courierRows);
   }
 
   async function refreshSelectedCourierRows() {
@@ -614,7 +601,12 @@ function App() {
       if (result.status === 'success' && token && config) {
         setScanFlash(true);
         setTimeout(() => setScanFlash(false), 600);
-        fetchTodayPackerCounts({ token, config }).then(setPackerCounts).catch(() => {});
+        fetchTodaySummary({ token, config }).then((data) => {
+          if (data) {
+            setPackerCounts(data.packerCounts);
+            setSummary(data.courierCounts);
+          }
+        }).catch(() => {});
       }
 
       if (result.status === 'cancelled') {
