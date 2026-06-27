@@ -59,6 +59,7 @@ const EMPTY_USER = {
 const THEME_KEY = 'scan-to-sheet-theme';
 const GOOGLE_SESSION_KEY = 'scan-to-sheet-google-session-v1';
 const LOGGED_OUT_FLAG = 'scan-to-sheet-logged-out-v1';
+const SOUND_KEY = 'scan-to-sheet-sound';
 const CAMERA_REGION_ID = 'camera-reader';
 const CAMERA_POPUP_ID = 'camera-reader-popup';
 const CAMERA_COOLDOWN_MS = 2500;
@@ -141,7 +142,7 @@ function App() {
   );
   const [scanFlash, setScanFlash] = useState(false);
   const [scanPopupOpen, setScanPopupOpen] = useState(false);
-  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [soundEnabled, setSoundEnabled] = useState(() => localStorage.getItem(SOUND_KEY) !== '0');
   const [theme, setTheme] = useState(() => localStorage.getItem(THEME_KEY) || 'light');
   const [scanMethod, setScanMethod] = useState('camera');
   const [scanMode, setScanMode] = useState('single');
@@ -192,6 +193,10 @@ function App() {
       themeColor.setAttribute('content', theme === 'dark' ? '#000000' : '#f2f2f7');
     }
   }, [theme]);
+
+  useEffect(() => {
+    localStorage.setItem(SOUND_KEY, soundEnabled ? '1' : '0');
+  }, [soundEnabled]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -472,7 +477,6 @@ function App() {
     });
     setToken(accessToken);
     setUser(nextUser);
-    setConfig(prepared);
     setConfig(prepared);
   }
 
