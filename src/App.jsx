@@ -67,6 +67,7 @@ const ISSUE_CUSTOMER_CANCELLED = 'ลูกค้ายกเลิก';
 const ISSUE_DAMAGED = 'สินค้าเสียหาย';
 const PACKER_UNASSIGNED = 'ยังไม่ระบุ';
 const PACKERS = [PACKER_UNASSIGNED, 'กิต', 'มาย', 'ยุทธ', 'หล้า', 'มุก'];
+const DEFAULT_PACKER_COUNTS = PACKERS.filter((p) => p !== PACKER_UNASSIGNED).map((p) => ({ packer: p, count: 0 }));
 
 function loadStoredGoogleSession() {
   try {
@@ -537,7 +538,7 @@ function App() {
     const data = await fetchTodaySummary({ token: accessToken, config: googleConfig });
     if (data) {
       setSummary(data.courierCounts);
-      setPackerCounts(data.packerCounts);
+      setPackerCounts(data.packerCounts.length > 0 ? data.packerCounts : DEFAULT_PACKER_COUNTS);
     }
 
     // Refresh selected courier rows
@@ -556,8 +557,8 @@ function App() {
       if (token && config) {
         fetchTodaySummary({ token, config }).then((data) => {
           if (data) {
+            setPackerCounts(data.packerCounts.length > 0 ? data.packerCounts : DEFAULT_PACKER_COUNTS);
             setSummary(data.courierCounts);
-            setPackerCounts(data.packerCounts);
           }
         }).catch(() => {});
       }
