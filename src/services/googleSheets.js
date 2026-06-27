@@ -558,13 +558,9 @@ export async function fetchTodaySummary({ token, config }) {
   }
 
   const date = getBangkokParts().date;
-  const spreadsheet = await getSpreadsheet(token, sheet.id);
-  const worksheet = spreadsheet.sheets?.find((item) => item.properties.title === date);
-  if (!worksheet) {
-    return { courierCounts: [], packerCounts: [], recentRows: [] };
-  }
+  // Ensure the date worksheet exists before reading (like getTodayRowsGoogle does)
+  await ensureDailyWorksheet({ token, spreadsheetId: sheet.id, date });
 
-  // Read ALL rows for today in a single API call
   const rows = await readDailyRows({ token, spreadsheetId: sheet.id, date });
   const parsedRows = rows.map(rowFromSheet);
 
