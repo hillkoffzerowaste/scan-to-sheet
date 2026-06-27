@@ -560,6 +560,9 @@ function App() {
       setRecentRows(rows);
       // Refresh all counts from sheet to keep consistent (Success-only)
       if (token && config) {
+        scheduleCountRefresh(); /* was: fetchTodaySummary */
+      }
+        /* old:
         fetchTodaySummary({ token, config }).then((data) => {
           if (data) {
             setSummary(data.courierCounts);
@@ -567,6 +570,7 @@ function App() {
           }
         }).catch(() => {});
       }
+        */
     } catch (error) {
       setStatus({
         type: 'error',
@@ -640,6 +644,9 @@ function App() {
         setScanFlash(true);
         setTimeout(() => setScanFlash(false), 600);
         scheduleCountRefresh(); // was: fetchTodaySummary debounced
+      }
+      /* keep - close if block above */
+      */
         /* >>> OLD CODE - replaced by scheduleCountRefresh() above
         fetchTodaySummary({ token, config }).then((data) => {
           if (data) {
