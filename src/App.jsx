@@ -59,6 +59,7 @@ const EMPTY_USER = {
 const THEME_KEY = 'scan-to-sheet-theme';
 const GOOGLE_SESSION_KEY = 'scan-to-sheet-google-session-v1';
 const CAMERA_REGION_ID = 'camera-reader';
+const CAMERA_POPUP_ID = 'camera-reader-popup';
 const CAMERA_COOLDOWN_MS = 2500;
 const CAMERA_SCAN_FPS = 18;
 const ISSUE_CUSTOMER_CANCELLED = 'ลูกค้ายกเลิก';
@@ -705,7 +706,11 @@ function App() {
     }
   }
 
-  async function startCamera() {
+  function startCameraPopup() {
+    return startCamera(CAMERA_POPUP_ID);
+  }
+
+  async function startCamera(regionId = CAMERA_REGION_ID) {
     if (!isSignedIn) {
       setStatus({
         type: 'warning',
@@ -722,7 +727,7 @@ function App() {
 
     try {
       showCameraMessage('กำลังเปิดกล้อง...', 'idle');
-      const scanner = new Html5Qrcode(CAMERA_REGION_ID, {
+      const scanner = new Html5Qrcode(regionId, {
         useBarCodeDetectorIfSupported: true,
         formatsToSupport: [
           Html5QrcodeSupportedFormats.QR_CODE,
@@ -1756,7 +1761,7 @@ function App() {
             {scanMethod === 'camera' ? (
               <div className="camera-panel">
                 <div className={`camera-stage ${cameraActive ? 'active' : ''}`}>
-                  <div id={CAMERA_REGION_ID} className="camera-reader" />
+                  <div id={CAMERA_POPUP_ID} className="camera-reader" />
                   <div className="scan-frame" aria-hidden="true"><span /></div>
                 </div>
                 <div className="camera-footer">
@@ -1767,7 +1772,7 @@ function App() {
                         <Square size={16} /><span>หยุดกล้อง</span>
                       </button>
                     ) : (
-                      <button className="secondary-button" type="button" onClick={startCamera} disabled={busy || !isSignedIn || !isPackerReady}>
+                      <button className="secondary-button" type="button" onClick={startCameraPopup} disabled={busy || !isSignedIn || !isPackerReady}>
                         <Camera size={16} /><span>เปิดกล้อง</span>
                       </button>
                     )}
@@ -1794,7 +1799,7 @@ function App() {
               </form>
             )}
 
-            <button className="scan-popup-close" type="button" onClick={() => setScanPopupOpen(false)}>
+            <button className="scan-popup-close" type="button" onClick={() => { setScanPopupOpen(false); void stopCamera(); }}>
               ปิด
             </button>
           </div>
