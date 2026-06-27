@@ -549,7 +549,7 @@ export async function getTodayRowsGoogle({ token, config, courier, date = getBan
 export async function fetchTodayPackerCounts({ token, config }) {
   const sheet = config?.master;
   if (!sheet?.id) {
-    return COURIERS.map((courier) => ({ courier, count: 0 }));
+    return [];
   }
 
   const date = getBangkokParts().date;
