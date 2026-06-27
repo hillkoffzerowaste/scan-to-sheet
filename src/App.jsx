@@ -1746,19 +1746,12 @@ function App() {
               </div>
             </div>
 
-            <div className={`issue-bar ${scanRemark ? 'active' : ''}`}>
-              <label className="packer-control">
-                <span>Packer</span>
-                <select value={selectedPacker} onChange={(e) => setSelectedPacker(e.target.value)} disabled={!isSignedIn || busy}>
-                  {PACKERS.map((p) => <option key={p} value={p}>{p}</option>)}
-                </select>
-              </label>
-              <button className={scanRemark === ISSUE_CUSTOMER_CANCELLED ? 'active' : ''} type="button"
-                onClick={() => setScanRemark((v) => (v === ISSUE_CUSTOMER_CANCELLED ? '' : ISSUE_CUSTOMER_CANCELLED))}
-                disabled={!isSignedIn || busy}>
-                ลูกค้ายกเลิก
-              </button>
-            </div>
+            <label className="packer-control popup-packer">
+              <span>Packer — เลือกคนแพ็คก่อนสแกน</span>
+              <select value={selectedPacker} onChange={(e) => setSelectedPacker(e.target.value)} disabled={!isSignedIn || busy}>
+                {PACKERS.map((p) => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </label>
 
             {scanMethod === 'camera' ? (
               <div className="camera-panel">
