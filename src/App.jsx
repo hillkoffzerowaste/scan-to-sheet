@@ -1500,7 +1500,7 @@ function App() {
             </div>
           </div>
 
-          {isSignedIn && totalTodayCount > 0 && (
+          {isSignedIn && (
             <div className="packer-section">
               <div className="packer-header">
                 <span className="eyebrow">Packer วันนี้</span>
