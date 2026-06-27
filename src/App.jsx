@@ -123,7 +123,6 @@ function App() {
   const [config, setConfig] = useState(() => loadGoogleConfig());
   const [selectedCourier, setSelectedCourier] = useState(COURIERS[0]);
   const [scanValue, setScanValue] = useState('');
-  const [scanValue, setScanValue] = useState('');
   const [lastScannedCode, setLastScannedCode] = useState('');
   const [selectedPacker, setSelectedPacker] = useState(PACKER_UNASSIGNED);
   const [scanRemark, setScanRemark] = useState('');
@@ -666,8 +665,6 @@ function App() {
       if (source !== 'manual') {
         setScanValue(result.code);
       }
-      setToday({ date: result.date, time: result.time });
-      setRecentRows(result.rows ?? []);
       setToday({ date: result.date, time: result.time });
       setRecentRows(result.rows ?? []);
       setLastScannedCode(result.code);
@@ -1370,9 +1367,6 @@ function App() {
               <span>สแกนล่าสุด: <strong>{lastScannedCode}</strong></span>
             </div>
           )}
-              </div>
-            </form>
-          )}
 
           <section className="search-panel" aria-label="ค้นหาเลขพัสดุ">
             <div className="search-heading">
@@ -1902,7 +1896,6 @@ function App() {
                 </div>
               </form>
             )}
-            )}
             {lastScannedCode && (
               <div className="last-scan">
                 <CheckCircle2 size={14} />
@@ -1910,7 +1903,6 @@ function App() {
               </div>
             )}
 
-            <button className="scan-popup-close"
 
             <button className="scan-popup-close" type="button" onClick={() => { setScanPopupOpen(false); void stopCamera(); }}>
               ปิด
