@@ -135,6 +135,7 @@ function App() {
   const [packerCounts, setPackerCounts] = useState(() =>
     PACKERS.filter((p) => p !== PACKER_UNASSIGNED).map((p) => ({ packer: p, count: 0 })),
   );
+  const [scanFlash, setScanFlash] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [theme, setTheme] = useState(() => localStorage.getItem(THEME_KEY) || 'light');
   const [scanMethod, setScanMethod] = useState('camera');
@@ -611,6 +612,8 @@ function App() {
       setSummary((current) => updateSummary(current, selectedCourier, result.count));
 
       if (result.status === 'success' && token && config) {
+        setScanFlash(true);
+        setTimeout(() => setScanFlash(false), 600);
         fetchTodayPackerCounts({ token, config }).then(setPackerCounts).catch(() => {});
       }
 
@@ -1250,7 +1253,7 @@ function App() {
           ) : (
             <form className="scan-form" onSubmit={handleScanSubmit}>
               <label htmlFor="scan-input">Tracking / Barcode</label>
-              <div className="scan-input-row">
+              <div className={`scan-input-row ${scanFlash ? 'flash' : ''}`}>
                 <ScanLine size={24} />
                 <input
                   id="scan-input"

@@ -72,12 +72,33 @@ input {
 
 button {
   cursor: pointer;
+  transition: all 0.2s ease;
 }
 
 button:disabled,
 input:disabled {
   cursor: not-allowed;
   opacity: 0.62;
+}
+
+button:not(:disabled):hover {
+  filter: brightness(0.92);
+}
+
+button:not(:disabled):active {
+  transform: scale(0.97);
+}
+
+input,
+select {
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+input:focus,
+select:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(24, 119, 111, 0.15);
 }
 
 h1,
@@ -1034,6 +1055,47 @@ th {
   to {
     transform: rotate(360deg);
   }
+}
+
+@keyframes flash-success {
+  0% { border-color: var(--primary); box-shadow: 0 0 0 0 rgba(24, 119, 111, 0.4); }
+  50% { border-color: var(--success); box-shadow: 0 0 0 6px rgba(18, 100, 77, 0.2); }
+  100% { border-color: var(--primary); box-shadow: 0 0 0 0 rgba(24, 119, 111, 0); }
+}
+
+.scan-input-row.flash {
+  animation: flash-success 0.6s ease;
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.metric-row > div,
+.packer-row > div {
+  animation: fadeInUp 0.3s ease;
+}
+
+.courier-button.active {
+  animation: pulse-active 2s ease infinite;
+}
+
+@keyframes pulse-active {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(24, 119, 111, 0.2); }
+  50% { box-shadow: 0 0 0 4px rgba(24, 119, 111, 0.1); }
+}
+
+.side-panel,
+.scan-panel,
+.report-panel {
+  transition: box-shadow 0.3s ease;
+}
+
+.side-panel:hover,
+.scan-panel:hover,
+.report-panel:hover {
+  box-shadow: 0 18px 48px rgba(31, 45, 61, 0.12);
 }
 
 @media (min-width: 560px) {
