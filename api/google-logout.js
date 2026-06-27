@@ -6,13 +6,17 @@ export default async function handler(req, res) {
     return;
   }
 
+  // Always clear cookie first, then try to delete KV session.
+  clearSessionCookie(res);
+
   try {
     const { sessionId } = await getSession(req);
-    await deleteSession(sessionId);
-    clearSessionCookie(res);
-    sendJson(res, 200, { ok: true });
-  } catch (error) {
-    clearSessionCookie(res);
-    sendJson(res, 200, { ok: true });
+    if (sessionId) {
+      await deleteSession(sessionId);
+    }
+  } catch {
+    // KV may be unreachable; cookie is already cleared.
   }
+
+  sendJson(res, 200, { ok: true });
 }
