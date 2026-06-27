@@ -570,12 +570,14 @@ export async function fetchTodaySummary({ token, config }) {
     count: parsedRows.filter((r) => r.courier === courier).length,
   }));
 
-  // Packer counts — count by packer name (works regardless of status column alignment)
+  // Packer counts — read directly from sheet columns H(7)=Packer, I(8)=Status
   const packerList = ['กิต', 'มาย', 'ยุทธ', 'หล้า', 'มุก'];
   const packerMap = Object.fromEntries(packerList.map((p) => [p, 0]));
-  for (const row of parsedRows) {
-    if (row.packer && packerMap[row.packer] !== undefined) {
-      packerMap[row.packer] += 1;
+  for (const row of rows) {
+    const packer = String(row[7] ?? '').trim();
+    const status = String(row[8] ?? '').trim();
+    if (status === 'Success' && packer && packerMap[packer] !== undefined) {
+      packerMap[packer] += 1;
     }
   }
   const packerCounts = Object.entries(packerMap).map(([packer, count]) => ({ packer, count }));
