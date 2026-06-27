@@ -29,6 +29,7 @@ import {
   COURIERS,
   appendScanGoogle,
   fetchGoogleProfile,
+  fetchTodayPackerCounts,
   getBangkokParts,
   getScanReportGoogle,
   getTodayRowsGoogle,
@@ -514,18 +515,10 @@ function App() {
 
     setSummary(rowsByCourier.map(({ courier, rows }) => ({ courier, count: rows.length })));
 
-    // Compute packer counts across all couriers
-    const packerMap = Object.fromEntries(
-      PACKERS.filter((p) => p !== PACKER_UNASSIGNED).map((p) => [p, 0]),
-    );
-    for (const { rows } of rowsByCourier) {
-      for (const row of rows) {
-        if (row.status === 'Success' && row.packer && packerMap[row.packer] !== undefined) {
-          packerMap[row.packer] += 1;
-        }
-      }
-    }
-    setPackerCounts(Object.entries(packerMap).map(([packer, count]) => ({ packer, count })));
+    // Fetch real packer counts from today's sheet (reflects all machines)
+    fetchTodayPackerCounts({ token: accessToken, config: googleConfig })
+      .then(setPackerCounts)
+      .catch(() => {});
 
     const selected = rowsByCourier.find((item) => item.courier === selectedCourier);
     setRecentRows(selected?.rows ?? []);
@@ -617,12 +610,8 @@ function App() {
       setRecentRows(result.rows ?? []);
       setSummary((current) => updateSummary(current, selectedCourier, result.count));
 
-      if (result.status === 'success' && selectedPacker !== PACKER_UNASSIGNED) {
-        setPackerCounts((current) =>
-          current.map((item) =>
-            item.packer === selectedPacker ? { ...item, count: item.count + 1 } : item,
-          ),
-        );
+      if (result.status === 'success' && token && config) {
+        fetchTodayPackerCounts({ token, config }).then(setPackerCounts).catch(() => {});
       }
 
       if (result.status === 'cancelled') {

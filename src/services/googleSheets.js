@@ -546,6 +546,43 @@ export async function getTodayRowsGoogle({ token, config, courier, date = getBan
   return rows.map(rowFromSheet).filter((row) => row.courier === courier).reverse();
 }
 
+export async function fetchTodayPackerCounts({ token, config }) {
+  const sheet = config?.master;
+  if (!sheet?.id) {
+    return COURIERS.map((courier) => ({ courier, count: 0 }));
+  }
+
+  const date = getBangkokParts().date;
+  const spreadsheet = await getSpreadsheet(token, sheet.id);
+  const worksheet = spreadsheet.sheets?.find((item) => item.properties.title === date);
+  if (!worksheet) {
+    return [];
+  }
+
+  // Read only the Packer (H) and Status (I) columns for today
+  const range = `${escapeSheetName(date)}!H2:I`;
+  const params = new URLSearchParams({ majorDimension: 'ROWS' });
+  const data = await apiFetch(
+    `${SHEETS_API}/${sheet.id}/values/${encodeURIComponent(range)}?${params}`,
+    token,
+  );
+  const rows = data.values ?? [];
+
+  const packerMap = Object.fromEntries(
+    PACKERS.filter((p) => p !== PACKER_UNASSIGNED).map((p) => [p, 0]),
+  );
+
+  for (const row of rows) {
+    const packer = row[0]; // Column H
+    const status = row[1]; // Column I
+    if (status === 'Success' && packer && packerMap[packer] !== undefined) {
+      packerMap[packer] += 1;
+    }
+  }
+
+  return Object.entries(packerMap).map(([packer, count]) => ({ packer, count }));
+}
+
 export async function getScanReportGoogle({ token, config, dates }) {
   const uniqueDates = [...new Set(dates)].filter(Boolean).sort();
   const dayMap = new Map(
