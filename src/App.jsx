@@ -911,6 +911,8 @@ function App() {
       return listDatesBetween(searchStartDate, searchEndDate);
     }
 
+    // 'all' mode is handled in handleSearchSubmit by passing null dates
+    // to searchScansGoogle, which reads all date sheets from the spreadsheet.
     return [];
   }
 
