@@ -166,6 +166,7 @@ function App() {
   const scanModeRef = useRef(scanMode);
   const lastCameraScanRef = useRef({ code: '', time: 0 });
   const cameraSavingRef = useRef(false);
+  const refreshTimerRef = useRef(null);
 
   const isGoogleReady = Boolean(GOOGLE_CLIENT_ID);
   const isSignedIn = Boolean(token && config);
@@ -519,6 +520,24 @@ function App() {
     ).catch(() => []);
     setRecentRows(courierRows);
   }
+
+  function scheduleCountRefresh() {
+    if (refreshTimerRef.current) {
+      clearTimeout(refreshTimerRef.current);
+    }
+    refreshTimerRef.current = setTimeout(() => {
+      refreshTimerRef.current = null;
+      if (token && config) {
+        fetchTodaySummary({ token, config }).then((data) => {
+          if (data) {
+            setSummary(data.courierCounts);
+            setPackerCounts(data.packerCounts);
+          }
+        }).catch(() => {});
+      }
+    }, 3000);
+  }
+
 
   async function refreshSelectedCourierRows() {
     if (!token || !config) {
