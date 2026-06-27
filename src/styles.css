@@ -109,7 +109,7 @@ input {
 
 button {
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.35s cubic-bezier(0.25, 0.1, 0.25, 1);
 }
 
 button:disabled,
@@ -297,27 +297,32 @@ h3 {
 .side-panel,
 .scan-panel,
 .report-panel {
-  border: 1px solid rgba(255,255,255,0.6);
-  border-radius: var(--radius-lg);
-  background: var(--surface-raised);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  border: 0.5px solid rgba(255,255,255,0.5);
+  border-radius: 28px;
+  background: rgba(255,255,255,0.72);
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
   box-shadow:
-    0 1px 0 rgba(255,255,255,0.6) inset,
-    0 2px 8px rgba(15,23,42,0.04),
-    0 8px 24px rgba(15,23,42,0.06);
+    0 0 0 0.5px rgba(255,255,255,0.8) inset,
+    0 0 0 1px rgba(0,0,0,0.04),
+    0 2px 8px rgba(0,0,0,0.04),
+    0 8px 32px rgba(0,0,0,0.06),
+    0 20px 60px rgba(0,0,0,0.04);
   min-width: 0;
-  transition: box-shadow 0.3s ease, transform 0.3s ease;
+  transition: all 0.5s cubic-bezier(0.25, 0.1, 0.25, 1);
 }
 
 .side-panel:hover,
 .scan-panel:hover,
 .report-panel:hover {
+  background: rgba(255,255,255,0.8);
   box-shadow:
-    0 1px 0 rgba(255,255,255,0.6) inset,
-    0 4px 16px rgba(15,23,42,0.06),
-    0 12px 32px rgba(15,23,42,0.08);
-  transform: translateY(-1px);
+    0 0 0 0.5px rgba(255,255,255,0.9) inset,
+    0 0 0 1px rgba(0,0,0,0.06),
+    0 4px 16px rgba(0,0,0,0.06),
+    0 12px 40px rgba(0,0,0,0.08),
+    0 24px 72px rgba(0,0,0,0.06);
+  transform: translateY(-2px) scale(1.005);
 }
 
 .side-panel,
@@ -923,9 +928,19 @@ h3 {
   gap: 6px;
   min-height: 76px;
   padding: var(--radius-lg);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
-  background: var(--surface);
+  border: 0.5px solid rgba(255,255,255,0.5);
+  border-radius: 20px;
+  background: rgba(255,255,255,0.6);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+  transition: all 0.4s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+.metric-row > div:hover {
+  background: rgba(255,255,255,0.8);
+  box-shadow: 0 8px 28px rgba(0,0,0,0.08);
+  transform: translateY(-2px);
 }
 
 .metric-row span {
@@ -973,11 +988,21 @@ h3 {
 .packer-row > div {
   display: grid;
   gap: 4px;
-  padding: 10px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--surface);
+  padding: 12px 10px;
+  border: 0.5px solid rgba(255,255,255,0.5);
+  border-radius: 16px;
+  background: rgba(255,255,255,0.55);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.03);
   text-align: center;
+  transition: all 0.35s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+.packer-row > div:hover {
+  background: rgba(255,255,255,0.75);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.06);
+  transform: translateY(-1px) scale(1.03);
 }
 
 .packer-row span {
