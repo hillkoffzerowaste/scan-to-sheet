@@ -1148,8 +1148,7 @@ function App() {
                 onClick={() => {
                   setSelectedCourier(courier);
                   setScanPopupOpen(true);
-                  // force git change
-                  setScanRemark('');
+                  setScanRemark(''); // reset cancel mode on courier change
                 }}
                 disabled={!isSignedIn || cameraActive}
               >
@@ -1743,7 +1742,7 @@ function App() {
       </section>
 
       {scanPopupOpen && (
-        <div className="scan-popup-overlay" onClick={() => setScanPopupOpen(false)}>
+        <div className="scan-popup-overlay" onClick={() => { setScanPopupOpen(false); void stopCamera(); }}>
           <div className="scan-popup-sheet" onClick={(e) => e.stopPropagation()}>
             <div className="scan-popup-handle" />
 
