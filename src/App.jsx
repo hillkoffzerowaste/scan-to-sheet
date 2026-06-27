@@ -1431,13 +1431,26 @@ function App() {
           </div>
 
           {isSignedIn && totalTodayCount > 0 && (
-            <div className="packer-row">
-              {packerCounts.map(({ packer, count }) => (
-                <div key={packer}>
-                  <span>{packer}</span>
-                  <strong>{count}</strong>
-                </div>
-              ))}
+            <div className="packer-section">
+              <div className="packer-header">
+                <span className="eyebrow">Packer วันนี้</span>
+                <button
+                  className="text-button refresh-button"
+                  type="button"
+                  onClick={() => refreshAllCounts()}
+                  title="รีเฟรชข้อมูลจาก Sheet"
+                >
+                  <RefreshCw size={14} />
+                </button>
+              </div>
+              <div className="packer-row">
+                {packerCounts.map(({ packer, count }) => (
+                  <div key={packer}>
+                    <span>{packer}</span>
+                    <strong>{count}</strong>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 

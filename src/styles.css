@@ -769,6 +769,31 @@ h3 {
   font-size: 1.35rem;
 }
 
+.packer-section {
+  margin-bottom: 14px;
+}
+
+.packer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.packer-header .eyebrow {
+  margin: 0;
+}
+
+.packer-header .refresh-button {
+  min-height: auto;
+  padding: 2px;
+  color: var(--muted);
+}
+
+.packer-header .refresh-button:hover {
+  color: var(--primary-strong);
+}
+
 .packer-row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
