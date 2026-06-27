@@ -474,22 +474,6 @@ function App() {
     setConfig(prepared);
     setConfig(prepared);
   }
-    // Save to localStorage but defer React state until API calls succeed.
-    saveStoredGoogleSession({
-      accessToken,
-      expiresAt: Date.now() + Math.max((data.expiresIn ?? 3600) - 60, 60) * 1000,
-      user: nextUser,
-      config: prepared,
-    });
-    await saveServerGoogleConfig(prepared).catch(() => {});
-
-    // Verify API access before updating React state to avoid 401 loops.
-    await refreshAllCounts(accessToken, prepared);
-
-    setToken(accessToken);
-    setUser(nextUser);
-    setConfig(prepared);
-  }
 
   async function runWithGoogleRetry(action) {
     try {
