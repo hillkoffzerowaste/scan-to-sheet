@@ -109,9 +109,24 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background: var(--page);
+  background:
+    /* subtle grain texture */
+    repeating-conic-gradient(rgba(0,0,0,0.008) 0% 25%, transparent 0% 50%) 50% / 3px 3px,
+    /* barely-there gradient */
+    linear-gradient(180deg, #fafafa 0%, var(--page) 30%, #ededf2 70%, var(--page) 100%);
   background-attachment: fixed;
   color: var(--text);
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 80% 40% at 20% 10%, rgba(0,122,255,0.03) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 30% at 80% 85%, rgba(0,122,255,0.02) 0%, transparent 60%);
+  pointer-events: none;
+  z-index: -1;
 }
 
 button,
