@@ -411,6 +411,9 @@ function App() {
         return;
       } catch {
         clearStoredGoogleSession();
+        setToken(null);
+        setUser(EMPTY_USER);
+        setConfig(null);
       } finally {
         setBusy(false);
       }
