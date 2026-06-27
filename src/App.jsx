@@ -1147,7 +1147,7 @@ function App() {
                 type="button"
                 onClick={() => {
                   setSelectedCourier(courier);
-                  setScanPopupOpen(true);
+                  if (window.innerWidth < 560) setScanPopupOpen(true);
                 }}
                 disabled={!isSignedIn || cameraActive}
               >
