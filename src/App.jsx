@@ -645,9 +645,7 @@ function App() {
         setTimeout(() => setScanFlash(false), 600);
         scheduleCountRefresh(); // was: fetchTodaySummary debounced
       }
-      /* keep - close if block above */
-      */
-        /* >>> OLD CODE - replaced by scheduleCountRefresh() above
+      /* >>> OLD CODE - replaced by scheduleCountRefresh() above
         fetchTodaySummary({ token, config }).then((data) => {
           if (data) {
             setPackerCounts(data.packerCounts);
