@@ -114,6 +114,26 @@ body {
   color: var(--text);
 }
 
+/* ── Coffee waves ── */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 80% 30% at 10% 20%, rgba(62,39,35,0.03) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 25% at 80% 50%, rgba(93,64,55,0.025) 0%, transparent 60%),
+    radial-gradient(ellipse 70% 35% at 40% 80%, rgba(141,110,99,0.025) 0%, transparent 60%);
+  animation: coffee-flow 12s ease-in-out infinite;
+  pointer-events: none;
+  z-index: -1;
+}
+
+@keyframes coffee-flow {
+  0%, 100% { background-position: 0% 0%, 0% 0%, 0% 0%; }
+  33% { background-position: 2% -1%, -1% 1%, 1% -1%; }
+  66% { background-position: -1% 1%, 1% -1%, -1% 1%; }
+}
+
 button,
 input {
   font: inherit;
