@@ -378,12 +378,13 @@ async function ensureDailyWorksheet({ token, spreadsheetId, date }) {
                 properties: {
                   sheetId: reusableDefaultSheet.properties.sheetId,
                   title: date,
+                  index: 0,
                   gridProperties: {
                     rowCount: 1000,
                     columnCount: SCAN_HEADERS.length,
                   },
                 },
-                fields: 'title,gridProperties(rowCount,columnCount)',
+                fields: 'title,index,gridProperties(rowCount,columnCount)',
               },
             },
           ],
@@ -414,6 +415,7 @@ async function ensureDailyWorksheet({ token, spreadsheetId, date }) {
             addSheet: {
               properties: {
                 title: date,
+                index: 0,
                 gridProperties: {
                   rowCount: 1000,
                   columnCount: SCAN_HEADERS.length,
