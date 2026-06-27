@@ -570,11 +570,11 @@ export async function fetchTodaySummary({ token, config }) {
     count: parsedRows.filter((r) => r.courier === courier).length,
   }));
 
-  // Packer counts (Success only)
+  // Packer counts — count by packer name (works regardless of status column alignment)
   const packerList = ['กิต', 'มาย', 'ยุทธ', 'หล้า', 'มุก'];
   const packerMap = Object.fromEntries(packerList.map((p) => [p, 0]));
   for (const row of parsedRows) {
-    if (row.status === 'Success' && row.packer && packerMap[row.packer] !== undefined) {
+    if (row.packer && packerMap[row.packer] !== undefined) {
       packerMap[row.packer] += 1;
     }
   }

@@ -258,6 +258,12 @@ function App() {
     setShowAllRecentRows(false);
   }, [selectedCourier, today.date]);
 
+  useEffect(() => {
+    if (isSignedIn && token && config) {
+      generateReport();
+    }
+  }, [isSignedIn]);
+
   async function playTone(type) {
     if (!soundEnabled) {
       return;
