@@ -1059,9 +1059,13 @@ function App() {
   return (
     <main className="app-shell">
       <section className="topbar">
-        <div>
-          <p className="eyebrow">Scan to Sheet</p>
+        <div className="app-title">
+          <span className="title-badge">
+            <ScanLine size={22} />
+            Scan to Sheet
+          </span>
           <h1>สแกนใบปะหน้าเข้า Google Sheet</h1>
+          <span className="title-accent" />
         </div>
         <div className="account-strip">
           <div className="account-pill">
