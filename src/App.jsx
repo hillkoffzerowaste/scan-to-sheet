@@ -1225,6 +1225,12 @@ function App() {
             </span>
           </div>
 
+          <div className="current-courier-badge">
+            <Truck size={18} />
+            <span>กำลังสแกน</span>
+            <strong>{selectedCourier}</strong>
+          </div>
+
           {scanMethod === 'camera' ? (
             <div className="camera-panel">
               <div className={`camera-stage ${cameraActive ? 'active' : ''}`}>
