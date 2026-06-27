@@ -575,9 +575,8 @@ export async function fetchTodaySummary({ token, config }) {
   }));
 
   // Packer counts (Success only)
-  const packerMap = Object.fromEntries(
-    PACKERS.filter((p) => p !== PACKER_UNASSIGNED).map((p) => [p, 0]),
-  );
+  const packerList = ['กิต', 'มาย', 'ยุทธ', 'หล้า', 'มุก'];
+  const packerMap = Object.fromEntries(packerList.map((p) => [p, 0]));
   for (const row of parsedRows) {
     if (row.status === 'Success' && row.packer && packerMap[row.packer] !== undefined) {
       packerMap[row.packer] += 1;
