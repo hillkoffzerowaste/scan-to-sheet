@@ -564,10 +564,10 @@ export async function fetchTodaySummary({ token, config }) {
   const rows = await readDailyRows({ token, spreadsheetId: sheet.id, date });
   const parsedRows = rows.map(rowFromSheet);
 
-  // Courier counts (Success only)
+  // Courier counts (all rows — matches getTodayRowsGoogle behavior)
   const courierCounts = COURIERS.map((courier) => ({
     courier,
-    count: parsedRows.filter((r) => r.courier === courier && r.status === 'Success').length,
+    count: parsedRows.filter((r) => r.courier === courier).length,
   }));
 
   // Packer counts (Success only)
