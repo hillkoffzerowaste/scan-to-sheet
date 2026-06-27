@@ -696,33 +696,49 @@ h3 {
   align-items: center;
   gap: 10px;
   border: 2px solid var(--primary);
-  border-radius: 8px;
+  border-radius: 12px;
   background: var(--surface);
-  padding: 9px;
+  padding: 12px;
+}
+
+.scan-input-row:focus-within {
+  box-shadow: 0 0 0 4px rgba(24, 119, 111, 0.18);
+  border-color: var(--primary-strong);
 }
 
 .scan-input-row input {
   width: 100%;
-  min-height: 50px;
+  min-height: 54px;
   border: 0;
   outline: 0;
   background: transparent;
   color: var(--text);
-  font-size: 1.08rem;
+  font-size: 1.25rem;
+  font-weight: 800;
+  font-family: "Cascadia Mono", "Fira Code", "Roboto Mono", monospace;
+  letter-spacing: 0.5px;
+}
+
+.scan-input-row input::placeholder {
+  font-weight: 400;
+  font-family: inherit;
+  letter-spacing: 0;
+  font-size: 0.95rem;
 }
 
 .scan-input-row button {
   grid-column: 1 / -1;
   display: inline-flex;
-  min-height: 48px;
+  min-height: 52px;
   align-items: center;
   justify-content: center;
   gap: 8px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 8px;
   background: var(--primary);
   color: #ffffff;
   font-weight: 800;
+  font-size: 1.05rem;
 }
 
 .status-banner {
