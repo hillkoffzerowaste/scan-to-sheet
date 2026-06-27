@@ -159,6 +159,30 @@ p {
 
 .app-title {
   position: relative;
+  padding: 18px 20px 14px;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, rgba(0,122,255,0.06) 0%, rgba(0,122,255,0.02) 50%, transparent 100%);
+  border: 0.5px solid rgba(0,122,255,0.1);
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.02), 0 4px 16px rgba(0,0,0,0.03);
+  overflow: hidden;
+}
+
+.app-title::before {
+  content: '';
+  position: absolute;
+  top: -30%;
+  right: -10%;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(0,122,255,0.08) 0%, transparent 70%);
+  pointer-events: none;
+  animation: title-glow 4s ease-in-out infinite;
+}
+
+@keyframes title-glow {
+  0%, 100% { transform: translate(0,0) scale(1); opacity: 0.6; }
+  50% { transform: translate(-5px, -5px) scale(1.2); opacity: 1; }
 }
 
 .title-badge {
@@ -167,33 +191,36 @@ p {
   gap: 8px;
   padding: 5px 14px;
   border-radius: var(--radius-full);
-  background: rgba(0,122,255,0.1);
+  background: linear-gradient(135deg, rgba(0,122,255,0.15), rgba(0,122,255,0.05));
+  border: 0.5px solid rgba(0,122,255,0.2);
   color: var(--primary);
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  margin-bottom: 10px;
+  letter-spacing: 0.08em;
+  margin-bottom: 12px;
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 0 12px rgba(0,122,255,0.08);
 }
 
 .title-badge svg {
+  filter: drop-shadow(0 0 4px rgba(0,122,255,0.4));
   animation: scan-pulse 2s ease infinite;
 }
 
 @keyframes scan-pulse {
-  0%, 100% { opacity: 0.6; transform: scale(1); }
-  50% { opacity: 1; transform: scale(1.1); }
+  0%, 100% { opacity: 0.5; transform: scale(1); filter: drop-shadow(0 0 3px rgba(0,122,255,0.3)); }
+  50% { opacity: 1; transform: scale(1.15); filter: drop-shadow(0 0 8px rgba(0,122,255,0.6)); }
 }
 
 h1 {
   margin-bottom: 0;
-  font-size: 1.8rem;
-  line-height: 1.18;
+  font-size: 2rem;
+  line-height: 1.15;
   font-weight: 700;
-  letter-spacing: -0.02em;
-  background: linear-gradient(135deg, var(--text) 0%, var(--primary) 100%);
+  letter-spacing: -0.03em;
+  background: linear-gradient(135deg, #1c1c1e 0%, #3a3a3c 30%, var(--primary) 70%, #409cff 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -201,11 +228,18 @@ h1 {
 
 .title-accent {
   display: block;
-  width: 48px;
+  width: 72px;
   height: 3px;
-  margin-top: 8px;
+  margin-top: 10px;
   border-radius: 3px;
-  background: linear-gradient(90deg, var(--primary), transparent);
+  background: linear-gradient(90deg, var(--primary), #409cff 50%, transparent);
+  box-shadow: 0 0 8px rgba(0,122,255,0.3);
+  animation: accent-pulse 3s ease-in-out infinite;
+}
+
+@keyframes accent-pulse {
+  0%, 100% { width: 72px; opacity: 0.7; }
+  50% { width: 96px; opacity: 1; }
 }
 
 h2 {
