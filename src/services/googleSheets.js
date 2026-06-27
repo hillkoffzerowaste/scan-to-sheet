@@ -168,6 +168,7 @@ async function apiFetch(url, token, options = {}) {
 
     if (response.status === 429 && attempt < maxRetries) {
       // Rate limited — wait and retry with exponential backoff
+      lastError = new Error(`Google API rate limited (429) after ${attempt + 1} attempts`);
       await new Promise((resolve) => setTimeout(resolve, 1000 * (attempt + 1)));
       continue;
     }
@@ -564,10 +565,10 @@ export async function fetchTodaySummary({ token, config }) {
   const rows = await readDailyRows({ token, spreadsheetId: sheet.id, date });
   const parsedRows = rows.map(rowFromSheet);
 
-  // Courier counts (all rows — matches getTodayRowsGoogle behavior)
+  // Courier counts — only Success status (actual shipments)
   const courierCounts = COURIERS.map((courier) => ({
     courier,
-    count: parsedRows.filter((r) => r.courier === courier).length,
+    count: parsedRows.filter((r) => r.courier === courier && r.status === 'Success').length,
   }));
 
   // Packer counts — read directly from sheet columns H(7)=Packer, I(8)=Status

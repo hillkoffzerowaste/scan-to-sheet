@@ -1148,6 +1148,8 @@ function App() {
                 onClick={() => {
                   setSelectedCourier(courier);
                   setScanPopupOpen(true);
+                  // force git change
+                  setScanRemark('');
                 }}
                 disabled={!isSignedIn || cameraActive}
               >
@@ -1232,7 +1234,7 @@ function App() {
               }
               disabled={!isSignedIn || busy}
             >
-              {ISSUE_CUSTOMER_CANCELLED}
+              {scanRemark === ISSUE_CUSTOMER_CANCELLED ? `✓ ${ISSUE_CUSTOMER_CANCELLED}` : ISSUE_CUSTOMER_CANCELLED}
             </button>
             <span>
               {scanRemark
