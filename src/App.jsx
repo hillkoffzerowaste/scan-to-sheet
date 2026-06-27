@@ -472,18 +472,6 @@ function App() {
     setToken(accessToken);
     setUser(nextUser);
     setConfig(prepared);
-    setToken(accessToken);
-    setUser(nextUser);
-    setConfig(prepared);
-    saveStoredGoogleSession({
-      accessToken,
-      expiresAt: Date.now() + Math.max((data.expiresIn ?? 3600) - 60, 60) * 1000,
-      user: nextUser,
-      config: prepared,
-    });
-    await saveServerGoogleConfig(prepared).catch(() => {});
-    await refreshAllCounts(accessToken, prepared);
-    return { accessToken, config: prepared, user: nextUser };
   }
 
   async function runWithGoogleRetry(action) {
