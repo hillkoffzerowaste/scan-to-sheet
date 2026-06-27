@@ -489,12 +489,16 @@ function App() {
     } catch {
       // Local sign-out still clears browser state even if the server is unreachable.
     }
+    // Clear session cookie client-side as well (belt and suspenders)
+    document.cookie = 'scan_to_sheet_session=; Path=/; Max-Age=0; Secure; SameSite=Lax';
     clearStoredGoogleSession();
     setToken(null);
     setUser(EMPTY_USER);
     setSummary(COURIERS.map((courier) => ({ courier, count: 0 })));
     setPackerCounts(PACKERS.filter((p) => p !== PACKER_UNASSIGNED).map((p) => ({ packer: p, count: 0 })));
     setRecentRows([]);
+    setReportData(null);
+    setSearchResults(null);
     setStatus({
       type: 'idle',
       title: 'ออกจากระบบแล้ว',
@@ -635,6 +639,8 @@ function App() {
       if (result.status === 'success' && token && config) {
         setScanFlash(true);
         setTimeout(() => setScanFlash(false), 600);
+        scheduleCountRefresh(); // was: fetchTodaySummary debounced
+        /* >>> OLD CODE - replaced by scheduleCountRefresh() above
         fetchTodaySummary({ token, config }).then((data) => {
           if (data) {
             setPackerCounts(data.packerCounts);
@@ -642,6 +648,7 @@ function App() {
           }
         }).catch(() => {});
       }
+        <<< END OLD CODE */
 
       if (result.status === 'cancelled') {
         setStatus({
