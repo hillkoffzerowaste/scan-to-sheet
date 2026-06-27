@@ -571,17 +571,20 @@ export async function fetchTodaySummary({ token, config }) {
     count: parsedRows.filter((r) => r.courier === courier && r.status === 'Success').length,
   }));
 
-  // Packer counts — read directly from sheet columns H(7)=Packer, I(8)=Status
-  const packerList = ['กิต', 'มาย', 'ยุทธ', 'หล้า', 'มุก'];
-  const packerMap = Object.fromEntries(packerList.map((p) => [p, 0]));
+  // Packer counts — read ALL packers dynamically from sheet columns H=Packer, I=Status
+  // Only count Success rows.  No hardcoded packer list – any name in column H counts.
+  const packerMap = new Map();
   for (const row of rows) {
     const packer = String(row[7] ?? '').trim();
     const status = String(row[8] ?? '').trim();
-    if (status === 'Success' && packer && packerMap[packer] !== undefined) {
-      packerMap[packer] += 1;
+    if (status === 'Success' && packer) {
+      packerMap.set(packer, (packerMap.get(packer) ?? 0) + 1);
     }
   }
-  const packerCounts = Object.entries(packerMap).map(([packer, count]) => ({ packer, count }));
+  // Sort by count descending so busiest packers appear first
+  const packerCounts = [...packerMap.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([packer, count]) => ({ packer, count }));
 
   return { courierCounts, packerCounts };
 }
