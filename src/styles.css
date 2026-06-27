@@ -1162,14 +1162,6 @@ tbody tr:hover {
   }
 }
 
-/* ── Success burst ── */
-@keyframes success-burst {
-  0% { box-shadow: 0 0 0 0 rgba(5,150,105,0.6), 0 0 0 0 rgba(5,150,105,0.4); }
-  40% { box-shadow: 0 0 0 12px rgba(5,150,105,0), 0 0 0 24px rgba(5,150,105,0); }
-  100% { box-shadow: 0 0 0 0 rgba(5,150,105,0), 0 0 0 0 rgba(5,150,105,0); }
-}
-.scan-input-row.burst { animation: success-burst 0.8s ease-out; }
-
 /* ── Counter pop ── */
 @keyframes counter-pop {
   0% { transform: scale(1); }
@@ -1201,17 +1193,6 @@ tbody tr:nth-child(8){ animation-delay: 0.21s; }
 .side-panel  { animation: cardEntrance 0.4s ease backwards; animation-delay: 0.05s; }
 .scan-panel  { animation: cardEntrance 0.4s ease backwards; animation-delay: 0.1s; }
 .search-panel{ animation: cardEntrance 0.4s ease backwards; animation-delay: 0.15s; }
-
-/* ── Shimmer button ── */
-@keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
-}
-.scan-input-row button:not(:disabled) {
-  background: linear-gradient(110deg, var(--primary) 30%, #14b8a6 50%, var(--primary) 70%);
-  background-size: 200% 100%;
-  animation: shimmer 3s ease infinite;
-}
 
 /* ── Status pop ── */
 @keyframes status-pop {

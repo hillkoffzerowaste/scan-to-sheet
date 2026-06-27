@@ -1253,7 +1253,7 @@ function App() {
           ) : (
             <form className="scan-form" onSubmit={handleScanSubmit}>
               <label htmlFor="scan-input">Tracking / Barcode</label>
-              <div className={`scan-input-row ${scanFlash ? 'flash burst' : ''}`}>
+              <div className={`scan-input-row ${scanFlash ? 'flash' : ''}`}>
                 <ScanLine size={24} />
                 <input
                   id="scan-input"
