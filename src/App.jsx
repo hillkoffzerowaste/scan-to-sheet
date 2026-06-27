@@ -123,6 +123,8 @@ function App() {
   const [config, setConfig] = useState(() => loadGoogleConfig());
   const [selectedCourier, setSelectedCourier] = useState(COURIERS[0]);
   const [scanValue, setScanValue] = useState('');
+  const [scanValue, setScanValue] = useState('');
+  const [lastScannedCode, setLastScannedCode] = useState('');
   const [selectedPacker, setSelectedPacker] = useState(PACKER_UNASSIGNED);
   const [scanRemark, setScanRemark] = useState('');
   const [status, setStatus] = useState(() => ({
@@ -666,6 +668,9 @@ function App() {
       }
       setToday({ date: result.date, time: result.time });
       setRecentRows(result.rows ?? []);
+      setToday({ date: result.date, time: result.time });
+      setRecentRows(result.rows ?? []);
+      setLastScannedCode(result.code);
 
       if (result.status === 'success' && token && config) {
         setScanFlash(true);
@@ -1357,6 +1362,14 @@ function App() {
                   {busy ? <RefreshCw size={18} className="spin" /> : <Play size={18} />}
                   <span>บันทึก</span>
                 </button>
+            </form>
+          )}
+          {lastScannedCode && (
+            <div className="last-scan">
+              <CheckCircle2 size={14} />
+              <span>สแกนล่าสุด: <strong>{lastScannedCode}</strong></span>
+            </div>
+          )}
               </div>
             </form>
           )}
@@ -1889,6 +1902,15 @@ function App() {
                 </div>
               </form>
             )}
+            )}
+            {lastScannedCode && (
+              <div className="last-scan">
+                <CheckCircle2 size={14} />
+                <span>สแกนล่าสุด: <strong>{lastScannedCode}</strong></span>
+              </div>
+            )}
+
+            <button className="scan-popup-close"
 
             <button className="scan-popup-close" type="button" onClick={() => { setScanPopupOpen(false); void stopCamera(); }}>
               ปิด
