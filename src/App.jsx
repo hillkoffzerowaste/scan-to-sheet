@@ -131,6 +131,9 @@ function App() {
   const [summary, setSummary] = useState(() => COURIERS.map((courier) => ({ courier, count: 0 })));
   const [recentRows, setRecentRows] = useState([]);
   const [showAllRecentRows, setShowAllRecentRows] = useState(false);
+  const [packerCounts, setPackerCounts] = useState(() =>
+    PACKERS.filter((p) => p !== PACKER_UNASSIGNED).map((p) => ({ packer: p, count: 0 })),
+  );
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [theme, setTheme] = useState(() => localStorage.getItem(THEME_KEY) || 'light');
   const [scanMethod, setScanMethod] = useState('camera');
@@ -478,6 +481,7 @@ function App() {
     setToken(null);
     setUser(EMPTY_USER);
     setSummary(COURIERS.map((courier) => ({ courier, count: 0 })));
+    setPackerCounts(PACKERS.filter((p) => p !== PACKER_UNASSIGNED).map((p) => ({ packer: p, count: 0 })));
     setRecentRows([]);
     setStatus({
       type: 'idle',
@@ -509,6 +513,20 @@ function App() {
       .map((r) => r.value);
 
     setSummary(rowsByCourier.map(({ courier, rows }) => ({ courier, count: rows.length })));
+
+    // Compute packer counts across all couriers
+    const packerMap = Object.fromEntries(
+      PACKERS.filter((p) => p !== PACKER_UNASSIGNED).map((p) => [p, 0]),
+    );
+    for (const { rows } of rowsByCourier) {
+      for (const row of rows) {
+        if (row.status === 'Success' && row.packer && packerMap[row.packer] !== undefined) {
+          packerMap[row.packer] += 1;
+        }
+      }
+    }
+    setPackerCounts(Object.entries(packerMap).map(([packer, count]) => ({ packer, count })));
+
     const selected = rowsByCourier.find((item) => item.courier === selectedCourier);
     setRecentRows(selected?.rows ?? []);
   }
@@ -598,6 +616,14 @@ function App() {
       setToday({ date: result.date, time: result.time });
       setRecentRows(result.rows ?? []);
       setSummary((current) => updateSummary(current, selectedCourier, result.count));
+
+      if (result.status === 'success' && selectedPacker !== PACKER_UNASSIGNED) {
+        setPackerCounts((current) =>
+          current.map((item) =>
+            item.packer === selectedPacker ? { ...item, count: item.count + 1 } : item,
+          ),
+        );
+      }
 
       if (result.status === 'cancelled') {
         setStatus({
@@ -1401,6 +1427,17 @@ function App() {
               <strong>{isSignedIn ? 'Google Sheet' : 'รอ Login'}</strong>
             </div>
           </div>
+
+          {isSignedIn && totalTodayCount > 0 && (
+            <div className="packer-row">
+              {packerCounts.map(({ packer, count }) => (
+                <div key={packer}>
+                  <span>{packer}</span>
+                  <strong>{count}</strong>
+                </div>
+              ))}
+            </div>
+          )}
 
           <div className="recent-header">
             <h3>รายการล่าสุด</h3>

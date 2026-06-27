@@ -769,6 +769,34 @@ h3 {
   font-size: 1.35rem;
 }
 
+.packer-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.packer-row > div {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  text-align: center;
+}
+
+.packer-row span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.packer-row strong {
+  font-size: 1.25rem;
+  color: var(--primary-strong);
+}
+
 .recent-header {
   display: flex;
   align-items: center;
