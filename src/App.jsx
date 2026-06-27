@@ -529,7 +529,15 @@ function App() {
         }),
       );
       setRecentRows(rows);
-      setSummary((current) => updateSummary(current, selectedCourier, rows.length));
+      // Refresh all counts from sheet to keep consistent (Success-only)
+      if (token && config) {
+        fetchTodaySummary({ token, config }).then((data) => {
+          if (data) {
+            setSummary(data.courierCounts);
+            setPackerCounts(data.packerCounts);
+          }
+        }).catch(() => {});
+      }
     } catch (error) {
       setStatus({
         type: 'error',
@@ -598,7 +606,6 @@ function App() {
       }
       setToday({ date: result.date, time: result.time });
       setRecentRows(result.rows ?? []);
-      setSummary((current) => updateSummary(current, selectedCourier, result.count));
 
       if (result.status === 'success' && token && config) {
         setScanFlash(true);
