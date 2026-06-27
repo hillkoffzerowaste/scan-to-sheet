@@ -20,6 +20,7 @@ export default async function handler(req, res) {
       ...session,
       email: profile.email,
       name: profile.name,
+      refreshToken: tokenData.refresh_token ?? session.refreshToken,
       sheetConfig,
       updatedAt: new Date().toISOString(),
     });

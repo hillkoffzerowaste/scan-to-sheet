@@ -133,29 +133,42 @@ export function validateScanCode(courier, value) {
 }
 
 async function apiFetch(url, token, options = {}) {
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-      ...(options.headers ?? {}),
-    },
-  });
+  const maxRetries = 2;
+  let lastError;
 
-  if (!response.ok) {
-    const detail = await response.text();
-    throw new Error(`Google API error ${response.status}: ${detail}`);
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        ...(options.headers ?? {}),
+      },
+    });
+
+    if (response.status === 429 && attempt < maxRetries) {
+      // Rate limited — wait and retry with exponential backoff
+      await new Promise((resolve) => setTimeout(resolve, 1000 * (attempt + 1)));
+      continue;
+    }
+
+    if (!response.ok) {
+      const detail = await response.text();
+      throw new Error(`Google API error ${response.status}: ${detail}`);
+    }
+
+    if (response.status === 204) {
+      return null;
+    }
+
+    return response.json();
   }
 
-  if (response.status === 204) {
-    return null;
-  }
-
-  return response.json();
+  throw lastError ?? new Error('Google API max retries exceeded');
 }
 
 function escapeQuery(value) {
-  return String(value).replace(/'/g, "\\'");
+  return String(value).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 }
 
 function escapeSheetName(sheetName) {
@@ -319,7 +332,19 @@ async function ensureDailyWorksheet({ token, spreadsheetId, date }) {
   const reusableDefaultSheet = preCreateSpreadsheet.sheets?.find((sheet) => {
     const title = sheet.properties.title;
     const rowCount = sheet.properties.gridProperties?.rowCount ?? 0;
-    return preCreateSpreadsheet.sheets.length === 1 && rowCount <= 1000 && ['Sheet1', 'ชีต1'].includes(title);
+    return preCreateSpreadsheet.sheets.length === 1 && rowCount <= 1000 && [
+      'Sheet1',       // English
+      'ชีต1',          // Thai
+      'シート1',       // Japanese
+      '시트1',         // Korean
+      '工作表1',        // Chinese Simplified
+      'Feuille 1',    // French
+      'Tabelle1',     // German
+      'Hoja 1',       // Spanish
+      'Página1',      // Portuguese
+      'Foglio1',      // Italian
+      'Лист1',        // Russian
+    ].includes(title);
   });
 
   if (reusableDefaultSheet) {
@@ -665,42 +690,61 @@ export async function appendScanGoogle({ token, config, courier, code, email, pa
   const duplicate = Boolean(duplicateRow);
 
   if (duplicateRow && isCancelled) {
-    const updatedRow = [
-      duplicateRow.no,
-      duplicateRow.courierNo,
-      duplicateRow.date,
-      duplicateRow.time,
-      duplicateRow.courier,
-      duplicateRow.code,
-      duplicateRow.email,
-      duplicateRow.packer,
-      'Cancelled',
-      note,
-    ];
-    await updateDailyRow({
-      token,
-      spreadsheetId: sheet.id,
-      date,
-      rowNumber: duplicateRow.sheetRowNumber ?? Number(duplicateRow.no) + 1,
-      row: updatedRow,
-    });
-    const nextRows = parsedRows
-      .map((row) => (row.no === duplicateRow.no ? rowFromSheet(updatedRow) : row))
-      .filter((row) => row.courier === courier)
-      .reverse();
-    return {
-      status: 'cancelled',
-      courier,
-      date,
-      time,
-      code: normalizedCode,
-      count: courierRows.length,
-      rows: nextRows,
-      sheetUrl: sheet.webViewLink,
-    };
+    // --- BEGIN FIX: Concurrent safety for cancellation path ---
+    // Re-read the sheet to get the current accurate row position.
+    // The initial read may be stale if another machine inserted rows.
+    const verifyRows = await readDailyRows({ token, spreadsheetId: sheet.id, date });
+    const verifyParsed = verifyRows.map(rowFromSheet);
+    const verifyCourierRows = verifyParsed.filter((row) => row.courier === courier);
+    const verifyIdx = verifyCourierRows.findIndex(
+      (row) => normalizeScanCode(row.code) === normalizeScanCode(normalizedCode),
+    );
+
+    if (verifyIdx !== -1) {
+      const currentRow = verifyCourierRows[verifyIdx];
+      // Find the global index in all rows to compute the accurate sheet row number.
+      const globalIdx = verifyParsed.findIndex(
+        (row) =>
+          row.courier === courier &&
+          normalizeScanCode(row.code) === normalizeScanCode(normalizedCode),
+      );
+      const rowNumber = globalIdx + 2; // +1 for header, +1 for zero-based index
+
+      const updatedRow = [
+        currentRow.no,
+        currentRow.courierNo,
+        currentRow.date,
+        currentRow.time,
+        currentRow.courier,
+        currentRow.code,
+        currentRow.email,
+        currentRow.packer,
+        'Cancelled',
+        note,
+      ];
+      await updateDailyRow({ token, spreadsheetId: sheet.id, date, rowNumber, row: updatedRow });
+
+      const nextRows = verifyParsed
+        .map((row) => (row.no === currentRow.no ? rowFromSheet(updatedRow) : row))
+        .filter((row) => row.courier === courier)
+        .reverse();
+      return {
+        status: 'cancelled',
+        courier,
+        date,
+        time,
+        code: normalizedCode,
+        count: verifyCourierRows.length,
+        rows: nextRows,
+        sheetUrl: sheet.webViewLink,
+      };
+    }
+    // Row was deleted/moved by another machine — fall through to BEGIN FIX
+    // which will insert it correctly as a new cancelled scan.
+    // --- END FIX: Concurrent safety for cancellation path ---
   }
 
-  if (duplicate) {
+  if (duplicate && !isCancelled) {
     return {
       status: 'duplicate',
       courier,
@@ -708,7 +752,7 @@ export async function appendScanGoogle({ token, config, courier, code, email, pa
       time,
       code: normalizedCode,
       count: courierRows.length,
-      rows: courierRows.reverse(),
+      rows: courierRows.reverse().slice(0, 20),
       sheetUrl: sheet.webViewLink,
     };
   }
@@ -837,20 +881,32 @@ export async function updateScanIssueGoogle({ token, config, row, issue }) {
     throw new Error('ไม่พบ Google Sheet Master');
   }
 
-  if (!row?.date || !row?.no) {
-    throw new Error('ไม่พบตำแหน่งแถวใน Google Sheet');
+  // --- BEGIN FIX: Concurrent safety — re-read before updating row position ---
+  // The row.sheetRowNumber may be stale if another machine inserted/removed rows.
+  const currentRows = await readDailyRows({ token, spreadsheetId: sheet.id, date: row.date });
+  const currentParsed = currentRows.map(rowFromSheet);
+  const targetIdx = currentParsed.findIndex(
+    (r) => normalizeScanCode(r.code) === normalizeScanCode(row.code) && r.courier === row.courier,
+  );
+
+  if (targetIdx === -1) {
+    throw new Error('ไม่พบรายการใน Google Sheet (อาจถูกลบหรือย้ายแล้ว)');
   }
+
+  const currentRow = currentParsed[targetIdx];
+  const rowNumber = targetIdx + 2; // +1 for header, +1 for zero-based index
+  // --- END FIX ---
 
   const status = issue === 'สินค้าเสียหาย' ? 'Damaged' : issue === 'ลูกค้ายกเลิก' ? 'Cancelled' : 'Issue';
   const updatedRow = [
-    row.no,
-    row.courierNo,
-    row.date,
-    row.time,
-    row.courier,
-    row.code,
-    row.email,
-    row.packer,
+    currentRow.no,
+    currentRow.courierNo,
+    currentRow.date,
+    currentRow.time,
+    currentRow.courier,
+    currentRow.code,
+    currentRow.email,
+    currentRow.packer,
     status,
     issue,
   ];
@@ -859,7 +915,7 @@ export async function updateScanIssueGoogle({ token, config, row, issue }) {
     token,
     spreadsheetId: sheet.id,
     date: row.date,
-    rowNumber: row.sheetRowNumber ?? Number(row.no) + 1,
+    rowNumber,
     row: updatedRow,
   });
 

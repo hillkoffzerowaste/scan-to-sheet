@@ -223,7 +223,7 @@ function App() {
 
   useEffect(() => {
     if (!isSignedIn || scanMethod !== 'camera') {
-      stopCamera();
+      void stopCamera();
     }
   }, [isSignedIn, scanMethod]);
 
@@ -233,7 +233,7 @@ function App() {
 
   useEffect(() => {
     return () => {
-      stopCamera();
+      void stopCamera();
     };
   }, []);
 
@@ -250,7 +250,7 @@ function App() {
     setShowAllRecentRows(false);
   }, [selectedCourier, today.date]);
 
-  function playTone(type) {
+  async function playTone(type) {
     if (!soundEnabled) {
       return;
     }
@@ -262,6 +262,9 @@ function App() {
 
     const context = audioContextRef.current ?? new AudioContext();
     audioContextRef.current = context;
+    if (context.state === 'suspended') {
+      await context.resume();
+    }
     const now = context.currentTime;
     const patterns = {
       success: [
@@ -406,7 +409,9 @@ function App() {
       }
       return session;
     } catch {
-      clearStoredGoogleSession();
+      if (!silent) {
+        clearStoredGoogleSession();
+      }
       return null;
     } finally {
       setBusy(false);
@@ -487,7 +492,7 @@ function App() {
     }
 
     const date = getBangkokParts().date;
-    const rowsByCourier = await Promise.all(
+    const results = await Promise.allSettled(
       COURIERS.map(async (courier) => {
         const rows = await getTodayRowsGoogle({
           token: accessToken,
@@ -498,6 +503,10 @@ function App() {
         return { courier, rows };
       }),
     );
+
+    const rowsByCourier = results
+      .filter((r) => r.status === 'fulfilled')
+      .map((r) => r.value);
 
     setSummary(rowsByCourier.map(({ courier, rows }) => ({ courier, count: rows.length })));
     const selected = rowsByCourier.find((item) => item.courier === selectedCourier);
@@ -564,6 +573,11 @@ function App() {
       return { status: isEmpty ? 'error' : 'ignored', code: validation.code };
     }
 
+    // Clear manual input immediately to prevent double-submission
+    if (source === 'manual') {
+      setScanValue('');
+    }
+
     setBusy(true);
     try {
       const result = await runWithGoogleRetry((accessToken, googleConfig) =>
@@ -578,9 +592,7 @@ function App() {
         }),
       );
 
-      if (source === 'manual') {
-        setScanValue('');
-      } else {
+      if (source !== 'manual') {
         setScanValue(result.code);
       }
       setToday({ date: result.date, time: result.time });
@@ -604,6 +616,7 @@ function App() {
         });
         showCameraMessage(`เลขซ้ำ: ${result.code}`, 'duplicate');
         playTone('duplicate');
+        setScanRemark('');
       } else {
         setStatus({
           type: 'success',
@@ -823,6 +836,10 @@ function App() {
       return;
     }
 
+    if (!window.confirm(`ยืนยันทำเครื่องหมาย "สินค้าเสียหาย" สำหรับ ${row.code}?`)) {
+      return;
+    }
+
     setSearchBusy(true);
     try {
       const updatedRow = await runWithGoogleRetry((accessToken, googleConfig) =>
@@ -990,20 +1007,33 @@ function App() {
     const text = buildReportText(reportData);
     try {
       await navigator.clipboard.writeText(text);
-      setStatus({
-        type: 'success',
-        title: 'คัดลอกรายงานแล้ว',
-        message: 'นำไปวางใน Gmail, LINE หรือช่องทางที่ต้องการได้เลย',
-      });
-      playTone('success');
     } catch {
-      setStatus({
-        type: 'error',
-        title: 'คัดลอกไม่สำเร็จ',
-        message: 'เบราว์เซอร์ไม่อนุญาตให้เข้าถึง Clipboard ลองกดคัดลอกใหม่อีกครั้ง',
-      });
-      playTone('error');
+      // Fallback for non-HTTPS (e.g. localhost dev)
+      try {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      } catch {
+        setStatus({
+          type: 'error',
+          title: 'คัดลอกไม่สำเร็จ',
+          message: 'เบราว์เซอร์ไม่อนุญาตให้เข้าถึง Clipboard ลองกดคัดลอกใหม่อีกครั้ง',
+        });
+        playTone('error');
+        return;
+      }
     }
+    setStatus({
+      type: 'success',
+      title: 'คัดลอกรายงานแล้ว',
+      message: 'นำไปวางใน Gmail, LINE หรือช่องทางที่ต้องการได้เลย',
+    });
+    playTone('success');
   }
 
   return (
