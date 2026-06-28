@@ -918,9 +918,10 @@ export async function appendScanGoogle({ token, config, courier, code, email, pa
 
   // Build the return payload from the in-memory corrected state so we avoid
   // a third round-trip.
-  const resultRows = updatedParsedRows
+  const allCourierRows = updatedParsedRows
     .filter((row) => row.courier === courier)
-    .map((row) => (String(row.no) === placeholder ? rowFromSheet(correctedRow) : row))
+    .map((row) => (String(row.no) === placeholder ? rowFromSheet(correctedRow) : row));
+  const resultRows = allCourierRows
     .reverse()
     .slice(0, 20);
 
@@ -930,9 +931,7 @@ export async function appendScanGoogle({ token, config, courier, code, email, pa
     date,
     time,
     code: normalizedCode,
-    count: concurrentDuplicate
-      ? updatedCourierRows.length
-      : updatedCourierRows.filter((row) => normalizeScanCode(row.code) !== placeholder).length + 1,
+    count: allCourierRows.length,
     row: rowFromSheet(correctedRow),
     rows: resultRows,
     sheetUrl: sheet.webViewLink,

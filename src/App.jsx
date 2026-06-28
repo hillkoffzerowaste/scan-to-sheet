@@ -29,7 +29,6 @@ import {
   COURIERS,
   appendScanGoogle,
   fetchGoogleProfile,
-  fetchTodayPackerCounts,
   fetchTodaySummary,
   getBangkokParts,
   getScanReportGoogle,
@@ -67,6 +66,7 @@ const ISSUE_CUSTOMER_CANCELLED = 'ลูกค้ายกเลิก';
 const ISSUE_DAMAGED = 'สินค้าเสียหาย';
 const PACKER_UNASSIGNED = 'ยังไม่ระบุ';
 const PACKERS = [PACKER_UNASSIGNED, 'กิต', 'มาย', 'ยุทธ', 'หล้า', 'มุก'];
+const DEFAULT_PACKER_COUNTS = PACKERS.filter((p) => p !== PACKER_UNASSIGNED).map((p) => ({ packer: p, count: 0 }));
 
 function loadStoredGoogleSession() {
   try {
@@ -476,29 +476,18 @@ function App() {
     });
     await saveServerGoogleConfig(prepared).catch(() => {});
 
-    // Verify API access before updating React state to avoid 401 loops.
+    // Verify API access before updating React state — avoid 401 loops.
     await refreshAllCounts(accessToken, prepared);
 
     setToken(accessToken);
     setUser(nextUser);
     setConfig(prepared);
-    setToken(accessToken);
-    setUser(nextUser);
-    setConfig(prepared);
-    saveStoredGoogleSession({
-      accessToken,
-      expiresAt: Date.now() + Math.max((data.expiresIn ?? 3600) - 60, 60) * 1000,
-      user: nextUser,
-      config: prepared,
-    });
-    await saveServerGoogleConfig(prepared).catch(() => {});
-    await refreshAllCounts(accessToken, prepared);
     return { accessToken, config: prepared, user: nextUser };
   }
 
-  async function runWithGoogleRetry(action) {
+  async function runWithGoogleRetry(action, accessToken = token, googleConfig = config) {
     try {
-      return await action(token, config);
+      return await action(accessToken, googleConfig);
     } catch (error) {
       if (!isGoogleAuthError(error)) {
         throw error;
@@ -526,6 +515,8 @@ function App() {
   async function signOut() {
     // Mark logout intent so page refresh won't auto-restore session.
     localStorage.setItem(LOGGED_OUT_FLAG, '1');
+    clearTimeout(refreshTimerRef.current);
+    refreshTimerRef.current = null;
 
     try {
       await fetch('/api/google-logout', { method: 'POST' });
@@ -556,12 +547,14 @@ function App() {
     const data = await fetchTodaySummary({ token: accessToken, config: googleConfig });
     if (data) {
       setSummary(data.courierCounts);
-      setPackerCounts(data.packerCounts);
+      setPackerCounts(normalizePackerCounts(data.packerCounts));
     }
 
     // Refresh selected courier rows
-    const courierRows = await runWithGoogleRetry((t, c) =>
-      getTodayRowsGoogle({ token: t, config: c, courier: selectedCourier, date: getBangkokParts().date }),
+    const courierRows = await runWithGoogleRetry(
+      (t, c) => getTodayRowsGoogle({ token: t, config: c, courier: selectedCourier, date: getBangkokParts().date }),
+      accessToken,
+      googleConfig,
     ).catch(() => []);
     setRecentRows(courierRows);
   }
@@ -576,7 +569,7 @@ function App() {
         fetchTodaySummary({ token, config }).then((data) => {
           if (data) {
             setSummary(data.courierCounts);
-            setPackerCounts(data.packerCounts);
+            setPackerCounts(normalizePackerCounts(data.packerCounts));
           }
         }).catch(() => {});
       }
@@ -1928,8 +1921,8 @@ function StatusBanner({ status }) {
   );
 }
 
-function updateSummary(summary, courier, count) {
-  return summary.map((item) => (item.courier === courier ? { ...item, count } : item));
+function normalizePackerCounts(packerCounts) {
+  return packerCounts?.length ? packerCounts : [...DEFAULT_PACKER_COUNTS];
 }
 
 export default App;
