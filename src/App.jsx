@@ -58,6 +58,7 @@ const EMPTY_USER = {
 };
 const THEME_KEY = 'scan-to-sheet-theme';
 const GOOGLE_SESSION_KEY = 'scan-to-sheet-google-session-v1';
+const LOGGED_OUT_FLAG = 'scan-to-sheet-logged-out-v1';
 const CAMERA_REGION_ID = 'camera-reader';
 const CAMERA_POPUP_ID = 'camera-reader-popup';
 const CAMERA_COOLDOWN_MS = 2500;
@@ -352,6 +353,8 @@ function App() {
       prompt: 'consent',
     });
 
+    // Clear logout flag before redirecting to Google so future restores work.
+    localStorage.removeItem(LOGGED_OUT_FLAG);
     setBusy(true);
     window.location.assign(`https://accounts.google.com/o/oauth2/v2/auth?${params}`);
   }
@@ -382,6 +385,12 @@ function App() {
   }
 
   async function restoreGoogleSession() {
+    // If user explicitly logged out, skip all session restore.
+    if (localStorage.getItem(LOGGED_OUT_FLAG) === '1') {
+      localStorage.removeItem(LOGGED_OUT_FLAG);
+      return;
+    }
+
     const stored = loadStoredGoogleSession();
     if (stored?.accessToken && stored.expiresAt > Date.now() + 60_000) {
       try {
@@ -402,6 +411,9 @@ function App() {
         return;
       } catch {
         clearStoredGoogleSession();
+        setToken(null);
+        setUser(EMPTY_USER);
+        setConfig(null);
       } finally {
         setBusy(false);
       }
@@ -426,6 +438,9 @@ function App() {
     } catch {
       if (!silent) {
         clearStoredGoogleSession();
+        setToken(null);
+        setUser(EMPTY_USER);
+        setConfig(null);
       }
       return null;
     } finally {
@@ -442,6 +457,21 @@ function App() {
       email: profile.email ?? 'google-user',
       name: profile.name ?? 'Google User',
     };
+    // Save to localStorage but defer React state until API calls succeed.
+    saveStoredGoogleSession({
+      accessToken,
+      expiresAt: Date.now() + Math.max((data.expiresIn ?? 3600) - 60, 60) * 1000,
+      user: nextUser,
+      config: prepared,
+    });
+    await saveServerGoogleConfig(prepared).catch(() => {});
+
+    // Verify API access before updating React state to avoid 401 loops.
+    await refreshAllCounts(accessToken, prepared);
+
+    setToken(accessToken);
+    setUser(nextUser);
+    setConfig(prepared);
     setToken(accessToken);
     setUser(nextUser);
     setConfig(prepared);
@@ -484,13 +514,14 @@ function App() {
   }
 
   async function signOut() {
+    // Mark logout intent so page refresh won't auto-restore session.
+    localStorage.setItem(LOGGED_OUT_FLAG, '1');
+
     try {
       await fetch('/api/google-logout', { method: 'POST' });
     } catch {
       // Local sign-out still clears browser state even if the server is unreachable.
     }
-    // Clear session cookie client-side as well (belt and suspenders)
-    document.cookie = 'scan_to_sheet_session=; Path=/; Max-Age=0; Secure; SameSite=Lax';
     clearStoredGoogleSession();
     setToken(null);
     setUser(EMPTY_USER);
