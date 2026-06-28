@@ -290,17 +290,8 @@ function App() {
 
   // Status Bar — sync theme color
   useEffect(() => {
-    try {
-      if (theme === 'dark') {
-        StatusBar.setStyle({ style: Style.Dark });
-        StatusBar.setBackgroundColor({ color: '#000000' });
-      } else {
-        StatusBar.setStyle({ style: Style.Light });
-        StatusBar.setBackgroundColor({ color: '#f2f2f7' });
-      }
-    } catch {
-      // Capacitor not available (e.g. running in browser)
-    }
+    StatusBar.setStyle({ style: theme === 'dark' ? Style.Dark : Style.Light }).catch(() => {});
+    StatusBar.setBackgroundColor({ color: theme === 'dark' ? '#000000' : '#f2f2f7' }).catch(() => {});
   }, [theme]);
 
   // Notification รายวัน 16:00 น.
