@@ -87,31 +87,19 @@ function clearStoredGoogleSession() {
 }
 
 async function apiJson(url, options = {}) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 20_000);
-  try {
   const response = await fetch(url, {
-      signal: controller.signal,
     ...options,
     headers: {
       'Content-Type': 'application/json',
       ...(options.headers ?? {}),
     },
   });
-    clearTimeout(timer);
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     throw new Error(data.error || `API error ${response.status}`);
   }
   return data;
 }
-  } catch (error) {
-    clearTimeout(timer);
-    if (error.name === 'AbortError') {
-      throw new Error('เชื่อมต่อนานเกินไป กรุณาลองใหม่');
-    }
-    throw error;
-  }
 
 async function loadServerGoogleConfig() {
   const data = await apiJson('/api/google-config');
@@ -1371,7 +1359,6 @@ function App() {
                   {busy ? <RefreshCw size={18} className="spin" /> : <Play size={18} />}
                   <span>บันทึก</span>
                 </button>
-              </div>
             </form>
           )}
           {lastScannedCode && (
