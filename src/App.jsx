@@ -58,6 +58,7 @@ const EMPTY_USER = {
 const THEME_KEY = 'scan-to-sheet-theme';
 const GOOGLE_SESSION_KEY = 'scan-to-sheet-google-session-v1';
 const LOGGED_OUT_FLAG = 'scan-to-sheet-logged-out-v1';
+const SOUND_KEY = 'scan-to-sheet-sound';
 const CAMERA_REGION_ID = 'camera-reader';
 const CAMERA_POPUP_ID = 'camera-reader-popup';
 const CAMERA_COOLDOWN_MS = 2500;
@@ -131,6 +132,7 @@ function App() {
   const [config, setConfig] = useState(() => loadGoogleConfig());
   const [selectedCourier, setSelectedCourier] = useState(COURIERS[0]);
   const [scanValue, setScanValue] = useState('');
+  const [lastScannedCode, setLastScannedCode] = useState('');
   const [selectedPacker, setSelectedPacker] = useState(PACKER_UNASSIGNED);
   const [scanRemark, setScanRemark] = useState('');
   const [status, setStatus] = useState(() => ({
@@ -150,7 +152,7 @@ function App() {
   );
   const [scanFlash, setScanFlash] = useState(false);
   const [scanPopupOpen, setScanPopupOpen] = useState(false);
-  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [soundEnabled, setSoundEnabled] = useState(() => localStorage.getItem(SOUND_KEY) !== '0');
   const [theme, setTheme] = useState(() => localStorage.getItem(THEME_KEY) || 'light');
   const [scanMethod, setScanMethod] = useState('camera');
   const [scanMode, setScanMode] = useState('single');
@@ -201,6 +203,10 @@ function App() {
       themeColor.setAttribute('content', theme === 'dark' ? '#000000' : '#f2f2f7');
     }
   }, [theme]);
+
+  useEffect(() => {
+    localStorage.setItem(SOUND_KEY, soundEnabled ? '1' : '0');
+  }, [soundEnabled]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -673,6 +679,7 @@ function App() {
       }
       setToday({ date: result.date, time: result.time });
       setRecentRows(result.rows ?? []);
+      setLastScannedCode(result.code);
 
       if (result.status === 'success' && token && config) {
         setScanFlash(true);
@@ -1367,6 +1374,12 @@ function App() {
               </div>
             </form>
           )}
+          {lastScannedCode && (
+            <div className="last-scan">
+              <CheckCircle2 size={14} />
+              <span>สแกนล่าสุด: <strong>{lastScannedCode}</strong></span>
+            </div>
+          )}
 
           <section className="search-panel" aria-label="ค้นหาเลขพัสดุ">
             <div className="search-heading">
@@ -1512,7 +1525,7 @@ function App() {
             </div>
           </div>
 
-          {isSignedIn && totalTodayCount > 0 && (
+          {isSignedIn && (
             <div className="packer-section">
               <div className="packer-header">
                 <span className="eyebrow">Packer วันนี้</span>
@@ -1895,6 +1908,12 @@ function App() {
                   </button>
                 </div>
               </form>
+            )}
+            {lastScannedCode && (
+              <div className="last-scan">
+                <CheckCircle2 size={14} />
+                <span>สแกนล่าสุด: <strong>{lastScannedCode}</strong></span>
+              </div>
             )}
 
             <button className="scan-popup-close" type="button" onClick={() => { setScanPopupOpen(false); void stopCamera(); }}>
