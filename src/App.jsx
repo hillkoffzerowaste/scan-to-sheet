@@ -85,18 +85,28 @@ function clearStoredGoogleSession() {
 }
 
 async function apiJson(url, options = {}) {
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(options.headers ?? {}),
-    },
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(data.error || `API error ${response.status}`);
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 25_000);
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: ctrl.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(options.headers ?? {}),
+      },
+    });
+    clearTimeout(t);
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.error || `API error ${response.status}`);
+    }
+    return data;
+  } catch (error) {
+    clearTimeout(t);
+    if (error.name === 'AbortError') throw new Error('เชื่อมต่อนานเกินไป กรุณาลองใหม่');
+    throw error;
   }
-  return data;
 }
 
 async function loadServerGoogleConfig() {
