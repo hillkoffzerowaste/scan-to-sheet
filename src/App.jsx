@@ -58,8 +58,6 @@ const EMPTY_USER = {
 };
 const THEME_KEY = 'scan-to-sheet-theme';
 const GOOGLE_SESSION_KEY = 'scan-to-sheet-google-session-v1';
-const LOGGED_OUT_FLAG = 'scan-to-sheet-logged-out-v1';
-const SOUND_KEY = 'scan-to-sheet-sound';
 const CAMERA_REGION_ID = 'camera-reader';
 const CAMERA_POPUP_ID = 'camera-reader-popup';
 const CAMERA_COOLDOWN_MS = 2500;
@@ -68,7 +66,6 @@ const ISSUE_CUSTOMER_CANCELLED = 'ลูกค้ายกเลิก';
 const ISSUE_DAMAGED = 'สินค้าเสียหาย';
 const PACKER_UNASSIGNED = 'ยังไม่ระบุ';
 const PACKERS = [PACKER_UNASSIGNED, 'กิต', 'มาย', 'ยุทธ', 'หล้า', 'มุก'];
-const DEFAULT_PACKER_COUNTS = PACKERS.filter((p) => p !== PACKER_UNASSIGNED).map((p) => ({ packer: p, count: 0 }));
 
 function loadStoredGoogleSession() {
   try {
@@ -123,7 +120,6 @@ function App() {
   const [config, setConfig] = useState(() => loadGoogleConfig());
   const [selectedCourier, setSelectedCourier] = useState(COURIERS[0]);
   const [scanValue, setScanValue] = useState('');
-  const [lastScannedCode, setLastScannedCode] = useState('');
   const [selectedPacker, setSelectedPacker] = useState(PACKER_UNASSIGNED);
   const [scanRemark, setScanRemark] = useState('');
   const [status, setStatus] = useState(() => ({
@@ -143,7 +139,7 @@ function App() {
   );
   const [scanFlash, setScanFlash] = useState(false);
   const [scanPopupOpen, setScanPopupOpen] = useState(false);
-  const [soundEnabled, setSoundEnabled] = useState(() => localStorage.getItem(SOUND_KEY) !== '0');
+  const [soundEnabled, setSoundEnabled] = useState(true);
   const [theme, setTheme] = useState(() => localStorage.getItem(THEME_KEY) || 'light');
   const [scanMethod, setScanMethod] = useState('camera');
   const [scanMode, setScanMode] = useState('single');
@@ -194,10 +190,6 @@ function App() {
       themeColor.setAttribute('content', theme === 'dark' ? '#000000' : '#f2f2f7');
     }
   }, [theme]);
-
-  useEffect(() => {
-    localStorage.setItem(SOUND_KEY, soundEnabled ? '1' : '0');
-  }, [soundEnabled]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -360,8 +352,6 @@ function App() {
       prompt: 'consent',
     });
 
-    // Clear logout flag before redirecting to Google so future restores work.
-    localStorage.removeItem(LOGGED_OUT_FLAG);
     setBusy(true);
     window.location.assign(`https://accounts.google.com/o/oauth2/v2/auth?${params}`);
   }
@@ -392,12 +382,6 @@ function App() {
   }
 
   async function restoreGoogleSession() {
-    // If user explicitly logged out, skip all session restore.
-    if (localStorage.getItem(LOGGED_OUT_FLAG) === '1') {
-      localStorage.removeItem(LOGGED_OUT_FLAG);
-      return;
-    }
-
     const stored = loadStoredGoogleSession();
     if (stored?.accessToken && stored.expiresAt > Date.now() + 60_000) {
       try {
@@ -418,9 +402,6 @@ function App() {
         return;
       } catch {
         clearStoredGoogleSession();
-        setToken(null);
-        setUser(EMPTY_USER);
-        setConfig(null);
       } finally {
         setBusy(false);
       }
@@ -445,9 +426,6 @@ function App() {
     } catch {
       if (!silent) {
         clearStoredGoogleSession();
-        setToken(null);
-        setUser(EMPTY_USER);
-        setConfig(null);
       }
       return null;
     } finally {
@@ -464,21 +442,18 @@ function App() {
       email: profile.email ?? 'google-user',
       name: profile.name ?? 'Google User',
     };
-    // Defer all persistence until API calls succeed.
-    await saveServerGoogleConfig(prepared).catch(() => {});
-
-    // Verify API access before updating any state to avoid 401 loops.
-    await refreshAllCounts(accessToken, prepared);
-
+    setToken(accessToken);
+    setUser(nextUser);
+    setConfig(prepared);
     saveStoredGoogleSession({
       accessToken,
       expiresAt: Date.now() + Math.max((data.expiresIn ?? 3600) - 60, 60) * 1000,
       user: nextUser,
       config: prepared,
     });
-    setToken(accessToken);
-    setUser(nextUser);
-    setConfig(prepared);
+    await saveServerGoogleConfig(prepared).catch(() => {});
+    await refreshAllCounts(accessToken, prepared);
+    return { accessToken, config: prepared, user: nextUser };
   }
 
   async function runWithGoogleRetry(action) {
@@ -509,16 +484,13 @@ function App() {
   }
 
   async function signOut() {
-    // Mark logout intent so page refresh won't auto-restore session.
-    localStorage.setItem(LOGGED_OUT_FLAG, '1');
-    clearTimeout(refreshTimerRef.current);
-    refreshTimerRef.current = null;
-
     try {
       await fetch('/api/google-logout', { method: 'POST' });
     } catch {
       // Local sign-out still clears browser state even if the server is unreachable.
     }
+    // Clear session cookie client-side as well (belt and suspenders)
+    document.cookie = 'scan_to_sheet_session=; Path=/; Max-Age=0; Secure; SameSite=Lax';
     clearStoredGoogleSession();
     setToken(null);
     setUser(EMPTY_USER);
@@ -543,7 +515,7 @@ function App() {
     const data = await fetchTodaySummary({ token: accessToken, config: googleConfig });
     if (data) {
       setSummary(data.courierCounts);
-      setPackerCounts(data.packerCounts.length > 0 ? data.packerCounts : DEFAULT_PACKER_COUNTS);
+      setPackerCounts(data.packerCounts);
     }
 
     // Refresh selected courier rows
@@ -562,8 +534,8 @@ function App() {
       if (token && config) {
         fetchTodaySummary({ token, config }).then((data) => {
           if (data) {
-            setPackerCounts(data.packerCounts.length > 0 ? data.packerCounts : DEFAULT_PACKER_COUNTS);
             setSummary(data.courierCounts);
+            setPackerCounts(data.packerCounts);
           }
         }).catch(() => {});
       }
@@ -667,7 +639,6 @@ function App() {
       }
       setToday({ date: result.date, time: result.time });
       setRecentRows(result.rows ?? []);
-      setLastScannedCode(result.code);
 
       if (result.status === 'success' && token && config) {
         setScanFlash(true);
@@ -1362,12 +1333,6 @@ function App() {
               </div>
             </form>
           )}
-          {lastScannedCode && (
-            <div className="last-scan">
-              <CheckCircle2 size={14} />
-              <span>สแกนล่าสุด: <strong>{lastScannedCode}</strong></span>
-            </div>
-          )}
 
           <section className="search-panel" aria-label="ค้นหาเลขพัสดุ">
             <div className="search-heading">
@@ -1513,7 +1478,7 @@ function App() {
             </div>
           </div>
 
-          {isSignedIn && (
+          {isSignedIn && totalTodayCount > 0 && (
             <div className="packer-section">
               <div className="packer-header">
                 <span className="eyebrow">Packer วันนี้</span>
@@ -1897,13 +1862,6 @@ function App() {
                 </div>
               </form>
             )}
-            {lastScannedCode && (
-              <div className="last-scan">
-                <CheckCircle2 size={14} />
-                <span>สแกนล่าสุด: <strong>{lastScannedCode}</strong></span>
-              </div>
-            )}
-
 
             <button className="scan-popup-close" type="button" onClick={() => { setScanPopupOpen(false); void stopCamera(); }}>
               ปิด
