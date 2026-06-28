@@ -388,7 +388,6 @@ function App() {
       oscillator.start(startsAt);
       oscillator.stop(endsAt);
     });
-  }
 
     // Haptic vibration patterns | success=สั้น | duplicate=ถี่ | error=ยาว
     if (navigator.vibrate) {
@@ -401,6 +400,7 @@ function App() {
       const pattern = vibePatterns[type] ?? vibePatterns.error;
       navigator.vibrate(pattern);
     }
+  }
 
 
   function showCameraMessage(message, type = 'idle') {
