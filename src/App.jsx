@@ -1359,6 +1359,7 @@ function App() {
                   {busy ? <RefreshCw size={18} className="spin" /> : <Play size={18} />}
                   <span>บันทึก</span>
                 </button>
+              </div>
             </form>
           )}
           {lastScannedCode && (
