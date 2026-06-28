@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Scan to Sheet</string>
+    <string name="title_activity_main">Scan to Sheet</string>
+    <string name="package_name">com.scantosheet.app</string>
+    <string name="custom_url_scheme">com.scantosheet.app</string>
+</resources>

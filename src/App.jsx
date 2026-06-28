@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   BarChart3,
@@ -23,7 +23,13 @@ import {
   Sun,
   Truck,
   Volume2,
+  Share2,
 } from 'lucide-react';
+
+import { Share } from '@capacitor/share';
+import { StatusBar, Style } from '@capacitor/status-bar';
+import { LocalNotifications } from '@capacitor/local-notifications';
+
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import {
   COURIERS,
@@ -282,6 +288,53 @@ function App() {
     }
   }, [isSignedIn]);
 
+  // Status Bar — sync theme color
+  useEffect(() => {
+    try {
+      if (theme === 'dark') {
+        StatusBar.setStyle({ style: Style.Dark });
+        StatusBar.setBackgroundColor({ color: '#000000' });
+      } else {
+        StatusBar.setStyle({ style: Style.Light });
+        StatusBar.setBackgroundColor({ color: '#f2f2f7' });
+      }
+    } catch {
+      // Capacitor not available (e.g. running in browser)
+    }
+  }, [theme]);
+
+  // Notification รายวัน 16:00 น.
+  useEffect(() => {
+    async function setupNotifications() {
+      try {
+        await LocalNotifications.requestPermissions();
+        // Cancel any existing ones first
+        const pending = await LocalNotifications.getPending();
+        if (pending.notifications.length > 0) {
+          await LocalNotifications.cancel({ notifications: pending.notifications.map(n => ({ id: n.id })) });
+        }
+        // Schedule daily at 4 PM
+        await LocalNotifications.schedule({
+          notifications: [{
+            id: 1600,
+            title: 'Scan to Sheet - สรุปยอดวันนี้',
+            body: 'เปิดแอพดูยอดสแกนประจำวันนี้',
+            schedule: {
+              at: new Date(new Date().setHours(16, 0, 0, 0)),
+              repeats: true,
+              every: 'day',
+            },
+          }],
+        });
+      } catch {
+        // Notifications not available
+      }
+    }
+    if (isSignedIn) {
+      setupNotifications();
+    }
+  }, [isSignedIn]);
+
   async function playTone(type) {
     if (!soundEnabled) {
       return;
@@ -336,6 +389,19 @@ function App() {
       oscillator.stop(endsAt);
     });
   }
+
+    // Haptic vibration patterns | success=สั้น | duplicate=ถี่ | error=ยาว
+    if (navigator.vibrate) {
+      const vibePatterns = {
+        success: [80],
+        duplicate: [80, 50, 80, 50, 80],
+        ignored: [30],
+        error: [300],
+      };
+      const pattern = vibePatterns[type] ?? vibePatterns.error;
+      navigator.vibrate(pattern);
+    }
+
 
   function showCameraMessage(message, type = 'idle') {
     setCameraMessage(message);
@@ -1139,6 +1205,81 @@ function App() {
     playTone('success');
   }
 
+  async function shareReport() {
+    if (!reportData) {
+      return;
+    }
+    const text = buildReportText(reportData);
+    try {
+      await Share.share({
+        title: 'Scan to Sheet - รายงานสแกนพัสดุ',
+        text,
+      });
+      setStatus({
+        type: 'success',
+        title: 'แชร์รายงานแล้ว',
+        message: 'รายงานถูกส่งผ่านแอพที่คุณเลือก',
+      });
+      playTone('success');
+    } catch (error) {
+      // User cancelled share — no error needed
+      if (error?.message !== 'Share canceled') {
+        setStatus({
+          type: 'error',
+          title: 'แชร์ไม่สำเร็จ',
+          message: error?.message || 'กรุณาลองใหม่',
+        });
+        playTone('error');
+      }
+    }
+  }
+
+
+  // ── Swipe gesture: ปัดซ้าย/ขวาเปลี่ยนขนส่ง ──
+  const swipeStart = useRef({ x: 0, y: 0 });
+  const handleSwipeStart = useCallback((e) => {
+    const touch = e.touches[0];
+    swipeStart.current = { x: touch.clientX, y: touch.clientY };
+  }, []);
+  const handleSwipeEnd = useCallback((e) => {
+    const touch = e.changedTouches[0];
+    const dx = touch.clientX - swipeStart.current.x;
+    const dy = touch.clientY - swipeStart.current.y;
+    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 60) {
+      const idx = COURIERS.indexOf(selectedCourier);
+      if (dx < 0 && idx < COURIERS.length - 1) {
+        setSelectedCourier(COURIERS[idx + 1]);
+        setScanPopupOpen(true);
+        playTone('success');
+      } else if (dx > 0 && idx > 0) {
+        setSelectedCourier(COURIERS[idx - 1]);
+        setScanPopupOpen(true);
+        playTone('success');
+      }
+    }
+  }, [selectedCourier, setScanPopupOpen]);
+
+  // ── Pull to refresh: ลากลงเพื่อรีเฟรช ──
+  const pullRef = useRef({ startY: 0, pulling: false, pulled: 0 });
+  const handlePullStart = useCallback((e) => {
+    const el = e.currentTarget;
+    if (el.scrollTop > 5) return;
+    pullRef.current = { startY: e.touches[0].clientY, pulling: true, pulled: 0 };
+  }, []);
+  const handlePullMove = useCallback((e) => {
+    if (!pullRef.current.pulling) return;
+    const dy = e.touches[0].clientY - pullRef.current.startY;
+    pullRef.current.pulled = Math.max(0, Math.min(dy * 0.35, 60));
+  }, []);
+  const handlePullEnd = useCallback(async () => {
+    if (!pullRef.current.pulling) return;
+    pullRef.current.pulling = false;
+    if (pullRef.current.pulled > 40 && token && config) {
+      playTone('success');
+      await refreshSelectedCourierRows();
+    }
+  }, [token, config]);
+
   return (
     <main className="app-shell">
       <section className="topbar">
@@ -1211,7 +1352,7 @@ function App() {
             <span>เลือกขนส่ง</span>
           </div>
 
-          <div className="courier-list">
+          <div className="courier-list" onTouchStart={handleSwipeStart} onTouchEnd={handleSwipeEnd}>
             {COURIERS.map((courier) => (
               <button
                 className={`courier-button ${courier === selectedCourier ? 'active' : ''}`}
@@ -1565,7 +1706,7 @@ function App() {
             </div>
           </div>
 
-          <div className="table-wrap">
+          <div className="table-wrap" onTouchStart={handlePullStart} onTouchMove={handlePullMove} onTouchEnd={handlePullEnd}>
             <table>
               <thead>
                 <tr>
@@ -1660,6 +1801,10 @@ function App() {
           <button className="ghost-button report-button" type="button" onClick={copyReport} disabled={!reportData}>
             <ClipboardCopy size={16} />
             <span>คัดลอกรายงาน</span>
+          </button>
+          <button className="ghost-button report-button" type="button" onClick={shareReport} disabled={!reportData}>
+            <Share2 size={16} />
+            <span>แชร์รายงาน</span>
           </button>
         </div>
 

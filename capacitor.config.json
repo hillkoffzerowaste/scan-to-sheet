@@ -1,0 +1,12 @@
+{
+  "appId": "com.scantosheet.app",
+  "appName": "Scan to Sheet",
+  "webDir": "dist",
+  "server": {
+    "url": "https://scan-to-sheet-ten.vercel.app",
+    "cleartext": true
+  },
+  "android": {
+    "allowMixedContent": true
+  }
+}
