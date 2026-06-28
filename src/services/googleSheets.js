@@ -73,6 +73,7 @@ const FOLDER_NAME = 'Scan to Sheet';
 const MASTER_SHEET_NAME = 'Scan to Sheet Master';
 const TIMEZONE = 'Asia/Bangkok';
 const formattedWorksheetKeys = new Set();
+const SCAN_STATUSES = new Set(['Success', 'Duplicate', 'Cancelled', 'Damaged', 'Issue']);
 
 export function getBangkokParts(now = new Date()) {
   const parts = new Intl.DateTimeFormat('en-CA', {
@@ -990,7 +991,9 @@ export async function updateScanIssueGoogle({ token, config, row, issue }) {
 }
 
 function rowFromSheet(row, index = null) {
-  const hasPackerColumn = row.length >= 10;
+  // Google Sheets omits trailing empty cells, so a new-schema row with an
+  // empty remark often has 9 cells instead of 10. Detect by status position.
+  const hasPackerColumn = row.length >= 10 || SCAN_STATUSES.has(String(row[8] ?? '').trim());
   return {
     no: row[0],
     sheetRowNumber: index === null ? null : index + 2,
