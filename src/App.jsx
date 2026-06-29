@@ -397,7 +397,17 @@ function App() {
     try {
       const { Capacitor } = await import('@capacitor/core');
       if (Capacitor.isNativePlatform()) {
-        // Use same Vercel redirect URI as web -- session stored server-side in KV
+        // Intercept redirect URL from Chrome Custom Tab, extract code, process in WebView
+        Browser.addListener('browserPageLoaded', (info) => {
+          try {
+            const url = new URL(info.url);
+            const code = url.searchParams.get('code');
+            if (code && url.origin === window.location.origin) {
+              Browser.close();
+              completeGoogleSignIn(code);
+            }
+          } catch {}
+        });
         const redirectUri = `${window.location.origin}${window.location.pathname}`;
         const googleParams = new URLSearchParams({
           client_id: GOOGLE_CLIENT_ID,
@@ -409,10 +419,6 @@ function App() {
           prompt: 'consent',
         });
         await Browser.open({ url: `https://accounts.google.com/o/oauth2/v2/auth?${googleParams}` });
-        // After user closes Chrome Custom Tab, restore session from Vercel KV
-        Browser.addListener('browserFinished', () => {
-          restoreGoogleSession();
-        });
         return;
       }
     } catch {
