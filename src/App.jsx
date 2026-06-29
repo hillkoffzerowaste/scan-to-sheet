@@ -1190,6 +1190,7 @@ function App() {
       `ยอดส่งจริง: ${data.total} รายการ`,
       `ยกเลิก: ${data.cancelledTotal ?? 0} รายการ`,
       `สินค้าเสียหาย: ${data.damagedTotal ?? 0} รายการ`,
+      `สินค้าตีกลับ: ${data.returnedTotal ?? 0} รายการ`,
       '',
       'ยอดแยกตามขนส่ง',
       ...COURIERS.map((courier) => {
@@ -1215,6 +1216,19 @@ function App() {
     if (data.damagedRows?.length > 0) {
       lines.push('', 'รายการสินค้าเสียหาย');
       data.damagedRows.forEach((row) => {
+        lines.push(`${row.date} ${row.time} | ${row.courier} | ${row.code}`);
+      });
+    }
+    if (data.damagedRows?.length > 0) {
+      lines.push('', 'รายการสินค้าเสียหาย');
+      data.damagedRows.forEach((row) => {
+        lines.push(`${row.date} ${row.time} | ${row.courier} | ${row.code}`);
+      });
+    }
+
+    if (data.returnedRows?.length > 0) {
+      lines.push('', 'รายการสินค้าตีกลับ');
+      data.returnedRows.forEach((row) => {
         lines.push(`${row.date} ${row.time} | ${row.courier} | ${row.code}`);
       });
     }
@@ -1881,6 +1895,10 @@ function App() {
             <strong>{reportData?.damagedTotal ?? 0}</strong>
           </div>
           <div>
+            <span>สินค้าตีกลับ</span>
+            <strong>{reportData?.returnedTotal ?? 0}</strong>
+          </div>
+          <div>
             <span>จำนวนวัน</span>
             <strong>{reportData?.days?.length ?? 0}</strong>
           </div>
@@ -2011,6 +2029,46 @@ function App() {
                 <tr>
                   <td colSpan={4} className="empty-cell">
                     ไม่มีรายการยกเลิกในช่วงนี้
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="recent-header">
+          <h3>รายการตีกลับ</h3>
+        </div>
+        <div className="table-wrap report-table">
+          <table>
+            <thead>
+              <tr>
+                <th>วันที่</th>
+                <th>เวลา</th>
+                <th>ขนส่ง</th>
+                <th>Tracking / Barcode</th>
+              </tr>
+            </thead>
+            <tbody>
+              {!reportData ? (
+                <tr>
+                  <td colSpan={4} className="empty-cell">
+                    เลือกรูปแบบรายงานแล้วกดสร้างรายงาน
+                  </td>
+                </tr>
+              ) : reportData.returnedRows?.length > 0 ? (
+                reportData.returnedRows.map((row) => (
+                  <tr key={`${row.date}-${row.time}-${row.courier}-${row.code}`}>
+                    <td>{row.date}</td>
+                    <td>{row.time}</td>
+                    <td>{row.courier}</td>
+                    <td className="code-cell">{row.code}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={4} className="empty-cell">
+                    ไม่มีรายการตีกลับในช่วงนี้
                   </td>
                 </tr>
               )}
