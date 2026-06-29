@@ -306,6 +306,62 @@ function App() {
     }
   }, [isSignedIn]);
 
+  // ── Restored: date timer ──
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setToday(getBangkokParts());
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  // ── Restored: auto-focus input ──
+  useEffect(() => {
+    if (isSignedIn) {
+      inputRef.current?.focus();
+    }
+  }, [isSignedIn, selectedCourier, busy]);
+
+  // ── Restored: stop camera on signout/method change ──
+  useEffect(() => {
+    if (!isSignedIn || scanMethod !== 'camera') {
+      void stopCamera();
+    }
+  }, [isSignedIn, scanMethod]);
+
+  // ── Restored: sync scanModeRef ──
+  useEffect(() => {
+    scanModeRef.current = scanMode;
+  }, [scanMode]);
+
+  // ── Restored: cleanup stopCamera on unmount ──
+  useEffect(() => {
+    return () => {
+      void stopCamera();
+    };
+  }, []);
+
+  // ── Restored: refresh rows when courier/date changes ──
+  useEffect(() => {
+    if (!isSignedIn) {
+      setRecentRows([]);
+      return;
+    }
+
+    refreshSelectedCourierRows();
+  }, [selectedCourier, today.date, isSignedIn]);
+
+  // ── Restored: reset showAllRecentRows ──
+  useEffect(() => {
+    setShowAllRecentRows(false);
+  }, [selectedCourier, today.date]);
+
+  // ── Restored: auto-generate report on login ──
+  useEffect(() => {
+    if (isSignedIn && token && config) {
+      generateReport();
+    }
+  }, [isSignedIn]);
+
   async function playTone(type) {
     if (!soundEnabled) {
       return;
