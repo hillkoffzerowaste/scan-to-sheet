@@ -753,6 +753,8 @@ export function listDatesInMonth(yearMonth) {
 export async function appendScanGoogle({ token, config, courier, code, email, packer = '', note = '' }) {
   const normalizedCode = normalizeCode(code);
   const isCancelled = note === 'ลูกค้ายกเลิก';
+  const isReturned = note === 'สินค้าตีกลับ';
+  const isDamaged = note === 'สินค้าเสียหาย';
   const sheet = config?.master;
   if (!sheet?.id) {
     throw new Error('ไม่พบ Google Sheet Master');
@@ -851,7 +853,7 @@ export async function appendScanGoogle({ token, config, courier, code, email, pa
     normalizedCode,
     email,
     packer,
-    isCancelled ? 'Cancelled' : 'Success',
+    isCancelled ? 'Cancelled' : isReturned ? 'Returned' : isDamaged ? 'Damaged' : 'Success',
     note,
   ];
 
