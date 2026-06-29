@@ -32,38 +32,38 @@ export const SCAN_HEADERS = [
 export const COURIER_RULES = {
   Lazada: {
     label: 'เลข Lazada ต้องขึ้นต้นด้วย LEX',
-    valid: /^LEX[A-Z0-9]{8,35}$/i,
+    valid: /^LEX[A-Z0-9]{6,35}$/i,
   },
   'KEX Lazada': {
-    label: 'เลข KEX Lazada ต้องขึ้นต้นด้วย KEXLM แล้วตามด้วยตัวเลข',
-    valid: /^KEXLM\d{8,20}$/i,
+    label: 'เลข KEX Lazada ต้องขึ้นต้นด้วย KEX',
+    valid: /^KEX[A-Z0-9]{6,30}$/i,
   },
   'Lazada Flash': {
     label: 'เลข Lazada Flash ต้องขึ้นต้นด้วย TH',
-    valid: /^TH[A-Z0-9]{8,18}$/i,
+    valid: /^TH[A-Z0-9]{6,30}$/i,
   },
   'J&T': {
-    label: 'เลข J&T ต้องเป็นตัวเลข 12 หลัก',
-    valid: /^\d{12}$/,
+    label: 'เลข J&T 8-35 ตัว (ตัวเลขหรือตัวอักษร)',
+    valid: /^[A-Z0-9]{8,35}$/i,
   },
   Shopee: {
-    label: 'เลข Shopee ต้องขึ้นต้นด้วย TH แล้วตามด้วยตัวเลข 10-14 หลัก',
-    valid: /^TH\d{10,14}[A-Z]?$/i,
+    label: 'เลข Shopee 6-35 ตัว (ตัวเลขหรือตัวอักษร)',
+    valid: /^[A-Z0-9]{6,35}$/i,
   },
   'Shopee Drop Off': {
-    label: 'เลข Shopee Drop Off ต้องขึ้นต้นด้วย TH แล้วตามด้วยตัวเลข 10-14 หลัก',
-    valid: /^TH\d{10,14}[A-Z]?$/i,
+    label: 'เลข Shopee Drop Off 6-35 ตัว',
+    valid: /^[A-Z0-9]{6,35}$/i,
   },
   Flash: {
-    label: 'เลข Flash ต้องขึ้นต้นด้วย TH',
-    valid: /^TH[A-Z0-9]{10,16}$/i,
+    label: 'เลข Flash 6-35 ตัว (ตัวเลขหรือตัวอักษร)',
+    valid: /^[A-Z0-9]{6,35}$/i,
   },
   Best: {
-    label: 'เลข Best ต้องเป็นตัวเลข 10-18 หลัก',
-    valid: /^\d{10,18}$/,
+    label: 'เลข Best 8-35 ตัว (ตัวเลขหรือตัวอักษร)',
+    valid: /^[A-Z0-9]{8,35}$/i,
   },
   Ratika: {
-    label: 'เลข Ratika ต้องเป็นตัวอักษรหรือตัวเลข 6-30 ตัว',
+    label: 'เลข Ratika 6-30 ตัว',
     valid: /^[A-Z0-9]{6,30}$/i,
   },
 };
