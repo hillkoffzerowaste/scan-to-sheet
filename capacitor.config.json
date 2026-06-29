@@ -4,7 +4,12 @@
   "webDir": "dist",
   "server": {
     "url": "https://scan-to-sheet-ten.vercel.app",
-    "cleartext": true
+    "cleartext": true,
+    "allowNavigation": [
+      "accounts.google.com",
+      "*.google.com",
+      "*.googleusercontent.com"
+    ]
   },
   "android": {
     "allowMixedContent": true
