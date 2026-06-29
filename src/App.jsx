@@ -29,7 +29,8 @@ import {
 import { Share } from '@capacitor/share';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { LocalNotifications } from '@capacitor/local-notifications';
-
+import { Browser } from '@capacitor/browser';
+import { App as CapacitorApp } from '@capacitor/app';
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import {
   COURIERS,
@@ -241,6 +242,51 @@ function App() {
   }, []);
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code');
+    const error = params.get('error');
+    const errorDescription = params.get('error_description');
+
+    if (!code && !error) {
+      restoreGoogleSession();
+      return;
+    }
+
+    window.history.replaceState(null, '', window.location.pathname);
+
+    if (error) {
+      setStatus({
+        type: 'error',
+        title: 'เข้าสู่ระบบไม่สำเร็จ',
+        message: errorDescription || error,
+      });
+      setBusy(false);
+      return;
+    }
+
+    completeGoogleSignIn(code);
+  }, []);
+
+  // Deep link listener for Capacitor (Google OAuth redirect via custom scheme)
+  useEffect(() => {
+    const handler = CapacitorApp.addListener('appUrlOpen', (data) => {
+      const url = new URL(data.url);
+      const code = url.searchParams.get('code');
+      const error = url.searchParams.get('error');
+      if (code) {
+        completeGoogleSignIn(code);
+      } else if (error) {
+        setStatus({
+          type: 'error',
+          title: 'เข้าสู่ระบบไม่สำเร็จ',
+          message: url.searchParams.get('error_description') || error,
+        });
+        setBusy(false);
+      }
+    });
+    return () => handler.remove();
+  }, []);
+  useEffect(() => {
     const timer = window.setInterval(() => {
       setToday(getBangkokParts());
     }, 1000);
@@ -409,6 +455,32 @@ function App() {
       return;
     }
 
+    localStorage.removeItem(LOGGED_OUT_FLAG);
+    setBusy(true);
+
+    // On Capacitor native (Android APK): use Chrome Custom Tab via Browser.open
+    // with custom redirect scheme, because Google blocks sign-in from embedded WebViews.
+    try {
+      const { Capacitor } = await import('@capacitor/core');
+      if (Capacitor.isNativePlatform()) {
+        const nativeRedirectUri = 'scantosheet://auth';
+        const googleParams = new URLSearchParams({
+          client_id: GOOGLE_CLIENT_ID,
+          redirect_uri: nativeRedirectUri,
+          response_type: 'code',
+          scope: SCOPES,
+          include_granted_scopes: 'true',
+          access_type: 'offline',
+          prompt: 'consent',
+        });
+        await Browser.open({ url: `https://accounts.google.com/o/oauth2/v2/auth?${googleParams}` });
+        return;
+      }
+    } catch {
+      // Not on Capacitor -- fall through to web flow below
+    }
+
+    // Web flow: redirect in same window
     const redirectUri = `${window.location.origin}${window.location.pathname}`;
     const params = new URLSearchParams({
       client_id: GOOGLE_CLIENT_ID,
@@ -416,19 +488,9 @@ function App() {
       response_type: 'code',
       scope: SCOPES,
       include_granted_scopes: 'true',
-      // access_type=offline + prompt=consent ensures each login receives a
-      // refresh token.  Google allows up to 50 valid refresh tokens per
-      // account+client, which is enough for several machines scanning
-      // simultaneously.  Each browser’s session stores its own refresh
-      // token independently in Vercel KV, so concurrent logins do not
-      // invalidate other devices.
       access_type: 'offline',
       prompt: 'consent',
     });
-
-    // Clear logout flag before redirecting to Google so future restores work.
-    localStorage.removeItem(LOGGED_OUT_FLAG);
-    setBusy(true);
     window.location.assign(`https://accounts.google.com/o/oauth2/v2/auth?${params}`);
   }
 
