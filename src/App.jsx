@@ -71,6 +71,7 @@ const CAMERA_COOLDOWN_MS = 2500;
 const CAMERA_SCAN_FPS = 18;
 const ISSUE_CUSTOMER_CANCELLED = 'ลูกค้ายกเลิก';
 const ISSUE_DAMAGED = 'สินค้าเสียหาย';
+const ISSUE_RETURNED = 'สินค้าตีกลับ';
 const PACKER_UNASSIGNED = 'ยังไม่ระบุ';
 const PACKERS = [PACKER_UNASSIGNED, 'กิต', 'มาย', 'ยุทธ', 'หล้า', 'มุก'];
 const DEFAULT_PACKER_COUNTS = PACKERS.filter((p) => p !== PACKER_UNASSIGNED).map((p) => ({ packer: p, count: 0 }));
@@ -2038,6 +2039,14 @@ function App() {
               {scanRemark === ISSUE_CUSTOMER_CANCELLED ? '✓ ลูกค้ายกเลิก' : 'ลูกค้ายกเลิก'}
             </button>
 
+            <button
+              className={`popup-cancel-btn ${scanRemark === ISSUE_RETURNED ? 'active' : ''}`}
+              type="button"
+              onClick={() => setScanRemark((v) => (v === ISSUE_RETURNED ? '' : ISSUE_RETURNED))}
+              disabled={!isSignedIn || busy}
+            >
+              {scanRemark === ISSUE_RETURNED ? '✓ สินค้าตีกลับ' : 'สินค้าตีกลับ'}
+            </button>
             <div className="scan-controls">
               <div className="segmented-control">
                 <button className={scanMethod === 'manual' ? 'active' : ''} type="button" onClick={() => setScanMethod('manual')}>

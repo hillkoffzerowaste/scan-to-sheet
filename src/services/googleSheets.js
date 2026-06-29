@@ -73,7 +73,7 @@ const FOLDER_NAME = 'Scan to Sheet';
 const MASTER_SHEET_NAME = 'Scan to Sheet Master';
 const TIMEZONE = 'Asia/Bangkok';
 const formattedWorksheetKeys = new Set();
-const SCAN_STATUSES = new Set(['Success', 'Duplicate', 'Cancelled', 'Damaged', 'Issue']);
+const SCAN_STATUSES = new Set(['Success', 'Duplicate', 'Cancelled', 'Damaged', 'Returned', 'Issue']);
 
 export function getBangkokParts(now = new Date()) {
   const parts = new Intl.DateTimeFormat('en-CA', {
@@ -600,6 +600,7 @@ export async function getScanReportGoogle({ token, config, dates }) {
         total: 0,
         cancelledTotal: 0,
         damagedTotal: 0,
+        returnedTotal: 0,
         couriers: COURIERS.map((courier) => ({ courier, count: 0 })),
       },
     ]),
@@ -607,6 +608,7 @@ export async function getScanReportGoogle({ token, config, dates }) {
   const courierTotals = COURIERS.map((courier) => ({ courier, count: 0 }));
   const cancelledRows = [];
   const damagedRows = [];
+  const returnedRows = [];
   const sheet = config?.master;
   if (!sheet?.id) {
     throw new Error('ไม่พบ Google Sheet Master');
@@ -638,6 +640,13 @@ export async function getScanReportGoogle({ token, config, dates }) {
         continue;
       }
 
+      const isReturned = row.status === 'Returned' || row.note === 'สินค้าตีกลับ';
+      if (isReturned) {
+        day.returnedTotal += 1;
+        returnedRows.push(row);
+        continue;
+      }
+
       const dayCourier = day.couriers.find((item) => item.courier === row.courier);
       const totalCourier = courierTotals.find((item) => item.courier === row.courier);
       if (!dayCourier || !totalCourier) {
@@ -659,6 +668,8 @@ export async function getScanReportGoogle({ token, config, dates }) {
     cancelledRows: cancelledRows.sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`)),
     damagedTotal: damagedRows.length,
     damagedRows: damagedRows.sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`)),
+    returnedTotal: returnedRows.length,
+    returnedRows: returnedRows.sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`)),
     generatedAt: new Date().toISOString(),
   };
 }
@@ -962,7 +973,7 @@ export async function updateScanIssueGoogle({ token, config, row, issue }) {
   const rowNumber = targetIdx + 2; // +1 for header, +1 for zero-based index
   // --- END FIX ---
 
-  const status = issue === 'สินค้าเสียหาย' ? 'Damaged' : issue === 'ลูกค้ายกเลิก' ? 'Cancelled' : 'Issue';
+  const status = issue === 'สินค้าเสียหาย' ? 'Damaged' : issue === 'ลูกค้ายกเลิก' ? 'Cancelled' : issue === 'สินค้าตีกลับ' ? 'Returned' : 'Issue';
   const updatedRow = [
     currentRow.no,
     currentRow.courierNo,
