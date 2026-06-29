@@ -30,7 +30,6 @@ import { Share } from '@capacitor/share';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { Browser } from '@capacitor/browser';
-import { App as CapacitorApp } from '@capacitor/app';
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import {
   COURIERS,
@@ -267,72 +266,7 @@ function App() {
     completeGoogleSignIn(code);
   }, []);
 
-  // Deep link listener for Capacitor (Google OAuth redirect via custom scheme)
-  useEffect(() => {
-    const handler = CapacitorApp.addListener('appUrlOpen', (data) => {
-      const url = new URL(data.url);
-      const code = url.searchParams.get('code');
-      const error = url.searchParams.get('error');
-      if (code) {
-        completeGoogleSignIn(code);
-      } else if (error) {
-        setStatus({
-          type: 'error',
-          title: 'เข้าสู่ระบบไม่สำเร็จ',
-          message: url.searchParams.get('error_description') || error,
-        });
-        setBusy(false);
-      }
-    });
-    return () => handler.remove();
-  }, []);
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      setToday(getBangkokParts());
-    }, 1000);
-    return () => window.clearInterval(timer);
-  }, []);
-
-  useEffect(() => {
-    if (isSignedIn) {
-      inputRef.current?.focus();
-    }
-  }, [isSignedIn, selectedCourier, busy]);
-
-  useEffect(() => {
-    if (!isSignedIn || scanMethod !== 'camera') {
-      void stopCamera();
-    }
-  }, [isSignedIn, scanMethod]);
-
-  useEffect(() => {
-    scanModeRef.current = scanMode;
-  }, [scanMode]);
-
-  useEffect(() => {
-    return () => {
-      void stopCamera();
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!isSignedIn) {
-      setRecentRows([]);
-      return;
-    }
-
-    refreshSelectedCourierRows();
-  }, [selectedCourier, today.date, isSignedIn]);
-
-  useEffect(() => {
-    setShowAllRecentRows(false);
-  }, [selectedCourier, today.date]);
-
-  useEffect(() => {
-    if (isSignedIn && token && config) {
-      generateReport();
-    }
-  }, [isSignedIn]);
+  
 
   // Status Bar — sync theme color
   useEffect(() => {
@@ -463,10 +397,11 @@ function App() {
     try {
       const { Capacitor } = await import('@capacitor/core');
       if (Capacitor.isNativePlatform()) {
-        const nativeRedirectUri = 'scantosheet://auth';
+        // Use same Vercel redirect URI as web -- session stored server-side in KV
+        const redirectUri = `${window.location.origin}${window.location.pathname}`;
         const googleParams = new URLSearchParams({
           client_id: GOOGLE_CLIENT_ID,
-          redirect_uri: nativeRedirectUri,
+          redirect_uri: redirectUri,
           response_type: 'code',
           scope: SCOPES,
           include_granted_scopes: 'true',
@@ -474,6 +409,10 @@ function App() {
           prompt: 'consent',
         });
         await Browser.open({ url: `https://accounts.google.com/o/oauth2/v2/auth?${googleParams}` });
+        // After user closes Chrome Custom Tab, restore session from Vercel KV
+        Browser.addListener('browserFinished', () => {
+          restoreGoogleSession();
+        });
         return;
       }
     } catch {
