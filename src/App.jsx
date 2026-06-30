@@ -29,6 +29,7 @@ import {
 import { Share } from '@capacitor/share';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { LocalNotifications } from '@capacitor/local-notifications';
+import { App as CapacitorApp } from '@capacitor/app';
 import { Browser } from '@capacitor/browser';
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import {
@@ -189,6 +190,7 @@ function App() {
   const refreshTimerRef = useRef(null);
   const restoreGoogleSessionInFlightRef = useRef(false);
   const completeGoogleSignInInFlightRef = useRef(false);
+  const appUrlOpenHandleRef = useRef(null);
 
   const isGoogleReady = Boolean(GOOGLE_CLIENT_ID);
   const isSignedIn = Boolean(token && config);
@@ -240,7 +242,23 @@ function App() {
       return;
     }
 
-    completeGoogleSignIn(code);
+    // Process OAuth code: after exchanging code for tokens,
+    // always redirect via custom scheme so the Capacitor app receives the session.
+    // No Capacitor check needed — custom scheme URL will close Chrome Custom Tab
+    // automatically on Android and deliver the session to the app via appUrlOpen.
+    (async () => {
+      await completeGoogleSignIn(code);
+      const session = loadStoredGoogleSession();
+      if (session?.accessToken) {
+        const payload = {
+          accessToken: session.accessToken,
+          profile: session.user ? { email: session.user.email, name: session.user.name } : undefined,
+          config: session.config,
+        };
+        const encoded = btoa(JSON.stringify(payload));
+        window.location.href = `com.scantosheet.app://oauth2?data=${encodeURIComponent(encoded)}`;
+      }
+    })();
   }, []);
 
 
@@ -427,20 +445,47 @@ function App() {
     setBusy(true);
 
     // On Capacitor native (Android APK): use Chrome Custom Tab via Browser.open
-    // with custom redirect scheme, because Google blocks sign-in from embedded WebViews.
+    // with HTTPS redirect + Android deep link intercept, because Google blocks
+    // sign-in from embedded WebViews and does not allow custom URI schemes.
     try {
       const { Capacitor } = await import('@capacitor/core');
       if (Capacitor.isNativePlatform()) {
-        // Intercept redirect URL from Chrome Custom Tab, extract code, process in WebView
-        Browser.addListener('browserPageLoaded', (info) => {
+        // Clean up any previous listener
+        if (appUrlOpenHandleRef.current) {
+          await appUrlOpenHandleRef.current.remove();
+          appUrlOpenHandleRef.current = null;
+        }
+        // Listen for redirect via Android deep link (intent-filter on https://scan-to-sheet-ten.vercel.app)
+        // Also handles custom-scheme session handoff from Chrome Custom Tab after OAuth.
+        appUrlOpenHandleRef.current = await CapacitorApp.addListener('appUrlOpen', async (data) => {
           try {
-            const url = new URL(info.url);
+            const url = new URL(data.url);
             const code = url.searchParams.get('code');
-            if (code && url.origin === window.location.origin) {
-              Browser.close();
-              completeGoogleSignIn(code);
+            const sessionData = url.searchParams.get('data');
+            if (appUrlOpenHandleRef.current) {
+              appUrlOpenHandleRef.current.remove();
+              appUrlOpenHandleRef.current = null;
+            }
+            if (sessionData) {
+              // Session data handoff from Chrome Custom Tab via custom scheme
+              const session = JSON.parse(atob(decodeURIComponent(sessionData)));
+              await activateGoogleSession(session);
+              setStatus({
+                type: 'success',
+                title: 'เชื่อม Google Sheet แล้ว',
+                message: 'ระบบเตรียม Google Sheet Master เรียบร้อย',
+              });
+            } else if (code) {
+              // Direct code from HTTPS deep link (fallback on supported devices)
+              await completeGoogleSignIn(code);
             }
           } catch {}
+        });
+        // When browser tab closes, just reset the spinner.
+        // Do NOT remove appUrlOpen listener — the custom scheme redirect
+        // may arrive shortly after the tab closes (race condition).
+        Browser.addListener('browserFinished', () => {
+          setBusy(false);
         });
         const redirectUri = `${window.location.origin}${window.location.pathname}`;
         const googleParams = new URLSearchParams({
@@ -473,7 +518,7 @@ function App() {
     window.location.assign(`https://accounts.google.com/o/oauth2/v2/auth?${params}`);
   }
 
-  async function completeGoogleSignIn(code) {
+  async function completeGoogleSignIn(code, customRedirectUri) {
     if (completeGoogleSignInInFlightRef.current) {
       return;
     }
@@ -481,7 +526,7 @@ function App() {
 
     try {
       setBusy(true);
-      const redirectUri = `${window.location.origin}${window.location.pathname}`;
+      const redirectUri = customRedirectUri || `${window.location.origin}${window.location.pathname}`;
       const data = await apiJson('/api/google-auth', {
         method: 'POST',
         body: JSON.stringify({ code, redirectUri }),
