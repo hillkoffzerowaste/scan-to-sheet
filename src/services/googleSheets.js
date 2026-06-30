@@ -945,7 +945,7 @@ export async function appendScanGoogle({ token, config, courier, code, email, pa
     .slice(0, 20);
 
   return {
-    status: concurrentDuplicate ? 'duplicate' : isCancelled ? 'cancelled' : 'success',
+    status: concurrentDuplicate ? 'duplicate' : isCancelled ? 'cancelled' : isReturned ? 'returned' : isDamaged ? 'damaged' : 'success',
     courier,
     date,
     time,
