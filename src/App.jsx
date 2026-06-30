@@ -187,7 +187,6 @@ function App() {
   const lastCameraScanRef = useRef({ code: '', time: 0 });
   const cameraSavingRef = useRef(false);
   const refreshTimerRef = useRef(null);
-  const googleCallbackHandledRef = useRef(false);
   const restoreGoogleSessionInFlightRef = useRef(false);
   const completeGoogleSignInInFlightRef = useRef(false);
 
@@ -244,36 +243,6 @@ function App() {
     completeGoogleSignIn(code);
   }, []);
 
-  useEffect(() => {
-    if (googleCallbackHandledRef.current) {
-      return;
-    }
-    googleCallbackHandledRef.current = true;
-
-    const params = new URLSearchParams(window.location.search);
-    const code = params.get('code');
-    const error = params.get('error');
-    const errorDescription = params.get('error_description');
-
-    if (!code && !error) {
-      restoreGoogleSession();
-      return;
-    }
-
-    window.history.replaceState(null, '', window.location.pathname);
-
-    if (error) {
-      setStatus({
-        type: 'error',
-        title: 'เข้าสู่ระบบไม่สำเร็จ',
-        message: errorDescription || error,
-      });
-      setBusy(false);
-      return;
-    }
-
-    completeGoogleSignIn(code);
-  }, []);
 
   
 

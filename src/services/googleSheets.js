@@ -647,6 +647,11 @@ export async function getScanReportGoogle({ token, config, dates }) {
         continue;
       }
 
+      // Only count Success rows towards totals (exclude Duplicate, Issue, etc.)
+      if (row.status !== 'Success') {
+        continue;
+      }
+
       const dayCourier = day.couriers.find((item) => item.courier === row.courier);
       const totalCourier = courierTotals.find((item) => item.courier === row.courier);
       if (!dayCourier || !totalCourier) {
@@ -917,7 +922,7 @@ export async function appendScanGoogle({ token, config, courier, code, email, pa
     normalizedCode,
     email,
     packer,
-    concurrentDuplicate ? 'Duplicate' : isCancelled ? 'Cancelled' : 'Success',
+    concurrentDuplicate ? 'Duplicate' : isCancelled ? 'Cancelled' : isReturned ? 'Returned' : isDamaged ? 'Damaged' : 'Success',
     concurrentDuplicate ? 'Duplicate (concurrent scan)' : note,
   ];
 
