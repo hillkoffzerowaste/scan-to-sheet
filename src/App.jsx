@@ -187,6 +187,9 @@ function App() {
   const lastCameraScanRef = useRef({ code: '', time: 0 });
   const cameraSavingRef = useRef(false);
   const refreshTimerRef = useRef(null);
+  const googleCallbackHandledRef = useRef(false);
+  const restoreGoogleSessionInFlightRef = useRef(false);
+  const completeGoogleSignInInFlightRef = useRef(false);
 
   const isGoogleReady = Boolean(GOOGLE_CLIENT_ID);
   const isSignedIn = Boolean(token && config);
@@ -242,6 +245,11 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (googleCallbackHandledRef.current) {
+      return;
+    }
+    googleCallbackHandledRef.current = true;
+
     const params = new URLSearchParams(window.location.search);
     const code = params.get('code');
     const error = params.get('error');
@@ -497,6 +505,11 @@ function App() {
   }
 
   async function completeGoogleSignIn(code) {
+    if (completeGoogleSignInInFlightRef.current) {
+      return;
+    }
+    completeGoogleSignInInFlightRef.current = true;
+
     try {
       setBusy(true);
       const redirectUri = `${window.location.origin}${window.location.pathname}`;
@@ -518,13 +531,20 @@ function App() {
       });
     } finally {
       setBusy(false);
+      completeGoogleSignInInFlightRef.current = false;
     }
   }
 
   async function restoreGoogleSession() {
+    if (restoreGoogleSessionInFlightRef.current) {
+      return;
+    }
+    restoreGoogleSessionInFlightRef.current = true;
+
     // If user explicitly logged out, skip all session restore.
     if (localStorage.getItem(LOGGED_OUT_FLAG) === '1') {
       localStorage.removeItem(LOGGED_OUT_FLAG);
+      restoreGoogleSessionInFlightRef.current = false;
       return;
     }
 
@@ -553,10 +573,12 @@ function App() {
         setConfig(null);
       } finally {
         setBusy(false);
+        restoreGoogleSessionInFlightRef.current = false;
       }
     }
 
     await refreshGoogleSessionFromServer();
+    restoreGoogleSessionInFlightRef.current = false;
   }
 
   async function refreshGoogleSessionFromServer({ silent = false } = {}) {
