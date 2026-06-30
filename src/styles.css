@@ -1595,6 +1595,11 @@ th {
   background: var(--danger-bg);
   color: var(--danger);
 }
+.status-badge.returned {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
 
 .empty-cell {
   color: var(--muted);
