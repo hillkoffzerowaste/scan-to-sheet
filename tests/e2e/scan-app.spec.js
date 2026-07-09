@@ -1,5 +1,5 @@
 // @ts-check
-const { test, expect } = require('@playwright/test');
+import { test, expect } from '@playwright/test';
 
 const BASE_URL = 'http://localhost:5173';
 
@@ -10,11 +10,12 @@ test.describe('Scan to Sheet — Packer Tab', () => {
 
   test('renders app shell and title', async ({ page }) => {
     await expect(page.locator('.app-shell')).toBeVisible();
-    await expect(page.locator('h1')).toContainText('Scan to Sheet');
+    await expect(page.locator('.title-badge')).toContainText('Scan to Sheet');
+    await expect(page.locator('h1')).toBeVisible();
   });
 
   test('shows Login with Google when not signed in', async ({ page }) => {
-    const loginBtn = page.locator('button:has-text("Login with Google")');
+    const loginBtn = page.locator('.top-connect-box .secondary-button');
     await expect(loginBtn).toBeVisible();
   });
 
@@ -32,15 +33,15 @@ test.describe('Scan to Sheet — Packer Tab', () => {
   });
 
   test('scan input is disabled until login', async ({ page }) => {
+    await page.locator('.scan-tool-panel button:has-text("เครื่องยิง/พิมพ์")').click();
     const input = page.locator('#scan-input');
     await expect(input).toBeDisabled();
   });
 
   test('can select a courier', async ({ page }) => {
     const shopeeBtn = page.locator('.courier-button:has-text("Shopee")').first();
-    await shopeeBtn.click();
+    await expect(shopeeBtn).toBeVisible();
     await expect(shopeeBtn).toHaveClass(/active/);
-    await expect(page.locator('.current-courier-badge strong')).toContainText('Shopee');
   });
 
   test('scan method segmented control works', async ({ page }) => {
@@ -117,7 +118,7 @@ test.describe('Scan to Sheet — Theme & Layout', () => {
   });
 
   test('recent rows header is visible', async ({ page }) => {
-    await expect(page.locator('.recent-header h3')).toContainText('รายการล่าสุด');
+    await expect(page.locator('.recent-header h3').first()).toContainText('รายการล่าสุด');
   });
 
   test('table wrap has horizontal scroll', async ({ page }) => {

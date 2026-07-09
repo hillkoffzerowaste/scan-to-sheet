@@ -2464,6 +2464,7 @@ function App() {
                 <div className={`scan-input-row ${scanFlash ? 'flash' : ''}`}>
                   <ScanLine size={24} />
                   <input
+                    id="popup-scan-input"
                     ref={inputRef}
                     value={scanValue}
                     onChange={(e) => setScanValue(e.target.value)}
