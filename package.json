@@ -10,6 +10,9 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:chromium": "playwright test --project=chromium",
+    "firebase:deploy": "npm run build && firebase deploy --only hosting",
+    "firebase:preview": "npm run build && firebase hosting:channel:deploy preview --expires 7d",
+    "firebase:serve": "npm run build && firebase emulators:start --only hosting",
     "cdp:launch": "node scripts/launch-cdp.js",
     "cdp:launch:headless": "node scripts/launch-cdp.js --headless"
   },
