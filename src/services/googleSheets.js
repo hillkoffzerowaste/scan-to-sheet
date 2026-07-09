@@ -29,41 +29,51 @@ export const SCAN_HEADERS = [
   'Remark / Issue',
 ];
 
+export const ADMIN_HEADERS = [
+  'Admin Scan Date',
+  'Admin Scan Time',
+  'Admin Tracking / Barcode',
+];
+
+export const ALL_HEADERS = [...SCAN_HEADERS, ...ADMIN_HEADERS];
+
+export const TOTAL_COLUMNS = ALL_HEADERS.length; // 13
+
 export const COURIER_RULES = {
   Lazada: {
     label: 'เลข Lazada ต้องขึ้นต้นด้วย LEX',
-    valid: /^LEX[A-Z0-9]{6,35}$/i,
+    valid: /^LEX[A-Z0-9]{8,35}$/i,
   },
   'KEX Lazada': {
-    label: 'เลข KEX Lazada ต้องขึ้นต้นด้วย KEX',
-    valid: /^KEX[A-Z0-9]{6,30}$/i,
+    label: 'เลข KEX Lazada ต้องขึ้นต้นด้วย KEXLM แล้วตามด้วยตัวเลข',
+    valid: /^KEXLM\d{8,20}$/i,
   },
   'Lazada Flash': {
     label: 'เลข Lazada Flash ต้องขึ้นต้นด้วย TH',
-    valid: /^TH[A-Z0-9]{6,30}$/i,
+    valid: /^TH[A-Z0-9]{8,18}$/i,
   },
   'J&T': {
-    label: 'เลข J&T 8-35 ตัว (ตัวเลขหรือตัวอักษร)',
-    valid: /^[A-Z0-9]{8,35}$/i,
+    label: 'เลข J&T ต้องเป็นตัวเลข 12 หลัก',
+    valid: /^\d{12}$/,
   },
   Shopee: {
-    label: 'เลข Shopee 6-35 ตัว (ตัวเลขหรือตัวอักษร)',
-    valid: /^[A-Z0-9]{6,35}$/i,
+    label: 'เลข Shopee ต้องขึ้นต้นด้วย TH แล้วตามด้วยตัวเลข 10-14 หลัก',
+    valid: /^TH\d{10,14}[A-Z]?$/i,
   },
   'Shopee Drop Off': {
-    label: 'เลข Shopee Drop Off 6-35 ตัว',
-    valid: /^[A-Z0-9]{6,35}$/i,
+    label: 'เลข Shopee Drop Off ต้องขึ้นต้นด้วย TH แล้วตามด้วยตัวเลข 10-14 หลัก',
+    valid: /^TH\d{10,14}[A-Z]?$/i,
   },
   Flash: {
-    label: 'เลข Flash 6-35 ตัว (ตัวเลขหรือตัวอักษร)',
-    valid: /^[A-Z0-9]{6,35}$/i,
+    label: 'เลข Flash ต้องขึ้นต้นด้วย TH',
+    valid: /^TH[A-Z0-9]{10,16}$/i,
   },
   Best: {
-    label: 'เลข Best 8-35 ตัว (ตัวเลขหรือตัวอักษร)',
-    valid: /^[A-Z0-9]{8,35}$/i,
+    label: 'เลข Best ต้องเป็นตัวเลข 10-18 หลัก',
+    valid: /^\d{10,18}$/,
   },
   Ratika: {
-    label: 'เลข Ratika 6-30 ตัว',
+    label: 'เลข Ratika ต้องเป็นตัวอักษรหรือตัวเลข 6-30 ตัว',
     valid: /^[A-Z0-9]{6,30}$/i,
   },
 };
@@ -73,7 +83,6 @@ const FOLDER_NAME = 'Scan to Sheet';
 const MASTER_SHEET_NAME = 'Scan to Sheet Master';
 const TIMEZONE = 'Asia/Bangkok';
 const formattedWorksheetKeys = new Set();
-const SCAN_STATUSES = new Set(['Success', 'Duplicate', 'Cancelled', 'Damaged', 'Returned', 'Issue']);
 
 export function getBangkokParts(now = new Date()) {
   const parts = new Intl.DateTimeFormat('en-CA', {
@@ -168,7 +177,6 @@ async function apiFetch(url, token, options = {}) {
     });
 
     if (response.status === 429 && attempt < maxRetries) {
-      // Rate limited — wait and retry with exponential backoff
       lastError = new Error(`Google API rate limited (429) after ${attempt + 1} attempts`);
       await new Promise((resolve) => setTimeout(resolve, 1000 * (attempt + 1)));
       continue;
@@ -269,13 +277,8 @@ async function createDriveItem({ token, name, mimeType, parentId }) {
 }
 
 export async function prepareGoogleSheets(token) {
-  // --- BEGIN FIX: Bug 4 — prevent concurrent duplicate folder creation ---
-  // When two machines call prepareGoogleSheets at the same time, both see
-  // no folder → both create one.  We re-read right before creating to
-  // catch any folder that another machine just created.
   let folder = await findDriveItem({ token, name: FOLDER_NAME, mimeType: MIME_FOLDER });
   if (!folder) {
-    // Re-check immediately before creating to avoid a race window.
     const preCreateFolder = await findDriveItem({ token, name: FOLDER_NAME, mimeType: MIME_FOLDER });
     if (preCreateFolder) {
       folder = preCreateFolder;
@@ -283,9 +286,6 @@ export async function prepareGoogleSheets(token) {
       try {
         folder = await createDriveItem({ token, name: FOLDER_NAME, mimeType: MIME_FOLDER });
       } catch (error) {
-        // If another machine created the folder between our re-check and
-        // our create call, Google may return a conflict.  Look it up once
-        // more and use whichever folder exists.
         if (String(error).includes('409') || String(error).includes('already exists')) {
           folder = await findDriveItem({ token, name: FOLDER_NAME, mimeType: MIME_FOLDER });
         }
@@ -295,7 +295,6 @@ export async function prepareGoogleSheets(token) {
       }
     }
   }
-  // --- END FIX ---
 
   const folderMasters = await listDriveItems({
     token,
@@ -339,11 +338,6 @@ async function getSpreadsheet(token, spreadsheetId) {
 }
 
 async function ensureDailyWorksheet({ token, spreadsheetId, date }) {
-  // --- BEGIN FIX: Bug 3 — prevent concurrent duplicate worksheet creation ---
-  // Re-read the spreadsheet immediately before creating a new sheet so we
-  // catch any sheet that another machine just created between our last read
-  // and this write.  Google Sheets allows duplicate sheet titles, so we
-  // *must* check right before adding.
   const preCreateSpreadsheet = await getSpreadsheet(token, spreadsheetId);
   const preExisting = preCreateSpreadsheet.sheets?.find((sheet) => sheet.properties.title === date);
   if (preExisting) {
@@ -355,17 +349,17 @@ async function ensureDailyWorksheet({ token, spreadsheetId, date }) {
     const title = sheet.properties.title;
     const rowCount = sheet.properties.gridProperties?.rowCount ?? 0;
     return preCreateSpreadsheet.sheets.length === 1 && rowCount <= 1000 && [
-      'Sheet1',       // English
-      'ชีต1',          // Thai
-      'シート1',       // Japanese
-      '시트1',         // Korean
-      '工作表1',        // Chinese Simplified
-      'Feuille 1',    // French
-      'Tabelle1',     // German
-      'Hoja 1',       // Spanish
-      'Página1',      // Portuguese
-      'Foglio1',      // Italian
-      'Лист1',        // Russian
+      'Sheet1',
+      'ชีต1',
+      'シート1',
+      '시트1',
+      '工作表1',
+      'Feuille 1',
+      'Tabelle1',
+      'Hoja 1',
+      'Página1',
+      'Foglio1',
+      'Лист1',
     ].includes(title);
   });
 
@@ -383,7 +377,7 @@ async function ensureDailyWorksheet({ token, spreadsheetId, date }) {
                   index: 0,
                   gridProperties: {
                     rowCount: 1000,
-                    columnCount: SCAN_HEADERS.length,
+                    columnCount: TOTAL_COLUMNS,
                   },
                 },
                 fields: 'title,index,gridProperties(rowCount,columnCount)',
@@ -393,8 +387,6 @@ async function ensureDailyWorksheet({ token, spreadsheetId, date }) {
         }),
       });
     } catch (error) {
-      // If another machine renamed the default sheet at the same time,
-      // the rename will fail.  Fall back to find-or-add below.
       if (!String(error).includes('already exists') && !String(error).includes('duplicate')) {
         throw error;
       }
@@ -420,7 +412,7 @@ async function ensureDailyWorksheet({ token, spreadsheetId, date }) {
                 index: 0,
                 gridProperties: {
                   rowCount: 1000,
-                  columnCount: SCAN_HEADERS.length,
+                  columnCount: TOTAL_COLUMNS,
                 },
               },
             },
@@ -429,23 +421,17 @@ async function ensureDailyWorksheet({ token, spreadsheetId, date }) {
       }),
     });
   } catch (error) {
-    // If Google already created a sheet with this title (unlikely with
-    // our re-check above, but possible under extreme concurrency), look
-    // it up again and use the existing one.
     if (!String(error).includes('already exists') && !String(error).includes('duplicate')) {
       throw error;
     }
   }
 
-  // Final re-read to pick up whichever sheet ended up with the target
-  // date title (ours or another machine’s).
   const postCreateSpreadsheet = await getSpreadsheet(token, spreadsheetId);
   const worksheet = postCreateSpreadsheet.sheets.find((sheet) => sheet.properties.title === date)?.properties;
   if (worksheet) {
     await ensureWorksheetReady({ token, spreadsheetId, date, sheetId: worksheet.sheetId });
   }
   return worksheet;
-  // --- END FIX ---
 }
 
 async function ensureWorksheetReady({ token, spreadsheetId, date, sheetId }) {
@@ -461,12 +447,12 @@ async function ensureWorksheetReady({ token, spreadsheetId, date, sheetId }) {
 
 async function writeHeaders({ token, spreadsheetId, date }) {
   await apiFetch(
-    `${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent(`${date}!A1:J1`)}?valueInputOption=RAW`,
+    `${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent(`${date}!A1:M1`)}?valueInputOption=RAW`,
     token,
     {
       method: 'PUT',
       body: JSON.stringify({
-        values: [SCAN_HEADERS],
+        values: [ALL_HEADERS],
       }),
     },
   );
@@ -483,7 +469,7 @@ async function formatDailyWorksheet({ token, spreadsheetId, sheetId }) {
               sheetId,
               gridProperties: {
                 frozenRowCount: 1,
-                columnCount: SCAN_HEADERS.length,
+                columnCount: TOTAL_COLUMNS,
               },
             },
             fields: 'gridProperties(frozenRowCount,columnCount)',
@@ -496,7 +482,7 @@ async function formatDailyWorksheet({ token, spreadsheetId, sheetId }) {
                 sheetId,
                 startRowIndex: 0,
                 startColumnIndex: 0,
-                endColumnIndex: SCAN_HEADERS.length,
+                endColumnIndex: TOTAL_COLUMNS,
               },
             },
           },
@@ -507,7 +493,7 @@ async function formatDailyWorksheet({ token, spreadsheetId, sheetId }) {
 }
 
 async function readDailyRows({ token, spreadsheetId, date }) {
-  const range = `${escapeSheetName(date)}!A2:J`;
+  const range = `${escapeSheetName(date)}!A2:M`;
   const params = new URLSearchParams({
     majorDimension: 'ROWS',
   });
@@ -519,7 +505,7 @@ async function readDailyRows({ token, spreadsheetId, date }) {
 }
 
 async function updateDailyRow({ token, spreadsheetId, date, rowNumber, row }) {
-  const range = `${escapeSheetName(date)}!A${rowNumber}:J${rowNumber}`;
+  const range = `${escapeSheetName(date)}!A${rowNumber}:M${rowNumber}`;
   await apiFetch(
     `${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`,
     token,
@@ -548,6 +534,22 @@ export async function getTodayRowsGoogle({ token, config, courier, date = getBan
   return rows.map(rowFromSheet).filter((row) => row.courier === courier).reverse();
 }
 
+export async function getDriveRowsGoogle({ token, config, date = getBangkokParts().date }) {
+  const sheet = config?.master;
+  if (!sheet?.id) {
+    throw new Error('ไม่พบ Google Sheet Master');
+  }
+
+  const spreadsheet = await getSpreadsheet(token, sheet.id);
+  const worksheet = spreadsheet.sheets?.find((item) => item.properties.title === date);
+  if (!worksheet) {
+    return [];
+  }
+
+  const rows = await readDailyRows({ token, spreadsheetId: sheet.id, date });
+  return rows.map(rowFromSheet).filter((row) => row.adminCode && row.adminCode.trim() !== '').reverse();
+}
+
 export async function fetchTodayPackerCounts({ token, config }) {
   const data = await fetchTodaySummary({ token, config });
   return data?.packerCounts ?? [];
@@ -560,29 +562,24 @@ export async function fetchTodaySummary({ token, config }) {
   }
 
   const date = getBangkokParts().date;
-  // Ensure the date worksheet exists before reading (like getTodayRowsGoogle does)
   await ensureDailyWorksheet({ token, spreadsheetId: sheet.id, date });
 
   const rows = await readDailyRows({ token, spreadsheetId: sheet.id, date });
   const parsedRows = rows.map(rowFromSheet);
 
-  // Courier counts — only Success status (actual shipments)
   const courierCounts = COURIERS.map((courier) => ({
     courier,
     count: parsedRows.filter((r) => r.courier === courier && r.status === 'Success').length,
   }));
 
-  // Packer counts — read ALL packers dynamically from sheet columns H=Packer, I=Status
-  // Only count Success rows.  No hardcoded packer list – any name in column H counts.
   const packerMap = new Map();
-  for (const row of rows) {
-    const packer = String(row[7] ?? '').trim();
-    const status = String(row[8] ?? '').trim();
+  for (const row of parsedRows) {
+    const packer = String(row.packer ?? '').trim();
+    const status = String(row.status ?? '').trim();
     if (status === 'Success' && packer) {
       packerMap.set(packer, (packerMap.get(packer) ?? 0) + 1);
     }
   }
-  // Sort by count descending so busiest packers appear first
   const packerCounts = [...packerMap.entries()]
     .sort((a, b) => b[1] - a[1])
     .map(([packer, count]) => ({ packer, count }));
@@ -599,16 +596,16 @@ export async function getScanReportGoogle({ token, config, dates }) {
         date,
         total: 0,
         cancelledTotal: 0,
-        damagedTotal: 0,
         returnedTotal: 0,
+        damagedTotal: 0,
         couriers: COURIERS.map((courier) => ({ courier, count: 0 })),
       },
     ]),
   );
   const courierTotals = COURIERS.map((courier) => ({ courier, count: 0 }));
   const cancelledRows = [];
-  const damagedRows = [];
   const returnedRows = [];
+  const damagedRows = [];
   const sheet = config?.master;
   if (!sheet?.id) {
     throw new Error('ไม่พบ Google Sheet Master');
@@ -633,13 +630,6 @@ export async function getScanReportGoogle({ token, config, dates }) {
         continue;
       }
 
-      const isDamaged = row.status === 'Damaged' || row.note === 'สินค้าเสียหาย';
-      if (isDamaged) {
-        day.damagedTotal += 1;
-        damagedRows.push(row);
-        continue;
-      }
-
       const isReturned = row.status === 'Returned' || row.note === 'สินค้าตีกลับ';
       if (isReturned) {
         day.returnedTotal += 1;
@@ -647,7 +637,15 @@ export async function getScanReportGoogle({ token, config, dates }) {
         continue;
       }
 
-      // Only count Success rows towards totals (exclude Duplicate, Issue, etc.)
+      const isDamaged = row.status === 'Damaged' || row.note === 'สินค้าเสียหาย';
+      if (isDamaged) {
+        day.damagedTotal += 1;
+        damagedRows.push(row);
+        continue;
+      }
+
+      // Only count Success rows in courier totals — admin-only rows (รอแพ็ค etc.)
+      // should not be counted as shipped items
       if (row.status !== 'Success') {
         continue;
       }
@@ -671,10 +669,10 @@ export async function getScanReportGoogle({ token, config, dates }) {
     total: courierTotals.reduce((sum, item) => sum + item.count, 0),
     cancelledTotal: cancelledRows.length,
     cancelledRows: cancelledRows.sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`)),
-    damagedTotal: damagedRows.length,
-    damagedRows: damagedRows.sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`)),
     returnedTotal: returnedRows.length,
     returnedRows: returnedRows.sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`)),
+    damagedTotal: damagedRows.length,
+    damagedRows: damagedRows.sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`)),
     generatedAt: new Date().toISOString(),
   };
 }
@@ -703,7 +701,8 @@ export async function searchScansGoogle({ token, config, query, couriers = COURI
     for (const row of rows) {
       const item = rowFromSheet(row);
       const code = normalizeScanCode(item.code);
-      if (courierSet.has(item.courier) && code.includes(normalizedQuery)) {
+      const adminCode = normalizeScanCode(item.adminCode);
+      if (courierSet.has(item.courier) && (code.includes(normalizedQuery) || adminCode.includes(normalizedQuery))) {
         results.push({
           ...item,
           sheetUrl: sheet.webViewLink,
@@ -755,11 +754,15 @@ export function listDatesInMonth(yearMonth) {
   return dates;
 }
 
+/**
+ * appendScanGoogle
+ * Packer scan — unchanged basic flow, with one addition:
+ * If the tracking code already exists in the admin columns (K-M),
+ * merge the packer data into that existing row instead of rejecting as duplicate.
+ */
 export async function appendScanGoogle({ token, config, courier, code, email, packer = '', note = '' }) {
-  const normalizedCode = normalizeCode(code);
+  const normalizedCode = normalizeScanCode(code);
   const isCancelled = note === 'ลูกค้ายกเลิก';
-  const isReturned = note === 'สินค้าตีกลับ';
-  const isDamaged = note === 'สินค้าเสียหาย';
   const sheet = config?.master;
   if (!sheet?.id) {
     throw new Error('ไม่พบ Google Sheet Master');
@@ -773,10 +776,83 @@ export async function appendScanGoogle({ token, config, courier, code, email, pa
   const duplicateRow = courierRows.find((row) => normalizeScanCode(row.code) === normalizeScanCode(normalizedCode));
   const duplicate = Boolean(duplicateRow);
 
+  // If packer scans a code that admin already put in column M, merge into that row
+  if (!duplicate && !isCancelled) {
+    const adminMatchRow = parsedRows.find(
+      (row) => normalizeScanCode(row.adminCode) === normalizeScanCode(normalizedCode) && row.courier === courier,
+    );
+    if (adminMatchRow) {
+      const rowNumber = adminMatchRow.sheetRowNumber;
+      // Re-read to get fresh row position
+      const verifyRows = await readDailyRows({ token, spreadsheetId: sheet.id, date });
+      const verifyParsed = verifyRows.map(rowFromSheet);
+      const targetIdx = verifyParsed.findIndex(
+        (row) => normalizeScanCode(row.adminCode) === normalizeScanCode(normalizedCode) && row.courier === courier,
+      );
+      if (targetIdx === -1) {
+        // Row was deleted, fall through to normal append
+      } else {
+        const currentRow = verifyParsed[targetIdx];
+        const targetRowNumber = targetIdx + 2;
+        // Calculate Courier No. for this courier's existing rows + 1
+        const existingCourierRows = verifyParsed.filter(
+          (r) => r.courier === courier && r.code && r.code.trim() !== '',
+        );
+        const adminOnlyCourierRows = verifyParsed.filter(
+          (r) => r.courier === courier && String(r.no) !== String(currentRow.no),
+        );
+        const courierNo = existingCourierRows.length + 1;
+        const overallNo = targetIdx + 1;
+
+        const mergedRow = [
+          overallNo,
+          courierNo,
+          currentRow.adminDate || currentRow.date || date,
+          time,
+          courier,
+          normalizedCode,
+          email,
+          packer,
+          'Success',
+          note,
+          currentRow.adminDate || date,
+          currentRow.adminTime || time,
+          currentRow.adminCode || normalizedCode,
+        ];
+
+        await updateDailyRow({
+          token,
+          spreadsheetId: sheet.id,
+          date,
+          rowNumber: targetRowNumber,
+          row: mergedRow,
+        });
+
+        const resultRows = verifyParsed
+          .map((row) =>
+            row.sheetRowNumber === targetRowNumber ? rowFromSheet(mergedRow) : row,
+          )
+          .filter((row) => row.courier === courier)
+          .reverse()
+          .slice(0, 20);
+
+        return {
+          status: 'success',
+          courier,
+          date,
+          time,
+          code: normalizedCode,
+          count: courierNo,
+          row: rowFromSheet(mergedRow),
+          rows: resultRows,
+          sheetUrl: sheet.webViewLink,
+          merged: true,
+        };
+      }
+    }
+  }
+
   if (duplicateRow && isCancelled) {
-    // --- BEGIN FIX: Concurrent safety for cancellation path ---
-    // Re-read the sheet to get the current accurate row position.
-    // The initial read may be stale if another machine inserted rows.
     const verifyRows = await readDailyRows({ token, spreadsheetId: sheet.id, date });
     const verifyParsed = verifyRows.map(rowFromSheet);
     const verifyCourierRows = verifyParsed.filter((row) => row.courier === courier);
@@ -786,13 +862,12 @@ export async function appendScanGoogle({ token, config, courier, code, email, pa
 
     if (verifyIdx !== -1) {
       const currentRow = verifyCourierRows[verifyIdx];
-      // Find the global index in all rows to compute the accurate sheet row number.
       const globalIdx = verifyParsed.findIndex(
         (row) =>
           row.courier === courier &&
           normalizeScanCode(row.code) === normalizeScanCode(normalizedCode),
       );
-      const rowNumber = globalIdx + 2; // +1 for header, +1 for zero-based index
+      const rowNumber = globalIdx + 2;
 
       const updatedRow = [
         currentRow.no,
@@ -805,7 +880,11 @@ export async function appendScanGoogle({ token, config, courier, code, email, pa
         currentRow.packer,
         'Cancelled',
         note,
+        currentRow.adminDate || '',
+        currentRow.adminTime || '',
+        currentRow.adminCode || '',
       ];
+
       await updateDailyRow({ token, spreadsheetId: sheet.id, date, rowNumber, row: updatedRow });
 
       const nextRows = verifyParsed
@@ -823,9 +902,6 @@ export async function appendScanGoogle({ token, config, courier, code, email, pa
         sheetUrl: sheet.webViewLink,
       };
     }
-    // Row was deleted/moved by another machine — fall through to BEGIN FIX
-    // which will insert it correctly as a new cancelled scan.
-    // --- END FIX: Concurrent safety for cancellation path ---
   }
 
   if (duplicate && !isCancelled) {
@@ -841,12 +917,6 @@ export async function appendScanGoogle({ token, config, courier, code, email, pa
     };
   }
 
-  // --- BEGIN FIX: Bug 1 & 2 — race-condition-safe append ---
-  //
-  // Use a unique placeholder for No. and Courier No. so we can find our row
-  // after the append and compute the correct sequence numbers from the
-  // sheet’s real state.  This prevents concurrent machines from assigning
-  // the same No./Courier No. and also lets us detect concurrent duplicates.
   const placeholder = `_TEMP_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
   const placeholderRow = [
@@ -858,11 +928,14 @@ export async function appendScanGoogle({ token, config, courier, code, email, pa
     normalizedCode,
     email,
     packer,
-    isCancelled ? 'Cancelled' : isReturned ? 'Returned' : isDamaged ? 'Damaged' : 'Success',
+    isCancelled ? 'Cancelled' : 'Success',
     note,
+    '',
+    '',
+    '',
   ];
 
-  const range = `${escapeSheetName(date)}!A:J`;
+  const range = `${escapeSheetName(date)}!A:M`;
   await apiFetch(
     `${SHEETS_API}/${sheet.id}/values/${encodeURIComponent(range)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
     token,
@@ -874,16 +947,11 @@ export async function appendScanGoogle({ token, config, courier, code, email, pa
     },
   );
 
-  // Re-read the sheet to determine the actual position of the row we just
-  // inserted.  This eliminates the race condition where two machines read
-  // the same row-count and then both assign the same No.
   const updatedRows = await readDailyRows({ token, spreadsheetId: sheet.id, date });
   const updatedParsedRows = updatedRows.map((row, idx) => rowFromSheet(row, idx));
   const insertedIdx = updatedParsedRows.findIndex((row) => String(row.no) === placeholder);
 
   if (insertedIdx === -1) {
-    // Fallback — should not happen.  Return a best-effort result using the
-    // current sheet state.
     const courierCount = updatedParsedRows.filter((row) => row.courier === courier).length;
     return {
       status: 'success',
@@ -899,16 +967,12 @@ export async function appendScanGoogle({ token, config, courier, code, email, pa
 
   const updatedCourierRows = updatedParsedRows.filter((row) => row.courier === courier);
 
-  // Check whether another machine appended the same tracking code between
-  // our initial read and our append (concurrent duplicate).
   const concurrentCodes = updatedCourierRows.filter(
     (row) => normalizeScanCode(row.code) === normalizeScanCode(normalizedCode),
   );
 
   const concurrentDuplicate = concurrentCodes.length > 1;
 
-  // Calculate the correct No. (1-based overall row index in this date sheet)
-  // and Courier No. (1-based index among this courier’s rows).
   const correctNo = insertedIdx + 1;
   const correctCourierNo =
     updatedCourierRows.findIndex((row) => String(row.no) === placeholder) + 1;
@@ -922,40 +986,213 @@ export async function appendScanGoogle({ token, config, courier, code, email, pa
     normalizedCode,
     email,
     packer,
-    concurrentDuplicate ? 'Duplicate' : isCancelled ? 'Cancelled' : isReturned ? 'Returned' : isDamaged ? 'Damaged' : 'Success',
+    concurrentDuplicate ? 'Duplicate' : isCancelled ? 'Cancelled' : 'Success',
     concurrentDuplicate ? 'Duplicate (concurrent scan)' : note,
+    '',
+    '',
+    '',
   ];
 
-  // Update the placeholder row with the real sequence numbers.
   await updateDailyRow({
     token,
     spreadsheetId: sheet.id,
     date,
-    rowNumber: insertedIdx + 2, // +1 header row, +1 zero-based index
+    rowNumber: insertedIdx + 2,
     row: correctedRow,
   });
 
-  // Build the return payload from the in-memory corrected state so we avoid
-  // a third round-trip.
-  const allCourierRows = updatedParsedRows
+  const resultRows = updatedParsedRows
     .filter((row) => row.courier === courier)
-    .map((row) => (String(row.no) === placeholder ? rowFromSheet(correctedRow) : row));
-  const resultRows = allCourierRows
+    .map((row) => (String(row.no) === placeholder ? rowFromSheet(correctedRow) : row))
     .reverse()
     .slice(0, 20);
 
   return {
-    status: concurrentDuplicate ? 'duplicate' : isCancelled ? 'cancelled' : isReturned ? 'returned' : isDamaged ? 'damaged' : 'success',
+    status: concurrentDuplicate ? 'duplicate' : isCancelled ? 'cancelled' : 'success',
     courier,
     date,
     time,
     code: normalizedCode,
-    count: allCourierRows.length,
+    count: concurrentDuplicate
+      ? updatedCourierRows.length
+      : updatedCourierRows.filter((row) => normalizeScanCode(row.code) !== placeholder).length + 1,
     row: rowFromSheet(correctedRow),
     rows: resultRows,
     sheetUrl: sheet.webViewLink,
   };
-  // --- END FIX ---
+}
+
+/**
+ * appendAdminScanGoogle
+ * Admin "down Drive" scan — saves tracking number into columns K, L, M.
+ * If packer already scanned this code (column F), merge admin data into that row.
+ */
+export async function appendAdminScanGoogle({ token, config, courier, code, email }) {
+  const normalizedCode = normalizeScanCode(code);
+  const sheet = config?.master;
+  if (!sheet?.id) {
+    throw new Error('ไม่พบ Google Sheet Master');
+  }
+
+  const { date, time } = getBangkokParts();
+  await ensureDailyWorksheet({ token, spreadsheetId: sheet.id, date });
+  const rows = await readDailyRows({ token, spreadsheetId: sheet.id, date });
+  const parsedRows = rows.map(rowFromSheet);
+
+  // 1) Check if admin already saved this code (duplicate admin scan)
+  const adminDuplicate = parsedRows.find(
+    (row) => normalizeScanCode(row.adminCode) === normalizedCode && row.courier === courier,
+  );
+  if (adminDuplicate) {
+    return {
+      status: 'duplicate',
+      courier,
+      date,
+      time,
+      code: normalizedCode,
+      rows: parsedRows.filter((r) => r.courier === courier).reverse().slice(0, 20),
+      sheetUrl: sheet.webViewLink,
+    };
+  }
+
+  // 2) Check if packer already scanned this code (column F)
+  const packerRow = parsedRows.find(
+    (row) => normalizeScanCode(row.code) === normalizedCode && row.courier === courier,
+  );
+
+  if (packerRow) {
+    // Merge: update existing row with admin fields
+    const rowNumber = packerRow.sheetRowNumber;
+    // Re-read for fresh position
+    const verifyRows = await readDailyRows({ token, spreadsheetId: sheet.id, date });
+    const verifyParsed = verifyRows.map(rowFromSheet);
+    const targetIdx = verifyParsed.findIndex(
+      (row) => normalizeScanCode(row.code) === normalizedCode && row.courier === courier,
+    );
+    if (targetIdx !== -1) {
+      const currentRow = verifyParsed[targetIdx];
+      const mergedRow = [
+        currentRow.no,
+        currentRow.courierNo,
+        currentRow.date,
+        currentRow.time,
+        currentRow.courier,
+        currentRow.code,
+        currentRow.email,
+        currentRow.packer,
+        currentRow.status || 'Success',
+        currentRow.note || '',
+        date,
+        time,
+        normalizedCode,
+      ];
+
+      await updateDailyRow({
+        token,
+        spreadsheetId: sheet.id,
+        date,
+        rowNumber: targetIdx + 2,
+        row: mergedRow,
+      });
+
+      const resultRows = verifyParsed
+        .filter((r) => r.courier === courier)
+        .reverse()
+        .slice(0, 20);
+
+      return {
+        status: 'admin_matched',
+        courier,
+        date,
+        time,
+        code: normalizedCode,
+        rows: resultRows,
+        sheetUrl: sheet.webViewLink,
+      };
+    }
+  }
+
+  // 3) New admin-only row — append with placeholder
+  const placeholder = `_TEMP_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+  const placeholderRow = [
+    placeholder,
+    placeholder,
+    date,
+    time,
+    courier,
+    '',
+    email,
+    '',
+    'รอแพ็ค',
+    '',
+    date,
+    time,
+    normalizedCode,
+  ];
+
+  const range = `${escapeSheetName(date)}!A:M`;
+  await apiFetch(
+    `${SHEETS_API}/${sheet.id}/values/${encodeURIComponent(range)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+    token,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        values: [placeholderRow],
+      }),
+    },
+  );
+
+  const updatedRows = await readDailyRows({ token, spreadsheetId: sheet.id, date });
+  const updatedParsedRows = updatedRows.map((row, idx) => rowFromSheet(row, idx));
+  const insertedIdx = updatedParsedRows.findIndex((row) => String(row.no) === placeholder);
+
+  const correctNo = insertedIdx >= 0 ? insertedIdx + 1 : updatedParsedRows.length + 1;
+  const courierAdminCount = updatedParsedRows.filter(
+    (r) => r.courier === courier && r.adminCode && r.adminCode.trim() !== '',
+  ).length + (insertedIdx >= 0 ? 1 : 0);
+  const correctCourierNo = courierAdminCount;
+
+  const correctedRow = [
+    correctNo,
+    correctCourierNo,
+    date,
+    time,
+    courier,
+    '',
+    email,
+    '',
+    'รอแพ็ค',
+    '',
+    date,
+    time,
+    normalizedCode,
+  ];
+
+  if (insertedIdx >= 0) {
+    await updateDailyRow({
+      token,
+      spreadsheetId: sheet.id,
+      date,
+      rowNumber: insertedIdx + 2,
+      row: correctedRow,
+    });
+  }
+
+  const driveRows = updatedParsedRows
+    .filter((row) => row.adminCode && row.adminCode.trim() !== '')
+    .reverse()
+    .slice(0, 20);
+
+  return {
+    status: 'admin_scan',
+    courier,
+    date,
+    time,
+    code: normalizedCode,
+    rows: driveRows,
+    sheetUrl: sheet.webViewLink,
+  };
 }
 
 export async function updateScanIssueGoogle({ token, config, row, issue }) {
@@ -964,8 +1201,6 @@ export async function updateScanIssueGoogle({ token, config, row, issue }) {
     throw new Error('ไม่พบ Google Sheet Master');
   }
 
-  // --- BEGIN FIX: Concurrent safety — re-read before updating row position ---
-  // The row.sheetRowNumber may be stale if another machine inserted/removed rows.
   const currentRows = await readDailyRows({ token, spreadsheetId: sheet.id, date: row.date });
   const currentParsed = currentRows.map(rowFromSheet);
   const targetIdx = currentParsed.findIndex(
@@ -977,10 +1212,9 @@ export async function updateScanIssueGoogle({ token, config, row, issue }) {
   }
 
   const currentRow = currentParsed[targetIdx];
-  const rowNumber = targetIdx + 2; // +1 for header, +1 for zero-based index
-  // --- END FIX ---
+  const rowNumber = targetIdx + 2;
 
-  const status = issue === 'สินค้าเสียหาย' ? 'Damaged' : issue === 'ลูกค้ายกเลิก' ? 'Cancelled' : issue === 'สินค้าตีกลับ' ? 'Returned' : 'Issue';
+  const status = issue === 'สินค้าเสียหาย' ? 'Damaged' : issue === 'ลูกค้ายกเลิก' ? 'Cancelled' : 'Issue';
   const updatedRow = [
     currentRow.no,
     currentRow.courierNo,
@@ -992,6 +1226,9 @@ export async function updateScanIssueGoogle({ token, config, row, issue }) {
     currentRow.packer,
     status,
     issue,
+    currentRow.adminDate || '',
+    currentRow.adminTime || '',
+    currentRow.adminCode || '',
   ];
 
   await updateDailyRow({
@@ -1008,10 +1245,106 @@ export async function updateScanIssueGoogle({ token, config, row, issue }) {
   };
 }
 
+/**
+ * Cross-check admin scans against packer scans within the lookback window.
+ */
+export async function checkMissingOrders({
+  token,
+  config,
+  courier = null,
+  hoursLookback = 48,
+  thresholdMinutes = 30,
+}) {
+  const sheet = config?.master;
+  if (!sheet?.id) {
+    throw new Error('ไม่พบ Google Sheet Master');
+  }
+
+  const now = new Date();
+  const lookbackMs = hoursLookback * 60 * 60 * 1000;
+  const thresholdMs = thresholdMinutes * 60 * 1000;
+
+  // Get all sheet dates
+  const spreadsheet = await getSpreadsheet(token, sheet.id);
+  const sheetTitles = (spreadsheet.sheets?.map((item) => item.properties.title) ?? [])
+    .filter((title) => /^\d{4}-\d{2}-\d{2}$/.test(title));
+
+  // Filter to dates within lookback window
+  const relevantDates = sheetTitles.filter((title) => {
+    const d = parseDateOnly(title);
+    if (!d) return false;
+    const titleTime = d.getTime();
+    // Include today and yesterday based on lookback
+    return (now.getTime() - titleTime) <= lookbackMs;
+  });
+
+  const matched = [];
+  const pending = [];
+  const tooSoon = [];
+  const cancelled = [];
+  const damaged = [];
+
+  for (const date of relevantDates) {
+    const rows = (await readDailyRows({ token, spreadsheetId: sheet.id, date })).map(rowFromSheet);
+
+    for (const row of rows) {
+      // Only consider rows that admin scanned
+      if (!row.adminCode || row.adminCode.trim() === '') continue;
+
+      // Filter by courier if specified
+      if (courier && row.courier !== courier) continue;
+
+      const adminTimeStr = row.adminTime || row.time || '00:00:00';
+      const adminDateStr = row.adminDate || row.date || date;
+      const adminDateTime = parseDateTime(adminDateStr, adminTimeStr);
+
+      const isCancelled = row.status === 'Cancelled' || row.note === 'ลูกค้ายกเลิก';
+      const isDamaged = row.status === 'Damaged' || row.note === 'สินค้าเสียหาย';
+
+      if (isCancelled) {
+        cancelled.push({ ...row, _sheetDate: date });
+      } else if (isDamaged) {
+        damaged.push({ ...row, _sheetDate: date });
+      } else if (row.status === 'Success' && row.code && row.code.trim() !== '') {
+        // Packer has scanned → matched
+        matched.push({ ...row, _sheetDate: date });
+      } else if (adminDateTime) {
+        const elapsed = now.getTime() - adminDateTime.getTime();
+        if (elapsed < thresholdMs) {
+          tooSoon.push({ ...row, _sheetDate: date });
+        } else {
+          pending.push({ ...row, _sheetDate: date });
+        }
+      } else {
+        // No admin time → treat as pending
+        pending.push({ ...row, _sheetDate: date });
+      }
+    }
+  }
+
+  return {
+    matched,
+    pending,
+    tooSoon,
+    cancelled,
+    damaged,
+    totalAdminScans: matched.length + pending.length + tooSoon.length + cancelled.length + damaged.length,
+    checkTime: new Date().toISOString(),
+    thresholdMinutes,
+    hoursLookback,
+  };
+}
+
 function rowFromSheet(row, index = null) {
-  // Google Sheets omits trailing empty cells, so a new-schema row with an
-  // empty remark often has 9 cells instead of 10. Detect by status position.
-  const hasPackerColumn = row.length >= 10 || SCAN_STATUSES.has(String(row[8] ?? '').trim());
+  // Google Sheets omits trailing empty cells. Legacy rows (before admin
+  // columns K-M were added) may only have 9-10 cells. Detect the schema by
+  // checking whether row[7] contains a known status value (old schema:
+  // Status at index 7, no Packer column) rather than relying on row length
+  // because trailing empty cells can make old rows appear longer.
+  const KNOWN_STATUSES = new Set(['Success', 'Cancelled', 'Damaged', 'Issue', 'Returned', 'รอแพ็ค']);
+  const maybeStatus = String(row[7] ?? '').trim();
+  const hasPackerColumn = row.length >= 10 && !KNOWN_STATUSES.has(maybeStatus);
+  const hasAdminColumns = row.length >= 13;
   return {
     no: row[0],
     sheetRowNumber: index === null ? null : index + 2,
@@ -1024,6 +1357,9 @@ function rowFromSheet(row, index = null) {
     packer: hasPackerColumn ? row[7] : '',
     status: hasPackerColumn ? row[8] : row[7],
     note: hasPackerColumn ? row[9] ?? '' : row[8] ?? '',
+    adminDate: hasAdminColumns ? row[10] ?? '' : '',
+    adminTime: hasAdminColumns ? row[11] ?? '' : '',
+    adminCode: hasAdminColumns ? row[12] ?? '' : '',
   };
 }
 
@@ -1040,4 +1376,19 @@ function formatDateOnly(date) {
   const month = String(date.getUTCMonth() + 1).padStart(2, '0');
   const day = String(date.getUTCDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+function parseDateTime(dateStr, timeStr) {
+  const d = parseDateOnly(dateStr);
+  if (!d) return null;
+  const parts = /^(\d{2}):(\d{2}):(\d{2})$/.exec(timeStr);
+  if (parts) {
+    d.setUTCHours(Number(parts[1]), Number(parts[2]), Number(parts[3]));
+  } else {
+    const simple = /^(\d{2}):(\d{2})$/.exec(timeStr);
+    if (simple) {
+      d.setUTCHours(Number(simple[1]), Number(simple[2]), 0);
+    }
+  }
+  return d;
 }
