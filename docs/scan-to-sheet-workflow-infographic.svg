@@ -1,0 +1,142 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="2000" viewBox="0 0 1400 2000">
+  <defs>
+    <style>
+      .bg { fill: #f3f6f8; }
+      .title { font: 800 62px "Segoe UI", Tahoma, sans-serif; fill: #17212f; }
+      .subtitle { font: 600 30px "Segoe UI", Tahoma, sans-serif; fill: #5e6a78; }
+      .section { font: 800 34px "Segoe UI", Tahoma, sans-serif; fill: #0f5d57; }
+      .stepNo { font: 900 34px "Segoe UI", Tahoma, sans-serif; fill: #ffffff; }
+      .stepTitle { font: 800 31px "Segoe UI", Tahoma, sans-serif; fill: #17212f; }
+      .body { font: 600 24px "Segoe UI", Tahoma, sans-serif; fill: #394755; }
+      .small { font: 600 21px "Segoe UI", Tahoma, sans-serif; fill: #5e6a78; }
+      .card { fill: #ffffff; stroke: #d8dee8; stroke-width: 2; }
+      .green { fill: #18776f; }
+      .greenSoft { fill: #e5f5f2; }
+      .yellowSoft { fill: #fff6e7; }
+      .redSoft { fill: #fff0f0; }
+      .line { stroke: #c8d1dd; stroke-width: 4; stroke-linecap: round; }
+      .ok { fill: #12644d; }
+      .warn { fill: #9a5c08; }
+      .danger { fill: #9c2424; }
+    </style>
+  </defs>
+
+  <rect class="bg" width="1400" height="2000"/>
+
+  <rect x="70" y="60" width="1260" height="210" rx="28" class="green"/>
+  <text x="120" y="145" class="title" fill="#ffffff">Scan to Sheet Web App</text>
+  <text x="120" y="205" class="subtitle" fill="#e5f5f2">Workflow ใช้งานจริงสำหรับทีมแพ็คและทีมจัดส่ง</text>
+
+  <text x="90" y="340" class="section">ขั้นตอนการใช้งานประจำวัน</text>
+
+  <g transform="translate(90 380)">
+    <rect class="card" width="560" height="160" rx="22"/>
+    <circle cx="70" cy="80" r="38" class="green"/>
+    <text x="58" y="92" class="stepNo">1</text>
+    <text x="130" y="65" class="stepTitle">Login ด้วย Google</text>
+    <text x="130" y="105" class="body">เชื่อม Google Sheet Master</text>
+    <text x="130" y="138" class="small">ข้อมูลบันทึกเข้า Drive อัตโนมัติ</text>
+  </g>
+
+  <g transform="translate(750 380)">
+    <rect class="card" width="560" height="160" rx="22"/>
+    <circle cx="70" cy="80" r="38" class="green"/>
+    <text x="58" y="92" class="stepNo">2</text>
+    <text x="130" y="65" class="stepTitle">เลือกขนส่ง</text>
+    <text x="130" y="105" class="body">Shopee, Lazada, KEX Lazada, J&amp;T</text>
+    <text x="130" y="138" class="small">ลดการสแกนผิดช่องขนส่ง</text>
+  </g>
+
+  <line x1="650" y1="460" x2="750" y2="460" class="line"/>
+
+  <g transform="translate(90 600)">
+    <rect class="card" width="560" height="160" rx="22"/>
+    <circle cx="70" cy="80" r="38" class="green"/>
+    <text x="58" y="92" class="stepNo">3</text>
+    <text x="130" y="65" class="stepTitle">เลือก Packer</text>
+    <text x="130" y="105" class="body">บังคับเลือกก่อนสแกนออเดอร์ปกติ</text>
+    <text x="130" y="138" class="small">รู้ว่าออเดอร์นี้ใครแพ็ค</text>
+  </g>
+
+  <g transform="translate(750 600)">
+    <rect class="card" width="560" height="160" rx="22"/>
+    <circle cx="70" cy="80" r="38" class="green"/>
+    <text x="58" y="92" class="stepNo">4</text>
+    <text x="130" y="65" class="stepTitle">สแกนด้วยกล้องมือถือ</text>
+    <text x="130" y="105" class="body">อ่าน QR และ Barcode จากใบปะหน้า</text>
+    <text x="130" y="138" class="small">รองรับเครื่องยิงในอนาคต</text>
+  </g>
+
+  <line x1="650" y1="680" x2="750" y2="680" class="line"/>
+
+  <g transform="translate(90 820)">
+    <rect class="card" width="560" height="160" rx="22"/>
+    <circle cx="70" cy="80" r="38" class="green"/>
+    <text x="58" y="92" class="stepNo">5</text>
+    <text x="130" y="65" class="stepTitle">ระบบตรวจเลขอัตโนมัติ</text>
+    <text x="130" y="105" class="body">LEX, KEXLM, J&amp;T 12 หลัก</text>
+    <text x="130" y="138" class="small">กันเลขผิดขนส่งและเลขไม่ใช่หลัก</text>
+  </g>
+
+  <g transform="translate(750 820)">
+    <rect class="card" width="560" height="160" rx="22"/>
+    <circle cx="70" cy="80" r="38" class="green"/>
+    <text x="58" y="92" class="stepNo">6</text>
+    <text x="130" y="65" class="stepTitle">บันทึกเข้า Sheet real-time</text>
+    <text x="130" y="105" class="body">แยกวันที่ ขนส่ง เวลา ผู้สแกน</text>
+    <text x="130" y="138" class="small">ไม่ต้องคีย์ข้อมูลซ้ำ</text>
+  </g>
+
+  <line x1="650" y1="900" x2="750" y2="900" class="line"/>
+
+  <text x="90" y="1085" class="section">ระบบแจ้งเตือนหน้างาน</text>
+
+  <g transform="translate(90 1125)">
+    <rect class="greenSoft" width="380" height="145" rx="20"/>
+    <text x="35" y="58" class="stepTitle">สแกนผ่าน</text>
+    <text x="35" y="98" class="body">เสียงยืนยันชัดเจน</text>
+  </g>
+
+  <g transform="translate(510 1125)">
+    <rect class="yellowSoft" width="380" height="145" rx="20"/>
+    <text x="35" y="58" class="stepTitle">เลขซ้ำ</text>
+    <text x="35" y="98" class="body">เตือนบนหน้ากล้องทันที</text>
+  </g>
+
+  <g transform="translate(930 1125)">
+    <rect class="redSoft" width="380" height="145" rx="20"/>
+    <text x="35" y="58" class="stepTitle">ผิดขนส่ง</text>
+    <text x="35" y="98" class="body">ไม่บันทึกลง Sheet</text>
+  </g>
+
+  <text x="90" y="1370" class="section">การค้นหาและบันทึกปัญหา</text>
+
+  <g transform="translate(90 1410)">
+    <rect class="card" width="1220" height="180" rx="24"/>
+    <text x="40" y="62" class="stepTitle">ค้นหาเลขพัสดุจากหน้าเว็บ</text>
+    <text x="40" y="105" class="body">พบรายการย้อนหลังจาก Google Sheet ได้ทันที</text>
+    <text x="40" y="145" class="body">กดบันทึก “สินค้าเสียหาย” หรือดูรายการ “ลูกค้ายกเลิก” เพื่อทำ KPI</text>
+  </g>
+
+  <text x="90" y="1670" class="section">รายงานสำหรับหัวหน้างานและผู้บริหาร</text>
+
+  <g transform="translate(90 1710)">
+    <rect class="card" width="390" height="150" rx="22"/>
+    <text x="32" y="58" class="stepTitle">ยอดส่งจริง</text>
+    <text x="32" y="102" class="body">แยกตามขนส่งและวันที่</text>
+  </g>
+
+  <g transform="translate(505 1710)">
+    <rect class="card" width="390" height="150" rx="22"/>
+    <text x="32" y="58" class="stepTitle">ยกเลิก</text>
+    <text x="32" y="102" class="body">จำนวนและเลขพัสดุที่ยกเลิก</text>
+  </g>
+
+  <g transform="translate(920 1710)">
+    <rect class="card" width="390" height="150" rx="22"/>
+    <text x="32" y="58" class="stepTitle">สินค้าเสียหาย</text>
+    <text x="32" y="102" class="body">ข้อมูลสำหรับ KPI ทีมงาน</text>
+  </g>
+
+  <text x="90" y="1940" class="small">Scan to Sheet Web App | ใช้งานผ่านมือถือ บันทึก Google Sheet อัตโนมัติ และสรุปรายงานได้ทันที</text>
+</svg>
