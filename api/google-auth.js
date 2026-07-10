@@ -15,16 +15,16 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { code, redirectUri } = req.body ?? {};
-    if (!code || !redirectUri) {
-      sendJson(res, 400, { error: 'Missing code or redirectUri' });
+    const { code, redirectUri, clientId } = req.body ?? {};
+    if (!code || !redirectUri || !clientId) {
+      sendJson(res, 400, { error: 'Missing code, redirectUri, or clientId' });
       return;
     }
 
     let tokenData;
     let profile;
     try {
-      tokenData = await exchangeCode({ code, redirectUri });
+      tokenData = await exchangeCode({ code, redirectUri, clientId });
       profile = await fetchProfile(tokenData.access_token);
     } catch (error) {
       sendJson(res, 500, {

@@ -11,12 +11,22 @@ function getRedisConfig() {
   return { url, token };
 }
 
-export function getRequiredGoogleEnv() {
-  const clientId = process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID;
+export function getRequiredGoogleEnv(postedClientId) {
+  const allowedClientIds = [
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.VITE_GOOGLE_CLIENT_ID,
+  ].filter(Boolean);
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  if (!clientId || !clientSecret) {
+
+  if (!allowedClientIds.length || !clientSecret) {
     throw new Error('Missing GOOGLE_CLIENT_ID/VITE_GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET');
   }
+
+  if (postedClientId && !allowedClientIds.includes(postedClientId)) {
+    throw new Error('OAuth client ID mismatch between browser and server environment');
+  }
+
+  const clientId = postedClientId || allowedClientIds[0];
   return { clientId, clientSecret };
 }
 
@@ -103,8 +113,8 @@ export function clearSessionCookie(res) {
   res.setHeader('Set-Cookie', `${SESSION_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`);
 }
 
-export async function exchangeCode({ code, redirectUri }) {
-  const { clientId, clientSecret } = getRequiredGoogleEnv();
+export async function exchangeCode({ code, redirectUri, clientId: postedClientId }) {
+  const { clientId, clientSecret } = getRequiredGoogleEnv(postedClientId);
   const body = new URLSearchParams({
     code,
     client_id: clientId,

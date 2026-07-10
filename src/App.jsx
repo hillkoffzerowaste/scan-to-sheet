@@ -624,7 +624,7 @@ function App() {
       const redirectUri = `${window.location.origin}${window.location.pathname}`;
       const data = await apiJson('/api/google-auth', {
         method: 'POST',
-        body: JSON.stringify({ code, redirectUri }),
+        body: JSON.stringify({ code, redirectUri, clientId: GOOGLE_CLIENT_ID }),
       });
       await activateGoogleSession(data);
       setStatus({
