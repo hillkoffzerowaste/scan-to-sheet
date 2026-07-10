@@ -256,7 +256,8 @@ function App() {
   const lastAutoCheckRef = useRef(0);
 
   const isGoogleReady = isFirebaseConfigured || Boolean(GOOGLE_CLIENT_ID);
-  const isSignedIn = Boolean(token && config);
+  const isSheetConnected = Boolean(token && config);
+  const isSignedIn = Boolean(firebaseUser || isSheetConnected);
   const selectedCount = useMemo(
     () => summary.find((item) => item.courier === selectedCourier)?.count ?? 0,
     [selectedCourier, summary],
@@ -290,6 +291,14 @@ function App() {
         }
         setFirebaseUser(authUser);
         if (authUser) {
+          setUser((current) => (
+            current.email === EMPTY_USER.email
+              ? {
+                  email: authUser.email ?? 'firebase-user',
+                  name: authUser.displayName ?? 'Firebase User',
+                }
+              : current
+          ));
           void upsertFirebaseUser(authUser).catch(() => {});
         }
       });
@@ -375,7 +384,7 @@ function App() {
   }, [selectedCourier, today.date, activeTab]);
 
   useEffect(() => {
-    if (isSignedIn && token && config) {
+    if (isSignedIn) {
       generateReport();
     }
   }, [isSignedIn]);
@@ -994,7 +1003,7 @@ function App() {
       setToday({ date: result.date, time: result.time });
       setRecentRows(result.rows ?? []);
 
-      if (result.status === 'success' && token && config) {
+      if (result.status === 'success' && isSignedIn) {
         setScanFlash(true);
         setTimeout(() => setScanFlash(false), 600);
         scheduleCountRefresh();
@@ -1037,6 +1046,7 @@ function App() {
         packer: selectedPacker === PACKER_UNASSIGNED ? '' : selectedPacker,
         note: scanRemark,
       }).catch(() => {});
+      await refreshSelectedCourierRows().catch(() => {});
       return { ...result, status: result.status };
     } catch (error) {
       setStatus({
@@ -1191,6 +1201,7 @@ function App() {
         courier: selectedCourier,
         user: firebaseUser ?? user,
       }).catch(() => {});
+      await refreshDriveRows().catch(() => {});
 
       return { ...result, status: result.status };
     } catch (error) {
@@ -1813,7 +1824,7 @@ function App() {
           <div className="top-connect-box">
             <div className="connect-title">
               <FileSpreadsheet size={18} />
-              <span>{isSignedIn ? 'Google พร้อมใช้งาน' : 'Google ยังไม่เชื่อม'}</span>
+              <span>{isSignedIn ? 'Firestore พร้อมใช้งาน' : 'Firebase ยังไม่เชื่อม'}</span>
             </div>
             {isSignedIn ? (
               <button className="ghost-button" type="button" onClick={signOut}>
@@ -2232,7 +2243,7 @@ function App() {
                 </div>
                 <div>
                   <span>สถานะ</span>
-                  <strong>{isSignedIn ? 'Google Sheet' : 'รอ Login'}</strong>
+                  <strong>{isSignedIn ? (isSheetConnected ? 'Firestore + Sheet Sync' : 'Firestore') : 'รอ Login'}</strong>
                 </div>
               </div>
 
@@ -2291,7 +2302,7 @@ function App() {
                     {recentRows.length === 0 ? (
                       <tr>
                         <td colSpan="5" className="empty-cell">
-                          {isSignedIn ? 'ยังไม่มีรายการของวันนี้' : 'เข้าสู่ระบบเพื่อโหลดรายการจาก Google Sheet'}
+                          {isSignedIn ? 'ยังไม่มีรายการของวันนี้ใน Firestore' : 'เข้าสู่ระบบเพื่อโหลดรายการ'}
                         </td>
                       </tr>
                     ) : (
