@@ -1,0 +1,17 @@
+{
+  "serviceAccountPath": "../../firebase-service-account.json",
+  "profilesDir": "profiles",
+  "logDir": "logs",
+  "screenshotsDir": "screenshots",
+  "enabledPlatforms": ["tiktok", "shopee", "lazada"],
+  "intervalMs": 300000,
+  "lockTtlMs": 600000,
+  "headless": false,
+  "navigationTimeoutMs": 60000,
+  "orderLoadTimeoutMs": 30000,
+  "maxOrdersPerPlatform": 200,
+  "collections": {
+    "orders": "marketplaceOrders",
+    "status": "syncStatus"
+  }
+}

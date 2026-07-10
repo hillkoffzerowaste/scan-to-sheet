@@ -30,6 +30,11 @@ yarn-error.log*
 .env
 .env.local
 .env.*.local
+firebase-service-account*.json
+scripts/marketplace-sync/config.json
+scripts/marketplace-sync/profiles/
+scripts/marketplace-sync/logs/
+scripts/marketplace-sync/screenshots/
 
 # debug
 pnpm-debug.log*
