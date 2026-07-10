@@ -3,9 +3,14 @@ import {
   collection,
   doc,
   getDoc,
+  getDocs,
+  limit,
+  orderBy,
+  query,
   runTransaction,
   setDoc,
   updateDoc,
+  where,
 } from 'firebase/firestore';
 import { firestoreDb, isFirebaseConfigured, serverTimestamp } from './firebase.js';
 
@@ -65,6 +70,88 @@ function baseOrderPayload({ type, code, courier, date, time, user, packer = '', 
         }
       : null,
   };
+}
+
+function isCancelledOrder(order) {
+  return order.status === 'cancelled' || String(order.note ?? '').includes('ยกเลิก');
+}
+
+function isDamagedOrder(order) {
+  return order.status === 'damaged' || String(order.note ?? '').includes('เสียหาย');
+}
+
+function isReturnedOrder(order) {
+  return order.status === 'returned' || String(order.note ?? '').includes('ตีกลับ');
+}
+
+function timeFromScan(scan, fallback = '') {
+  const value = scan?.scannedAt ?? fallback;
+  return String(value).includes('T') ? String(value).split('T')[1] : value;
+}
+
+function orderToRow(order, id = '') {
+  const packerScan = order.packerScan ?? null;
+  const admin = order.admin ?? null;
+  const code = order.code || order.normalizedCode || '';
+  const packerTime = timeFromScan(packerScan, order.time || '');
+  const adminTime = timeFromScan(admin, order.time || '');
+  const hasPacker = Boolean(packerScan?.scannedAt || order.status === 'packer_scanned' || order.status === 'matched');
+  const hasAdmin = Boolean(admin?.scannedAt || order.status === 'pending' || order.status === 'matched');
+  const status = isCancelledOrder(order)
+    ? 'Cancelled'
+    : isDamagedOrder(order)
+      ? 'Damaged'
+      : hasPacker
+        ? 'Success'
+        : 'รอแพ็ค';
+
+  return {
+    id,
+    no: id,
+    courierNo: '',
+    date: order.date,
+    time: packerTime || adminTime,
+    courier: order.courier,
+    code: hasPacker ? code : '',
+    adminCode: hasAdmin ? code : '',
+    email: packerScan?.scannedBy?.email || admin?.scannedBy?.email || order.user?.email || '',
+    packer: order.packer ?? packerScan?.packer ?? '',
+    status,
+    note: order.note ?? '',
+    adminDate: hasAdmin ? order.date : '',
+    adminTime,
+    sheetSyncStatus: order.sheetSyncStatus ?? 'pending',
+    sheetSyncError: order.sheetSyncError ?? '',
+  };
+}
+
+function reportDay(date) {
+  return {
+    date,
+    total: 0,
+    cancelledTotal: 0,
+    returnedTotal: 0,
+    damagedTotal: 0,
+    couriers: [],
+  };
+}
+
+async function getOrdersByDate(date) {
+  if (!canWriteFirestore()) {
+    return [];
+  }
+
+  const snap = await getDocs(query(collection(firestoreDb, 'orders'), where('date', '==', date)));
+  return snap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+}
+
+async function getRecentOrders(maxRows = 500) {
+  if (!canWriteFirestore()) {
+    return [];
+  }
+
+  const snap = await getDocs(query(collection(firestoreDb, 'orders'), orderBy('updatedAt', 'desc'), limit(maxRows)));
+  return snap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
 }
 
 export function canUseFirestorePrimary() {
@@ -237,4 +324,235 @@ export async function markSheetSyncResult({ orderId: id, ok, result = null, erro
     updatedAt: serverTimestamp(),
     updatedAtIso: nowIso(),
   });
+}
+
+export async function backfillOrdersFromSheetRows({ rows, user }) {
+  if (!canWriteFirestore()) {
+    return { imported: 0, skipped: rows.length, failed: 0 };
+  }
+
+  let imported = 0;
+  let skipped = 0;
+  let failed = 0;
+
+  for (const row of rows) {
+    const code = normalizeCode(row.code || row.adminCode);
+    const courier = row.courier;
+    const date = row.date || row.adminDate || row._sheetDate;
+    if (!code || !courier || !date) {
+      skipped += 1;
+      continue;
+    }
+
+    const ref = doc(firestoreDb, 'orders', orderId({ date, courier, code }));
+    const hasPacker = Boolean(row.code);
+    const hasAdmin = Boolean(row.adminCode);
+    const note = row.note ?? '';
+    const status = row.status === 'Cancelled'
+      ? 'cancelled'
+      : row.status === 'Damaged'
+        ? 'damaged'
+        : hasPacker && hasAdmin
+          ? 'matched'
+          : hasPacker
+            ? 'packer_scanned'
+            : 'pending';
+
+    try {
+      await setDoc(
+        ref,
+        {
+          code,
+          normalizedCode: code,
+          courier,
+          date,
+          packer: row.packer ?? '',
+          note,
+          status,
+          sheetSyncStatus: 'synced',
+          sheetSyncError: '',
+          sheetSyncedAt: serverTimestamp(),
+          sheetUrl: row.sheetUrl ?? '',
+          importedFromSheet: true,
+          importedAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          updatedAtIso: nowIso(),
+          user: userPayload(user),
+          createdBy: userPayload(user),
+          admin: hasAdmin
+            ? {
+                scannedAt: `${row.adminDate || date}T${row.adminTime || row.time || '00:00:00'}`,
+                scannedBy: { email: row.email ?? '', name: '', uid: '' },
+              }
+            : null,
+          packerScan: hasPacker
+            ? {
+                scannedAt: `${date}T${row.time || row.adminTime || '00:00:00'}`,
+                scannedBy: { email: row.email ?? '', name: '', uid: '' },
+                packer: row.packer ?? '',
+                note,
+              }
+            : null,
+        },
+        { merge: true },
+      );
+      imported += 1;
+    } catch {
+      failed += 1;
+    }
+  }
+
+  return { imported, skipped, failed };
+}
+
+export async function fetchTodaySummaryFirestore({ couriers = [], date }) {
+  const orders = await getOrdersByDate(date);
+  const courierCounts = couriers.map((courier) => ({
+    courier,
+    count: orders.filter((order) => order.courier === courier && order.packerScan?.scannedAt && !isCancelledOrder(order)).length,
+  }));
+
+  const packerMap = new Map();
+  for (const order of orders) {
+    const packer = String(order.packer ?? order.packerScan?.packer ?? '').trim();
+    if (packer && order.packerScan?.scannedAt && !isCancelledOrder(order)) {
+      packerMap.set(packer, (packerMap.get(packer) ?? 0) + 1);
+    }
+  }
+
+  return {
+    courierCounts,
+    packerCounts: [...packerMap.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([packer, count]) => ({ packer, count })),
+  };
+}
+
+export async function getTodayRowsFirestore({ courier, date }) {
+  const orders = await getOrdersByDate(date);
+  return orders
+    .filter((order) => order.courier === courier && order.packerScan?.scannedAt)
+    .sort((a, b) => String(b.packerScan?.scannedAt ?? '').localeCompare(String(a.packerScan?.scannedAt ?? '')))
+    .map((order) => orderToRow(order, order.id));
+}
+
+export async function getDriveRowsFirestore({ date }) {
+  const orders = await getOrdersByDate(date);
+  return orders
+    .filter((order) => order.admin?.scannedAt)
+    .sort((a, b) => String(b.admin?.scannedAt ?? '').localeCompare(String(a.admin?.scannedAt ?? '')))
+    .map((order) => orderToRow(order, order.id));
+}
+
+export async function searchScansFirestore({ query: searchQuery, couriers = [], dates = null, limit: maxRows = 50 }) {
+  const term = normalizeCode(searchQuery);
+  const sourceOrders = dates?.length
+    ? (await Promise.all(dates.map((date) => getOrdersByDate(date)))).flat()
+    : await getRecentOrders(1000);
+
+  return sourceOrders
+    .filter((order) => {
+      const matchesCode = normalizeCode(order.code || order.normalizedCode).includes(term);
+      const matchesCourier = couriers.length === 0 || couriers.includes(order.courier);
+      return matchesCode && matchesCourier;
+    })
+    .sort((a, b) => String(b.updatedAtIso ?? '').localeCompare(String(a.updatedAtIso ?? '')))
+    .slice(0, maxRows)
+    .map((order) => orderToRow(order, order.id));
+}
+
+export async function getScanReportFirestore({ couriers = [], dates }) {
+  const uniqueDates = [...new Set(dates)].filter(Boolean).sort();
+  const orders = (await Promise.all(uniqueDates.map((date) => getOrdersByDate(date)))).flat();
+  const dayMap = new Map(uniqueDates.map((date) => [date, {
+    ...reportDay(date),
+    couriers: couriers.map((courier) => ({ courier, count: 0 })),
+  }]));
+  const courierTotals = couriers.map((courier) => ({ courier, count: 0 }));
+  const cancelledRows = [];
+  const returnedRows = [];
+  const damagedRows = [];
+
+  for (const order of orders) {
+    const day = dayMap.get(order.date);
+    if (!day) continue;
+    const row = orderToRow(order, order.id);
+    const hasPacker = Boolean(order.packerScan?.scannedAt);
+    const cancelled = isCancelledOrder(order);
+    const damaged = isDamagedOrder(order);
+    const returned = isReturnedOrder(order);
+
+    if (cancelled) {
+      day.cancelledTotal += 1;
+      cancelledRows.push(row);
+    } else if (damaged) {
+      day.damagedTotal += 1;
+      damagedRows.push(row);
+    } else if (returned) {
+      day.returnedTotal += 1;
+      returnedRows.push(row);
+    } else if (hasPacker) {
+      day.total += 1;
+      const dayCourier = day.couriers.find((item) => item.courier === order.courier);
+      if (dayCourier) dayCourier.count += 1;
+      const totalCourier = courierTotals.find((item) => item.courier === order.courier);
+      if (totalCourier) totalCourier.count += 1;
+    }
+  }
+
+  return {
+    total: [...dayMap.values()].reduce((sum, day) => sum + day.total, 0),
+    cancelledTotal: cancelledRows.length,
+    returnedTotal: returnedRows.length,
+    damagedTotal: damagedRows.length,
+    couriers: courierTotals,
+    days: [...dayMap.values()],
+    cancelledRows,
+    returnedRows,
+    damagedRows,
+  };
+}
+
+export async function checkMissingOrdersFirestore({ courier = null, hoursLookback = 48, thresholdMinutes = 30 }) {
+  const orders = await getRecentOrders(1000);
+  const now = Date.now();
+  const lookbackMs = hoursLookback * 60 * 60 * 1000;
+  const thresholdMs = thresholdMinutes * 60 * 1000;
+  const matched = [];
+  const pending = [];
+  const tooSoon = [];
+  const cancelled = [];
+  const damaged = [];
+
+  for (const order of orders) {
+    if (courier && order.courier !== courier) continue;
+    if (!order.admin?.scannedAt) continue;
+    const adminMs = new Date(order.admin.scannedAt).getTime();
+    if (Number.isFinite(adminMs) && now - adminMs > lookbackMs) continue;
+    const row = orderToRow(order, order.id);
+
+    if (isCancelledOrder(order)) {
+      cancelled.push(row);
+    } else if (isDamagedOrder(order)) {
+      damaged.push(row);
+    } else if (order.packerScan?.scannedAt) {
+      matched.push(row);
+    } else if (Number.isFinite(adminMs) && now - adminMs < thresholdMs) {
+      tooSoon.push(row);
+    } else {
+      pending.push(row);
+    }
+  }
+
+  return {
+    matched,
+    pending,
+    tooSoon,
+    cancelled,
+    damaged,
+    totalAdminScans: matched.length + pending.length + tooSoon.length + cancelled.length + damaged.length,
+    checkTime: new Date().toISOString(),
+    thresholdMinutes,
+    hoursLookback,
+  };
 }

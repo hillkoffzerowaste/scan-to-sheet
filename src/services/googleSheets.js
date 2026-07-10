@@ -716,6 +716,38 @@ export async function searchScansGoogle({ token, config, query, couriers = COURI
     .slice(0, limit);
 }
 
+export async function getRowsForFirestoreBackfillGoogle({ token, config, dates }) {
+  const sheet = config?.master;
+  if (!sheet?.id) {
+    throw new Error('ไม่พบ Google Sheet Master');
+  }
+
+  const spreadsheet = await getSpreadsheet(token, sheet.id);
+  const sheetTitles = new Set(spreadsheet.sheets?.map((item) => item.properties.title) ?? []);
+  const rows = [];
+
+  for (const date of [...new Set(dates)].filter(Boolean).sort()) {
+    if (!sheetTitles.has(date)) {
+      continue;
+    }
+
+    const dailyRows = await readDailyRows({ token, spreadsheetId: sheet.id, date });
+    rows.push(
+      ...dailyRows
+        .map((row, index) => rowFromSheet(row, index))
+        .filter((row) => row.code || row.adminCode)
+        .map((row) => ({
+          ...row,
+          date: row.date || row.adminDate || date,
+          _sheetDate: date,
+          sheetUrl: sheet.webViewLink,
+        })),
+    );
+  }
+
+  return rows;
+}
+
 export function listDatesBetween(startDate, endDate) {
   if (!startDate || !endDate) {
     return [];

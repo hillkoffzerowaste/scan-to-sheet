@@ -39,6 +39,7 @@ import {
   fetchTodaySummary,
   getBangkokParts,
   getDriveRowsGoogle,
+  getRowsForFirestoreBackfillGoogle,
   getScanReportGoogle,
   getTodayRowsGoogle,
   listDatesBetween,
@@ -66,11 +67,18 @@ import {
   signOutFirebase,
 } from './services/firebase.js';
 import {
+  backfillOrdersFromSheetRows,
   canUseFirestorePrimary,
+  checkMissingOrdersFirestore,
+  fetchTodaySummaryFirestore,
+  getDriveRowsFirestore,
+  getScanReportFirestore,
+  getTodayRowsFirestore,
   markSheetSyncResult,
   mirrorScanToFirestore,
   recordAdminScanPrimary,
   recordPackerScanPrimary,
+  searchScansFirestore,
   upsertFirebaseUser,
 } from './services/firebaseScans.js';
 
@@ -236,6 +244,7 @@ function App() {
   const [missingBusy, setMissingBusy] = useState(false);
   const [missingAlertBadge, setMissingAlertBadge] = useState(0);
   const [thresholdMinutes, setThresholdMinutes] = useState(DEFAULT_THRESHOLD_MINUTES);
+  const [backfillBusy, setBackfillBusy] = useState(false);
   const inputRef = useRef(null);
   const audioContextRef = useRef(null);
   const cameraRef = useRef(null);
@@ -419,15 +428,21 @@ function App() {
     }
 
     try {
-      const results = await runWithGoogleRetry((accessToken, googleConfig) =>
-        checkMissingOrders({
-          token: accessToken,
-          config: googleConfig,
-          courier: null,
-          hoursLookback: DEFAULT_LOOKBACK_HOURS,
-          thresholdMinutes,
-        }),
-      );
+      const results = canUseFirestorePrimary()
+        ? await checkMissingOrdersFirestore({
+            courier: null,
+            hoursLookback: DEFAULT_LOOKBACK_HOURS,
+            thresholdMinutes,
+          })
+        : await runWithGoogleRetry((accessToken, googleConfig) =>
+            checkMissingOrders({
+              token: accessToken,
+              config: googleConfig,
+              courier: null,
+              hoursLookback: DEFAULT_LOOKBACK_HOURS,
+              thresholdMinutes,
+            }),
+          );
 
       setMissingCheckCache(results);
       const pendingCount = results.pending?.length ?? 0;
@@ -761,25 +776,31 @@ function App() {
   }
 
   async function refreshAllCounts(accessToken = token, googleConfig = config) {
-    if (!accessToken || !googleConfig) {
+    if (!isSignedIn) {
       return;
     }
 
-    const data = await fetchTodaySummary({ token: accessToken, config: googleConfig });
+    const data = canUseFirestorePrimary()
+      ? await fetchTodaySummaryFirestore({ couriers: COURIERS, date: getBangkokParts().date })
+      : await fetchTodaySummary({ token: accessToken, config: googleConfig });
     if (data) {
       setSummary(data.courierCounts);
       setPackerCounts(data.packerCounts);
     }
 
     if (activeTab === 'packer') {
-      const courierRows = await runWithGoogleRetry((t, c) =>
-        getTodayRowsGoogle({ token: t, config: c, courier: selectedCourier, date: getBangkokParts().date }),
-      ).catch(() => []);
+      const courierRows = canUseFirestorePrimary()
+        ? await getTodayRowsFirestore({ courier: selectedCourier, date: getBangkokParts().date }).catch(() => [])
+        : await runWithGoogleRetry((t, c) =>
+            getTodayRowsGoogle({ token: t, config: c, courier: selectedCourier, date: getBangkokParts().date }),
+          ).catch(() => []);
       setRecentRows(courierRows);
     } else {
-      const driveRows = await runWithGoogleRetry((t, c) =>
-        getDriveRowsGoogle({ token: t, config: c, date: getBangkokParts().date }),
-      ).catch(() => []);
+      const driveRows = canUseFirestorePrimary()
+        ? await getDriveRowsFirestore({ date: getBangkokParts().date }).catch(() => [])
+        : await runWithGoogleRetry((t, c) =>
+            getDriveRowsGoogle({ token: t, config: c, date: getBangkokParts().date }),
+          ).catch(() => []);
       setDriveRecentRows(driveRows);
       setDriveTotalCount(driveRows.length);
     }
@@ -791,8 +812,11 @@ function App() {
     }
     refreshTimerRef.current = setTimeout(() => {
       refreshTimerRef.current = null;
-      if (token && config) {
-        fetchTodaySummary({ token, config }).then((data) => {
+      if (isSignedIn) {
+        const summaryPromise = canUseFirestorePrimary()
+          ? fetchTodaySummaryFirestore({ couriers: COURIERS, date: getBangkokParts().date })
+          : fetchTodaySummary({ token, config });
+        summaryPromise.then((data) => {
           if (data) {
             setSummary(data.courierCounts);
             setPackerCounts(data.packerCounts);
@@ -803,23 +827,23 @@ function App() {
   }
 
   async function refreshSelectedCourierRows() {
-    if (!token || !config) {
+    if (!isSignedIn) {
       return;
     }
 
     try {
-      const rows = await runWithGoogleRetry((accessToken, googleConfig) =>
-        getTodayRowsGoogle({
-          token: accessToken,
-          config: googleConfig,
-          courier: selectedCourier,
-          date: today.date,
-        }),
-      );
+      const rows = canUseFirestorePrimary()
+        ? await getTodayRowsFirestore({ courier: selectedCourier, date: today.date })
+        : await runWithGoogleRetry((accessToken, googleConfig) =>
+            getTodayRowsGoogle({
+              token: accessToken,
+              config: googleConfig,
+              courier: selectedCourier,
+              date: today.date,
+            }),
+          );
       setRecentRows(rows);
-      if (token && config) {
-        scheduleCountRefresh();
-      }
+      scheduleCountRefresh();
     } catch (error) {
       setStatus({
         type: 'error',
@@ -830,18 +854,20 @@ function App() {
   }
 
   async function refreshDriveRows() {
-    if (!token || !config) {
+    if (!isSignedIn) {
       return;
     }
 
     try {
-      const rows = await runWithGoogleRetry((accessToken, googleConfig) =>
-        getDriveRowsGoogle({
-          token: accessToken,
-          config: googleConfig,
-          date: today.date,
-        }),
-      );
+      const rows = canUseFirestorePrimary()
+        ? await getDriveRowsFirestore({ date: today.date })
+        : await runWithGoogleRetry((accessToken, googleConfig) =>
+            getDriveRowsGoogle({
+              token: accessToken,
+              config: googleConfig,
+              date: today.date,
+            }),
+          );
       setDriveRecentRows(rows);
       setDriveTotalCount(rows.length);
     } catch (error) {
@@ -1328,15 +1354,21 @@ function App() {
 
     setMissingBusy(true);
     try {
-      const results = await runWithGoogleRetry((accessToken, googleConfig) =>
-        checkMissingOrders({
-          token: accessToken,
-          config: googleConfig,
-          courier: null,
-          hoursLookback: DEFAULT_LOOKBACK_HOURS,
-          thresholdMinutes,
-        }),
-      );
+      const results = canUseFirestorePrimary()
+        ? await checkMissingOrdersFirestore({
+            courier: null,
+            hoursLookback: DEFAULT_LOOKBACK_HOURS,
+            thresholdMinutes,
+          })
+        : await runWithGoogleRetry((accessToken, googleConfig) =>
+            checkMissingOrders({
+              token: accessToken,
+              config: googleConfig,
+              courier: null,
+              hoursLookback: DEFAULT_LOOKBACK_HOURS,
+              thresholdMinutes,
+            }),
+          );
 
       setMissingResults(results);
       setMissingAlertBadge(results.pending?.length ?? 0);
@@ -1468,15 +1500,21 @@ function App() {
 
     setSearchBusy(true);
     try {
-      const results = await runWithGoogleRetry((accessToken, googleConfig) =>
-        searchScansGoogle({
-          token: accessToken,
-          config: googleConfig,
-          query,
-          couriers: searchScope === 'all' ? COURIERS : [selectedCourier],
-          dates: searchMode === 'all' ? null : dates,
-        }),
-      );
+      const results = canUseFirestorePrimary()
+        ? await searchScansFirestore({
+            query,
+            couriers: searchScope === 'all' ? COURIERS : [selectedCourier],
+            dates: searchMode === 'all' ? null : dates,
+          })
+        : await runWithGoogleRetry((accessToken, googleConfig) =>
+            searchScansGoogle({
+              token: accessToken,
+              config: googleConfig,
+              query,
+              couriers: searchScope === 'all' ? COURIERS : [selectedCourier],
+              dates: searchMode === 'all' ? null : dates,
+            }),
+          );
       setSearchResults(results);
       setStatus({
         type: results.length > 0 ? 'success' : 'warning',
@@ -1576,9 +1614,11 @@ function App() {
 
     setReportBusy(true);
     try {
-      const data = await runWithGoogleRetry((accessToken, googleConfig) =>
-        getScanReportGoogle({ token: accessToken, config: googleConfig, dates }),
-      );
+      const data = canUseFirestorePrimary()
+        ? await getScanReportFirestore({ couriers: COURIERS, dates })
+        : await runWithGoogleRetry((accessToken, googleConfig) =>
+            getScanReportGoogle({ token: accessToken, config: googleConfig, dates }),
+          );
       setReportData({
         ...data,
         mode: reportMode,
@@ -1592,6 +1632,55 @@ function App() {
       });
     } finally {
       setReportBusy(false);
+    }
+  }
+
+  async function backfillSelectedReportRange() {
+    if (!isSignedIn || !token || !config) {
+      setStatus({
+        type: 'warning',
+        title: 'ต้อง Login ก่อน',
+        message: 'Login ให้ระบบเชื่อม Google Sheet ก่อนดึงข้อมูลย้อนหลังเข้า Firestore',
+      });
+      return;
+    }
+
+    const dates = getReportDates();
+    if (dates.length === 0) {
+      setStatus({
+        type: 'warning',
+        title: 'ช่วงวันที่ไม่ถูกต้อง',
+        message: 'เลือกวันที่/เดือนที่ต้องการดึงข้อมูลย้อนหลังก่อน',
+      });
+      return;
+    }
+
+    setBackfillBusy(true);
+    try {
+      const rows = await runWithGoogleRetry((accessToken, googleConfig) =>
+        getRowsForFirestoreBackfillGoogle({ token: accessToken, config: googleConfig, dates }),
+      );
+      const result = await backfillOrdersFromSheetRows({ rows, user: firebaseUser ?? user });
+      await refreshAllCounts();
+      if (activeTab === 'packer') {
+        await refreshSelectedCourierRows();
+      } else {
+        await refreshDriveRows();
+      }
+      await generateReport();
+      setStatus({
+        type: result.failed > 0 ? 'warning' : 'success',
+        title: 'ดึงข้อมูลย้อนหลังเข้า Firestore แล้ว',
+        message: `นำเข้า ${result.imported} รายการ, ข้าม ${result.skipped}, ไม่สำเร็จ ${result.failed}`,
+      });
+    } catch (error) {
+      setStatus({
+        type: 'error',
+        title: 'ดึงข้อมูลย้อนหลังไม่สำเร็จ',
+        message: error.message,
+      });
+    } finally {
+      setBackfillBusy(false);
     }
   }
 
@@ -2443,6 +2532,11 @@ function App() {
             <button className="secondary-button report-button" type="button" onClick={generateReport} disabled={!isSignedIn || reportBusy}>
               {reportBusy ? <RefreshCw size={16} className="spin" /> : <CalendarDays size={16} />}
               <span>สร้างรายงาน</span>
+            </button>
+
+            <button className="secondary-button report-button" type="button" onClick={backfillSelectedReportRange} disabled={!isSignedIn || backfillBusy}>
+              {backfillBusy ? <RefreshCw size={16} className="spin" /> : <Upload size={16} />}
+              <span>Import Sheet to Firestore</span>
             </button>
 
             <button className="ghost-button report-button" type="button" onClick={copyReport} disabled={!reportData}>

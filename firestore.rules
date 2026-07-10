@@ -36,7 +36,10 @@ service cloud.firestore {
           'pending',
           'packer_scanned',
           'matched',
-          'issue'
+          'issue',
+          'cancelled',
+          'damaged',
+          'returned'
         ]
         && request.resource.data.sheetSyncStatus in [
           'pending',
