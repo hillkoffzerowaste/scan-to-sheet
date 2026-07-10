@@ -851,7 +851,7 @@ function App() {
           }
         }).catch(() => {});
       }
-    }, 3000);
+    }, 8000);
   }
 
   function runAfterScanCommit(task) {
@@ -1062,7 +1062,7 @@ function App() {
             packer: packerName,
             note: scanNote,
           }).catch(() => {});
-          await refreshSelectedCourierRows().catch(() => {});
+          scheduleCountRefresh();
         });
       } else {
         try {
@@ -1271,7 +1271,7 @@ function App() {
             courier: scanCourier,
             user: scanUser,
           }).catch(() => {});
-          await refreshDriveRows().catch(() => {});
+          scheduleCountRefresh();
         });
       } else {
         try {
