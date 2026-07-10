@@ -29,6 +29,10 @@ npm run marketplace:login -- lazada
 
 Keep the opened browser signed in, then close it after the session is saved.
 
+Each platform keeps its own Playwright profile under `scripts/marketplace-sync/profiles/{platform}`.
+The login command opens the order page first, so an existing saved session should stay logged in.
+If it asks for login again, make sure no other worker/login window for the same platform is open and the profile folder was not deleted.
+
 5. Test one sync:
 
 ```powershell

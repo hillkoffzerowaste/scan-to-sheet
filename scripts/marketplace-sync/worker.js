@@ -69,8 +69,12 @@ function resolvePlatforms(config, requestedPlatforms) {
   return selected.filter((platform) => known.has(platform));
 }
 
+function profilePath(config, platform) {
+  return path.resolve(BASE_DIR, config.profilesDir, platform);
+}
+
 async function openContext(config, platform) {
-  const profileDir = path.resolve(BASE_DIR, config.profilesDir, platform);
+  const profileDir = profilePath(config, platform);
   await mkdir(profileDir, { recursive: true });
   return chromium.launchPersistentContext(profileDir, {
     headless: Boolean(config.headless),
@@ -100,17 +104,21 @@ async function loginPlatform(config, platform, logger) {
     throw new Error(`Unknown platform: ${platform}`);
   }
 
-  await logger.info(`Opening ${platformConfig.label} login. Complete login in the browser, then close it.`);
+  const profileDir = profilePath(config, platform);
+  await logger.info(`Opening ${platformConfig.label} with profile: ${profileDir}`);
   const context = await openContext({ ...config, headless: false }, platform);
   const page = context.pages()[0] ?? await context.newPage();
-  await page.goto(platformConfig.loginUrl, {
+  await page.goto(platformConfig.orderListUrl ?? platformConfig.loginUrl, {
     waitUntil: 'domcontentloaded',
     timeout: config.navigationTimeoutMs,
   });
 
-  await logger.info('Keeping browser open for 10 minutes so the session can be saved.');
-  await page.waitForTimeout(10 * 60 * 1000).catch(() => {});
-  await context.close();
+  await logger.info('Login window is open. Sign in if needed, then close the browser window yourself.');
+  await Promise.race([
+    new Promise((resolve) => context.once('close', resolve)),
+    page.waitForEvent('close').catch(() => null),
+  ]);
+  await context.close().catch(() => {});
 }
 
 async function scrapePlatform(config, platform, logger) {
