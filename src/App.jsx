@@ -55,15 +55,30 @@ import {
   formatMissingResultsForUI,
   buildDashboardSummary,
 } from './services/missingOrderCheck.js';
+import {
+  createGoogleProvider,
+  firebaseAuth,
+  getRedirectResult,
+  GoogleAuthProvider,
+  isFirebaseConfigured,
+  onAuthStateChanged,
+  signInWithRedirect,
+  signOutFirebase,
+} from './services/firebase.js';
+import {
+  mirrorScanToFirestore,
+  upsertFirebaseUser,
+} from './services/firebaseScans.js';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-const SCOPES = [
+const GOOGLE_SCOPES = [
   'openid',
   'email',
   'profile',
   'https://www.googleapis.com/auth/drive.file',
   'https://www.googleapis.com/auth/spreadsheets',
-].join(' ');
+];
+const SCOPES = GOOGLE_SCOPES.join(' ');
 
 const EMPTY_USER = {
   email: 'ยังไม่ได้เข้าสู่ระบบ',
@@ -166,6 +181,7 @@ function setMissingCheckCache(data) {
 function App() {
   const [token, setToken] = useState(null);
   const [user, setUser] = useState(EMPTY_USER);
+  const [firebaseUser, setFirebaseUser] = useState(null);
   const [config, setConfig] = useState(() => loadGoogleConfig());
   const [selectedCourier, setSelectedCourier] = useState(COURIERS[0]);
   const [scanValue, setScanValue] = useState('');
@@ -226,7 +242,7 @@ function App() {
   const autoCheckTimerRef = useRef(null);
   const lastAutoCheckRef = useRef(0);
 
-  const isGoogleReady = Boolean(GOOGLE_CLIENT_ID);
+  const isGoogleReady = isFirebaseConfigured || Boolean(GOOGLE_CLIENT_ID);
   const isSignedIn = Boolean(token && config);
   const selectedCount = useMemo(
     () => summary.find((item) => item.courier === selectedCourier)?.count ?? 0,
@@ -251,14 +267,32 @@ function App() {
   }, [theme]);
 
   useEffect(() => {
+    let unsubscribed = false;
+    let unsubscribeAuth = null;
+
+    if (firebaseAuth) {
+      unsubscribeAuth = onAuthStateChanged(firebaseAuth, (authUser) => {
+        if (unsubscribed) {
+          return;
+        }
+        setFirebaseUser(authUser);
+        if (authUser) {
+          void upsertFirebaseUser(authUser).catch(() => {});
+        }
+      });
+    }
+
     const params = new URLSearchParams(window.location.search);
     const code = params.get('code');
     const error = params.get('error');
     const errorDescription = params.get('error_description');
 
     if (!code && !error) {
-      restoreGoogleSession();
-      return;
+      handleFirebaseRedirectOrRestore();
+      return () => {
+        unsubscribed = true;
+        unsubscribeAuth?.();
+      };
     }
 
     window.history.replaceState(null, '', window.location.pathname);
@@ -270,10 +304,14 @@ function App() {
         message: errorDescription || error,
       });
       setBusy(false);
-      return;
+    } else {
+      completeGoogleSignIn(code);
     }
 
-    completeGoogleSignIn(code);
+    return () => {
+      unsubscribed = true;
+      unsubscribeAuth?.();
+    };
   }, []);
 
   useEffect(() => {
@@ -469,6 +507,14 @@ function App() {
   }
 
   async function signInWithGoogle() {
+    if (firebaseAuth) {
+      const provider = createGoogleProvider(GOOGLE_SCOPES);
+      localStorage.removeItem(LOGGED_OUT_FLAG);
+      setBusy(true);
+      await signInWithRedirect(firebaseAuth, provider);
+      return;
+    }
+
     if (!GOOGLE_CLIENT_ID) {
       setStatus({
         type: 'warning',
@@ -492,6 +538,49 @@ function App() {
     localStorage.removeItem(LOGGED_OUT_FLAG);
     setBusy(true);
     window.location.assign(`https://accounts.google.com/o/oauth2/v2/auth?${params}`);
+  }
+
+  async function handleFirebaseRedirectOrRestore() {
+    if (!firebaseAuth) {
+      await restoreGoogleSession();
+      return;
+    }
+
+    try {
+      setBusy(true);
+      const result = await getRedirectResult(firebaseAuth);
+      const credential = result ? GoogleAuthProvider.credentialFromResult(result) : null;
+      const accessToken = credential?.accessToken;
+
+      if (result?.user && accessToken) {
+        await activateGoogleSession({
+          accessToken,
+          profile: {
+            email: result.user.email,
+            name: result.user.displayName,
+          },
+          expiresIn: 3600,
+          config: null,
+          firebaseUser: result.user,
+        });
+        setStatus({
+          type: 'success',
+          title: 'Firebase Login พร้อมใช้งาน',
+          message: 'Firebase Auth เป็น login หลัก และ Google Sheet ยังบันทึกได้ตาม flow เดิม',
+        });
+        return;
+      }
+    } catch (error) {
+      setStatus({
+        type: 'error',
+        title: 'Firebase Login ไม่สำเร็จ',
+        message: error.message,
+      });
+      setBusy(false);
+      return;
+    }
+
+    await restoreGoogleSession();
   }
 
   async function completeGoogleSignIn(code) {
@@ -601,6 +690,10 @@ function App() {
 
     setToken(accessToken);
     setUser(nextUser);
+    if (data.firebaseUser) {
+      setFirebaseUser(data.firebaseUser);
+      await upsertFirebaseUser(data.firebaseUser).catch(() => {});
+    }
     setConfig(prepared);
     return { accessToken, config: prepared, user: nextUser };
   }
@@ -635,6 +728,10 @@ function App() {
   async function signOut() {
     localStorage.setItem(LOGGED_OUT_FLAG, '1');
 
+    if (firebaseAuth) {
+      await signOutFirebase(firebaseAuth).catch(() => {});
+    }
+
     try {
       await fetch('/api/google-logout', { method: 'POST' });
     } catch {
@@ -642,6 +739,7 @@ function App() {
     clearStoredGoogleSession();
     setToken(null);
     setUser(EMPTY_USER);
+    setFirebaseUser(null);
     setSummary(COURIERS.map((courier) => ({ courier, count: 0 })));
     setPackerCounts(PACKERS.filter((p) => p !== PACKER_UNASSIGNED).map((p) => ({ packer: p, count: 0 })));
     setRecentRows([]);
@@ -845,6 +943,14 @@ function App() {
         playTone('success');
         setScanRemark('');
       }
+      await mirrorScanToFirestore({
+        type: 'packer',
+        result,
+        courier: selectedCourier,
+        user: firebaseUser ?? user,
+        packer: selectedPacker === PACKER_UNASSIGNED ? '' : selectedPacker,
+        note: scanRemark,
+      }).catch(() => {});
       return { ...result, status: result.status };
     } catch (error) {
       setStatus({
@@ -941,6 +1047,13 @@ function App() {
 
       // Trigger auto-check after admin scan
       setTimeout(() => runAutoCheck(), 2000);
+
+      await mirrorScanToFirestore({
+        type: 'admin',
+        result,
+        courier: selectedCourier,
+        user: firebaseUser ?? user,
+      }).catch(() => {});
 
       return { ...result, status: result.status };
     } catch (error) {
