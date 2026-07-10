@@ -8,7 +8,7 @@ const ROOT_DIR = path.resolve(BASE_DIR, '..', '..');
 const HOST = process.env.MARKETPLACE_DASHBOARD_HOST || '127.0.0.1';
 const PORT = Number(process.env.MARKETPLACE_DASHBOARD_PORT || 8787);
 const IS_WINDOWS = process.platform === 'win32';
-const NPM = IS_WINDOWS ? 'npm.cmd' : 'npm';
+const NPM = 'npm';
 const MAX_LOGS = 400;
 
 const COMMANDS = {
@@ -37,12 +37,19 @@ function addLog(scope, message) {
 }
 
 function spawnNpm(args, scope) {
-  const child = spawn(NPM, args, {
-    cwd: ROOT_DIR,
-    shell: false,
-    windowsHide: false,
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
+  const child = IS_WINDOWS
+    ? spawn('cmd.exe', ['/d', '/s', '/c', NPM, ...args], {
+        cwd: ROOT_DIR,
+        shell: false,
+        windowsHide: false,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      })
+    : spawn(NPM, args, {
+        cwd: ROOT_DIR,
+        shell: false,
+        windowsHide: false,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
 
   jobs.set(child.pid, { pid: child.pid, scope, startedAt: new Date().toISOString() });
   addLog(scope, `started: npm ${args.join(' ')}`);
