@@ -534,8 +534,14 @@ function App() {
     setCameraMessageType(type);
   }
 
+  const isFirebaseHosting = typeof window !== 'undefined' && (
+    window.location.hostname.endsWith('.firebaseapp.com') ||
+    window.location.hostname.endsWith('.web.app')
+  );
+
   async function signInWithGoogle() {
-    if (firebaseAuth) {
+    // Only use Firebase signInWithRedirect on Firebase Hosting
+    if (firebaseAuth && isFirebaseHosting) {
       const provider = createGoogleProvider(GOOGLE_SCOPES);
       localStorage.removeItem(LOGGED_OUT_FLAG);
       setBusy(true);
@@ -543,6 +549,7 @@ function App() {
       return;
     }
 
+    // Server-side OAuth flow (works on Vercel and any custom domain)
     if (!GOOGLE_CLIENT_ID) {
       setStatus({
         type: 'warning',
