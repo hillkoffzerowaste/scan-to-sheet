@@ -66,7 +66,11 @@ import {
   signOutFirebase,
 } from './services/firebase.js';
 import {
+  canUseFirestorePrimary,
+  markSheetSyncResult,
   mirrorScanToFirestore,
+  recordAdminScanPrimary,
+  recordPackerScanPrimary,
   upsertFirebaseUser,
 } from './services/firebaseScans.js';
 
@@ -890,17 +894,73 @@ function App() {
 
     setBusy(true);
     try {
-      const result = await runWithGoogleRetry((accessToken, googleConfig) =>
-        appendScanGoogle({
-          token: accessToken,
-          config: googleConfig,
+      const nowParts = getBangkokParts();
+      const firestorePrimary = canUseFirestorePrimary()
+        ? await recordPackerScanPrimary({
+            code: validation.code,
+            courier: selectedCourier,
+            date: nowParts.date,
+            time: nowParts.time,
+            user: firebaseUser ?? user,
+            packer: selectedPacker === PACKER_UNASSIGNED ? '' : selectedPacker,
+            note: scanRemark,
+          })
+        : null;
+
+      if (firestorePrimary?.status === 'duplicate') {
+        const duplicateResult = {
+          status: 'duplicate',
           courier: selectedCourier,
+          date: nowParts.date,
+          time: nowParts.time,
           code: validation.code,
-          email: user.email,
-          packer: selectedPacker === PACKER_UNASSIGNED ? '' : selectedPacker,
-          note: scanRemark,
-        }),
-      );
+          count: selectedCount,
+          rows: recentRows,
+          sheetUrl,
+        };
+        setStatus({
+          type: 'duplicate',
+          title: 'เลขซ้ำ',
+          message: `${validation.code} มีอยู่แล้วใน Firebase สำหรับ ${selectedCourier}`,
+        });
+        showCameraMessage(`เลขซ้ำ: ${validation.code}`, 'duplicate');
+        playTone('duplicate');
+        setScanRemark('');
+        return duplicateResult;
+      }
+
+      let result;
+      try {
+        result = await runWithGoogleRetry((accessToken, googleConfig) =>
+          appendScanGoogle({
+            token: accessToken,
+            config: googleConfig,
+            courier: selectedCourier,
+            code: validation.code,
+            email: user.email,
+            packer: selectedPacker === PACKER_UNASSIGNED ? '' : selectedPacker,
+            note: scanRemark,
+          }),
+        );
+        await markSheetSyncResult({ orderId: firestorePrimary?.id, ok: true, result }).catch(() => {});
+      } catch (sheetError) {
+        if (!firestorePrimary?.id) {
+          throw sheetError;
+        }
+        await markSheetSyncResult({ orderId: firestorePrimary.id, ok: false, error: sheetError }).catch(() => {});
+        result = {
+          status: scanRemark === ISSUE_CUSTOMER_CANCELLED ? 'cancelled' : 'success',
+          courier: selectedCourier,
+          date: nowParts.date,
+          time: nowParts.time,
+          code: validation.code,
+          count: selectedCount + 1,
+          rows: recentRows,
+          sheetUrl,
+          sheetSyncStatus: 'failed',
+          sheetSyncError: sheetError.message,
+        };
+      }
 
       if (source !== 'manual') {
         setScanValue(result.code);
@@ -998,15 +1058,66 @@ function App() {
 
     setBusy(true);
     try {
-      const result = await runWithGoogleRetry((accessToken, googleConfig) =>
-        appendAdminScanGoogle({
-          token: accessToken,
-          config: googleConfig,
+      const nowParts = getBangkokParts();
+      const firestorePrimary = canUseFirestorePrimary()
+        ? await recordAdminScanPrimary({
+            code: validation.code,
+            courier: selectedCourier,
+            date: nowParts.date,
+            time: nowParts.time,
+            user: firebaseUser ?? user,
+          })
+        : null;
+
+      if (firestorePrimary?.status === 'duplicate') {
+        const duplicateResult = {
+          status: 'duplicate',
           courier: selectedCourier,
+          date: nowParts.date,
+          time: nowParts.time,
           code: validation.code,
-          email: user.email,
-        }),
-      );
+          rows: driveRecentRows,
+          sheetUrl,
+        };
+        setStatus({
+          type: 'duplicate',
+          title: 'เลขซ้ำใน Firebase',
+          message: `${validation.code} เคยลง Drive สำหรับ ${selectedCourier} แล้ว`,
+        });
+        showCameraMessage(`ลงแล้ว: ${validation.code}`, 'duplicate');
+        playTone('duplicate');
+        return duplicateResult;
+      }
+
+      let result;
+      try {
+        result = await runWithGoogleRetry((accessToken, googleConfig) =>
+          appendAdminScanGoogle({
+            token: accessToken,
+            config: googleConfig,
+            courier: selectedCourier,
+            code: validation.code,
+            email: user.email,
+          }),
+        );
+        await markSheetSyncResult({ orderId: firestorePrimary?.id, ok: true, result }).catch(() => {});
+      } catch (sheetError) {
+        if (!firestorePrimary?.id) {
+          throw sheetError;
+        }
+        await markSheetSyncResult({ orderId: firestorePrimary.id, ok: false, error: sheetError }).catch(() => {});
+        result = {
+          status: firestorePrimary.status === 'matched' ? 'admin_matched' : 'admin_scan',
+          courier: selectedCourier,
+          date: nowParts.date,
+          time: nowParts.time,
+          code: validation.code,
+          rows: driveRecentRows,
+          sheetUrl,
+          sheetSyncStatus: 'failed',
+          sheetSyncError: sheetError.message,
+        };
+      }
 
       if (source !== 'manual') {
         setScanValue(result.code);

@@ -24,5 +24,26 @@ service cloud.firestore {
         && request.resource.data.type in ['packer', 'admin'];
       allow update, delete: if false;
     }
+
+    match /orders/{orderId} {
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn()
+        && request.resource.data.code is string
+        && request.resource.data.normalizedCode is string
+        && request.resource.data.courier is string
+        && request.resource.data.date is string
+        && request.resource.data.status in [
+          'pending',
+          'packer_scanned',
+          'matched',
+          'issue'
+        ]
+        && request.resource.data.sheetSyncStatus in [
+          'pending',
+          'synced',
+          'failed'
+        ];
+      allow delete: if false;
+    }
   }
 }
