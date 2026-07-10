@@ -132,10 +132,14 @@ async function scrapePlatform(config, platform, logger) {
       await logger.warn(`${platform}: no known order selector found. You may need to log in or tune selectors.`);
     }
 
-    const rawOrders = await page.evaluate((extractorSource, platformKey, maxOrders) => {
+    const rawOrders = await page.evaluate(({ extractorSource, platformKey, maxOrders }) => {
       const extractor = new Function(`return (${extractorSource});`)();
       return extractor({ platform: platformKey }).slice(0, maxOrders);
-    }, platformConfig.extractor.toString(), platform, config.maxOrdersPerPlatform);
+    }, {
+      extractorSource: platformConfig.extractor.toString(),
+      platformKey: platform,
+      maxOrders: config.maxOrdersPerPlatform,
+    });
 
     if (!rawOrders.length) {
       const screenshotPath = path.resolve(BASE_DIR, config.screenshotsDir, `${platform}-${Date.now()}.png`);
