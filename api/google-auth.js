@@ -42,6 +42,6 @@ export default async function handler(req, res) {
       config: sheetConfig,
     });
   } catch (error) {
-    sendJson(res, 500, { error: error.message });
+    sendJson(res, 500, { error: error.message, stack: error.stack, cause: error.cause?.message ?? null });
   }
 }
