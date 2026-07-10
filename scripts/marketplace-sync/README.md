@@ -51,6 +51,28 @@ powershell -ExecutionPolicy Bypass -File scripts\marketplace-sync\windows\instal
 
 This creates a Task Scheduler task named `ScanToSheet Marketplace Sync` that starts on logon.
 
+## Local Dashboard
+
+Start the local dashboard:
+
+```powershell
+npm run marketplace:dashboard
+```
+
+Then open:
+
+```txt
+http://127.0.0.1:8787
+```
+
+Or use the Windows launcher:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\marketplace-sync\windows\open-dashboard.ps1
+```
+
+The dashboard can open login browsers, run one sync, start the 5-minute worker, stop it, and show recent logs.
+
 ## Firestore Data
 
 Orders are upserted into `marketplaceOrders` with document id:

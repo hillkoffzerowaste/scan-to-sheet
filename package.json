@@ -13,6 +13,7 @@
     "marketplace:login": "node scripts/marketplace-sync/worker.js --login",
     "marketplace:sync": "node scripts/marketplace-sync/worker.js",
     "marketplace:sync:once": "node scripts/marketplace-sync/worker.js --once",
+    "marketplace:dashboard": "node scripts/marketplace-sync/dashboard.js",
     "firebase:deploy": "npm run build && firebase deploy --only hosting",
     "firebase:preview": "npm run build && firebase hosting:channel:deploy preview --expires 7d",
     "firebase:serve": "npm run build && firebase emulators:start --only hosting",
