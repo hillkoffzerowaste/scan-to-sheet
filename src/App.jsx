@@ -854,6 +854,14 @@ function App() {
     }, 3000);
   }
 
+  function runAfterScanCommit(task) {
+    window.setTimeout(() => {
+      Promise.resolve()
+        .then(task)
+        .catch((error) => console.warn('Background scan sync failed:', error));
+    }, 0);
+  }
+
   async function refreshSelectedCourierRows() {
     if (!isSignedIn) {
       return;
@@ -983,37 +991,95 @@ function App() {
         return duplicateResult;
       }
 
+      const packerName = selectedPacker === PACKER_UNASSIGNED ? '' : selectedPacker;
+      const scanNote = scanRemark;
+      const scanCourier = selectedCourier;
+      const scanUser = firebaseUser ?? user;
+      const scanEmail = user.email;
       let result;
-      try {
-        result = await runWithGoogleRetry((accessToken, googleConfig) =>
-          appendScanGoogle({
-            token: accessToken,
-            config: googleConfig,
-            courier: selectedCourier,
-            code: validation.code,
-            email: user.email,
-            packer: selectedPacker === PACKER_UNASSIGNED ? '' : selectedPacker,
-            note: scanRemark,
-          }),
-        );
-        await markSheetSyncResult({ orderId: firestorePrimary?.id, ok: true, result }).catch(() => {});
-      } catch (sheetError) {
-        if (!firestorePrimary?.id) {
-          throw sheetError;
-        }
-        await markSheetSyncResult({ orderId: firestorePrimary.id, ok: false, error: sheetError }).catch(() => {});
+
+      if (firestorePrimary?.id) {
+        const rowStatus = scanNote === ISSUE_CUSTOMER_CANCELLED
+          ? 'Cancelled'
+          : scanNote === ISSUE_DAMAGED
+            ? 'Damaged'
+            : 'Success';
+        const optimisticRow = {
+          no: firestorePrimary.id,
+          courierNo: '',
+          date: nowParts.date,
+          time: nowParts.time,
+          courier: scanCourier,
+          code: validation.code,
+          email: scanEmail,
+          packer: packerName,
+          status: rowStatus,
+          note: scanNote,
+          sheetSyncStatus: 'pending',
+        };
         result = {
-          status: scanRemark === ISSUE_CUSTOMER_CANCELLED ? 'cancelled' : 'success',
-          courier: selectedCourier,
+          status: scanNote === ISSUE_CUSTOMER_CANCELLED ? 'cancelled' : 'success',
+          courier: scanCourier,
           date: nowParts.date,
           time: nowParts.time,
           code: validation.code,
           count: selectedCount + 1,
-          rows: recentRows,
+          rows: [optimisticRow, ...recentRows].slice(0, 50),
           sheetUrl,
-          sheetSyncStatus: 'failed',
-          sheetSyncError: sheetError.message,
+          sheetSyncStatus: 'pending',
         };
+
+        runAfterScanCommit(async () => {
+          let backgroundResult = result;
+          try {
+            const sheetResult = await runWithGoogleRetry((accessToken, googleConfig) =>
+              appendScanGoogle({
+                token: accessToken,
+                config: googleConfig,
+                courier: scanCourier,
+                code: validation.code,
+                email: scanEmail,
+                packer: packerName,
+                note: scanNote,
+              }),
+            );
+            await markSheetSyncResult({ orderId: firestorePrimary.id, ok: true, result: sheetResult }).catch(() => {});
+            backgroundResult = { ...result, ...sheetResult, sheetSyncStatus: 'synced' };
+          } catch (sheetError) {
+            await markSheetSyncResult({ orderId: firestorePrimary.id, ok: false, error: sheetError }).catch(() => {});
+            backgroundResult = {
+              ...result,
+              sheetSyncStatus: 'failed',
+              sheetSyncError: sheetError.message,
+            };
+          }
+
+          await mirrorScanToFirestore({
+            type: 'packer',
+            result: backgroundResult,
+            courier: scanCourier,
+            user: scanUser,
+            packer: packerName,
+            note: scanNote,
+          }).catch(() => {});
+          await refreshSelectedCourierRows().catch(() => {});
+        });
+      } else {
+        try {
+          result = await runWithGoogleRetry((accessToken, googleConfig) =>
+            appendScanGoogle({
+              token: accessToken,
+              config: googleConfig,
+              courier: scanCourier,
+              code: validation.code,
+              email: scanEmail,
+              packer: packerName,
+              note: scanNote,
+            }),
+          );
+        } catch (sheetError) {
+          throw sheetError;
+        }
       }
 
       if (source !== 'manual') {
@@ -1057,15 +1123,17 @@ function App() {
         playTone('success');
         setScanRemark('');
       }
-      await mirrorScanToFirestore({
-        type: 'packer',
-        result,
-        courier: selectedCourier,
-        user: firebaseUser ?? user,
-        packer: selectedPacker === PACKER_UNASSIGNED ? '' : selectedPacker,
-        note: scanRemark,
-      }).catch(() => {});
-      await refreshSelectedCourierRows().catch(() => {});
+      if (!firestorePrimary?.id) {
+        await mirrorScanToFirestore({
+          type: 'packer',
+          result,
+          courier: scanCourier,
+          user: scanUser,
+          packer: packerName,
+          note: scanNote,
+        }).catch(() => {});
+        await refreshSelectedCourierRows().catch(() => {});
+      }
       return { ...result, status: result.status };
     } catch (error) {
       setStatus({
@@ -1144,34 +1212,81 @@ function App() {
         return duplicateResult;
       }
 
+      const scanCourier = selectedCourier;
+      const scanUser = firebaseUser ?? user;
+      const scanEmail = user.email;
       let result;
-      try {
-        result = await runWithGoogleRetry((accessToken, googleConfig) =>
-          appendAdminScanGoogle({
-            token: accessToken,
-            config: googleConfig,
-            courier: selectedCourier,
-            code: validation.code,
-            email: user.email,
-          }),
-        );
-        await markSheetSyncResult({ orderId: firestorePrimary?.id, ok: true, result }).catch(() => {});
-      } catch (sheetError) {
-        if (!firestorePrimary?.id) {
-          throw sheetError;
-        }
-        await markSheetSyncResult({ orderId: firestorePrimary.id, ok: false, error: sheetError }).catch(() => {});
+
+      if (firestorePrimary?.id) {
+        const optimisticRow = {
+          no: firestorePrimary.id,
+          date: nowParts.date,
+          time: nowParts.time,
+          courier: scanCourier,
+          code: '',
+          adminCode: validation.code,
+          adminDate: nowParts.date,
+          adminTime: nowParts.time,
+          email: scanEmail,
+          status: firestorePrimary.status === 'matched' ? 'Success' : 'Pending',
+          sheetSyncStatus: 'pending',
+        };
         result = {
           status: firestorePrimary.status === 'matched' ? 'admin_matched' : 'admin_scan',
-          courier: selectedCourier,
+          courier: scanCourier,
           date: nowParts.date,
           time: nowParts.time,
           code: validation.code,
-          rows: driveRecentRows,
+          rows: [optimisticRow, ...driveRecentRows].slice(0, 50),
           sheetUrl,
-          sheetSyncStatus: 'failed',
-          sheetSyncError: sheetError.message,
+          sheetSyncStatus: 'pending',
         };
+
+        runAfterScanCommit(async () => {
+          let backgroundResult = result;
+          try {
+            const sheetResult = await runWithGoogleRetry((accessToken, googleConfig) =>
+              appendAdminScanGoogle({
+                token: accessToken,
+                config: googleConfig,
+                courier: scanCourier,
+                code: validation.code,
+                email: scanEmail,
+              }),
+            );
+            await markSheetSyncResult({ orderId: firestorePrimary.id, ok: true, result: sheetResult }).catch(() => {});
+            backgroundResult = { ...result, ...sheetResult, sheetSyncStatus: 'synced' };
+          } catch (sheetError) {
+            await markSheetSyncResult({ orderId: firestorePrimary.id, ok: false, error: sheetError }).catch(() => {});
+            backgroundResult = {
+              ...result,
+              sheetSyncStatus: 'failed',
+              sheetSyncError: sheetError.message,
+            };
+          }
+
+          await mirrorScanToFirestore({
+            type: 'admin',
+            result: backgroundResult,
+            courier: scanCourier,
+            user: scanUser,
+          }).catch(() => {});
+          await refreshDriveRows().catch(() => {});
+        });
+      } else {
+        try {
+          result = await runWithGoogleRetry((accessToken, googleConfig) =>
+            appendAdminScanGoogle({
+              token: accessToken,
+              config: googleConfig,
+              courier: scanCourier,
+              code: validation.code,
+              email: scanEmail,
+            }),
+          );
+        } catch (sheetError) {
+          throw sheetError;
+        }
       }
 
       if (source !== 'manual') {
@@ -1214,13 +1329,15 @@ function App() {
       // Trigger auto-check after admin scan
       setTimeout(() => runAutoCheck(), 2000);
 
-      await mirrorScanToFirestore({
-        type: 'admin',
-        result,
-        courier: selectedCourier,
-        user: firebaseUser ?? user,
-      }).catch(() => {});
-      await refreshDriveRows().catch(() => {});
+      if (!firestorePrimary?.id) {
+        await mirrorScanToFirestore({
+          type: 'admin',
+          result,
+          courier: scanCourier,
+          user: scanUser,
+        }).catch(() => {});
+        await refreshDriveRows().catch(() => {});
+      }
 
       return { ...result, status: result.status };
     } catch (error) {
