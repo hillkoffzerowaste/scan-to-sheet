@@ -63,6 +63,7 @@ import {
   GoogleAuthProvider,
   isFirebaseConfigured,
   onAuthStateChanged,
+  signInWithCredential,
   signInWithRedirect,
   signOutFirebase,
 } from './services/firebase.js';
@@ -706,6 +707,7 @@ function App() {
 
   async function activateGoogleSession(data) {
     const accessToken = data.accessToken;
+    const idToken = data.idToken;
     const profile = data.profile ?? (await fetchGoogleProfile(accessToken));
     const serverConfig = data.config ?? (await loadServerGoogleConfig().catch(() => null));
     const prepared = serverConfig ?? (await prepareGoogleSheets(accessToken));
@@ -721,14 +723,24 @@ function App() {
     });
     await saveServerGoogleConfig(prepared).catch(() => {});
 
-    await refreshAllCounts(accessToken, prepared);
-
     setToken(accessToken);
     setUser(nextUser);
-    if (data.firebaseUser) {
+
+    if (firebaseAuth && idToken) {
+      try {
+        const credential = GoogleAuthProvider.credential(idToken, accessToken);
+        const result = await signInWithCredential(firebaseAuth, credential);
+        setFirebaseUser(result.user);
+        await upsertFirebaseUser(result.user).catch(() => {});
+      } catch (error) {
+        console.warn('Firebase Auth sign-in failed after Google OAuth:', error);
+      }
+    } else if (data.firebaseUser) {
       setFirebaseUser(data.firebaseUser);
       await upsertFirebaseUser(data.firebaseUser).catch(() => {});
     }
+
+    await refreshAllCounts(accessToken, prepared);
     setConfig(prepared);
     return { accessToken, config: prepared, user: nextUser };
   }

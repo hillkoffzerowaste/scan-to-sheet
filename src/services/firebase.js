@@ -4,6 +4,7 @@ import {
   getRedirectResult,
   GoogleAuthProvider,
   onAuthStateChanged,
+  signInWithCredential,
   signInWithRedirect,
   signOut as signOutFirebase,
 } from 'firebase/auth';
@@ -32,7 +33,15 @@ export const isFirebaseConfigured = Boolean(
 export const firebaseApp = isFirebaseConfigured ? initializeApp(firebaseConfig) : null;
 export const firebaseAuth = firebaseApp ? getAuth(firebaseApp) : null;
 export const firestoreDb = firebaseApp ? getFirestore(firebaseApp) : null;
-export { GoogleAuthProvider, getRedirectResult, onAuthStateChanged, serverTimestamp, signInWithRedirect, signOutFirebase };
+export {
+  GoogleAuthProvider,
+  getRedirectResult,
+  onAuthStateChanged,
+  serverTimestamp,
+  signInWithCredential,
+  signInWithRedirect,
+  signOutFirebase,
+};
 
 export function createGoogleProvider(scopes = []) {
   const provider = new GoogleAuthProvider();

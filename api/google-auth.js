@@ -56,6 +56,7 @@ export default async function handler(req, res) {
 
     sendJson(res, 200, {
       accessToken: tokenData.access_token,
+      idToken: tokenData.id_token ?? null,
       expiresIn: tokenData.expires_in,
       profile,
       config: sheetConfig,
