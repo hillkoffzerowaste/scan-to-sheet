@@ -35,9 +35,19 @@ export const ADMIN_HEADERS = [
   'Admin Tracking / Barcode',
 ];
 
-export const ALL_HEADERS = [...SCAN_HEADERS, ...ADMIN_HEADERS];
+export const MARKETPLACE_HEADERS = [
+  'Marketplace Platform',
+  'Order ID',
+  'Buyer Name',
+  'Items',
+  'SKUs',
+  'Item Qty',
+  'Marketplace Status',
+];
 
-export const TOTAL_COLUMNS = ALL_HEADERS.length; // 13
+export const ALL_HEADERS = [...SCAN_HEADERS, ...ADMIN_HEADERS, ...MARKETPLACE_HEADERS];
+
+export const TOTAL_COLUMNS = ALL_HEADERS.length; // 20
 
 export const COURIER_RULES = {
   Lazada: {
@@ -203,6 +213,75 @@ function escapeQuery(value) {
 
 function escapeSheetName(sheetName) {
   return `'${String(sheetName).replace(/'/g, "''")}'`;
+}
+
+function columnLetter(columnNumber) {
+  let number = columnNumber;
+  let letters = '';
+  while (number > 0) {
+    const remainder = (number - 1) % 26;
+    letters = String.fromCharCode(65 + remainder) + letters;
+    number = Math.floor((number - 1) / 26);
+  }
+  return letters;
+}
+
+function sheetEndColumn() {
+  return columnLetter(TOTAL_COLUMNS);
+}
+
+function marketplaceItemsText(order) {
+  const items = Array.isArray(order?.items) ? order.items : [];
+  return items
+    .map((item) => {
+      const name = String(item?.name ?? '').trim();
+      const quantity = item?.quantity ? ` x${item.quantity}` : '';
+      return `${name}${quantity}`.trim();
+    })
+    .filter(Boolean)
+    .join(' | ');
+}
+
+function marketplaceSkusText(order) {
+  const items = Array.isArray(order?.items) ? order.items : [];
+  return items
+    .map((item) => String(item?.sku ?? '').trim())
+    .filter(Boolean)
+    .join(' | ');
+}
+
+function marketplaceQtyText(order) {
+  const items = Array.isArray(order?.items) ? order.items : [];
+  const total = items.reduce((sum, item) => sum + (Number(item?.quantity) || 0), 0);
+  return total || '';
+}
+
+function marketplaceCells(order) {
+  return [
+    order?.platform ?? '',
+    order?.orderId ?? '',
+    order?.buyerName ?? '',
+    marketplaceItemsText(order),
+    marketplaceSkusText(order),
+    marketplaceQtyText(order),
+    order?.status ?? '',
+  ];
+}
+
+function marketplaceOrderFromRow(row) {
+  return {
+    platform: row.marketplacePlatform ?? '',
+    orderId: row.marketplaceOrderId ?? '',
+    buyerName: row.buyerName ?? '',
+    items: row.marketplaceItems ? [{ name: row.marketplaceItems, sku: row.marketplaceSkus, quantity: row.marketplaceItemQty }] : [],
+    status: row.marketplaceStatus ?? '',
+  };
+}
+
+function withMarketplaceCells(row, marketplaceOrder = null) {
+  const baseRow = row.slice(0, ALL_HEADERS.length - MARKETPLACE_HEADERS.length);
+  const source = marketplaceOrder ?? null;
+  return [...baseRow, ...marketplaceCells(source)].slice(0, TOTAL_COLUMNS);
 }
 
 async function findDriveItem({ token, name, mimeType, parentId }) {
@@ -447,7 +526,7 @@ async function ensureWorksheetReady({ token, spreadsheetId, date, sheetId }) {
 
 async function writeHeaders({ token, spreadsheetId, date }) {
   await apiFetch(
-    `${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent(`${date}!A1:M1`)}?valueInputOption=RAW`,
+    `${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent(`${date}!A1:${sheetEndColumn()}1`)}?valueInputOption=RAW`,
     token,
     {
       method: 'PUT',
@@ -493,7 +572,7 @@ async function formatDailyWorksheet({ token, spreadsheetId, sheetId }) {
 }
 
 async function readDailyRows({ token, spreadsheetId, date }) {
-  const range = `${escapeSheetName(date)}!A2:M`;
+  const range = `${escapeSheetName(date)}!A2:${sheetEndColumn()}`;
   const params = new URLSearchParams({
     majorDimension: 'ROWS',
   });
@@ -505,7 +584,7 @@ async function readDailyRows({ token, spreadsheetId, date }) {
 }
 
 async function updateDailyRow({ token, spreadsheetId, date, rowNumber, row }) {
-  const range = `${escapeSheetName(date)}!A${rowNumber}:M${rowNumber}`;
+  const range = `${escapeSheetName(date)}!A${rowNumber}:${sheetEndColumn()}${rowNumber}`;
   await apiFetch(
     `${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`,
     token,
@@ -792,7 +871,7 @@ export function listDatesInMonth(yearMonth) {
  * If the tracking code already exists in the admin columns (K-M),
  * merge the packer data into that existing row instead of rejecting as duplicate.
  */
-export async function appendScanGoogle({ token, config, courier, code, email, packer = '', note = '' }) {
+export async function appendScanGoogle({ token, config, courier, code, email, packer = '', note = '', marketplaceOrder = null }) {
   const normalizedCode = normalizeScanCode(code);
   const isCancelled = note === 'ลูกค้ายกเลิก';
   const sheet = config?.master;
@@ -836,7 +915,7 @@ export async function appendScanGoogle({ token, config, courier, code, email, pa
         const courierNo = existingCourierRows.length + 1;
         const overallNo = targetIdx + 1;
 
-        const mergedRow = [
+        const mergedRow = withMarketplaceCells([
           overallNo,
           courierNo,
           currentRow.adminDate || currentRow.date || date,
@@ -850,7 +929,7 @@ export async function appendScanGoogle({ token, config, courier, code, email, pa
           currentRow.adminDate || date,
           currentRow.adminTime || time,
           currentRow.adminCode || normalizedCode,
-        ];
+        ], marketplaceOrder ?? marketplaceOrderFromRow(currentRow));
 
         await updateDailyRow({
           token,
@@ -901,7 +980,7 @@ export async function appendScanGoogle({ token, config, courier, code, email, pa
       );
       const rowNumber = globalIdx + 2;
 
-      const updatedRow = [
+      const updatedRow = withMarketplaceCells([
         currentRow.no,
         currentRow.courierNo,
         currentRow.date,
@@ -915,7 +994,7 @@ export async function appendScanGoogle({ token, config, courier, code, email, pa
         currentRow.adminDate || '',
         currentRow.adminTime || '',
         currentRow.adminCode || '',
-      ];
+      ], marketplaceOrder ?? marketplaceOrderFromRow(currentRow));
 
       await updateDailyRow({ token, spreadsheetId: sheet.id, date, rowNumber, row: updatedRow });
 
@@ -951,7 +1030,7 @@ export async function appendScanGoogle({ token, config, courier, code, email, pa
 
   const placeholder = `_TEMP_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
-  const placeholderRow = [
+  const placeholderRow = withMarketplaceCells([
     placeholder,
     placeholder,
     date,
@@ -965,9 +1044,9 @@ export async function appendScanGoogle({ token, config, courier, code, email, pa
     '',
     '',
     '',
-  ];
+  ], marketplaceOrder);
 
-  const range = `${escapeSheetName(date)}!A:M`;
+  const range = `${escapeSheetName(date)}!A:${sheetEndColumn()}`;
   await apiFetch(
     `${SHEETS_API}/${sheet.id}/values/${encodeURIComponent(range)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
     token,
@@ -1009,7 +1088,7 @@ export async function appendScanGoogle({ token, config, courier, code, email, pa
   const correctCourierNo =
     updatedCourierRows.findIndex((row) => String(row.no) === placeholder) + 1;
 
-  const correctedRow = [
+  const correctedRow = withMarketplaceCells([
     correctNo,
     correctCourierNo,
     date,
@@ -1023,7 +1102,7 @@ export async function appendScanGoogle({ token, config, courier, code, email, pa
     '',
     '',
     '',
-  ];
+  ], marketplaceOrder);
 
   await updateDailyRow({
     token,
@@ -1059,7 +1138,7 @@ export async function appendScanGoogle({ token, config, courier, code, email, pa
  * Admin "down Drive" scan — saves tracking number into columns K, L, M.
  * If packer already scanned this code (column F), merge admin data into that row.
  */
-export async function appendAdminScanGoogle({ token, config, courier, code, email }) {
+export async function appendAdminScanGoogle({ token, config, courier, code, email, marketplaceOrder = null }) {
   const normalizedCode = normalizeScanCode(code);
   const sheet = config?.master;
   if (!sheet?.id) {
@@ -1103,7 +1182,7 @@ export async function appendAdminScanGoogle({ token, config, courier, code, emai
     );
     if (targetIdx !== -1) {
       const currentRow = verifyParsed[targetIdx];
-      const mergedRow = [
+      const mergedRow = withMarketplaceCells([
         currentRow.no,
         currentRow.courierNo,
         currentRow.date,
@@ -1117,7 +1196,7 @@ export async function appendAdminScanGoogle({ token, config, courier, code, emai
         date,
         time,
         normalizedCode,
-      ];
+      ], marketplaceOrder ?? marketplaceOrderFromRow(currentRow));
 
       await updateDailyRow({
         token,
@@ -1147,7 +1226,7 @@ export async function appendAdminScanGoogle({ token, config, courier, code, emai
   // 3) New admin-only row — append with placeholder
   const placeholder = `_TEMP_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
-  const placeholderRow = [
+  const placeholderRow = withMarketplaceCells([
     placeholder,
     placeholder,
     date,
@@ -1161,9 +1240,9 @@ export async function appendAdminScanGoogle({ token, config, courier, code, emai
     date,
     time,
     normalizedCode,
-  ];
+  ], marketplaceOrder);
 
-  const range = `${escapeSheetName(date)}!A:M`;
+  const range = `${escapeSheetName(date)}!A:${sheetEndColumn()}`;
   await apiFetch(
     `${SHEETS_API}/${sheet.id}/values/${encodeURIComponent(range)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
     token,
@@ -1185,7 +1264,7 @@ export async function appendAdminScanGoogle({ token, config, courier, code, emai
   ).length + (insertedIdx >= 0 ? 1 : 0);
   const correctCourierNo = courierAdminCount;
 
-  const correctedRow = [
+  const correctedRow = withMarketplaceCells([
     correctNo,
     correctCourierNo,
     date,
@@ -1199,7 +1278,7 @@ export async function appendAdminScanGoogle({ token, config, courier, code, emai
     date,
     time,
     normalizedCode,
-  ];
+  ], marketplaceOrder);
 
   if (insertedIdx >= 0) {
     await updateDailyRow({
@@ -1247,7 +1326,7 @@ export async function updateScanIssueGoogle({ token, config, row, issue }) {
   const rowNumber = targetIdx + 2;
 
   const status = issue === 'สินค้าเสียหาย' ? 'Damaged' : issue === 'ลูกค้ายกเลิก' ? 'Cancelled' : 'Issue';
-  const updatedRow = [
+  const updatedRow = withMarketplaceCells([
     currentRow.no,
     currentRow.courierNo,
     currentRow.date,
@@ -1261,7 +1340,7 @@ export async function updateScanIssueGoogle({ token, config, row, issue }) {
     currentRow.adminDate || '',
     currentRow.adminTime || '',
     currentRow.adminCode || '',
-  ];
+  ], marketplaceOrderFromRow(currentRow));
 
   await updateDailyRow({
     token,
@@ -1392,6 +1471,13 @@ function rowFromSheet(row, index = null) {
     adminDate: hasAdminColumns ? row[10] ?? '' : '',
     adminTime: hasAdminColumns ? row[11] ?? '' : '',
     adminCode: hasAdminColumns ? row[12] ?? '' : '',
+    marketplacePlatform: row[13] ?? '',
+    marketplaceOrderId: row[14] ?? '',
+    buyerName: row[15] ?? '',
+    marketplaceItems: row[16] ?? '',
+    marketplaceSkus: row[17] ?? '',
+    marketplaceItemQty: row[18] ?? '',
+    marketplaceStatus: row[19] ?? '',
   };
 }
 

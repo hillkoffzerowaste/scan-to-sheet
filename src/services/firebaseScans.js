@@ -158,6 +158,32 @@ export function canUseFirestorePrimary() {
   return canWriteFirestore();
 }
 
+export async function findMarketplaceOrderByTracking({ trackingNo }) {
+  if (!canWriteFirestore() || !trackingNo) {
+    return null;
+  }
+
+  const normalizedTrackingNo = normalizeCode(trackingNo).replace(/[^A-Z0-9]/g, '');
+  const ordersRef = collection(firestoreDb, 'marketplaceOrders');
+  const normalizedSnap = await getDocs(query(
+    ordersRef,
+    where('normalizedTrackingNo', '==', normalizedTrackingNo),
+    limit(1),
+  ));
+  const normalizedDoc = normalizedSnap.docs[0];
+  if (normalizedDoc) {
+    return { id: normalizedDoc.id, ...normalizedDoc.data() };
+  }
+
+  const exactSnap = await getDocs(query(
+    ordersRef,
+    where('trackingNo', '==', String(trackingNo).trim()),
+    limit(1),
+  ));
+  const exactDoc = exactSnap.docs[0];
+  return exactDoc ? { id: exactDoc.id, ...exactDoc.data() } : null;
+}
+
 export async function upsertFirebaseUser(user) {
   if (!canWriteFirestore() || !user?.uid) {
     return;

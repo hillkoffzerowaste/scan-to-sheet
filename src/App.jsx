@@ -72,6 +72,7 @@ import {
   canUseFirestorePrimary,
   checkMissingOrdersFirestore,
   fetchTodaySummaryFirestore,
+  findMarketplaceOrderByTracking,
   getDriveRowsFirestore,
   getScanReportFirestore,
   getTodayRowsFirestore,
@@ -996,6 +997,7 @@ function App() {
       const scanCourier = selectedCourier;
       const scanUser = firebaseUser ?? user;
       const scanEmail = user.email;
+      const marketplaceOrderPromise = findMarketplaceOrderByTracking({ trackingNo: validation.code }).catch(() => null);
       let result;
 
       if (firestorePrimary?.id) {
@@ -1032,6 +1034,7 @@ function App() {
         runAfterScanCommit(async () => {
           let backgroundResult = result;
           try {
+            const marketplaceOrder = await marketplaceOrderPromise;
             const sheetResult = await runWithGoogleRetry((accessToken, googleConfig) =>
               appendScanGoogle({
                 token: accessToken,
@@ -1041,6 +1044,7 @@ function App() {
                 email: scanEmail,
                 packer: packerName,
                 note: scanNote,
+                marketplaceOrder,
               }),
             );
             await markSheetSyncResult({ orderId: firestorePrimary.id, ok: true, result: sheetResult }).catch(() => {});
@@ -1066,6 +1070,7 @@ function App() {
         });
       } else {
         try {
+          const marketplaceOrder = await marketplaceOrderPromise;
           result = await runWithGoogleRetry((accessToken, googleConfig) =>
             appendScanGoogle({
               token: accessToken,
@@ -1075,6 +1080,7 @@ function App() {
               email: scanEmail,
               packer: packerName,
               note: scanNote,
+              marketplaceOrder,
             }),
           );
         } catch (sheetError) {
@@ -1215,6 +1221,7 @@ function App() {
       const scanCourier = selectedCourier;
       const scanUser = firebaseUser ?? user;
       const scanEmail = user.email;
+      const marketplaceOrderPromise = findMarketplaceOrderByTracking({ trackingNo: validation.code }).catch(() => null);
       let result;
 
       if (firestorePrimary?.id) {
@@ -1245,6 +1252,7 @@ function App() {
         runAfterScanCommit(async () => {
           let backgroundResult = result;
           try {
+            const marketplaceOrder = await marketplaceOrderPromise;
             const sheetResult = await runWithGoogleRetry((accessToken, googleConfig) =>
               appendAdminScanGoogle({
                 token: accessToken,
@@ -1252,6 +1260,7 @@ function App() {
                 courier: scanCourier,
                 code: validation.code,
                 email: scanEmail,
+                marketplaceOrder,
               }),
             );
             await markSheetSyncResult({ orderId: firestorePrimary.id, ok: true, result: sheetResult }).catch(() => {});
@@ -1275,6 +1284,7 @@ function App() {
         });
       } else {
         try {
+          const marketplaceOrder = await marketplaceOrderPromise;
           result = await runWithGoogleRetry((accessToken, googleConfig) =>
             appendAdminScanGoogle({
               token: accessToken,
@@ -1282,6 +1292,7 @@ function App() {
               courier: scanCourier,
               code: validation.code,
               email: scanEmail,
+              marketplaceOrder,
             }),
           );
         } catch (sheetError) {
