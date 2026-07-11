@@ -157,6 +157,7 @@ export function buildDashboardSummary(results) {
   return {
     matchedCount: results.matched?.length ?? 0,
     pendingCount: results.pending?.length ?? 0,
+    pendingOverOneDayCount: results.pendingOverOneDay?.length ?? 0,
     tooSoonCount: results.tooSoon?.length ?? 0,
   };
 }

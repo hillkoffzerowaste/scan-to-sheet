@@ -2496,6 +2496,11 @@ function App() {
                       <span>ตกหล่น</span>
                       <strong>{dashboardSummary.pendingCount}</strong>
                     </div>
+                    <div className={`drive-card ${dashboardSummary.pendingOverOneDayCount > 0 ? 'danger' : 'muted'}`}>
+                      <ShieldAlert size={18} />
+                      <span>รอแพ็คเกิน 1 วัน</span>
+                      <strong>{dashboardSummary.pendingOverOneDayCount}</strong>
+                    </div>
                     <div className="drive-card muted">
                       <Clock3 size={18} />
                       <span>รอแพ็ค</span>
