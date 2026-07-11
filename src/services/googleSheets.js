@@ -863,9 +863,18 @@ export async function colorAllHistoricalSheetsGoogle({ token, config }) {
   const spreadsheet = await getSpreadsheet(token, spreadsheetId);
   const dateSheets = (spreadsheet.sheets ?? [])
     .map((item) => item.properties)
-    .filter((properties) => /^\d{4}-\d{2}-\d{2}$/.test(properties.title));
+    .filter((properties) => /^\d{4}-\d{2}-\d{2}(?:_conflict\d+)?$/.test(properties.title));
   let colored = 0;
   for (const sheet of dateSheets) {
+    if ((sheet.gridProperties?.columnCount ?? 0) < TOTAL_COLUMNS) {
+      await apiFetch(`${SHEETS_API}/${spreadsheetId}:batchUpdate`, token, {
+        method: 'POST',
+        body: JSON.stringify({ requests: [{ updateSheetProperties: {
+          properties: { sheetId: sheet.sheetId, gridProperties: { columnCount: TOTAL_COLUMNS } },
+          fields: 'gridProperties.columnCount',
+        } }] }),
+      });
+    }
     await applyStatusCellColors({ token, spreadsheetId, date: sheet.title, sheetId: sheet.sheetId });
     colored += 1;
   }
