@@ -442,6 +442,64 @@ async function getSpreadsheet(token, spreadsheetId) {
   );
 }
 
+const MANAGEMENT_SHEETS = {
+  dashboard: 'Dashboard',
+  audit: 'Audit Log',
+};
+
+async function ensureManagementSheets({ token, spreadsheetId, today = getBangkokParts().date }) {
+  const spreadsheet = await getSpreadsheet(token, spreadsheetId);
+  const sheets = spreadsheet.sheets ?? [];
+  const requests = [];
+  const existing = new Map(sheets.map((sheet) => [sheet.properties.title, sheet.properties]));
+
+  if (!existing.has(MANAGEMENT_SHEETS.dashboard)) {
+    requests.push({ addSheet: { properties: { title: MANAGEMENT_SHEETS.dashboard, index: 0, gridProperties: { rowCount: 100, columnCount: 8 } } } });
+  }
+  if (!existing.has(MANAGEMENT_SHEETS.audit)) {
+    requests.push({ addSheet: { properties: { title: MANAGEMENT_SHEETS.audit, index: 1, gridProperties: { rowCount: 1000, columnCount: 9 } } } });
+  }
+
+  for (const sheet of sheets) {
+    const title = sheet.properties.title;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(title) && title < today && !sheet.properties.hidden) {
+      requests.push({ updateSheetProperties: { properties: { sheetId: sheet.properties.sheetId, hidden: true }, fields: 'hidden' } });
+    }
+  }
+  if (requests.length > 0) {
+    await apiFetch(`${SHEETS_API}/${spreadsheetId}:batchUpdate`, token, { method: 'POST', body: JSON.stringify({ requests }) });
+  }
+
+  const refreshed = await getSpreadsheet(token, spreadsheetId);
+  const dashboard = refreshed.sheets?.find((sheet) => sheet.properties.title === MANAGEMENT_SHEETS.dashboard)?.properties;
+  const audit = refreshed.sheets?.find((sheet) => sheet.properties.title === MANAGEMENT_SHEETS.audit)?.properties;
+  if (!dashboard || !audit) return;
+
+  await apiFetch(`${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent('Audit Log!A1:I1')}?valueInputOption=RAW`, token, {
+    method: 'PUT', body: JSON.stringify({ values: [['เวลา', 'Tracking Number', 'ผู้ใช้งาน', 'บทบาท', 'การกระทำ', 'ขนส่งเดิม', 'ขนส่งใหม่', 'ผลลัพธ์', 'หมายเหตุ']] }),
+  });
+  const dateSheets = refreshed.sheets?.map((sheet) => sheet.properties.title).filter((title) => /^\d{4}-\d{2}-\d{2}$/.test(title)).sort().reverse() ?? [];
+  const dateList = dateSheets.length > 0 ? dateSheets : [today];
+  await apiFetch(`${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent('Dashboard!A1:H8')}?valueInputOption=USER_ENTERED`, token, {
+    method: 'PUT', body: JSON.stringify({ values: [
+      ['สรุปการสแกน', '', '', '', '', '', '', ''],
+      ['เลือกวันที่', dateList[0], '', '', '', '', '', ''],
+      ['รายการแอดมินสแกน', `=COUNTIF(INDIRECT("'"&B2&"'!L2:L"),"<>")`, '', 'แพ็คแล้ว', `=COUNTIF(INDIRECT("'"&B2&"'!I2:I"),"Success")`, '', 'รอแพ็ค', `=COUNTIF(INDIRECT("'"&B2&"'!I2:I"),"รอแพ็ค")`],
+      ['ข้ามวัน', `=COUNTIF(INDIRECT("'"&B2&"'!V2:V"),"ใช่")`, '', 'อัปเดตล่าสุด', new Date().toISOString(), '', '', ''],
+      ['วันที่ในระบบ', ...dateList],
+    ] }),
+  });
+  await apiFetch(`${SHEETS_API}/${spreadsheetId}:batchUpdate`, token, { method: 'POST', body: JSON.stringify({ requests: [
+    { setDataValidation: { range: { sheetId: dashboard.sheetId, startRowIndex: 1, endRowIndex: 2, startColumnIndex: 1, endColumnIndex: 2 }, rule: { condition: { type: 'ONE_OF_LIST', values: dateList.map((date) => ({ userEnteredValue: date })) }, showCustomUi: true, strict: true } } },
+    { updateSheetProperties: { properties: { sheetId: dashboard.sheetId, index: 0 }, fields: 'index' } },
+    { updateSheetProperties: { properties: { sheetId: audit.sheetId, index: 1 }, fields: 'index' } },
+  ] }) });
+}
+
+export async function ensureGoogleSheetOrganization({ token, config, today = getBangkokParts().date }) {
+  if (config?.master?.id) await ensureManagementSheets({ token, spreadsheetId: config.master.id, today });
+}
+
 async function ensureDailyWorksheet({ token, spreadsheetId, date }) {
   const preCreateSpreadsheet = await getSpreadsheet(token, spreadsheetId);
   const preExisting = preCreateSpreadsheet.sheets?.find((sheet) => sheet.properties.title === date);

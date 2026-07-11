@@ -34,6 +34,7 @@ import {
   appendScanGoogle,
   appendAdminScanGoogle,
   colorAllHistoricalSheetsGoogle,
+  ensureGoogleSheetOrganization,
   checkMissingOrders,
   fetchGoogleProfile,
   fetchTodayPackerCounts,
@@ -727,6 +728,9 @@ function App() {
 
     setToken(accessToken);
     setUser(nextUser);
+    await ensureGoogleSheetOrganization({ token: accessToken, config: prepared }).catch((error) => {
+      console.warn('Google Sheet organization failed:', error);
+    });
     await colorAllHistoricalSheetsGoogle({ token: accessToken, config: prepared }).catch((error) => {
       console.warn('Historical sheet coloring failed:', error);
     });
