@@ -33,6 +33,7 @@ import {
   COURIERS,
   appendScanGoogle,
   appendAdminScanGoogle,
+  colorAllHistoricalSheetsGoogle,
   checkMissingOrders,
   fetchGoogleProfile,
   fetchTodayPackerCounts,
@@ -726,6 +727,9 @@ function App() {
 
     setToken(accessToken);
     setUser(nextUser);
+    await colorAllHistoricalSheetsGoogle({ token: accessToken, config: prepared }).catch((error) => {
+      console.warn('Historical sheet coloring failed:', error);
+    });
 
     if (firebaseAuth && idToken) {
       try {

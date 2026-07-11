@@ -624,6 +624,7 @@ async function applyStatusCellColors({ token, spreadsheetId, date, sheetId }) {
         : null;
     const rowStart = index + 1;
     if (style) requests.push({ repeatCell: { range: { sheetId, startRowIndex: rowStart, endRowIndex: rowStart + 1, startColumnIndex: 8, endColumnIndex: 9 }, cell: { userEnteredFormat: { backgroundColor: style.backgroundColor, textFormat: { foregroundColor: style.foregroundColor, bold: status !== 'Success' } } }, fields: 'userEnteredFormat(backgroundColor,textFormat)' } });
+    if (style) requests.push({ repeatCell: { range: { sheetId, startRowIndex: rowStart, endRowIndex: rowStart + 1, startColumnIndex: 20, endColumnIndex: 21 }, cell: { userEnteredFormat: { backgroundColor: style.backgroundColor, textFormat: { foregroundColor: style.foregroundColor, bold: status !== 'Success' } } }, fields: 'userEnteredFormat(backgroundColor,textFormat)' } });
     if (hasAdmin && hasPacker && scanDate && adminDate && scanDate !== adminDate) requests.push({ repeatCell: { range: { sheetId, startRowIndex: rowStart, endRowIndex: rowStart + 1, startColumnIndex: 21, endColumnIndex: 22 }, cell: { userEnteredFormat: { backgroundColor: colors.crossDay.backgroundColor, textFormat: { foregroundColor: colors.crossDay.foregroundColor, bold: true } } }, fields: 'userEnteredFormat(backgroundColor,textFormat)' } });
   });
   if (requests.length > 0) await apiFetch(`${SHEETS_API}/${spreadsheetId}:batchUpdate`, token, { method: 'POST', body: JSON.stringify({ requests }) });
@@ -697,6 +698,21 @@ export async function getTodayRowsGoogle({ token, config, courier, date = getBan
 
   const rows = await readDailyRows({ token, spreadsheetId: sheet.id, date });
   return rows.map(rowFromSheet).filter((row) => row.courier === courier).reverse();
+}
+
+export async function colorAllHistoricalSheetsGoogle({ token, config }) {
+  const spreadsheetId = config?.master?.id;
+  if (!spreadsheetId) return { colored: 0, total: 0 };
+  const spreadsheet = await getSpreadsheet(token, spreadsheetId);
+  const dateSheets = (spreadsheet.sheets ?? [])
+    .map((item) => item.properties)
+    .filter((properties) => /^\d{4}-\d{2}-\d{2}$/.test(properties.title));
+  let colored = 0;
+  for (const sheet of dateSheets) {
+    await applyStatusCellColors({ token, spreadsheetId, date: sheet.title, sheetId: sheet.sheetId });
+    colored += 1;
+  }
+  return { colored, total: dateSheets.length };
 }
 
 export async function getDriveRowsGoogle({ token, config, date = getBangkokParts().date }) {
