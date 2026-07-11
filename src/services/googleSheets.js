@@ -475,6 +475,11 @@ async function ensureManagementSheets({ token, spreadsheetId, today = getBangkok
   const audit = refreshed.sheets?.find((sheet) => sheet.properties.title === MANAGEMENT_SHEETS.audit)?.properties;
   if (!dashboard || !audit) return;
 
+  await apiFetch(`${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent('Dashboard!A1:B2')}?valueInputOption=RAW`, token, {
+    method: 'PUT',
+    body: JSON.stringify({ values: [['Dashboard', 'Loading'], ['Last sync', new Date().toISOString()]] }),
+  });
+
   await apiFetch(`${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent('Audit Log!A1:I1')}?valueInputOption=RAW`, token, {
     method: 'PUT', body: JSON.stringify({ values: [['เวลา', 'Tracking Number', 'ผู้ใช้งาน', 'บทบาท', 'การกระทำ', 'ขนส่งเดิม', 'ขนส่งใหม่', 'ผลลัพธ์', 'หมายเหตุ']] }),
   });
@@ -491,7 +496,10 @@ async function ensureManagementSheets({ token, spreadsheetId, today = getBangkok
   });
   const dashboardRows = [];
   for (const date of dateSheets) {
-    const rows = await readDailyRows({ token, spreadsheetId, date });
+    const rows = await readDailyRows({ token, spreadsheetId, date }).catch((error) => {
+      console.warn(`Dashboard read failed for ${date}:`, error);
+      return [];
+    });
     dashboardRows.push([
       date,
       rows.filter((row) => String(row[11] ?? '').trim()).length,
