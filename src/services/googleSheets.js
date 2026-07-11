@@ -546,7 +546,7 @@ async function ensureWorksheetReady({ token, spreadsheetId, date, sheetId }) {
   }
 
   await writeHeaders({ token, spreadsheetId, date });
-  await formatDailyWorksheet({ token, spreadsheetId, sheetId });
+  await formatDailyWorksheet({ token, spreadsheetId, date, sheetId });
   formattedWorksheetKeys.add(key);
 }
 
@@ -563,7 +563,7 @@ async function writeHeaders({ token, spreadsheetId, date }) {
   );
 }
 
-async function formatDailyWorksheet({ token, spreadsheetId, sheetId }) {
+async function formatDailyWorksheet({ token, spreadsheetId, date, sheetId }) {
   await apiFetch(`${SHEETS_API}/${spreadsheetId}:batchUpdate`, token, {
     method: 'POST',
     body: JSON.stringify({
@@ -596,6 +596,37 @@ async function formatDailyWorksheet({ token, spreadsheetId, sheetId }) {
       ],
     }),
   });
+  await applyStatusCellColors({ token, spreadsheetId, date, sheetId });
+}
+
+async function applyStatusCellColors({ token, spreadsheetId, date, sheetId }) {
+  const rows = await readDailyRows({ token, spreadsheetId, date });
+  const requests = [];
+  const colors = {
+    success: { backgroundColor: { red: 0.85, green: 0.95, blue: 0.88 }, foregroundColor: { red: 0.1, green: 0.45, blue: 0.2 } },
+    pending: { backgroundColor: { red: 1, green: 0.95, blue: 0.75 }, foregroundColor: { red: 0.55, green: 0.35, blue: 0 } },
+    overdue: { backgroundColor: { red: 0.98, green: 0.82, blue: 0.82 }, foregroundColor: { red: 0.65, green: 0.05, blue: 0.05 } },
+    crossDay: { backgroundColor: { red: 1, green: 0.9, blue: 0.75 }, foregroundColor: { red: 0.65, green: 0.35, blue: 0 } },
+  };
+  rows.slice(0, 500).forEach((row, index) => {
+    const status = String(row[8] ?? '').trim();
+    const hasPacker = Boolean(String(row[5] ?? '').trim());
+    const hasAdmin = Boolean(String(row[12] ?? '').trim());
+    const scanDate = String(row[2] ?? '').trim();
+    const adminDate = String(row[10] ?? '').trim();
+    const adminAt = hasAdmin ? parseDateTime(adminDate, String(row[11] ?? '').trim()) : null;
+    const overdue = hasAdmin && !hasPacker && adminAt
+      && Date.now() - adminAt.getTime() >= 24 * 60 * 60 * 1000;
+    const style = status === 'Success'
+      ? colors.success
+      : hasAdmin && !hasPacker
+        ? overdue ? colors.overdue : colors.pending
+        : null;
+    const rowStart = index + 1;
+    if (style) requests.push({ repeatCell: { range: { sheetId, startRowIndex: rowStart, endRowIndex: rowStart + 1, startColumnIndex: 8, endColumnIndex: 9 }, cell: { userEnteredFormat: { backgroundColor: style.backgroundColor, textFormat: { foregroundColor: style.foregroundColor, bold: status !== 'Success' } } }, fields: 'userEnteredFormat(backgroundColor,textFormat)' } });
+    if (hasAdmin && hasPacker && scanDate && adminDate && scanDate !== adminDate) requests.push({ repeatCell: { range: { sheetId, startRowIndex: rowStart, endRowIndex: rowStart + 1, startColumnIndex: 21, endColumnIndex: 22 }, cell: { userEnteredFormat: { backgroundColor: colors.crossDay.backgroundColor, textFormat: { foregroundColor: colors.crossDay.foregroundColor, bold: true } } }, fields: 'userEnteredFormat(backgroundColor,textFormat)' } });
+  });
+  if (requests.length > 0) await apiFetch(`${SHEETS_API}/${spreadsheetId}:batchUpdate`, token, { method: 'POST', body: JSON.stringify({ requests }) });
 }
 
 function buildStatusFormattingRequests(sheetId) {
@@ -647,6 +678,9 @@ async function updateDailyRow({ token, spreadsheetId, date, rowNumber, row }) {
       }),
     },
   );
+  const spreadsheet = await getSpreadsheet(token, spreadsheetId);
+  const sheetId = spreadsheet.sheets?.find((sheet) => sheet.properties.title === date)?.properties.sheetId;
+  if (sheetId) await applyStatusCellColors({ token, spreadsheetId, date, sheetId });
 }
 
 export async function getTodayRowsGoogle({ token, config, courier, date = getBangkokParts().date }) {
