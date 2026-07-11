@@ -986,6 +986,30 @@ export async function appendScanGoogle({ token, config, courier, code, email, pa
     }
   }
 
+  if (!duplicate && !isCancelled) {
+    const adminMatchAnyCourier = await findRowsAcrossDays({
+      token,
+      spreadsheetId: sheet.id,
+      currentDate: date,
+      code: normalizedCode,
+      field: 'adminCode',
+    });
+    if (adminMatchAnyCourier && adminMatchAnyCourier.row.courier !== courier) {
+      const currentRow = adminMatchAnyCourier.row;
+      const correctedNote = [currentRow.note, `แพ็คเกอร์เลือกขนส่งไม่ตรงกับแอดมิน (เลือก ${courier})`].filter(Boolean).join(' | ');
+      const mergedRow = withMarketplaceCells([
+        currentRow.no, currentRow.courierNo, date, time, currentRow.courier, normalizedCode, email, packer,
+        'Success', correctedNote, currentRow.adminDate || adminMatchAnyCourier.date, currentRow.adminTime || '', currentRow.adminCode || normalizedCode,
+      ], marketplaceOrder ?? marketplaceOrderFromRow(currentRow));
+      await updateDailyRow({ token, spreadsheetId: sheet.id, date: adminMatchAnyCourier.date, rowNumber: currentRow.sheetRowNumber, row: mergedRow });
+      return {
+        status: 'success', courier: currentRow.courier, selectedCourier: courier, date, time, code: normalizedCode,
+        rows: adminMatchAnyCourier.parsedRows.filter((row) => row.courier === currentRow.courier).reverse().slice(0, 20),
+        sheetUrl: sheet.webViewLink, merged: true, wrongCourier: true, crossDay: adminMatchAnyCourier.date !== date,
+      };
+    }
+  }
+
   if (duplicateRow && isCancelled) {
     const verifyRows = await readDailyRows({ token, spreadsheetId: sheet.id, date });
     const verifyParsed = verifyRows.map(rowFromSheet);
@@ -1544,7 +1568,7 @@ function getLookbackDates(date, days = CROSS_DAY_LOOKBACK) {
   });
 }
 
-async function findRowsAcrossDays({ token, spreadsheetId, currentDate, courier, code, field }) {
+async function findRowsAcrossDays({ token, spreadsheetId, currentDate, courier = null, code, field }) {
   const normalizedCode = normalizeScanCode(code);
   const spreadsheet = await getSpreadsheet(token, spreadsheetId);
   const titles = new Set((spreadsheet.sheets ?? []).map((item) => item.properties.title));
@@ -1553,7 +1577,7 @@ async function findRowsAcrossDays({ token, spreadsheetId, currentDate, courier, 
     const rows = await readDailyRows({ token, spreadsheetId, date });
     const parsedRows = rows.map((row, index) => rowFromSheet(row, index));
     const match = parsedRows.find(
-      (row) => row.courier === courier && normalizeScanCode(row[field]) === normalizedCode,
+      (row) => (!courier || row.courier === courier) && normalizeScanCode(row[field]) === normalizedCode,
     );
     if (match) return { date, parsedRows, row: match };
   }

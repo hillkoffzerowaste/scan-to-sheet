@@ -137,6 +137,18 @@ async function findRecentOrder({ courier, normalizedCode, days = 3 }) {
   }) ?? null;
 }
 
+async function findRecentAdminOrderByCode({ normalizedCode, days = 3 }) {
+  const orders = await getRecentOrders(500);
+  const now = Date.now();
+  const lookbackMs = (days + 1) * 24 * 60 * 60 * 1000;
+  return orders.find((order) => {
+    const updated = new Date(order.updatedAtIso ?? 0).getTime();
+    return order.admin?.scannedAt
+      && normalizeCode(order.normalizedCode || order.code) === normalizedCode
+      && (!Number.isFinite(updated) || now - updated <= lookbackMs);
+  }) ?? null;
+}
+
 function reportDay(date) {
   return {
     date,
@@ -238,7 +250,7 @@ export async function recordPackerScanPrimary({ code, courier, date, time, user,
   }
 
   const normalizedCode = normalizeCode(code);
-  const recent = await findRecentOrder({ courier, normalizedCode });
+  const recent = await findRecentAdminOrderByCode({ normalizedCode }) ?? await findRecentOrder({ courier, normalizedCode });
   const ref = doc(firestoreDb, 'orders', recent?.id ?? orderId({ date, courier, code: normalizedCode }));
 
   return runTransaction(firestoreDb, async (transaction) => {
@@ -254,11 +266,15 @@ export async function recordPackerScanPrimary({ code, courier, date, time, user,
       };
     }
 
+    const wrongCourier = Boolean(existing?.admin?.scannedAt && existing.courier && existing.courier !== courier);
+    const correctedNote = wrongCourier
+      ? [note, `แพ็คเกอร์เลือกขนส่งไม่ตรงกับแอดมิน (เลือก ${courier})`].filter(Boolean).join(' | ')
+      : note;
     const nextStatus = existing?.admin?.scannedAt ? 'matched' : note ? 'issue' : 'packer_scanned';
     const payload = existing
       ? {
           packer,
-          note,
+          note: correctedNote,
           status: nextStatus,
           sheetSyncStatus: 'pending',
           sheetSyncError: '',
@@ -269,7 +285,7 @@ export async function recordPackerScanPrimary({ code, courier, date, time, user,
             scannedAt: `${date}T${time}`,
             scannedBy: userPayload(user),
             packer,
-            note,
+            note: correctedNote,
           },
         }
       : {
@@ -285,6 +301,8 @@ export async function recordPackerScanPrimary({ code, courier, date, time, user,
       status: existing?.admin?.scannedAt ? 'matched' : 'created',
       id: ref.id,
       existing,
+      wrongCourier,
+      courier: existing?.courier ?? courier,
       sheetSyncStatus: 'pending',
     };
   });
