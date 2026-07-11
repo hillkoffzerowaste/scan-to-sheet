@@ -538,6 +538,22 @@ async function ensureManagementSheets({ token, spreadsheetId, today = getBangkok
   await apiFetch(`${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent('Dashboard!G1:K100')}?valueInputOption=USER_ENTERED`, token, {
     method: 'PUT', body: JSON.stringify({ values: [['เดือน', 'แอดมินสแกน', 'แพ็คแล้ว', 'รอแพ็ค', 'ข้ามวัน'], ...monthlyRows] }),
   });
+  const todayStats = dailyMap.get(today) ?? [0, 0, 0, 0];
+  await apiFetch(`${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent('Dashboard!A1:E5')}?valueInputOption=USER_ENTERED`, token, {
+    method: 'PUT', body: JSON.stringify({ values: [
+      ['Dashboard Summary', '', '', '', ''],
+      ['Last sync', new Date().toISOString(), '', '', ''],
+      ['Today', today, '', '', ''],
+      ['Admin scans', todayStats[0], 'Packed', todayStats[1], ''],
+      ['Pending pack', todayStats[2], 'Cross-day', todayStats[3], 'Packed count uses packer scan date'],
+    ] }),
+  });
+  await apiFetch(`${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent('Dashboard!A7:E100')}?valueInputOption=USER_ENTERED`, token, {
+    method: 'PUT', body: JSON.stringify({ values: [['Daily summary', '', '', '', ''], ['Date', 'Admin scans', 'Packed', 'Pending', 'Cross-day'], ...dashboardRows] }),
+  });
+  await apiFetch(`${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent('Dashboard!G7:K100')}?valueInputOption=USER_ENTERED`, token, {
+    method: 'PUT', body: JSON.stringify({ values: [['Monthly summary', '', '', '', ''], ['Month', 'Admin scans', 'Packed', 'Pending', 'Cross-day'], ...monthlyRows] }),
+  });
   await apiFetch(`${SHEETS_API}/${spreadsheetId}:batchUpdate`, token, { method: 'POST', body: JSON.stringify({ requests: [
     { setDataValidation: { range: { sheetId: dashboard.sheetId, startRowIndex: 1, endRowIndex: 2, startColumnIndex: 1, endColumnIndex: 2 }, rule: { condition: { type: 'ONE_OF_LIST', values: dateList.map((date) => ({ userEnteredValue: date })) }, showCustomUi: true, strict: true } } },
     { updateSheetProperties: { properties: { sheetId: dashboard.sheetId, index: 0 }, fields: 'index' } },
