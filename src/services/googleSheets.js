@@ -483,8 +483,8 @@ async function ensureManagementSheets({ token, spreadsheetId, today = getBangkok
   await apiFetch(`${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent('Audit Log!A1:I1')}?valueInputOption=RAW`, token, {
     method: 'PUT', body: JSON.stringify({ values: [['เวลา', 'Tracking Number', 'ผู้ใช้งาน', 'บทบาท', 'การกระทำ', 'ขนส่งเดิม', 'ขนส่งใหม่', 'ผลลัพธ์', 'หมายเหตุ']] }),
   });
-  const dateSheets = refreshed.sheets?.map((sheet) => sheet.properties.title).filter((title) => /^\d{4}-\d{2}-\d{2}$/.test(title)).sort().reverse() ?? [];
-  const dateList = dateSheets.length > 0 ? dateSheets : [today];
+  const dateSheets = refreshed.sheets?.map((sheet) => sheet.properties.title).filter((title) => /^\d{4}-\d{2}-\d{2}(?:_conflict\d+)?$/.test(title)).sort().reverse() ?? [];
+  const dateList = [...new Set(dateSheets.map((title) => title.slice(0, 10)))];
   await apiFetch(`${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent('Dashboard!A1:H8')}?valueInputOption=USER_ENTERED`, token, {
     method: 'PUT', body: JSON.stringify({ values: [
       ['สรุปการสแกน', '', '', '', '', '', '', ''],
@@ -494,7 +494,7 @@ async function ensureManagementSheets({ token, spreadsheetId, today = getBangkok
       ['วันที่ในระบบ', ...dateList],
     ] }),
   });
-  const dashboardRows = [];
+  let dashboardRows = [];
   for (const date of dateSheets) {
     const rows = await readDailyRows({ token, spreadsheetId, date }).catch((error) => {
       console.warn(`Dashboard read failed for ${date}:`, error);
@@ -508,11 +508,33 @@ async function ensureManagementSheets({ token, spreadsheetId, today = getBangkok
       rows.filter((row) => String(row[21] ?? '').trim() === 'ใช่').length,
     ]);
   }
+  const dailyMap = new Map();
+  for (const [date, admin, shipped, pending, crossDay] of dashboardRows) {
+    const key = date.slice(0, 10);
+    const stats = dailyMap.get(key) ?? [0, 0, 0, 0];
+    stats[0] += admin;
+    stats[1] += shipped;
+    stats[2] += pending;
+    stats[3] += crossDay;
+    dailyMap.set(key, stats);
+  }
+  dashboardRows = [...dailyMap.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([date, stats]) => [date, ...stats]);
+  const monthlyMap = new Map();
+  for (const [date, ...stats] of dashboardRows) {
+    const month = date.slice(0, 7);
+    const total = monthlyMap.get(month) ?? [0, 0, 0, 0];
+    stats.forEach((value, index) => { total[index] += value; });
+    monthlyMap.set(month, total);
+  }
+  const monthlyRows = [...monthlyMap.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([month, stats]) => [month, ...stats]);
   await apiFetch(`${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent('Dashboard!A10:E100')}?valueInputOption=USER_ENTERED`, token, {
     method: 'PUT', body: JSON.stringify({ values: [['วันที่', 'แอดมินสแกน', 'แพ็คแล้ว', 'รอแพ็ค', 'ข้ามวัน'], ...dashboardRows] }),
   });
   await apiFetch(`${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent('Dashboard!A1:E100')}?valueInputOption=USER_ENTERED`, token, {
     method: 'PUT', body: JSON.stringify({ values: [['วันที่', 'แอดมินสแกน', 'แพ็คแล้ว', 'รอแพ็ค', 'ข้ามวัน'], ...dashboardRows] }),
+  });
+  await apiFetch(`${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent('Dashboard!G1:K100')}?valueInputOption=USER_ENTERED`, token, {
+    method: 'PUT', body: JSON.stringify({ values: [['เดือน', 'แอดมินสแกน', 'แพ็คแล้ว', 'รอแพ็ค', 'ข้ามวัน'], ...monthlyRows] }),
   });
   await apiFetch(`${SHEETS_API}/${spreadsheetId}:batchUpdate`, token, { method: 'POST', body: JSON.stringify({ requests: [
     { setDataValidation: { range: { sheetId: dashboard.sheetId, startRowIndex: 1, endRowIndex: 2, startColumnIndex: 1, endColumnIndex: 2 }, rule: { condition: { type: 'ONE_OF_LIST', values: dateList.map((date) => ({ userEnteredValue: date })) }, showCustomUi: true, strict: true } } },
