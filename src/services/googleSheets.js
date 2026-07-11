@@ -46,9 +46,11 @@ export const MARKETPLACE_HEADERS = [
   'Marketplace Status',
 ];
 
-export const ALL_HEADERS = [...SCAN_HEADERS, ...ADMIN_HEADERS, ...MARKETPLACE_HEADERS];
+export const SHEET_METADATA_HEADERS = ['Order Status', 'Cross-day', 'Sync Status'];
 
-export const TOTAL_COLUMNS = ALL_HEADERS.length; // 20
+export const ALL_HEADERS = [...SCAN_HEADERS, ...ADMIN_HEADERS, ...MARKETPLACE_HEADERS, ...SHEET_METADATA_HEADERS];
+
+export const TOTAL_COLUMNS = ALL_HEADERS.length; // 23
 
 export const COURIER_RULES = {
   Lazada: {
@@ -285,9 +287,27 @@ function marketplaceOrderFromRow(row) {
 }
 
 function withMarketplaceCells(row, marketplaceOrder = null) {
-  const baseRow = row.slice(0, ALL_HEADERS.length - MARKETPLACE_HEADERS.length);
+  const baseRow = row.slice(0, SCAN_HEADERS.length + ADMIN_HEADERS.length);
   const source = marketplaceOrder ?? null;
-  return [...baseRow, ...marketplaceCells(source)].slice(0, TOTAL_COLUMNS);
+  const status = String(baseRow[8] ?? '').trim();
+  const scanDate = String(baseRow[2] ?? '').trim();
+  const adminDate = String(baseRow[10] ?? '').trim();
+  const hasAdmin = Boolean(String(baseRow[12] ?? '').trim());
+  const hasPacker = Boolean(String(baseRow[5] ?? '').trim());
+  const adminDateTime = hasAdmin ? parseDateTime(adminDate, String(baseRow[11] ?? '').trim()) : null;
+  const isOverdue = hasAdmin && !hasPacker && adminDateTime
+    && Date.now() - adminDateTime.getTime() >= 24 * 60 * 60 * 1000;
+  const orderStatus = status === 'Success'
+    ? 'ส่งออกแล้ว'
+    : status === 'Cancelled'
+      ? 'ยกเลิก'
+      : status === 'Damaged'
+        ? 'เสียหาย'
+        : hasAdmin && !hasPacker
+          ? isOverdue ? 'รอแพ็คเกิน 1 วัน' : 'รอแพ็ค'
+          : status || '';
+  const crossDay = hasAdmin && hasPacker && scanDate && adminDate && scanDate !== adminDate ? 'ใช่' : 'ไม่ใช่';
+  return [...baseRow, ...marketplaceCells(source), orderStatus, crossDay, ''].slice(0, TOTAL_COLUMNS);
 }
 
 async function findDriveItem({ token, name, mimeType, parentId }) {
@@ -572,9 +592,35 @@ async function formatDailyWorksheet({ token, spreadsheetId, sheetId }) {
             },
           },
         },
+        ...buildStatusFormattingRequests(sheetId),
       ],
     }),
   });
+}
+
+function buildStatusFormattingRequests(sheetId) {
+  const statusRange = { sheetId, startRowIndex: 1, startColumnIndex: 8, endColumnIndex: 9 };
+  const orderStatusRange = { sheetId, startRowIndex: 1, startColumnIndex: 20, endColumnIndex: 21 };
+  const crossDayRange = { sheetId, startRowIndex: 1, startColumnIndex: 21, endColumnIndex: 22 };
+  const rule = (range, formula, backgroundColor, foregroundColor, bold = false) => ({
+    addConditionalFormatRule: {
+      rule: {
+        ranges: [range],
+        booleanRule: {
+          condition: { type: 'CUSTOM_FORMULA', values: [{ userEnteredValue: formula }] },
+          format: { backgroundColor, foregroundColor, textFormat: { bold } },
+        },
+      },
+      index: 0,
+    },
+  });
+  return [
+    rule(statusRange, '=$I2="Success"', { red: 0.85, green: 0.95, blue: 0.88 }, { red: 0.1, green: 0.45, blue: 0.2 }),
+    rule(orderStatusRange, '=$U2="ส่งออกแล้ว"', { red: 0.85, green: 0.95, blue: 0.88 }, { red: 0.1, green: 0.45, blue: 0.2 }),
+    rule(orderStatusRange, '=$U2="รอแพ็ค"', { red: 1, green: 0.95, blue: 0.75 }, { red: 0.55, green: 0.35, blue: 0 }),
+    rule(orderStatusRange, '=$U2="รอแพ็คเกิน 1 วัน"', { red: 0.98, green: 0.82, blue: 0.82 }, { red: 0.65, green: 0.05, blue: 0.05 }, true),
+    rule(crossDayRange, '=$V2="ใช่"', { red: 1, green: 0.9, blue: 0.75 }, { red: 0.65, green: 0.35, blue: 0 }),
+  ];
 }
 
 async function readDailyRows({ token, spreadsheetId, date }) {
@@ -1540,6 +1586,9 @@ function rowFromSheet(row, index = null) {
     marketplaceSkus: row[17] ?? '',
     marketplaceItemQty: row[18] ?? '',
     marketplaceStatus: row[19] ?? '',
+    orderStatus: row[20] ?? '',
+    crossDay: row[21] ?? '',
+    syncStatus: row[22] ?? '',
   };
 }
 
