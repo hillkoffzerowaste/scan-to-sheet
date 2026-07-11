@@ -608,7 +608,7 @@ function buildStatusFormattingRequests(sheetId) {
         ranges: [range],
         booleanRule: {
           condition: { type: 'CUSTOM_FORMULA', values: [{ userEnteredValue: formula }] },
-          format: { backgroundColor, foregroundColor, textFormat: { bold } },
+          format: { backgroundColor, textFormat: { foregroundColor, bold } },
         },
       },
       index: 0,
