@@ -1583,6 +1583,18 @@ th {
   color: var(--success);
 }
 
+.status-badge.pending,
+.status-badge.รอแพ็ค {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
+.status-badge.cross-day {
+  margin-left: 6px;
+  background: #fff0d6;
+  color: #a85d00;
+}
+
 .status-badge.duplicate,
 .status-badge.ignored {
   background: var(--warning-bg);

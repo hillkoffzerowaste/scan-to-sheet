@@ -1425,6 +1425,7 @@ export async function checkMissingOrders({
 
   const matched = [];
   const pending = [];
+  const pendingOverOneDay = [];
   const tooSoon = [];
   const cancelled = [];
   const damaged = [];
@@ -1458,7 +1459,9 @@ export async function checkMissingOrders({
         if (elapsed < thresholdMs) {
           tooSoon.push({ ...row, _sheetDate: date });
         } else {
-          pending.push({ ...row, _sheetDate: date });
+          const item = { ...row, _sheetDate: date };
+          pending.push(item);
+          if (elapsed >= 24 * 60 * 60 * 1000) pendingOverOneDay.push(item);
         }
       } else {
         // No admin time → treat as pending
@@ -1470,6 +1473,7 @@ export async function checkMissingOrders({
   return {
     matched,
     pending,
+    pendingOverOneDay,
     tooSoon,
     cancelled,
     damaged,

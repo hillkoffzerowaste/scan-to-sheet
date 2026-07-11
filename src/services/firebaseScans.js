@@ -571,6 +571,7 @@ export async function checkMissingOrdersFirestore({ courier = null, hoursLookbac
   const thresholdMs = thresholdMinutes * 60 * 1000;
   const matched = [];
   const pending = [];
+  const pendingOverOneDay = [];
   const tooSoon = [];
   const cancelled = [];
   const damaged = [];
@@ -592,12 +593,14 @@ export async function checkMissingOrdersFirestore({ courier = null, hoursLookbac
       tooSoon.push(row);
     } else {
       pending.push(row);
+      if (Number.isFinite(adminMs) && now - adminMs >= 24 * 60 * 60 * 1000) pendingOverOneDay.push(row);
     }
   }
 
   return {
     matched,
     pending,
+    pendingOverOneDay,
     tooSoon,
     cancelled,
     damaged,

@@ -23,7 +23,7 @@ export function buildMissingAlertMessage(results) {
     `💥 สินค้าเสียหาย: ${results.damaged?.length ?? 0} รายการ`,
   ];
 
-  if (results.pending?.length > 0) {
+  if (regularPending.length > 0) {
     lines.push('', '━━━ ⏳ ออเดอร์ตกหล่น (เกินเวลา) ━━━');
     for (const row of results.pending) {
       const code = row.adminCode || 'ไม่ระบุ';
@@ -82,14 +82,26 @@ export function formatMissingResultsForUI(results) {
   if (!results) return [];
 
   const sections = [];
+  const overduePending = new Set(results.pendingOverOneDay ?? []);
+  const regularPending = (results.pending ?? []).filter((row) => !overduePending.has(row));
 
   if (results.pending?.length > 0) {
     sections.push({
       type: 'pending',
       label: '⏳ ออเดอร์ตกหล่น (เกินเวลา)',
-      count: results.pending.length,
+      count: regularPending.length,
+      color: 'warning',
+      rows: regularPending,
+    });
+  }
+
+  if (results.pendingOverOneDay?.length > 0) {
+    sections.push({
+      type: 'pendingOverOneDay',
+      label: 'รอแพ็คเกิน 1 วัน',
+      count: results.pendingOverOneDay.length,
       color: 'danger',
-      rows: results.pending,
+      rows: results.pendingOverOneDay,
     });
   }
 

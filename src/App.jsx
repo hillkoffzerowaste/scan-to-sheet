@@ -2459,7 +2459,10 @@ function App() {
                           <td>{row.time}</td>
                           <td className="code-cell">{row.code}</td>
                           <td>{row.email}</td>
-                          <td><span className={`status-badge ${(row.status || '').toLowerCase()}`}>{row.status}</span></td>
+                          <td>
+                            <span className={`status-badge ${(row.status || '').toLowerCase()}`}>{row.status}</span>
+                            {row.date && row.adminDate && row.date !== row.adminDate && <span className="status-badge cross-day">ข้ามวัน</span>}
+                          </td>
                         </tr>
                       ))
                     )}
@@ -2620,7 +2623,10 @@ function App() {
                           <td>{row.adminTime || row.time}</td>
                           <td className="code-cell">{row.adminCode || '-'}</td>
                           <td className="code-cell">{row.code || 'รอแพ็ค'}</td>
-                          <td><span className={`status-badge ${(row.status || '').toLowerCase()}`}>{row.status || 'รอแพ็ค'}</span></td>
+                          <td>
+                            <span className={`status-badge ${(row.status || '').toLowerCase()}`}>{row.status || 'รอแพ็ค'}</span>
+                            {row.date && row.adminDate && row.date !== row.adminDate && <span className="status-badge cross-day">ข้ามวัน</span>}
+                          </td>
                           <td>{row.courier}</td>
                         </tr>
                       ))
