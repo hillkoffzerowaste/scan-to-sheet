@@ -451,6 +451,16 @@ const MANAGEMENT_SHEETS = {
 async function ensureManagementSheets({ token, spreadsheetId, today = getBangkokParts().date }) {
   const spreadsheet = await getSpreadsheet(token, spreadsheetId);
   const sheets = spreadsheet.sheets ?? [];
+  const removedManagementSheets = sheets
+    .filter((sheet) => ['Dashboard', 'Audit Log', 'All Orders'].includes(sheet.properties.title))
+    .map((sheet) => ({ deleteSheet: { sheetId: sheet.properties.sheetId } }));
+  if (removedManagementSheets.length > 0) {
+    await apiFetch(`${SHEETS_API}/${spreadsheetId}:batchUpdate`, token, {
+      method: 'POST',
+      body: JSON.stringify({ requests: removedManagementSheets }),
+    });
+  }
+  return;
   const requests = [];
   const existing = new Map(sheets.map((sheet) => [sheet.properties.title, sheet.properties]));
 
