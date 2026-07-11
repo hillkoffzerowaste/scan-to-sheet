@@ -195,6 +195,7 @@ function setMissingCheckCache(data) {
 }
 
 function App() {
+  const signingOutRef = useRef(false);
   const organizationSyncAtRef = useRef(0);
   const ORGANIZATION_SYNC_THROTTLE_MS = 5 * 60 * 1000;
   const [token, setToken] = useState(null);
@@ -711,6 +712,7 @@ function App() {
   }
 
   async function activateGoogleSession(data) {
+    signingOutRef.current = false;
     const accessToken = data.accessToken;
     const idToken = data.idToken;
     const profile = data.profile ?? (await fetchGoogleProfile(accessToken));
@@ -756,10 +758,13 @@ function App() {
   }
 
   async function runWithGoogleRetry(action) {
+    if (signingOutRef.current) {
+      throw new Error('Google session is signing out');
+    }
     try {
       return await action(token, config);
     } catch (error) {
-      if (!isGoogleAuthError(error)) {
+      if (signingOutRef.current || !isGoogleAuthError(error)) {
         throw error;
       }
 
@@ -784,6 +789,7 @@ function App() {
   }
 
   async function signOut() {
+    signingOutRef.current = true;
     localStorage.setItem(LOGGED_OUT_FLAG, '1');
 
     if (firebaseAuth) {
@@ -815,6 +821,9 @@ function App() {
   }
 
   async function refreshAllCounts(accessToken = token, googleConfig = config) {
+    if (signingOutRef.current) {
+      return;
+    }
     if (accessToken && googleConfig && Date.now() - organizationSyncAtRef.current >= ORGANIZATION_SYNC_THROTTLE_MS) {
       await ensureGoogleSheetOrganization({ token: accessToken, config: googleConfig }).catch((error) => {
         console.warn('Google Sheet organization refresh failed:', error);
