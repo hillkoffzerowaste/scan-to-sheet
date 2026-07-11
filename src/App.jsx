@@ -813,6 +813,11 @@ function App() {
   }
 
   async function refreshAllCounts(accessToken = token, googleConfig = config) {
+    if (accessToken && googleConfig) {
+      await ensureGoogleSheetOrganization({ token: accessToken, config: googleConfig }).catch((error) => {
+        console.warn('Google Sheet organization refresh failed:', error);
+      });
+    }
     if (!isSignedIn) {
       return;
     }
