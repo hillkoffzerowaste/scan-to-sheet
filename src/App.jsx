@@ -777,7 +777,8 @@ function App() {
       message.includes('401') ||
       message.includes('invalid authentication') ||
       message.includes('invalid credentials') ||
-      message.includes('unauthorized')
+      message.includes('unauthorized') ||
+      (message.includes('google api error 403') && message.includes('permission_denied'))
     );
   }
 
