@@ -555,6 +555,9 @@ async function ensureManagementSheets({ token, spreadsheetId, today = getBangkok
     monthlyMap.set(month, total);
   }
   const monthlyRows = [...monthlyMap.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([month, stats]) => [month, ...stats]);
+  await apiFetch(`${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent('Dashboard!A1:AC100')}:clear`, token, {
+    method: 'POST', body: JSON.stringify({}),
+  });
   await apiFetch(`${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent('Dashboard!A10:E100')}?valueInputOption=USER_ENTERED`, token, {
     method: 'PUT', body: JSON.stringify({ values: [['วันที่', 'แอดมินสแกน', 'แพ็คแล้ว', 'รอแพ็ค', 'ข้ามวัน'], ...dashboardRows] }),
   });
@@ -582,12 +585,12 @@ async function ensureManagementSheets({ token, spreadsheetId, today = getBangkok
   });
   await apiFetch(`${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent('Dashboard!A8:E15')}?valueInputOption=USER_ENTERED`, token, {
     method: 'PUT', body: JSON.stringify({ values: [[
-      '=QUERY(\'All Orders\'!A:AC,"select X,sum(Y),sum(Z),sum(AA),sum(AB) where X is not null group by X order by X desc limit 7 label X \'Date\',sum(Y) \'Admin scans\',sum(Z) \'Packed\',sum(AA) \'Pending\',sum(AB) \'Cross-day\'",1)', '', '', '', ''],
+      '=QUERY(\'All Orders\'!A2:AC,"select Col24,sum(Col25),sum(Col26),sum(Col27),sum(Col28) where Col24 is not null group by Col24 order by Col24 desc limit 7 label Col24 \'Date\',sum(Col25) \'Admin scans\',sum(Col26) \'Packed\',sum(Col27) \'Pending\',sum(Col28) \'Cross-day\'",0)', '', '', '', ''],
     ] }),
   }).catch((error) => console.warn('Daily Dashboard formula skipped:', error));
   await apiFetch(`${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent('Dashboard!G8:K20')}?valueInputOption=USER_ENTERED`, token, {
     method: 'PUT', body: JSON.stringify({ values: [[
-      '=QUERY(\'All Orders\'!A:AC,"select AC,sum(Y),sum(Z),sum(AA),sum(AB) where AC is not null group by AC order by AC desc label AC \'Month\',sum(Y) \'Admin scans\',sum(Z) \'Packed\',sum(AA) \'Pending\',sum(AB) \'Cross-day\'",1)', '', '', '', ''],
+      '=QUERY(\'All Orders\'!A2:AC,"select Col29,sum(Col25),sum(Col26),sum(Col27),sum(Col28) where Col29 is not null group by Col29 order by Col29 desc label Col29 \'Month\',sum(Col25) \'Admin scans\',sum(Col26) \'Packed\',sum(Col27) \'Pending\',sum(Col28) \'Cross-day\'",0)', '', '', '', ''],
     ] }),
   }).catch((error) => console.warn('Monthly Dashboard formula skipped:', error));
   await apiFetch(`${SHEETS_API}/${spreadsheetId}:batchUpdate`, token, { method: 'POST', body: JSON.stringify({ requests: [
