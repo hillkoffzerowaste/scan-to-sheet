@@ -493,6 +493,8 @@ async function ensureManagementSheets({ token, spreadsheetId, today = getBangkok
       ['ข้ามวัน', `=COUNTIF(INDIRECT("'"&B2&"'!V2:V"),"ใช่")`, '', 'อัปเดตล่าสุด', new Date().toISOString(), '', '', ''],
       ['วันที่ในระบบ', ...dateList],
     ] }),
+  }).catch((error) => {
+    console.warn('Legacy Dashboard formulas skipped:', error);
   });
   let dashboardRows = [];
   for (const date of dateSheets) {
