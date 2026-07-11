@@ -10,6 +10,7 @@ export const COURIERS = [
   'Lazada',
   'KEX Lazada',
   'Lazada Flash',
+  'TikTok Flash',
   'J&T',
   'Flash',
   'Best',
@@ -61,6 +62,10 @@ export const COURIER_RULES = {
   'Lazada Flash': {
     label: 'เลข Lazada Flash ต้องขึ้นต้นด้วย TH',
     valid: /^TH[A-Z0-9]{8,18}$/i,
+  },
+  'TikTok Flash': {
+    label: 'เลข TikTok Flash ต้องขึ้นต้นด้วย THT และเป็นตัวอักษร/ตัวเลข 11-27 ตัว',
+    valid: /^THT[A-Z0-9]{8,24}$/i,
   },
   'J&T': {
     label: 'เลข J&T ต้องเป็นตัวเลข 12 หลัก',
