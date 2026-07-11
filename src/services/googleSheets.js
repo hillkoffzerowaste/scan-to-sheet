@@ -591,7 +591,6 @@ async function ensureManagementSheets({ token, spreadsheetId, today = getBangkok
     ] }),
   }).catch((error) => console.warn('Monthly Dashboard formula skipped:', error));
   await apiFetch(`${SHEETS_API}/${spreadsheetId}:batchUpdate`, token, { method: 'POST', body: JSON.stringify({ requests: [
-    { setDataValidation: { range: { sheetId: dashboard.sheetId, startRowIndex: 1, endRowIndex: 2, startColumnIndex: 1, endColumnIndex: 2 }, rule: { condition: { type: 'ONE_OF_LIST', values: dateList.map((date) => ({ userEnteredValue: date })) }, showCustomUi: true, strict: true } } },
     { updateSheetProperties: { properties: { sheetId: dashboard.sheetId, index: 0 }, fields: 'index' } },
     { updateSheetProperties: { properties: { sheetId: audit.sheetId, index: 1 }, fields: 'index' } },
   ] }) });

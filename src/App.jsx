@@ -827,7 +827,7 @@ function App() {
 
     const data = canUseFirestorePrimary()
       ? await fetchTodaySummaryFirestore({ couriers: COURIERS, date: getBangkokParts().date })
-      : await fetchTodaySummary({ token: accessToken, config: googleConfig });
+      : await runWithGoogleRetry((t, c) => fetchTodaySummary({ token: t, config: c }));
     if (data) {
       setSummary(data.courierCounts);
       setPackerCounts(data.packerCounts);
