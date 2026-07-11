@@ -502,6 +502,10 @@ async function ensureManagementSheets({ token, spreadsheetId, today = getBangkok
     }
   }
   const allOrdersHeaders = [...ALL_HEADERS, 'Source Sheet', 'Admin Flag', 'Packed Flag', 'Pending Flag', 'Cross-day Flag', 'Month'];
+  await apiFetch(`${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent('All Orders!A1:AC5000')}:clear`, token, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });
   await apiFetch(`${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent('All Orders!A1:AC5000')}?valueInputOption=USER_ENTERED`, token, {
     method: 'PUT', body: JSON.stringify({ values: [allOrdersHeaders, ...allOrderRows] }),
   });
