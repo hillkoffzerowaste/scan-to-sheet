@@ -446,7 +446,10 @@ export async function backfillOrdersFromSheetRows({ rows, user }) {
 }
 
 export async function fetchTodaySummaryFirestore({ couriers = [], date }) {
-  const orders = await getOrdersByDate(date);
+  const orders = (await getRecentOrders(1000)).filter((order) => {
+    const scanDate = order.packerScan?.scannedAt?.split('T')[0];
+    return scanDate === date;
+  });
   const courierCounts = couriers.map((courier) => ({
     courier,
     count: orders.filter((order) => order.courier === courier && order.packerScan?.scannedAt && !isCancelledOrder(order)).length,
@@ -503,7 +506,12 @@ export async function searchScansFirestore({ query: searchQuery, couriers = [], 
 
 export async function getScanReportFirestore({ couriers = [], dates }) {
   const uniqueDates = [...new Set(dates)].filter(Boolean).sort();
-  const orders = (await Promise.all(uniqueDates.map((date) => getOrdersByDate(date)))).flat();
+  const orders = (await getRecentOrders(2000)).filter((order) => {
+    const eventDate = order.packerScan?.scannedAt?.split('T')[0]
+      || order.admin?.scannedAt?.split('T')[0]
+      || order.date;
+    return uniqueDates.includes(eventDate);
+  });
   const dayMap = new Map(uniqueDates.map((date) => [date, {
     ...reportDay(date),
     couriers: couriers.map((courier) => ({ courier, count: 0 })),
@@ -514,7 +522,10 @@ export async function getScanReportFirestore({ couriers = [], dates }) {
   const damagedRows = [];
 
   for (const order of orders) {
-    const day = dayMap.get(order.date);
+    const eventDate = order.packerScan?.scannedAt?.split('T')[0]
+      || order.admin?.scannedAt?.split('T')[0]
+      || order.date;
+    const day = dayMap.get(eventDate);
     if (!day) continue;
     const row = orderToRow(order, order.id);
     const hasPacker = Boolean(order.packerScan?.scannedAt);

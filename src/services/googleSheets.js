@@ -649,16 +649,23 @@ export async function fetchTodaySummary({ token, config }) {
   const date = getBangkokParts().date;
   await ensureDailyWorksheet({ token, spreadsheetId: sheet.id, date });
 
-  const rows = await readDailyRows({ token, spreadsheetId: sheet.id, date });
-  const parsedRows = rows.map(rowFromSheet);
+  const spreadsheet = await getSpreadsheet(token, sheet.id);
+  const sheetDates = (spreadsheet.sheets ?? [])
+    .map((item) => item.properties.title)
+    .filter((title) => /^\d{4}-\d{2}-\d{2}$/.test(title));
+  const parsedRows = (await Promise.all(sheetDates.map(async (sheetDate) => {
+    const rows = await readDailyRows({ token, spreadsheetId: sheet.id, date: sheetDate });
+    return rows.map(rowFromSheet);
+  }))).flat();
+  const shippedRows = parsedRows.filter((row) => row.status === 'Success' && row.date === date);
 
   const courierCounts = COURIERS.map((courier) => ({
     courier,
-    count: parsedRows.filter((r) => r.courier === courier && r.status === 'Success').length,
+    count: shippedRows.filter((r) => r.courier === courier).length,
   }));
 
   const packerMap = new Map();
-  for (const row of parsedRows) {
+  for (const row of shippedRows) {
     const packer = String(row.packer ?? '').trim();
     const status = String(row.status ?? '').trim();
     if (status === 'Success' && packer) {
@@ -697,17 +704,16 @@ export async function getScanReportGoogle({ token, config, dates }) {
   }
 
   const spreadsheet = await getSpreadsheet(token, sheet.id);
-  const sheetTitles = new Set(spreadsheet.sheets?.map((item) => item.properties.title) ?? []);
+  const sheetTitles = (spreadsheet.sheets ?? [])
+    .map((item) => item.properties.title)
+    .filter((title) => /^\d{4}-\d{2}-\d{2}$/.test(title));
 
-  for (const date of uniqueDates) {
-    if (!sheetTitles.has(date)) {
-      continue;
-    }
-
-    const rows = (await readDailyRows({ token, spreadsheetId: sheet.id, date })).map(rowFromSheet);
-    const day = dayMap.get(date);
-
+  for (const sheetDate of sheetTitles) {
+    const rows = (await readDailyRows({ token, spreadsheetId: sheet.id, date: sheetDate })).map(rowFromSheet);
     for (const row of rows) {
+      const eventDate = row.status === 'Success' && row.code ? row.date : row.adminDate || row.date;
+      const day = dayMap.get(eventDate);
+      if (!day) continue;
       const isCancelled = row.status === 'Cancelled' || row.note === 'ลูกค้ายกเลิก';
       if (isCancelled) {
         day.cancelledTotal += 1;
