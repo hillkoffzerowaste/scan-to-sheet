@@ -64,7 +64,7 @@ export const COURIER_RULES = {
   },
   'J&T': {
     label: 'เลข J&T ต้องเป็นตัวเลข 12 หลัก',
-    valid: /^\d{12}$/,
+    valid: /^[A-Z0-9]{12,18}$/i,
   },
   Shopee: {
     label: 'เลข Shopee ต้องขึ้นต้นด้วย TH แล้วตามด้วยตัวเลข 10-14 หลัก',
@@ -93,6 +93,7 @@ const FOLDER_NAME = 'Scan to Sheet';
 const MASTER_SHEET_NAME = 'Scan to Sheet Master';
 const TIMEZONE = 'Asia/Bangkok';
 const formattedWorksheetKeys = new Set();
+const CROSS_DAY_LOOKBACK = 3;
 
 export function getBangkokParts(now = new Date()) {
   const parts = new Intl.DateTimeFormat('en-CA', {
@@ -961,6 +962,17 @@ export async function appendScanGoogle({ token, config, courier, code, email, pa
         };
       }
     }
+
+    const crossDayMatch = await findRowsAcrossDays({ token, spreadsheetId: sheet.id, currentDate: date, courier, code: normalizedCode, field: 'adminCode' });
+    if (crossDayMatch) {
+      const currentRow = crossDayMatch.row;
+      const mergedRow = withMarketplaceCells([
+        currentRow.no, currentRow.courierNo, date, time, courier, normalizedCode, email, packer,
+        'Success', note, currentRow.adminDate || crossDayMatch.date, currentRow.adminTime || '', currentRow.adminCode || normalizedCode,
+      ], marketplaceOrder ?? marketplaceOrderFromRow(currentRow));
+      await updateDailyRow({ token, spreadsheetId: sheet.id, date: crossDayMatch.date, rowNumber: currentRow.sheetRowNumber, row: mergedRow });
+      return { status: 'success', courier, date, time, code: normalizedCode, rows: crossDayMatch.parsedRows.filter((row) => row.courier === courier).reverse().slice(0, 20), sheetUrl: sheet.webViewLink, merged: true, crossDay: true };
+    }
   }
 
   if (duplicateRow && isCancelled) {
@@ -1221,6 +1233,17 @@ export async function appendAdminScanGoogle({ token, config, courier, code, emai
         sheetUrl: sheet.webViewLink,
       };
     }
+  }
+
+  const crossDayMatch = await findRowsAcrossDays({ token, spreadsheetId: sheet.id, currentDate: date, courier, code: normalizedCode, field: 'code' });
+  if (crossDayMatch) {
+    const currentRow = crossDayMatch.row;
+    const mergedRow = withMarketplaceCells([
+      currentRow.no, currentRow.courierNo, currentRow.date, currentRow.time, currentRow.courier, currentRow.code,
+      currentRow.email, currentRow.packer, currentRow.status || 'Success', currentRow.note || '', date, time, normalizedCode,
+    ], marketplaceOrder ?? marketplaceOrderFromRow(currentRow));
+    await updateDailyRow({ token, spreadsheetId: sheet.id, date: crossDayMatch.date, rowNumber: currentRow.sheetRowNumber, row: mergedRow });
+    return { status: 'admin_matched', courier, date, time, code: normalizedCode, rows: crossDayMatch.parsedRows.filter((row) => row.courier === courier).reverse().slice(0, 20), sheetUrl: sheet.webViewLink, crossDay: true };
   }
 
   // 3) New admin-only row — append with placeholder
@@ -1494,6 +1517,32 @@ function formatDateOnly(date) {
   const month = String(date.getUTCMonth() + 1).padStart(2, '0');
   const day = String(date.getUTCDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+function getLookbackDates(date, days = CROSS_DAY_LOOKBACK) {
+  const base = parseDateOnly(date);
+  if (!base) return [];
+  return Array.from({ length: days + 1 }, (_, offset) => {
+    const value = new Date(base);
+    value.setUTCDate(value.getUTCDate() - offset);
+    return formatDateOnly(value);
+  });
+}
+
+async function findRowsAcrossDays({ token, spreadsheetId, currentDate, courier, code, field }) {
+  const normalizedCode = normalizeScanCode(code);
+  const spreadsheet = await getSpreadsheet(token, spreadsheetId);
+  const titles = new Set((spreadsheet.sheets ?? []).map((item) => item.properties.title));
+  for (const date of getLookbackDates(currentDate)) {
+    if (!titles.has(date)) continue;
+    const rows = await readDailyRows({ token, spreadsheetId, date });
+    const parsedRows = rows.map((row, index) => rowFromSheet(row, index));
+    const match = parsedRows.find(
+      (row) => row.courier === courier && normalizeScanCode(row[field]) === normalizedCode,
+    );
+    if (match) return { date, parsedRows, row: match };
+  }
+  return null;
 }
 
 function parseDateTime(dateStr, timeStr) {

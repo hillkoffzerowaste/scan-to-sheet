@@ -118,11 +118,23 @@ function orderToRow(order, id = '') {
     packer: order.packer ?? packerScan?.packer ?? '',
     status,
     note: order.note ?? '',
-    adminDate: hasAdmin ? order.date : '',
+    adminDate: hasAdmin ? String(admin?.scannedAt ?? order.date).split('T')[0] : '',
     adminTime,
     sheetSyncStatus: order.sheetSyncStatus ?? 'pending',
     sheetSyncError: order.sheetSyncError ?? '',
   };
+}
+
+async function findRecentOrder({ courier, normalizedCode, days = 3 }) {
+  const orders = await getRecentOrders(500);
+  const now = Date.now();
+  const lookbackMs = (days + 1) * 24 * 60 * 60 * 1000;
+  return orders.find((order) => {
+    const sameOrder = order.courier === courier
+      && normalizeCode(order.normalizedCode || order.code) === normalizedCode;
+    const updated = new Date(order.updatedAtIso ?? 0).getTime();
+    return sameOrder && (!Number.isFinite(updated) || now - updated <= lookbackMs);
+  }) ?? null;
 }
 
 function reportDay(date) {
@@ -226,7 +238,8 @@ export async function recordPackerScanPrimary({ code, courier, date, time, user,
   }
 
   const normalizedCode = normalizeCode(code);
-  const ref = doc(firestoreDb, 'orders', orderId({ date, courier, code: normalizedCode }));
+  const recent = await findRecentOrder({ courier, normalizedCode });
+  const ref = doc(firestoreDb, 'orders', recent?.id ?? orderId({ date, courier, code: normalizedCode }));
 
   return runTransaction(firestoreDb, async (transaction) => {
     const snap = await transaction.get(ref);
@@ -283,7 +296,8 @@ export async function recordAdminScanPrimary({ code, courier, date, time, user }
   }
 
   const normalizedCode = normalizeCode(code);
-  const ref = doc(firestoreDb, 'orders', orderId({ date, courier, code: normalizedCode }));
+  const recent = await findRecentOrder({ courier, normalizedCode });
+  const ref = doc(firestoreDb, 'orders', recent?.id ?? orderId({ date, courier, code: normalizedCode }));
 
   return runTransaction(firestoreDb, async (transaction) => {
     const snap = await transaction.get(ref);
