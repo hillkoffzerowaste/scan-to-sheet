@@ -462,7 +462,7 @@ async function ensureManagementSheets({ token, spreadsheetId, today = getBangkok
 
   for (const sheet of sheets) {
     const title = sheet.properties.title;
-    if (/^\d{4}-\d{2}-\d{2}$/.test(title) && title < today && !sheet.properties.hidden) {
+    if (/^\d{4}-\d{2}-\d{2}(?:_conflict\d+)?$/.test(title) && title < today && !sheet.properties.hidden) {
       requests.push({ updateSheetProperties: { properties: { sheetId: sheet.properties.sheetId, hidden: true }, fields: 'hidden' } });
     }
   }
@@ -488,6 +488,20 @@ async function ensureManagementSheets({ token, spreadsheetId, today = getBangkok
       ['ข้ามวัน', `=COUNTIF(INDIRECT("'"&B2&"'!V2:V"),"ใช่")`, '', 'อัปเดตล่าสุด', new Date().toISOString(), '', '', ''],
       ['วันที่ในระบบ', ...dateList],
     ] }),
+  });
+  const dashboardRows = [];
+  for (const date of dateSheets) {
+    const rows = await readDailyRows({ token, spreadsheetId, date });
+    dashboardRows.push([
+      date,
+      rows.filter((row) => String(row[11] ?? '').trim()).length,
+      rows.filter((row) => String(row[8] ?? '').trim() === 'Success').length,
+      rows.filter((row) => String(row[8] ?? '').trim() === 'รอแพ็ค').length,
+      rows.filter((row) => String(row[21] ?? '').trim() === 'ใช่').length,
+    ]);
+  }
+  await apiFetch(`${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent('Dashboard!A10:E100')}?valueInputOption=USER_ENTERED`, token, {
+    method: 'PUT', body: JSON.stringify({ values: [['วันที่', 'แอดมินสแกน', 'แพ็คแล้ว', 'รอแพ็ค', 'ข้ามวัน'], ...dashboardRows] }),
   });
   await apiFetch(`${SHEETS_API}/${spreadsheetId}:batchUpdate`, token, { method: 'POST', body: JSON.stringify({ requests: [
     { setDataValidation: { range: { sheetId: dashboard.sheetId, startRowIndex: 1, endRowIndex: 2, startColumnIndex: 1, endColumnIndex: 2 }, rule: { condition: { type: 'ONE_OF_LIST', values: dateList.map((date) => ({ userEnteredValue: date })) }, showCustomUi: true, strict: true } } },
