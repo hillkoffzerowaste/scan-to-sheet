@@ -195,6 +195,8 @@ function setMissingCheckCache(data) {
 }
 
 function App() {
+  const organizationSyncAtRef = useRef(0);
+  const ORGANIZATION_SYNC_THROTTLE_MS = 5 * 60 * 1000;
   const [token, setToken] = useState(null);
   const [user, setUser] = useState(EMPTY_USER);
   const [firebaseUser, setFirebaseUser] = useState(null);
@@ -731,9 +733,14 @@ function App() {
     await ensureGoogleSheetOrganization({ token: accessToken, config: prepared }).catch((error) => {
       console.warn('Google Sheet organization failed:', error);
     });
-    await colorAllHistoricalSheetsGoogle({ token: accessToken, config: prepared }).catch((error) => {
-      console.warn('Historical sheet coloring failed:', error);
-    });
+    organizationSyncAtRef.current = Date.now();
+    const lastHistoricalColoring = Number(localStorage.getItem('scan-to-sheet-historical-coloring-at') || 0);
+    if (Date.now() - lastHistoricalColoring >= 30 * 60 * 1000) {
+      await colorAllHistoricalSheetsGoogle({ token: accessToken, config: prepared }).catch((error) => {
+        console.warn('Historical sheet coloring failed:', error);
+      });
+      localStorage.setItem('scan-to-sheet-historical-coloring-at', String(Date.now()));
+    }
 
     if (firebaseAuth && idToken) {
       try {
@@ -814,10 +821,11 @@ function App() {
   }
 
   async function refreshAllCounts(accessToken = token, googleConfig = config) {
-    if (accessToken && googleConfig) {
+    if (accessToken && googleConfig && Date.now() - organizationSyncAtRef.current >= ORGANIZATION_SYNC_THROTTLE_MS) {
       await ensureGoogleSheetOrganization({ token: accessToken, config: googleConfig }).catch((error) => {
         console.warn('Google Sheet organization refresh failed:', error);
       });
+      organizationSyncAtRef.current = Date.now();
     }
     if (!isSignedIn) {
       return;
