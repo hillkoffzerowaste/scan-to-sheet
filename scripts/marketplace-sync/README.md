@@ -8,6 +8,7 @@ Supported platforms:
 - Lazada Seller Center
 
 The worker runs on the shop PC, keeps separate browser profiles per platform, and syncs every 5 minutes by default.
+It runs sequentially by default (`concurrency: 1`) because that is the safest mode for fragile seller-center sessions.
 
 ## Setup
 
@@ -44,6 +45,8 @@ npm run marketplace:sync:once
 ```powershell
 npm run marketplace:sync
 ```
+
+Optional: run a limited number of platform workers in parallel by setting `concurrency` in `scripts/marketplace-sync/config.json` or passing `--concurrency 2` directly to the worker. Keep this low unless the seller-center sessions are stable on that machine.
 
 ## Windows Autostart
 
@@ -97,7 +100,9 @@ The worker also uses `syncLocks/{platform}` so multiple installed shop PCs do no
 
 ## Selector Tuning
 
-The first extractor is intentionally conservative and regex-based. It will not fake data. If a seller center page changes or hides data behind a detail modal, the worker will save a screenshot under `screenshots/` and report zero orders. Use that screenshot to tune `platforms.js`.
+The extractor is intentionally conservative and text-driven. It tries to recover `orderId`, `trackingNo`, `buyerName`, `status`, `courier`, and basic `items[].name/sku` only when those values are visible on the page. It will not invent fields.
+
+If a seller center page changes or hides data behind a detail modal, the worker will save a screenshot under `screenshots/` and report zero or partial orders. Use that screenshot to tune `platforms.js`.
 
 ## Security
 

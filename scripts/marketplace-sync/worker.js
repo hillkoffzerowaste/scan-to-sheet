@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import os from 'node:os';
 import { chromium } from 'playwright';
 import { acquireSyncLock, initFirestore, releaseSyncLock, setSyncStatus, upsertOrders } from './firestore.js';
-import { getPlatformConfig, listPlatformKeys } from './platforms.js';
+import { getPlatformConfig, getPlatformExtractorSource, listPlatformKeys } from './platforms.js';
 import { normalizeOrder } from './normalize.js';
 
 const BASE_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -18,12 +18,15 @@ function parseArgs(argv) {
   const args = argv.slice(2);
   const loginIndex = args.indexOf('--login');
   const platformArg = loginIndex >= 0 ? args[loginIndex + 1] : null;
+  const concurrencyIndex = args.indexOf('--concurrency');
+  const concurrencyArg = concurrencyIndex >= 0 ? Number.parseInt(args[concurrencyIndex + 1], 10) : null;
   return {
     login: loginIndex >= 0,
     once: args.includes('--once'),
     platforms: platformArg && !platformArg.startsWith('--')
       ? platformArg.split(',').map((value) => value.trim()).filter(Boolean)
       : null,
+    concurrency: Number.isFinite(concurrencyArg) && concurrencyArg > 0 ? concurrencyArg : null,
   };
 }
 
@@ -57,6 +60,12 @@ function createLogger(config) {
     warn: (message) => append('WARN', message),
     error: (message) => append('ERROR', message),
   };
+}
+
+function resolveConcurrency(config, requestedConcurrency, platformCount) {
+  const configured = Number.parseInt(config.concurrency, 10);
+  const raw = requestedConcurrency ?? (Number.isFinite(configured) ? configured : 1);
+  return Math.max(1, Math.min(raw, platformCount));
 }
 
 function resolvePlatforms(config, requestedPlatforms) {
@@ -141,10 +150,11 @@ async function scrapePlatform(config, platform, logger) {
     }
 
     const rawOrders = await page.evaluate(({ extractorSource, platformKey, maxOrders }) => {
-      const extractor = new Function(`return (${extractorSource});`)();
+      const factory = new Function(`${extractorSource}\nreturn extractCards;`);
+      const extractor = factory();
       return extractor({ platform: platformKey }).slice(0, maxOrders);
     }, {
-      extractorSource: platformConfig.extractor.toString(),
+      extractorSource: getPlatformExtractorSource(platform),
       platformKey: platform,
       maxOrders: config.maxOrdersPerPlatform,
     });
@@ -153,6 +163,14 @@ async function scrapePlatform(config, platform, logger) {
       const screenshotPath = path.resolve(BASE_DIR, config.screenshotsDir, `${platform}-${Date.now()}.png`);
       await page.screenshot({ path: screenshotPath, fullPage: true }).catch(() => {});
       await logger.warn(`${platform}: extracted 0 orders. Screenshot saved for selector tuning.`);
+    } else {
+      const buyerCount = rawOrders.filter((order) => order.buyerName).length;
+      const itemCount = rawOrders.reduce((sum, order) => sum + (Array.isArray(order.items) ? order.items.length : 0), 0);
+      const skuCount = rawOrders.reduce(
+        (sum, order) => sum + (Array.isArray(order.items) ? order.items.filter((item) => item?.sku).length : 0),
+        0,
+      );
+      await logger.info(`${platform}: extracted=${rawOrders.length}, buyerNames=${buyerCount}, items=${itemCount}, skus=${skuCount}`);
     }
 
     return rawOrders.map((order) => normalizeOrder(order, platform));
@@ -249,6 +267,13 @@ async function sleep(ms) {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function runPlatformsWithConcurrency(platforms, concurrency, handler) {
+  for (let index = 0; index < platforms.length; index += concurrency) {
+    const batch = platforms.slice(index, index + concurrency);
+    await Promise.all(batch.map((platform) => handler(platform)));
+  }
+}
+
 async function main() {
   const args = parseArgs(process.argv);
   const config = await loadConfig();
@@ -268,10 +293,12 @@ async function main() {
   }
 
   const db = await initFirestore({ config, baseDir: BASE_DIR });
+  const concurrency = resolveConcurrency(config, args.concurrency, platforms.length);
+  await logger.info(`Worker starting for ${platforms.join(', ')} with concurrency=${concurrency}`);
   do {
-    for (const platform of platforms) {
-      await syncPlatform({ db, config, platform, logger });
-    }
+    await runPlatformsWithConcurrency(platforms, concurrency, (platform) =>
+      syncPlatform({ db, config, platform, logger }),
+    );
     if (!args.once) {
       await logger.info(`Waiting ${config.intervalMs}ms before next sync.`);
       await sleep(config.intervalMs);

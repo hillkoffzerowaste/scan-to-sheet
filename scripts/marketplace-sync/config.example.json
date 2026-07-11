@@ -6,6 +6,7 @@
   "enabledPlatforms": ["tiktok", "shopee", "lazada"],
   "intervalMs": 300000,
   "lockTtlMs": 600000,
+  "concurrency": 1,
   "headless": false,
   "navigationTimeoutMs": 60000,
   "orderLoadTimeoutMs": 30000,
