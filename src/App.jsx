@@ -734,13 +734,7 @@ function App() {
       console.warn('Google Sheet organization failed:', error);
     });
     organizationSyncAtRef.current = Date.now();
-    const lastHistoricalColoring = Number(localStorage.getItem('scan-to-sheet-historical-coloring-at') || 0);
-    if (Date.now() - lastHistoricalColoring >= 30 * 60 * 1000) {
-      await colorAllHistoricalSheetsGoogle({ token: accessToken, config: prepared }).catch((error) => {
-        console.warn('Historical sheet coloring failed:', error);
-      });
-      localStorage.setItem('scan-to-sheet-historical-coloring-at', String(Date.now()));
-    }
+    // Historical colors are already backfilled; avoid reading every old sheet on login.
 
     if (firebaseAuth && idToken) {
       try {

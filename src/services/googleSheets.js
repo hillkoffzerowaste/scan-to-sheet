@@ -491,7 +491,8 @@ async function ensureManagementSheets({ token, spreadsheetId, today = getBangkok
   const dateSheets = refreshed.sheets?.map((sheet) => sheet.properties.title).filter((title) => /^\d{4}-\d{2}-\d{2}(?:_conflict\d+)?$/.test(title)).sort().reverse() ?? [];
   const dateList = [...new Set(dateSheets.map((title) => title.slice(0, 10)))];
   const allOrderRows = [];
-  for (const date of dateSheets) {
+  const shouldBuildAllOrders = !existing.has(MANAGEMENT_SHEETS.allOrders);
+  for (const date of shouldBuildAllOrders ? dateSheets : [today]) {
     const rows = await readDailyRows({ token, spreadsheetId, date }).catch(() => []);
     for (const row of rows) {
       const hasAdmin = Boolean(String(row[11] ?? '').trim());
@@ -502,13 +503,14 @@ async function ensureManagementSheets({ token, spreadsheetId, today = getBangkok
     }
   }
   const allOrdersHeaders = [...ALL_HEADERS, 'Source Sheet', 'Admin Flag', 'Packed Flag', 'Pending Flag', 'Cross-day Flag', 'Month'];
-  await apiFetch(`${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent('All Orders!A1:AC5000')}:clear`, token, {
-    method: 'POST',
-    body: JSON.stringify({}),
-  });
-  await apiFetch(`${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent('All Orders!A1:AC5000')}?valueInputOption=USER_ENTERED`, token, {
-    method: 'PUT', body: JSON.stringify({ values: [allOrdersHeaders, ...allOrderRows] }),
-  });
+  if (shouldBuildAllOrders) {
+    await apiFetch(`${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent('All Orders!A1:AC5000')}:clear`, token, {
+      method: 'POST', body: JSON.stringify({}),
+    });
+    await apiFetch(`${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent('All Orders!A1:AC5000')}?valueInputOption=USER_ENTERED`, token, {
+      method: 'PUT', body: JSON.stringify({ values: [allOrdersHeaders, ...allOrderRows] }),
+    });
+  }
   await apiFetch(`${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent('Dashboard!A1:H8')}?valueInputOption=USER_ENTERED`, token, {
     method: 'PUT', body: JSON.stringify({ values: [
       ['สรุปการสแกน', '', '', '', '', '', '', ''],
