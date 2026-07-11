@@ -511,7 +511,7 @@ async function ensureManagementSheets({ token, spreadsheetId, today = getBangkok
       method: 'PUT', body: JSON.stringify({ values: [allOrdersHeaders, ...allOrderRows] }),
     });
   }
-  await apiFetch(`${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent('Dashboard!A1:H8')}?valueInputOption=USER_ENTERED`, token, {
+  await apiFetch(`${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent('Dashboard!A1:AC100')}?valueInputOption=USER_ENTERED`, token, {
     method: 'PUT', body: JSON.stringify({ values: [
       ['สรุปการสแกน', '', '', '', '', '', '', ''],
       ['เลือกวันที่', dateList[0], '', '', '', '', '', ''],
