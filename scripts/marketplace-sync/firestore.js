@@ -33,6 +33,7 @@ export async function upsertOrders({ db, config, platform, orders, machineName }
       db.collection(collectionName).doc(docId),
       {
         ...order,
+        buyerName: FieldValue.delete(),
         platform,
         source: 'playwright',
         syncMachine: machineName,

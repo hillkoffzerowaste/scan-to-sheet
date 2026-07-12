@@ -78,7 +78,6 @@ function extractShopeeCards({ platform }) {
         return null;
       }
 
-      const buyerName = firstMatch(rawText, [/^(.+?)\s*หมายเลขคำสั่งซื้อ/i]);
       const afterOrderId = rawText.slice(rawText.indexOf(orderId) + orderId.length);
       const itemName = afterOrderId
         .split(/(?:ตัวเลือกสินค้า\s*:|\s+x\d+\b)/i)[0]
@@ -91,7 +90,6 @@ function extractShopeeCards({ platform }) {
         platform,
         orderId,
         trackingNo,
-        buyerName,
         items: [{ name: itemName, sku, quantity }].filter((item) => item.name || item.sku),
         rawText,
       };
@@ -109,10 +107,6 @@ function extractCards({ platform }) {
       if (!trackingNo && !orderId) {
         return null;
       }
-      const buyerName = firstMatch(rawText, [
-        /(?:Buyer|Customer|Ship\s*to|Recipient|ผู้ซื้อ|ชื่อลูกค้า|ลูกค้า)\s*[:：]\s*(.{2,80}?)(?=\s+(?:SKU|Seller\s*SKU|Tracking|Order\s*ID|Product\s*Name|Item\s*Name|Status)\b|$)/i,
-        /(?:ผู้รับ)\s*[:：]\s*(.{2,80}?)(?=\s+(?:SKU|Tracking|Order\s*ID|สินค้า|สถานะ)\b|$)/i,
-      ]);
       const courier = firstMatch(rawText, [
         /(?:Courier|Carrier|Logistics|ขนส่ง)\s*[:：]\s*([^\n|,]{2,80})/i,
       ]);
@@ -128,7 +122,6 @@ function extractCards({ platform }) {
         trackingNo,
         status,
         courier,
-        buyerName,
         orderCreatedAt,
         items: extractItemsFromText(rawText),
         rawText,
