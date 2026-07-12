@@ -7,8 +7,7 @@ Supported platforms:
 - Shopee Seller Centre
 - Lazada Seller Center
 
-The worker runs on the shop PC, keeps separate browser profiles per platform, and syncs every 5 minutes by default.
-It runs sequentially by default (`concurrency: 1`) because that is the safest mode for fragile seller-center sessions.
+The worker runs on the shop PC using one dedicated Chromium profile shared by every platform, and syncs every 5 minutes by default. It always runs sequentially because the shared profile must never be opened by concurrent workers.
 
 ## Setup
 
@@ -30,7 +29,7 @@ npm run marketplace:login -- lazada
 
 Keep the opened browser signed in, then close it after the session is saved.
 
-Each platform keeps its own Playwright profile under `scripts/marketplace-sync/profiles/{platform}`.
+All platforms share `scripts/marketplace-sync/marketplace-profile` by default. This is a dedicated Chromium profile for the worker, not the user's normal Chrome profile.
 The login command opens the order page first, so an existing saved session should stay logged in.
 If it asks for login again, make sure no other worker/login window for the same platform is open and the profile folder was not deleted.
 
@@ -46,7 +45,7 @@ npm run marketplace:sync:once
 npm run marketplace:sync
 ```
 
-Optional: run a limited number of platform workers in parallel by setting `concurrency` in `scripts/marketplace-sync/config.json` or passing `--concurrency 2` directly to the worker. Keep this low unless the seller-center sessions are stable on that machine.
+Do not run two sync workers or a login window while the worker is running. The Firestore global lock prevents concurrent access to the shared profile.
 
 ## Windows Autostart
 
@@ -96,7 +95,9 @@ Sync status is written to:
 syncStatus/{platform}
 ```
 
-The worker also uses `syncLocks/{platform}` so multiple installed shop PCs do not sync the same platform at the same time.
+The worker uses `syncLocks/marketplace-worker` with a unique run token so two workers, including on the same PC, cannot use the shared profile at the same time.
+
+Sync status values are `running`, `synced`, `partial`, `login_required`, and `error`. `partial` means no orders were extracted although a login page was not detected; the worker saves a screenshot for review. `login_required` means the session needs a manual login.
 
 ## Selector Tuning
 

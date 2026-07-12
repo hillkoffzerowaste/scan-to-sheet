@@ -69,8 +69,8 @@ export async function setSyncStatus({ db, config, platform, status }) {
   );
 }
 
-export async function acquireSyncLock({ db, platform, machineName, ttlMs }) {
-  const lockRef = db.collection('syncLocks').doc(platform);
+export async function acquireSyncLock({ db, lockKey = 'marketplace-worker', ownerToken, machineName, ttlMs }) {
+  const lockRef = db.collection('syncLocks').doc(lockKey);
   const now = Date.now();
   const expiresAt = new Date(now + ttlMs);
 
@@ -78,7 +78,7 @@ export async function acquireSyncLock({ db, platform, machineName, ttlMs }) {
     const snap = await transaction.get(lockRef);
     const lock = snap.exists ? snap.data() : null;
     const currentExpiresAt = lock?.expiresAt?.toDate?.() ?? (lock?.expiresAt ? new Date(lock.expiresAt) : null);
-    const ownedByOther = lock?.owner && lock.owner !== machineName;
+    const ownedByOther = lock?.ownerToken && lock.ownerToken !== ownerToken;
     const stillActive = currentExpiresAt && currentExpiresAt.getTime() > now;
 
     if (ownedByOther && stillActive) {
@@ -86,8 +86,9 @@ export async function acquireSyncLock({ db, platform, machineName, ttlMs }) {
     }
 
     transaction.set(lockRef, {
-      owner: machineName,
-      platform,
+      ownerToken,
+      lockKey,
+      machineName,
       lockedAt: FieldValue.serverTimestamp(),
       expiresAt,
     }, { merge: true });
@@ -95,12 +96,12 @@ export async function acquireSyncLock({ db, platform, machineName, ttlMs }) {
   });
 }
 
-export async function releaseSyncLock({ db, platform, machineName }) {
-  const lockRef = db.collection('syncLocks').doc(platform);
+export async function releaseSyncLock({ db, lockKey = 'marketplace-worker', ownerToken }) {
+  const lockRef = db.collection('syncLocks').doc(lockKey);
   await db.runTransaction(async (transaction) => {
     const snap = await transaction.get(lockRef);
     const lock = snap.exists ? snap.data() : null;
-    if (lock?.owner === machineName) {
+    if (lock?.ownerToken === ownerToken) {
       transaction.set(lockRef, {
         releasedAt: FieldValue.serverTimestamp(),
         expiresAt: new Date(0),

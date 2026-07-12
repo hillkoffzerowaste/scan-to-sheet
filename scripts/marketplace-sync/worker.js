@@ -4,6 +4,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import os from 'node:os';
+import { randomUUID } from 'node:crypto';
 import { chromium } from 'playwright';
 import { acquireSyncLock, initFirestore, releaseSyncLock, setSyncStatus, upsertOrders } from './firestore.js';
 import { getPlatformConfig, getPlatformExtractorSource, listPlatformKeys } from './platforms.js';
@@ -13,20 +14,21 @@ const BASE_DIR = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_CONFIG_PATH = path.join(BASE_DIR, 'config.json');
 const EXAMPLE_CONFIG_PATH = path.join(BASE_DIR, 'config.example.json');
 const MACHINE_NAME = os.hostname();
+const RUN_TOKEN = `${MACHINE_NAME}:${randomUUID()}`;
 
 function parseArgs(argv) {
   const args = argv.slice(2);
   const loginIndex = args.indexOf('--login');
   const platformArg = loginIndex >= 0 ? args[loginIndex + 1] : null;
-  const concurrencyIndex = args.indexOf('--concurrency');
-  const concurrencyArg = concurrencyIndex >= 0 ? Number.parseInt(args[concurrencyIndex + 1], 10) : null;
+  if (args.includes('--concurrency')) {
+    throw new Error('This worker uses one shared browser profile and only supports sequential sync.');
+  }
   return {
     login: loginIndex >= 0,
     once: args.includes('--once'),
     platforms: platformArg && !platformArg.startsWith('--')
       ? platformArg.split(',').map((value) => value.trim()).filter(Boolean)
       : null,
-    concurrency: Number.isFinite(concurrencyArg) && concurrencyArg > 0 ? concurrencyArg : null,
   };
 }
 
@@ -43,7 +45,8 @@ async function loadConfig() {
 }
 
 async function ensureLocalDirs(config) {
-  for (const key of ['profilesDir', 'logDir', 'screenshotsDir']) {
+  await mkdir(profilePath(config), { recursive: true });
+  for (const key of ['logDir', 'screenshotsDir']) {
     await mkdir(path.resolve(BASE_DIR, config[key]), { recursive: true });
   }
 }
@@ -62,12 +65,6 @@ function createLogger(config) {
   };
 }
 
-function resolveConcurrency(config, requestedConcurrency, platformCount) {
-  const configured = Number.parseInt(config.concurrency, 10);
-  const raw = requestedConcurrency ?? (Number.isFinite(configured) ? configured : 1);
-  return Math.max(1, Math.min(raw, platformCount));
-}
-
 function resolvePlatforms(config, requestedPlatforms) {
   const platforms = requestedPlatforms?.length ? requestedPlatforms : config.enabledPlatforms;
   const known = new Set(listPlatformKeys());
@@ -78,19 +75,19 @@ function resolvePlatforms(config, requestedPlatforms) {
   return selected.filter((platform) => known.has(platform));
 }
 
-function profilePath(config, platform) {
-  return path.resolve(BASE_DIR, config.profilesDir, platform);
+function profilePath(config) {
+  // profilesDir is retained as a fallback for existing local config files.
+  return path.resolve(BASE_DIR, config.profileDir ?? config.profilesDir ?? 'marketplace-profile');
 }
 
-async function openContext(config, platform) {
-  const profileDir = profilePath(config, platform);
+async function openContext(config) {
+  const profileDir = profilePath(config);
   await mkdir(profileDir, { recursive: true });
   return chromium.launchPersistentContext(profileDir, {
     headless: Boolean(config.headless),
     viewport: { width: 1440, height: 960 },
     locale: 'th-TH',
     timezoneId: 'Asia/Bangkok',
-    args: ['--disable-blink-features=AutomationControlled'],
   });
 }
 
@@ -113,9 +110,9 @@ async function loginPlatform(config, platform, logger) {
     throw new Error(`Unknown platform: ${platform}`);
   }
 
-  const profileDir = profilePath(config, platform);
+  const profileDir = profilePath(config);
   await logger.info(`Opening ${platformConfig.label} with profile: ${profileDir}`);
-  const context = await openContext({ ...config, headless: false }, platform);
+  const context = await openContext({ ...config, headless: false });
   const page = context.pages()[0] ?? await context.newPage();
   await page.goto(platformConfig.orderListUrl ?? platformConfig.loginUrl, {
     waitUntil: 'domcontentloaded',
@@ -136,7 +133,7 @@ async function scrapePlatform(config, platform, logger) {
     throw new Error(`Unknown platform: ${platform}`);
   }
 
-  const context = await openContext(config, platform);
+  const context = await openContext(config);
   const page = context.pages()[0] ?? await context.newPage();
   try {
     await page.goto(platformConfig.orderListUrl, {
@@ -147,6 +144,17 @@ async function scrapePlatform(config, platform, logger) {
     const matchedSelector = await waitForAnySelector(page, platformConfig.readySelectors, config.orderLoadTimeoutMs);
     if (!matchedSelector) {
       await logger.warn(`${platform}: no known order selector found. You may need to log in or tune selectors.`);
+    }
+
+    const currentUrl = page.url().toLowerCase();
+    const loginDetected = currentUrl.includes('login')
+      || currentUrl.includes('signin')
+      || await page.locator('input[type="password"]').count() > 0;
+    if (loginDetected) {
+      const screenshotPath = path.resolve(BASE_DIR, config.screenshotsDir, `${platform}-login-${Date.now()}.png`);
+      await page.screenshot({ path: screenshotPath, fullPage: true }).catch(() => {});
+      await logger.warn(`${platform}: login is required. Screenshot saved: ${screenshotPath}`);
+      return { orders: [], status: 'login_required' };
     }
 
     const rawOrders = await page.evaluate(({ extractorSource, platformKey, maxOrders }) => {
@@ -163,6 +171,7 @@ async function scrapePlatform(config, platform, logger) {
       const screenshotPath = path.resolve(BASE_DIR, config.screenshotsDir, `${platform}-${Date.now()}.png`);
       await page.screenshot({ path: screenshotPath, fullPage: true }).catch(() => {});
       await logger.warn(`${platform}: extracted 0 orders. Screenshot saved for selector tuning.`);
+      return { orders: [], status: 'partial' };
     } else {
       const buyerCount = rawOrders.filter((order) => order.buyerName).length;
       const itemCount = rawOrders.reduce((sum, order) => sum + (Array.isArray(order.items) ? order.items.length : 0), 0);
@@ -173,7 +182,7 @@ async function scrapePlatform(config, platform, logger) {
       await logger.info(`${platform}: extracted=${rawOrders.length}, buyerNames=${buyerCount}, items=${itemCount}, skus=${skuCount}`);
     }
 
-    return rawOrders.map((order) => normalizeOrder(order, platform));
+    return { orders: rawOrders.map((order) => normalizeOrder(order, platform)), status: 'synced' };
   } finally {
     await context.close();
   }
@@ -181,32 +190,6 @@ async function scrapePlatform(config, platform, logger) {
 
 async function syncPlatform({ db, config, platform, logger }) {
   const startedAt = new Date().toISOString();
-  const lockAcquired = await acquireSyncLock({
-    db,
-    platform,
-    machineName: MACHINE_NAME,
-    ttlMs: config.lockTtlMs ?? 600000,
-  });
-
-  if (!lockAcquired) {
-    await logger.warn(`${platform}: skipped because another machine owns the sync lock`);
-    await setSyncStatus({
-      db,
-      config,
-      platform,
-      status: {
-        platform,
-        status: 'locked',
-        lastStartedAt: startedAt,
-        lastFinishedAt: new Date().toISOString(),
-        lastOk: true,
-        error: '',
-        machineName: MACHINE_NAME,
-      },
-    });
-    return;
-  }
-
   await setSyncStatus({
     db,
     config,
@@ -223,25 +206,25 @@ async function syncPlatform({ db, config, platform, logger }) {
 
   try {
     await logger.info(`${platform}: sync started`);
-    const orders = await scrapePlatform(config, platform, logger);
-    const upserted = await upsertOrders({ db, config, platform, orders, machineName: MACHINE_NAME });
+    const result = await scrapePlatform(config, platform, logger);
+    const upserted = await upsertOrders({ db, config, platform, orders: result.orders, machineName: MACHINE_NAME });
     await setSyncStatus({
       db,
       config,
       platform,
       status: {
         platform,
-        status: 'idle',
+        status: result.status,
         lastStartedAt: startedAt,
         lastFinishedAt: new Date().toISOString(),
-        lastOk: true,
+        lastOk: result.status === 'synced',
         error: '',
-        ordersSeen: orders.length,
+        ordersSeen: result.orders.length,
         ordersUpserted: upserted,
         machineName: MACHINE_NAME,
       },
     });
-    await logger.info(`${platform}: sync finished, seen=${orders.length}, upserted=${upserted}`);
+    await logger.info(`${platform}: sync finished with status=${result.status}, seen=${result.orders.length}, upserted=${upserted}`);
   } catch (error) {
     await setSyncStatus({
       db,
@@ -258,20 +241,11 @@ async function syncPlatform({ db, config, platform, logger }) {
       },
     });
     await logger.error(`${platform}: ${error.stack || error.message}`);
-  } finally {
-    await releaseSyncLock({ db, platform, machineName: MACHINE_NAME }).catch(() => {});
   }
 }
 
 async function sleep(ms) {
   await new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function runPlatformsWithConcurrency(platforms, concurrency, handler) {
-  for (let index = 0; index < platforms.length; index += concurrency) {
-    const batch = platforms.slice(index, index + concurrency);
-    await Promise.all(batch.map((platform) => handler(platform)));
-  }
 }
 
 async function main() {
@@ -285,20 +259,46 @@ async function main() {
     throw new Error('No valid platforms selected.');
   }
 
+  const db = await initFirestore({ config, baseDir: BASE_DIR });
   if (args.login) {
-    for (const platform of platforms) {
-      await loginPlatform(config, platform, logger);
+    const lockAcquired = await acquireSyncLock({
+      db,
+      ownerToken: RUN_TOKEN,
+      machineName: MACHINE_NAME,
+      ttlMs: config.lockTtlMs ?? 600000,
+    });
+    if (!lockAcquired) {
+      throw new Error('Another worker or login window owns the shared Chromium profile. Try again later.');
+    }
+    try {
+      for (const platform of platforms) {
+        await loginPlatform(config, platform, logger);
+      }
+    } finally {
+      await releaseSyncLock({ db, ownerToken: RUN_TOKEN }).catch(() => {});
     }
     return;
   }
 
-  const db = await initFirestore({ config, baseDir: BASE_DIR });
-  const concurrency = resolveConcurrency(config, args.concurrency, platforms.length);
-  await logger.info(`Worker starting for ${platforms.join(', ')} with concurrency=${concurrency}`);
+  await logger.info(`Worker starting for ${platforms.join(', ')} with one shared Chromium profile`);
   do {
-    await runPlatformsWithConcurrency(platforms, concurrency, (platform) =>
-      syncPlatform({ db, config, platform, logger }),
-    );
+    const lockAcquired = await acquireSyncLock({
+      db,
+      ownerToken: RUN_TOKEN,
+      machineName: MACHINE_NAME,
+      ttlMs: config.lockTtlMs ?? 600000,
+    });
+    if (!lockAcquired) {
+      await logger.warn('Sync skipped because another worker owns the shared Chromium profile.');
+    } else {
+      try {
+        for (const platform of platforms) {
+          await syncPlatform({ db, config, platform, logger });
+        }
+      } finally {
+        await releaseSyncLock({ db, ownerToken: RUN_TOKEN }).catch(() => {});
+      }
+    }
     if (!args.once) {
       await logger.info(`Waiting ${config.intervalMs}ms before next sync.`);
       await sleep(config.intervalMs);
