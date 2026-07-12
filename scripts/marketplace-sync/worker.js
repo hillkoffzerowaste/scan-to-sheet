@@ -65,6 +65,64 @@ function createLogger(config) {
   };
 }
 
+function createShutdownController(logger) {
+  let activeContext = null;
+  let closingContext = null;
+  let signal = '';
+
+  const closeActiveContext = async () => {
+    const context = activeContext;
+    if (!context || closingContext === context) {
+      return;
+    }
+    closingContext = context;
+    try {
+      await context.close();
+    } catch (error) {
+      await logger.warn(`Failed to close Chromium context: ${error.message}`);
+    } finally {
+      if (activeContext === context) {
+        activeContext = null;
+      }
+      closingContext = null;
+    }
+  };
+
+  const handleSignal = (nextSignal) => {
+    if (signal) {
+      return;
+    }
+    signal = nextSignal;
+    void logger.warn(`Received ${nextSignal}; closing the active Chromium context.`);
+    void closeActiveContext();
+  };
+
+  const onSigint = () => handleSignal('SIGINT');
+  const onSigterm = () => handleSignal('SIGTERM');
+  process.once('SIGINT', onSigint);
+  process.once('SIGTERM', onSigterm);
+
+  return {
+    setContext(context) {
+      activeContext = context;
+      if (signal) {
+        void closeActiveContext();
+      }
+    },
+    clearContext(context) {
+      if (activeContext === context) {
+        activeContext = null;
+      }
+    },
+    isStopping: () => Boolean(signal),
+    dispose() {
+      process.off('SIGINT', onSigint);
+      process.off('SIGTERM', onSigterm);
+      return signal === 'SIGINT' ? 130 : 0;
+    },
+  };
+}
+
 function resolvePlatforms(config, requestedPlatforms) {
   const platforms = requestedPlatforms?.length ? requestedPlatforms : config.enabledPlatforms;
   const known = new Set(listPlatformKeys());
@@ -104,36 +162,53 @@ async function waitForAnySelector(page, selectors, timeoutMs) {
   return null;
 }
 
-async function loginPlatform(config, platform, logger) {
-  const platformConfig = getPlatformConfig(platform);
-  if (!platformConfig) {
-    throw new Error(`Unknown platform: ${platform}`);
-  }
-
-  const profileDir = profilePath(config);
-  await logger.info(`Opening ${platformConfig.label} with profile: ${profileDir}`);
-  const context = await openContext({ ...config, headless: false });
-  const page = context.pages()[0] ?? await context.newPage();
-  await page.goto(platformConfig.orderListUrl ?? platformConfig.loginUrl, {
-    waitUntil: 'domcontentloaded',
-    timeout: config.navigationTimeoutMs,
+async function loginPlatforms(config, platforms, logger, contextController) {
+  const platformConfigs = platforms.map((platform) => {
+    const platformConfig = getPlatformConfig(platform);
+    if (!platformConfig) {
+      throw new Error(`Unknown platform: ${platform}`);
+    }
+    return platformConfig;
   });
+  const profileDir = profilePath(config);
+  await logger.info(`Opening one shared profile with ${platformConfigs.length} login tab(s): ${profileDir}`);
+  const context = await openContext({ ...config, headless: false });
+  contextController.setContext(context);
+  const contextClosed = new Promise((resolve) => context.once('close', resolve));
+  try {
+    const firstPage = context.pages()[0] ?? await context.newPage();
+    const pages = await Promise.all(platformConfigs.map((_, index) => (
+      index === 0 ? firstPage : context.newPage()
+    )));
 
-  await logger.info('Login window is open. Sign in if needed, then close the browser window yourself.');
-  await Promise.race([
-    new Promise((resolve) => context.once('close', resolve)),
-    page.waitForEvent('close').catch(() => null),
-  ]);
-  await context.close().catch(() => {});
+    await Promise.all(platformConfigs.map(async (platformConfig, index) => {
+      try {
+        await pages[index].goto(platformConfig.orderListUrl ?? platformConfig.loginUrl, {
+          waitUntil: 'domcontentloaded',
+          timeout: config.navigationTimeoutMs,
+        });
+        await logger.info(`${platformConfig.label}: login tab is ready.`);
+      } catch (error) {
+        await logger.error(`${platformConfig.label}: login tab navigation failed: ${error.message}`);
+      }
+    }));
+
+    await logger.info('All login tabs are open. Complete each login, then close the Chromium window.');
+    await contextClosed;
+  } finally {
+    await context.close().catch(() => {});
+    contextController.clearContext(context);
+  }
 }
 
-async function scrapePlatform(config, platform, logger) {
+async function scrapePlatform(config, platform, logger, contextController) {
   const platformConfig = getPlatformConfig(platform);
   if (!platformConfig) {
     throw new Error(`Unknown platform: ${platform}`);
   }
 
   const context = await openContext(config);
+  contextController.setContext(context);
   const page = context.pages()[0] ?? await context.newPage();
   try {
     await page.goto(platformConfig.orderListUrl, {
@@ -185,10 +260,11 @@ async function scrapePlatform(config, platform, logger) {
     return { orders: rawOrders.map((order) => normalizeOrder(order, platform)), status: 'synced' };
   } finally {
     await context.close();
+    contextController.clearContext(context);
   }
 }
 
-async function syncPlatform({ db, config, platform, logger }) {
+async function syncPlatform({ db, config, platform, logger, contextController }) {
   const startedAt = new Date().toISOString();
   await setSyncStatus({
     db,
@@ -206,7 +282,7 @@ async function syncPlatform({ db, config, platform, logger }) {
 
   try {
     await logger.info(`${platform}: sync started`);
-    const result = await scrapePlatform(config, platform, logger);
+    const result = await scrapePlatform(config, platform, logger, contextController);
     const upserted = await upsertOrders({ db, config, platform, orders: result.orders, machineName: MACHINE_NAME });
     await setSyncStatus({
       db,
@@ -253,6 +329,7 @@ async function main() {
   const config = await loadConfig();
   await ensureLocalDirs(config);
   const logger = createLogger(config);
+  const shutdownController = createShutdownController(logger);
   const platforms = resolvePlatforms(config, args.platforms);
 
   if (!platforms.length) {
@@ -271,11 +348,13 @@ async function main() {
       throw new Error('Another worker or login window owns the shared Chromium profile. Try again later.');
     }
     try {
-      for (const platform of platforms) {
-        await loginPlatform(config, platform, logger);
-      }
+      await loginPlatforms(config, platforms, logger, shutdownController);
     } finally {
       await releaseSyncLock({ db, ownerToken: RUN_TOKEN }).catch(() => {});
+      const exitCode = shutdownController.dispose();
+      if (exitCode) {
+        process.exitCode = exitCode;
+      }
     }
     return;
   }
@@ -293,11 +372,21 @@ async function main() {
     } else {
       try {
         for (const platform of platforms) {
-          await syncPlatform({ db, config, platform, logger });
+          if (shutdownController.isStopping()) {
+            break;
+          }
+          await syncPlatform({ db, config, platform, logger, contextController: shutdownController });
         }
       } finally {
         await releaseSyncLock({ db, ownerToken: RUN_TOKEN }).catch(() => {});
       }
+    }
+    if (shutdownController.isStopping()) {
+      const exitCode = shutdownController.dispose();
+      if (exitCode) {
+        process.exitCode = exitCode;
+      }
+      return;
     }
     if (!args.once) {
       await logger.info(`Waiting ${config.intervalMs}ms before next sync.`);

@@ -69,6 +69,36 @@ function extractItemsFromText(rawText) {
   })).filter((item) => item.name || item.sku);
 }
 
+function extractShopeeCards({ platform }) {
+  return Array.from(document.querySelectorAll('a[data-testid="order-item"]'))
+    .map((element) => {
+      const rawText = textFromElement(element);
+      const orderId = firstMatch(rawText, [/หมายเลขคำสั่งซื้อ\s*([A-Z0-9]+)/i]);
+      if (!orderId) {
+        return null;
+      }
+
+      const buyerName = firstMatch(rawText, [/^(.+?)\s*หมายเลขคำสั่งซื้อ/i]);
+      const afterOrderId = rawText.slice(rawText.indexOf(orderId) + orderId.length);
+      const itemName = afterOrderId
+        .split(/(?:ตัวเลือกสินค้า\s*:|\s+x\d+\b)/i)[0]
+        .trim();
+      const sku = firstMatch(rawText, [/\[([A-Z]{2,8}-[A-Z0-9-]{2,})\s*\]/i]);
+      const trackingNo = rawText.match(/\b(?:TH|SPX|SPE|JNT|JT|KEX|LEX|BEST|FLASH|DHL|NINJA|NJV)[A-Z0-9-]{6,}\b/i)?.[0] ?? '';
+      const quantity = Number.parseInt(firstMatch(rawText, [/\s+x(\d+)\b/i]), 10) || 1;
+
+      return {
+        platform,
+        orderId,
+        trackingNo,
+        buyerName,
+        items: [{ name: itemName, sku, quantity }].filter((item) => item.name || item.sku),
+        rawText,
+      };
+    })
+    .filter(Boolean);
+}
+
 function extractCards({ platform }) {
   const trackingRe = /\b(?:TH|SPX|SPE|JNT|JT|KEX|LEX|BEST|FLASH|DHL|NINJA|NJV)[A-Z0-9-]{6,}\b/gi;
   const orderRe = /\b(?:20\d{10,}|[0-9]{10,20}|[A-Z0-9]{12,24})\b/g;
@@ -130,7 +160,7 @@ export const PLATFORMS = {
       'table',
       'main',
     ],
-    extractor: extractCards,
+    extractor: extractShopeeCards,
   },
   lazada: {
     label: 'Lazada Seller Center',
@@ -160,11 +190,16 @@ export function getPlatformExtractorSource(platform) {
     return '';
   }
 
+  const extractorSource = platformConfig.extractor === extractShopeeCards
+    ? 'const extractCards = extractShopeeCards;'
+    : platformConfig.extractor.toString();
+
   return [
     textFromElement.toString(),
     collectCandidateRows.toString(),
     firstMatch.toString(),
     extractItemsFromText.toString(),
-    platformConfig.extractor.toString(),
-  ].join('\n');
+    extractShopeeCards.toString(),
+    extractorSource,
+  ].filter(Boolean).join('\n');
 }

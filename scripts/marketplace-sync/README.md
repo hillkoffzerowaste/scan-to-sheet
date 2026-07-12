@@ -19,7 +19,13 @@ The worker runs on the shop PC using one dedicated Chromium profile shared by ev
 Copy-Item scripts\marketplace-sync\config.example.json scripts\marketplace-sync\config.json
 ```
 
-4. Login each platform once:
+4. Login each platform once. To open all three Seller Centers as tabs in one Chromium window:
+
+```powershell
+npm run marketplace:login -- all
+```
+
+Or open one platform at a time:
 
 ```powershell
 npm run marketplace:login -- tiktok
@@ -27,7 +33,7 @@ npm run marketplace:login -- shopee
 npm run marketplace:login -- lazada
 ```
 
-Keep the opened browser signed in, then close it after the session is saved.
+Complete each login, then close the Chromium window after the sessions are saved.
 
 All platforms share `scripts/marketplace-sync/marketplace-profile` by default. This is a dedicated Chromium profile for the worker, not the user's normal Chrome profile.
 The login command opens the order page first, so an existing saved session should stay logged in.
