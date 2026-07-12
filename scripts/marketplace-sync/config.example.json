@@ -3,7 +3,7 @@
   "profileDir": "marketplace-profile",
   "logDir": "logs",
   "screenshotsDir": "screenshots",
-  "enabledPlatforms": ["tiktok", "shopee", "lazada"],
+  "enabledPlatforms": ["shopee"],
   "intervalMs": 300000,
   "lockTtlMs": 600000,
   "headless": false,
