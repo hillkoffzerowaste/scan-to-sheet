@@ -104,27 +104,41 @@ async function waitForAnySelector(page, selectors, timeoutMs) {
   return null;
 }
 
-async function loginPlatform(config, platform, logger) {
-  const platformConfig = getPlatformConfig(platform);
-  if (!platformConfig) {
-    throw new Error(`Unknown platform: ${platform}`);
-  }
-
-  const profileDir = profilePath(config);
-  await logger.info(`Opening ${platformConfig.label} with profile: ${profileDir}`);
-  const context = await openContext({ ...config, headless: false });
-  const page = context.pages()[0] ?? await context.newPage();
-  await page.goto(platformConfig.orderListUrl ?? platformConfig.loginUrl, {
-    waitUntil: 'domcontentloaded',
-    timeout: config.navigationTimeoutMs,
+async function loginPlatforms(config, platforms, logger) {
+  const platformConfigs = platforms.map((platform) => {
+    const platformConfig = getPlatformConfig(platform);
+    if (!platformConfig) {
+      throw new Error(`Unknown platform: ${platform}`);
+    }
+    return platformConfig;
   });
+  const profileDir = profilePath(config);
+  await logger.info(`Opening one shared profile with ${platformConfigs.length} login tab(s): ${profileDir}`);
+  const context = await openContext({ ...config, headless: false });
+  const contextClosed = new Promise((resolve) => context.once('close', resolve));
+  try {
+    const firstPage = context.pages()[0] ?? await context.newPage();
+    const pages = await Promise.all(platformConfigs.map((_, index) => (
+      index === 0 ? firstPage : context.newPage()
+    )));
 
-  await logger.info('Login window is open. Sign in if needed, then close the browser window yourself.');
-  await Promise.race([
-    new Promise((resolve) => context.once('close', resolve)),
-    page.waitForEvent('close').catch(() => null),
-  ]);
-  await context.close().catch(() => {});
+    await Promise.all(platformConfigs.map(async (platformConfig, index) => {
+      try {
+        await pages[index].goto(platformConfig.orderListUrl ?? platformConfig.loginUrl, {
+          waitUntil: 'domcontentloaded',
+          timeout: config.navigationTimeoutMs,
+        });
+        await logger.info(`${platformConfig.label}: login tab is ready.`);
+      } catch (error) {
+        await logger.error(`${platformConfig.label}: login tab navigation failed: ${error.message}`);
+      }
+    }));
+
+    await logger.info('All login tabs are open. Complete each login, then close the Chromium window.');
+    await contextClosed;
+  } finally {
+    await context.close().catch(() => {});
+  }
 }
 
 async function scrapePlatform(config, platform, logger) {
@@ -271,9 +285,7 @@ async function main() {
       throw new Error('Another worker or login window owns the shared Chromium profile. Try again later.');
     }
     try {
-      for (const platform of platforms) {
-        await loginPlatform(config, platform, logger);
-      }
+      await loginPlatforms(config, platforms, logger);
     } finally {
       await releaseSyncLock({ db, ownerToken: RUN_TOKEN }).catch(() => {});
     }
