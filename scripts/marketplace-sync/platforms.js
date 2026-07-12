@@ -83,7 +83,7 @@ function extractShopeeCards({ platform }) {
         .split(/(?:ตัวเลือกสินค้า\s*:|\s+x\d+\b)/i)[0]
         .trim();
       const sku = firstMatch(rawText, [/\[([A-Z]{2,8}-[A-Z0-9-]{2,})\s*\]/i]);
-      const trackingNo = rawText.match(/\b(?:TH|SPX|SPE|JNT|JT|KEX|LEX|BEST|FLASH|DHL|NINJA|NJV)[A-Z0-9-]{6,}\b/i)?.[0] ?? '';
+      const trackingNo = rawText.match(/\b(?:TH|SPX|SPE|JNT|JT|KEX|LEX|BEST|FLASH|DHL|NINJA|NJV)(?=[A-Z0-9-]*\d)[A-Z0-9-]{6,}\b/i)?.[0] ?? '';
       const quantity = Number.parseInt(firstMatch(rawText, [/\s+x(\d+)\b/i]), 10) || 1;
 
       return {
@@ -98,7 +98,7 @@ function extractShopeeCards({ platform }) {
 }
 
 function extractCards({ platform }) {
-  const trackingRe = /\b(?:TH|SPX|SPE|JNT|JT|KEX|LEX|BEST|FLASH|DHL|NINJA|NJV)[A-Z0-9-]{6,}\b/gi;
+  const trackingRe = /\b(?:TH|SPX|SPE|JNT|JT|KEX|LEX|BEST|FLASH|DHL|NINJA|NJV)(?=[A-Z0-9-]*\d)[A-Z0-9-]{6,}\b/gi;
   const orderRe = /\b(?:20\d{10,}|[0-9]{10,20}|[A-Z0-9]{12,24})\b/g;
   return collectCandidateRows()
     .map(({ text: rawText }) => {

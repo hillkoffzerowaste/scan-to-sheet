@@ -114,6 +114,12 @@ function createShutdownController(logger) {
         activeContext = null;
       }
     },
+    markContextClosed(context) {
+      if (activeContext === context) {
+        activeContext = null;
+        signal = signal || 'context-closed';
+      }
+    },
     isStopping: () => Boolean(signal),
     dispose() {
       process.off('SIGINT', onSigint);
@@ -152,6 +158,7 @@ async function openContext(config) {
 async function createBrowserSession(config, contextController) {
   const context = await openContext(config);
   contextController.setContext(context);
+  context.once('close', () => contextController.markContextClosed(context));
   return {
     context,
     pages: new Map(),
@@ -190,7 +197,7 @@ async function waitForAnySelector(page, selectors, timeoutMs) {
 }
 
 function extractTrackingToken(text) {
-  return String(text ?? '').match(/\b(?:TH|SPX|SPE|JNT|JT|KEX|LEX|BEST|FLASH|DHL|NINJA|NJV)[A-Z0-9-]{6,}\b/i)?.[0] ?? '';
+  return String(text ?? '').match(/\b(?:TH|SPX|SPE|JNT|JT|KEX|LEX|BEST|FLASH|DHL|NINJA|NJV)(?=[A-Z0-9-]*\d)[A-Z0-9-]{6,}\b/i)?.[0] ?? '';
 }
 
 async function extractTrackingFromDetail(page) {
@@ -215,17 +222,24 @@ async function closeDetailPage({ listPage, detailPage, listUrl }) {
   }
 }
 
-async function enrichTrackingFromDetails({ config, platform, orders, page, logger }) {
+async function enrichTrackingFromDetails({ config, platform, orders, page, listUrl, logger }) {
   if (!['tiktok', 'lazada'].includes(platform)) return orders;
-  const candidates = orders.filter((order) => order.orderId && !order.trackingNo);
+  const candidates = [...new Map(
+    orders.filter((order) => order.orderId && !order.trackingNo).map((order) => [order.orderId, order]),
+  ).values()];
   const maxVisits = Number.parseInt(config.maxDetailPageVisits, 10) || 20;
   let enriched = 0;
 
   for (const order of candidates.slice(0, maxVisits)) {
     let detailPage = page;
     try {
-      const platformConfig = getPlatformConfig(platform);
-      await page.goto(platformConfig.orderListUrl, { waitUntil: 'domcontentloaded', timeout: config.navigationTimeoutMs });
+      await page.goto(listUrl, { waitUntil: 'domcontentloaded', timeout: config.navigationTimeoutMs });
+      await page.waitForLoadState('networkidle', { timeout: config.orderLoadTimeoutMs }).catch(() => {});
+      await waitForAnySelector(
+        page,
+        getPlatformConfig(platform).readySelectors,
+        config.orderLoadTimeoutMs,
+      );
       const orderLink = platform === 'tiktok'
         ? page.locator(`a[href*="/order/detail"][href*="order_no=${order.orderId}"]`).first()
         : page.getByText(String(order.orderId), { exact: false }).first();
@@ -247,7 +261,7 @@ async function enrichTrackingFromDetails({ config, platform, orders, page, logge
     } catch (error) {
       await logger.warn(`${platform}: detail lookup failed for ${order.orderId}: ${error.message}`);
     } finally {
-      await closeDetailPage({ listPage: page, detailPage, listUrl: getPlatformConfig(platform).orderListUrl });
+      await closeDetailPage({ listPage: page, detailPage, listUrl });
     }
   }
   await logger.info(`${platform}: detail tracking enriched=${enriched}/${Math.min(candidates.length, maxVisits)}`);
@@ -309,6 +323,7 @@ async function scrapePlatform(config, platform, logger, session) {
   if (!matchedSelector) {
     await logger.warn(`${platform}: no known order selector found. You may need to log in or tune selectors.`);
   }
+  const listUrl = page.url();
 
   const currentUrl = page.url().toLowerCase();
   const loginDetected = currentUrl.includes('login')
@@ -345,7 +360,7 @@ async function scrapePlatform(config, platform, logger, session) {
   );
   await logger.info(`${platform}: extracted=${rawOrders.length}, buyerNames=0, items=${itemCount}, skus=${skuCount}`);
   const orders = rawOrders.map((order) => normalizeOrder(order, platform));
-  await enrichTrackingFromDetails({ config, platform, orders, page, logger });
+  await enrichTrackingFromDetails({ config, platform, orders, page, listUrl, logger });
   return { orders, status: 'synced' };
 }
 
