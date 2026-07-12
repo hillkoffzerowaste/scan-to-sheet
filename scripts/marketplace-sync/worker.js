@@ -149,6 +149,33 @@ async function openContext(config) {
   });
 }
 
+async function createBrowserSession(config, contextController) {
+  const context = await openContext(config);
+  contextController.setContext(context);
+  return {
+    context,
+    pages: new Map(),
+  };
+}
+
+async function closeBrowserSession(session, contextController) {
+  await session.context.close().catch(() => {});
+  contextController.clearContext(session.context);
+}
+
+async function getPlatformPage(session, platform) {
+  const existing = session.pages.get(platform);
+  if (existing && !existing.isClosed()) {
+    return existing;
+  }
+
+  const page = session.pages.size === 0
+    ? (session.context.pages()[0] ?? await session.context.newPage())
+    : await session.context.newPage();
+  session.pages.set(platform, page);
+  return page;
+}
+
 async function waitForAnySelector(page, selectors, timeoutMs) {
   const deadline = Date.now() + timeoutMs;
   for (const selector of selectors) {
@@ -201,70 +228,62 @@ async function loginPlatforms(config, platforms, logger, contextController) {
   }
 }
 
-async function scrapePlatform(config, platform, logger, contextController) {
+async function scrapePlatform(config, platform, logger, session) {
   const platformConfig = getPlatformConfig(platform);
   if (!platformConfig) {
     throw new Error(`Unknown platform: ${platform}`);
   }
 
-  const context = await openContext(config);
-  contextController.setContext(context);
-  const page = context.pages()[0] ?? await context.newPage();
-  try {
-    await page.goto(platformConfig.orderListUrl, {
-      waitUntil: 'domcontentloaded',
-      timeout: config.navigationTimeoutMs,
-    });
-    await page.waitForLoadState('networkidle', { timeout: config.orderLoadTimeoutMs }).catch(() => {});
-    const matchedSelector = await waitForAnySelector(page, platformConfig.readySelectors, config.orderLoadTimeoutMs);
-    if (!matchedSelector) {
-      await logger.warn(`${platform}: no known order selector found. You may need to log in or tune selectors.`);
-    }
-
-    const currentUrl = page.url().toLowerCase();
-    const loginDetected = currentUrl.includes('login')
-      || currentUrl.includes('signin')
-      || await page.locator('input[type="password"]').count() > 0;
-    if (loginDetected) {
-      const screenshotPath = path.resolve(BASE_DIR, config.screenshotsDir, `${platform}-login-${Date.now()}.png`);
-      await page.screenshot({ path: screenshotPath, fullPage: true }).catch(() => {});
-      await logger.warn(`${platform}: login is required. Screenshot saved: ${screenshotPath}`);
-      return { orders: [], status: 'login_required' };
-    }
-
-    const rawOrders = await page.evaluate(({ extractorSource, platformKey, maxOrders }) => {
-      const factory = new Function(`${extractorSource}\nreturn extractCards;`);
-      const extractor = factory();
-      return extractor({ platform: platformKey }).slice(0, maxOrders);
-    }, {
-      extractorSource: getPlatformExtractorSource(platform),
-      platformKey: platform,
-      maxOrders: config.maxOrdersPerPlatform,
-    });
-
-    if (!rawOrders.length) {
-      const screenshotPath = path.resolve(BASE_DIR, config.screenshotsDir, `${platform}-${Date.now()}.png`);
-      await page.screenshot({ path: screenshotPath, fullPage: true }).catch(() => {});
-      await logger.warn(`${platform}: extracted 0 orders. Screenshot saved for selector tuning.`);
-      return { orders: [], status: 'partial' };
-    } else {
-      const buyerCount = rawOrders.filter((order) => order.buyerName).length;
-      const itemCount = rawOrders.reduce((sum, order) => sum + (Array.isArray(order.items) ? order.items.length : 0), 0);
-      const skuCount = rawOrders.reduce(
-        (sum, order) => sum + (Array.isArray(order.items) ? order.items.filter((item) => item?.sku).length : 0),
-        0,
-      );
-      await logger.info(`${platform}: extracted=${rawOrders.length}, buyerNames=${buyerCount}, items=${itemCount}, skus=${skuCount}`);
-    }
-
-    return { orders: rawOrders.map((order) => normalizeOrder(order, platform)), status: 'synced' };
-  } finally {
-    await context.close();
-    contextController.clearContext(context);
+  const page = await getPlatformPage(session, platform);
+  await page.goto(platformConfig.orderListUrl, {
+    waitUntil: 'domcontentloaded',
+    timeout: config.navigationTimeoutMs,
+  });
+  await page.waitForLoadState('networkidle', { timeout: config.orderLoadTimeoutMs }).catch(() => {});
+  const matchedSelector = await waitForAnySelector(page, platformConfig.readySelectors, config.orderLoadTimeoutMs);
+  if (!matchedSelector) {
+    await logger.warn(`${platform}: no known order selector found. You may need to log in or tune selectors.`);
   }
+
+  const currentUrl = page.url().toLowerCase();
+  const loginDetected = currentUrl.includes('login')
+    || currentUrl.includes('signin')
+    || await page.locator('input[type="password"]').count() > 0;
+  if (loginDetected) {
+    const screenshotPath = path.resolve(BASE_DIR, config.screenshotsDir, `${platform}-login-${Date.now()}.png`);
+    await page.screenshot({ path: screenshotPath, fullPage: true }).catch(() => {});
+    await logger.warn(`${platform}: login is required. Screenshot saved: ${screenshotPath}`);
+    return { orders: [], status: 'login_required' };
+  }
+
+  const rawOrders = await page.evaluate(({ extractorSource, platformKey, maxOrders }) => {
+    const factory = new Function(`${extractorSource}\nreturn extractCards;`);
+    const extractor = factory();
+    return extractor({ platform: platformKey }).slice(0, maxOrders);
+  }, {
+    extractorSource: getPlatformExtractorSource(platform),
+    platformKey: platform,
+    maxOrders: config.maxOrdersPerPlatform,
+  });
+
+  if (!rawOrders.length) {
+    const screenshotPath = path.resolve(BASE_DIR, config.screenshotsDir, `${platform}-${Date.now()}.png`);
+    await page.screenshot({ path: screenshotPath, fullPage: true }).catch(() => {});
+    await logger.warn(`${platform}: extracted 0 orders. Screenshot saved for selector tuning.`);
+    return { orders: [], status: 'partial' };
+  }
+
+  const buyerCount = rawOrders.filter((order) => order.buyerName).length;
+  const itemCount = rawOrders.reduce((sum, order) => sum + (Array.isArray(order.items) ? order.items.length : 0), 0);
+  const skuCount = rawOrders.reduce(
+    (sum, order) => sum + (Array.isArray(order.items) ? order.items.filter((item) => item?.sku).length : 0),
+    0,
+  );
+  await logger.info(`${platform}: extracted=${rawOrders.length}, buyerNames=${buyerCount}, items=${itemCount}, skus=${skuCount}`);
+  return { orders: rawOrders.map((order) => normalizeOrder(order, platform)), status: 'synced' };
 }
 
-async function syncPlatform({ db, config, platform, logger, contextController }) {
+async function syncPlatform({ db, config, platform, logger, session }) {
   const startedAt = new Date().toISOString();
   await setSyncStatus({
     db,
@@ -282,7 +301,7 @@ async function syncPlatform({ db, config, platform, logger, contextController })
 
   try {
     await logger.info(`${platform}: sync started`);
-    const result = await scrapePlatform(config, platform, logger, contextController);
+    const result = await scrapePlatform(config, platform, logger, session);
     const upserted = await upsertOrders({ db, config, platform, orders: result.orders, machineName: MACHINE_NAME });
     await setSyncStatus({
       db,
@@ -360,39 +379,57 @@ async function main() {
   }
 
   await logger.info(`Worker starting for ${platforms.join(', ')} with one shared Chromium profile`);
-  do {
-    const lockAcquired = await acquireSyncLock({
-      db,
-      ownerToken: RUN_TOKEN,
-      machineName: MACHINE_NAME,
-      ttlMs: config.lockTtlMs ?? 600000,
-    });
-    if (!lockAcquired) {
-      await logger.warn('Sync skipped because another worker owns the shared Chromium profile.');
-    } else {
-      try {
-        for (const platform of platforms) {
-          if (shutdownController.isStopping()) {
-            break;
-          }
-          await syncPlatform({ db, config, platform, logger, contextController: shutdownController });
+  const lockAcquired = await acquireSyncLock({
+    db,
+    ownerToken: RUN_TOKEN,
+    machineName: MACHINE_NAME,
+    ttlMs: config.lockTtlMs ?? 600000,
+  });
+  if (!lockAcquired) {
+    await logger.warn('Sync skipped because another worker owns the shared Chromium profile.');
+    shutdownController.dispose();
+    return;
+  }
+
+  let session = null;
+  try {
+    session = await createBrowserSession(config, shutdownController);
+    do {
+      // Refresh the existing lock before each cycle while the browser stays open.
+      const lockRefreshed = await acquireSyncLock({
+        db,
+        ownerToken: RUN_TOKEN,
+        machineName: MACHINE_NAME,
+        ttlMs: config.lockTtlMs ?? 600000,
+      });
+      if (!lockRefreshed) {
+        throw new Error('Lost the shared Chromium profile lock.');
+      }
+
+      for (const platform of platforms) {
+        if (shutdownController.isStopping()) {
+          break;
         }
-      } finally {
-        await releaseSyncLock({ db, ownerToken: RUN_TOKEN }).catch(() => {});
+        await syncPlatform({ db, config, platform, logger, session });
       }
-    }
-    if (shutdownController.isStopping()) {
-      const exitCode = shutdownController.dispose();
-      if (exitCode) {
-        process.exitCode = exitCode;
+      if (shutdownController.isStopping()) {
+        return;
       }
-      return;
-    }
-    if (!args.once) {
-      await logger.info(`Waiting ${config.intervalMs}ms before next sync.`);
-      await sleep(config.intervalMs);
-    }
+      if (!args.once) {
+        await logger.info(`Waiting ${config.intervalMs}ms before next sync. Chromium stays open.`);
+        await sleep(config.intervalMs);
+      }
   } while (!args.once);
+  } finally {
+    if (session) {
+      await closeBrowserSession(session, shutdownController);
+    }
+    await releaseSyncLock({ db, ownerToken: RUN_TOKEN }).catch(() => {});
+    const exitCode = shutdownController.dispose();
+    if (exitCode) {
+      process.exitCode = exitCode;
+    }
+  }
 }
 
 main().catch((error) => {

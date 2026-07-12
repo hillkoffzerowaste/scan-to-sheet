@@ -8,6 +8,7 @@ Supported platforms:
 - Lazada Seller Center
 
 The worker runs on the shop PC using one dedicated Chromium profile shared by every platform, and syncs every 5 minutes by default. It always runs sequentially because the shared profile must never be opened by concurrent workers.
+Continuous sync keeps one Chromium window open for the lifetime of the worker and reuses its tabs across polling cycles. `--once` closes that window after its single cycle finishes.
 
 ## Setup
 
