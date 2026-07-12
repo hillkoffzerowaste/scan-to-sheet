@@ -10,6 +10,8 @@
   "navigationTimeoutMs": 60000,
   "orderLoadTimeoutMs": 30000,
   "maxOrdersPerPlatform": 200,
+  "maxDetailPageVisits": 20,
+  "maxDetailPageVisits": 20,
   "collections": {
     "orders": "marketplaceOrders",
     "status": "syncStatus"

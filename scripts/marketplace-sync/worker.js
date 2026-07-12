@@ -189,6 +189,71 @@ async function waitForAnySelector(page, selectors, timeoutMs) {
   return null;
 }
 
+function extractTrackingToken(text) {
+  return String(text ?? '').match(/\b(?:TH|SPX|SPE|JNT|JT|KEX|LEX|BEST|FLASH|DHL|NINJA|NJV)[A-Z0-9-]{6,}\b/i)?.[0] ?? '';
+}
+
+async function extractTrackingFromDetail(page) {
+  const texts = await page.locator(
+    '[class*="tracking" i], [class*="awb" i], [class*="waybill" i], [class*="logistics" i], [id*="tracking" i], [data-testid*="tracking" i], body',
+  ).allTextContents();
+  for (const text of texts) {
+    const trackingNo = extractTrackingToken(text);
+    if (trackingNo) return trackingNo;
+  }
+  return '';
+}
+
+async function closeDetailPage({ listPage, detailPage, listUrl }) {
+  if (detailPage !== listPage) {
+    await detailPage.close().catch(() => {});
+    return;
+  }
+  await listPage.keyboard.press('Escape').catch(() => {});
+  if (!listPage.url().includes(listUrl)) {
+    await listPage.goto(listUrl, { waitUntil: 'domcontentloaded', timeout: 60000 }).catch(() => {});
+  }
+}
+
+async function enrichTrackingFromDetails({ config, platform, orders, page, logger }) {
+  if (!['tiktok', 'lazada'].includes(platform)) return orders;
+  const candidates = orders.filter((order) => order.orderId && !order.trackingNo);
+  const maxVisits = Number.parseInt(config.maxDetailPageVisits, 10) || 20;
+  let enriched = 0;
+
+  for (const order of candidates.slice(0, maxVisits)) {
+    let detailPage = page;
+    try {
+      const platformConfig = getPlatformConfig(platform);
+      await page.goto(platformConfig.orderListUrl, { waitUntil: 'domcontentloaded', timeout: config.navigationTimeoutMs });
+      const orderLink = platform === 'tiktok'
+        ? page.locator(`a[href*="/order/detail"][href*="order_no=${order.orderId}"]`).first()
+        : page.getByText(String(order.orderId), { exact: false }).first();
+      if (!(await orderLink.isVisible({ timeout: 3000 }).catch(() => false))) {
+        await logger.warn(`${platform}: order ${order.orderId} is not visible for detail lookup.`);
+        continue;
+      }
+      const popupPromise = page.waitForEvent('popup', { timeout: 2000 }).catch(() => null);
+      await orderLink.click({ timeout: 5000 });
+      detailPage = (await popupPromise) ?? page;
+      await detailPage.waitForLoadState('domcontentloaded', { timeout: config.navigationTimeoutMs }).catch(() => {});
+      await detailPage.waitForTimeout(1200);
+      const trackingNo = await extractTrackingFromDetail(detailPage);
+      if (trackingNo) {
+        order.trackingNo = trackingNo;
+        enriched += 1;
+        await logger.info(`${platform}: tracking enriched for order ${order.orderId}`);
+      }
+    } catch (error) {
+      await logger.warn(`${platform}: detail lookup failed for ${order.orderId}: ${error.message}`);
+    } finally {
+      await closeDetailPage({ listPage: page, detailPage, listUrl: getPlatformConfig(platform).orderListUrl });
+    }
+  }
+  await logger.info(`${platform}: detail tracking enriched=${enriched}/${Math.min(candidates.length, maxVisits)}`);
+  return orders;
+}
+
 async function loginPlatforms(config, platforms, logger, contextController) {
   const platformConfigs = platforms.map((platform) => {
     const platformConfig = getPlatformConfig(platform);
@@ -273,14 +338,15 @@ async function scrapePlatform(config, platform, logger, session) {
     return { orders: [], status: 'partial' };
   }
 
-  const buyerCount = rawOrders.filter((order) => order.buyerName).length;
   const itemCount = rawOrders.reduce((sum, order) => sum + (Array.isArray(order.items) ? order.items.length : 0), 0);
   const skuCount = rawOrders.reduce(
     (sum, order) => sum + (Array.isArray(order.items) ? order.items.filter((item) => item?.sku).length : 0),
     0,
   );
-  await logger.info(`${platform}: extracted=${rawOrders.length}, buyerNames=${buyerCount}, items=${itemCount}, skus=${skuCount}`);
-  return { orders: rawOrders.map((order) => normalizeOrder(order, platform)), status: 'synced' };
+  await logger.info(`${platform}: extracted=${rawOrders.length}, buyerNames=0, items=${itemCount}, skus=${skuCount}`);
+  const orders = rawOrders.map((order) => normalizeOrder(order, platform));
+  await enrichTrackingFromDetails({ config, platform, orders, page, logger });
+  return { orders, status: 'synced' };
 }
 
 async function syncPlatform({ db, config, platform, logger, session }) {
