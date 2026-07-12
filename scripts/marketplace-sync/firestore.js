@@ -34,6 +34,7 @@ export async function upsertOrders({ db, config, platform, orders, machineName }
       {
         ...order,
         buyerName: FieldValue.delete(),
+        rawText: FieldValue.delete(),
         platform,
         source: 'playwright',
         syncMachine: machineName,
