@@ -7,7 +7,7 @@ Supported platforms:
 - Shopee Seller Centre
 - Lazada Seller Center
 
-The worker runs on the shop PC, keeps separate browser profiles per platform, and syncs every 5 minutes by default.
+The worker runs on the shop PC using one dedicated Chromium profile shared by every platform, and syncs every 5 minutes by default. It always runs sequentially because the shared profile must never be opened by concurrent workers.
 
 ## Setup
 
@@ -29,7 +29,7 @@ npm run marketplace:login -- lazada
 
 Keep the opened browser signed in, then close it after the session is saved.
 
-Each platform keeps its own Playwright profile under `scripts/marketplace-sync/profiles/{platform}`.
+All platforms share `scripts/marketplace-sync/marketplace-profile` by default. This is a dedicated Chromium profile for the worker, not the user's normal Chrome profile.
 The login command opens the order page first, so an existing saved session should stay logged in.
 If it asks for login again, make sure no other worker/login window for the same platform is open and the profile folder was not deleted.
 
@@ -44,6 +44,8 @@ npm run marketplace:sync:once
 ```powershell
 npm run marketplace:sync
 ```
+
+Do not run two sync workers or a login window while the worker is running. The Firestore global lock prevents concurrent access to the shared profile.
 
 ## Windows Autostart
 
@@ -93,11 +95,15 @@ Sync status is written to:
 syncStatus/{platform}
 ```
 
-The worker also uses `syncLocks/{platform}` so multiple installed shop PCs do not sync the same platform at the same time.
+The worker uses `syncLocks/marketplace-worker` with a unique run token so two workers, including on the same PC, cannot use the shared profile at the same time.
+
+Sync status values are `running`, `synced`, `partial`, `login_required`, and `error`. `partial` means no orders were extracted although a login page was not detected; the worker saves a screenshot for review. `login_required` means the session needs a manual login.
 
 ## Selector Tuning
 
-The first extractor is intentionally conservative and regex-based. It will not fake data. If a seller center page changes or hides data behind a detail modal, the worker will save a screenshot under `screenshots/` and report zero orders. Use that screenshot to tune `platforms.js`.
+The extractor is intentionally conservative and text-driven. It tries to recover `orderId`, `trackingNo`, `buyerName`, `status`, `courier`, and basic `items[].name/sku` only when those values are visible on the page. It will not invent fields.
+
+If a seller center page changes or hides data behind a detail modal, the worker will save a screenshot under `screenshots/` and report zero or partial orders. Use that screenshot to tune `platforms.js`.
 
 ## Security
 

@@ -1,6 +1,6 @@
 {
   "serviceAccountPath": "../../firebase-service-account.json",
-  "profilesDir": "profiles",
+  "profileDir": "marketplace-profile",
   "logDir": "logs",
   "screenshotsDir": "screenshots",
   "enabledPlatforms": ["tiktok", "shopee", "lazada"],

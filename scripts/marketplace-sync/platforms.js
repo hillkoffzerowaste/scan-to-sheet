@@ -1,7 +1,8 @@
-function extractCards({ platform }) {
-  const trackingRe = /\b(?:TH|SPX|SPE|JNT|JT|KEX|LEX|BEST|FLASH|DHL|NINJA|NJV)[A-Z0-9-]{6,}\b/gi;
-  const orderRe = /\b(?:20\d{10,}|[0-9]{10,20}|[A-Z0-9]{12,24})\b/g;
-  const textFromElement = (element) => (element?.innerText || element?.textContent || '').replace(/\s+/g, ' ').trim();
+function textFromElement(element) {
+  return (element?.innerText || element?.textContent || '').replace(/\s+/g, ' ').trim();
+}
+
+function collectCandidateRows() {
   const candidates = [
     '[data-testid*="order" i]',
     '[class*="order" i]',
@@ -21,26 +22,85 @@ function extractCards({ platform }) {
         continue;
       }
       seen.add(text);
-      rows.push(text);
+      rows.push({ element, text });
     }
   }
 
-  return rows
-    .map((rawText) => {
+  return rows;
+}
+
+function firstMatch(text, patterns) {
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match?.[1]) {
+      return match[1].trim();
+    }
+  }
+  return '';
+}
+
+function extractItemsFromText(rawText) {
+  const itemNames = [];
+  const itemPatterns = [
+    /(?:SKU\s*Name|Product\s*Name|Item\s*Name|ชื่อสินค้า|สินค้า)\s*[:：]\s*(.{2,120}?)(?=\s+(?:SKU|Seller\s*SKU|Tracking|Order\s*ID|Buyer|Customer|Ship\s*to|Recipient)\b|$)/gi,
+  ];
+  for (const pattern of itemPatterns) {
+    for (const match of rawText.matchAll(pattern)) {
+      const name = match?.[1]?.trim();
+      if (name && !itemNames.includes(name)) {
+        itemNames.push(name);
+      }
+    }
+  }
+
+  const skuNames = [];
+  for (const match of rawText.matchAll(/(?:SKU|Seller SKU|SKU Code|รหัสสินค้า)\s*[:：#]?\s*([A-Z0-9][A-Z0-9._/-]{2,63})/gi)) {
+    const sku = match?.[1]?.trim();
+    if (sku && !skuNames.includes(sku)) {
+      skuNames.push(sku);
+    }
+  }
+
+  const count = Math.max(itemNames.length, skuNames.length);
+  return Array.from({ length: count }, (_, index) => ({
+    name: itemNames[index] ?? '',
+    sku: skuNames[index] ?? '',
+    quantity: 1,
+  })).filter((item) => item.name || item.sku);
+}
+
+function extractCards({ platform }) {
+  const trackingRe = /\b(?:TH|SPX|SPE|JNT|JT|KEX|LEX|BEST|FLASH|DHL|NINJA|NJV)[A-Z0-9-]{6,}\b/gi;
+  const orderRe = /\b(?:20\d{10,}|[0-9]{10,20}|[A-Z0-9]{12,24})\b/g;
+  return collectCandidateRows()
+    .map(({ text: rawText }) => {
       const trackingNo = rawText.match(trackingRe)?.[0] ?? '';
       const orderId = rawText.match(orderRe)?.find((value) => value !== trackingNo) ?? '';
       if (!trackingNo && !orderId) {
         return null;
       }
+      const buyerName = firstMatch(rawText, [
+        /(?:Buyer|Customer|Ship\s*to|Recipient|ผู้ซื้อ|ชื่อลูกค้า|ลูกค้า)\s*[:：]\s*(.{2,80}?)(?=\s+(?:SKU|Seller\s*SKU|Tracking|Order\s*ID|Product\s*Name|Item\s*Name|Status)\b|$)/i,
+        /(?:ผู้รับ)\s*[:：]\s*(.{2,80}?)(?=\s+(?:SKU|Tracking|Order\s*ID|สินค้า|สถานะ)\b|$)/i,
+      ]);
+      const courier = firstMatch(rawText, [
+        /(?:Courier|Carrier|Logistics|ขนส่ง)\s*[:：]\s*([^\n|,]{2,80})/i,
+      ]);
+      const status = firstMatch(rawText, [
+        /(?:Status|สถานะ)\s*[:：]\s*([^\n|,]{2,80})/i,
+      ]);
+      const orderCreatedAt = firstMatch(rawText, [
+        /(?:Order\s*Time|Created\s*At|วันที่สั่งซื้อ|เวลาสั่งซื้อ)\s*[:：]\s*([^\n|,]{4,80})/i,
+      ]);
       return {
         platform,
         orderId,
         trackingNo,
-        status: '',
-        courier: '',
-        buyerName: '',
-        orderCreatedAt: '',
-        items: [],
+        status,
+        courier,
+        buyerName,
+        orderCreatedAt,
+        items: extractItemsFromText(rawText),
         rawText,
       };
     })
@@ -92,4 +152,19 @@ export function getPlatformConfig(platform) {
 
 export function listPlatformKeys() {
   return Object.keys(PLATFORMS);
+}
+
+export function getPlatformExtractorSource(platform) {
+  const platformConfig = getPlatformConfig(platform);
+  if (!platformConfig) {
+    return '';
+  }
+
+  return [
+    textFromElement.toString(),
+    collectCandidateRows.toString(),
+    firstMatch.toString(),
+    extractItemsFromText.toString(),
+    platformConfig.extractor.toString(),
+  ].join('\n');
 }
