@@ -84,7 +84,9 @@ import {
   recordPackerScanPrimary,
   searchScansFirestore,
   upsertFirebaseUser,
+  importMarketplaceOrders,
 } from './services/firebaseScans.js';
+import { groupMarketplaceRows, parseCsvText, parseMarketplaceRows } from './services/marketplaceImport.js';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 const GOOGLE_SCOPES = [
@@ -252,6 +254,9 @@ function App() {
   const [missingAlertBadge, setMissingAlertBadge] = useState(0);
   const [thresholdMinutes, setThresholdMinutes] = useState(DEFAULT_THRESHOLD_MINUTES);
   const [backfillBusy, setBackfillBusy] = useState(false);
+  const [marketplaceUploadBusy, setMarketplaceUploadBusy] = useState(false);
+  const [marketplaceUploadResult, setMarketplaceUploadResult] = useState(null);
+  const marketplaceFileRef = useRef(null);
   const inputRef = useRef(null);
   const audioContextRef = useRef(null);
   const cameraRef = useRef(null);
@@ -275,6 +280,43 @@ function App() {
   const requiresPacker = scanRemark !== ISSUE_CUSTOMER_CANCELLED && activeTab === 'packer';
   const isPackerReady = !requiresPacker || selectedPacker !== PACKER_UNASSIGNED;
   const isDriveReady = isSignedIn && scanMethod === 'manual' ? true : isSignedIn;
+
+  async function uploadMarketplaceFiles(event) {
+    const files = [...(event.target.files ?? [])];
+    event.target.value = '';
+    if (!files.length || !firebaseUser) return;
+    setMarketplaceUploadBusy(true);
+    setMarketplaceUploadResult(null);
+    try {
+      const parsedRows = [];
+      for (const file of files) {
+        let rows;
+        if (file.name.toLowerCase().endsWith('.csv')) {
+          rows = parseCsvText(await file.text());
+        } else {
+          const ExcelJS = await import('exceljs');
+          const workbook = new ExcelJS.Workbook();
+          await workbook.xlsx.load(await file.arrayBuffer());
+          const worksheet = workbook.worksheets[0];
+          rows = worksheet
+            ? Array.from({ length: worksheet.rowCount }, (_, index) => worksheet.getRow(index + 1).values.slice(1))
+            : [];
+        }
+        parsedRows.push(...parseMarketplaceRows(rows));
+      }
+      const groups = groupMarketplaceRows(parsedRows);
+      if (!groups.length) throw new Error('ไม่พบออเดอร์ที่มีเลขพัสดุในไฟล์');
+      const result = await importMarketplaceOrders(groups);
+      setMarketplaceUploadResult({
+        type: 'success',
+        message: `นำเข้า ${result.imported} ออเดอร์ และเติมรายการสแกนแล้ว ${result.matchedScans} รายการ`,
+      });
+    } catch (error) {
+      setMarketplaceUploadResult({ type: 'error', message: error.message });
+    } finally {
+      setMarketplaceUploadBusy(false);
+    }
+  }
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -2064,6 +2106,39 @@ function App() {
           )}
         </button>
       </nav>
+
+      <section className="marketplace-upload-panel" aria-labelledby="marketplace-upload-title">
+        <div>
+          <div className="panel-heading" id="marketplace-upload-title">
+            <FileSpreadsheet size={18} />
+            <span>อัปโหลดออเดอร์ Seller Center</span>
+          </div>
+          <p>เลือกไฟล์ .xlsx หรือ .csv จาก Shopee, Lazada และ TikTok ได้หลายไฟล์พร้อมกัน</p>
+        </div>
+        <input
+          ref={marketplaceFileRef}
+          className="visually-hidden"
+          type="file"
+          accept=".xlsx,.csv"
+          multiple
+          onChange={uploadMarketplaceFiles}
+          aria-label="เลือกไฟล์ออเดอร์ Seller Center"
+        />
+        <button
+          className="secondary-button"
+          type="button"
+          onClick={() => marketplaceFileRef.current?.click()}
+          disabled={!firebaseUser || marketplaceUploadBusy}
+        >
+          {marketplaceUploadBusy ? <RefreshCw size={16} className="spin" /> : <Upload size={16} />}
+          <span>{marketplaceUploadBusy ? 'กำลังอัปโหลด...' : 'เลือกไฟล์ออเดอร์'}</span>
+        </button>
+        {marketplaceUploadResult && (
+          <div className={`marketplace-upload-result ${marketplaceUploadResult.type}`} role="status">
+            {marketplaceUploadResult.message}
+          </div>
+        )}
+      </section>
 
       <section className="workspace-grid">
         <aside className="side-panel">

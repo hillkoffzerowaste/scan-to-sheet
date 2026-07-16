@@ -11,6 +11,7 @@ import {
   setDoc,
   updateDoc,
   where,
+  writeBatch,
 } from 'firebase/firestore';
 import { firestoreDb, isFirebaseConfigured, serverTimestamp } from './firebase.js';
 import { marketplaceMetadata } from '../../scripts/marketplace-sync/normalize.js';
@@ -207,6 +208,50 @@ export async function findMarketplaceOrderByTracking({ trackingNo }) {
   ));
   const exactDoc = exactSnap.docs[0];
   return exactDoc ? { id: exactDoc.id, ...exactDoc.data() } : null;
+}
+
+export async function importMarketplaceOrders(groups) {
+  if (!canWriteFirestore()) throw new Error('Firebase ยังไม่พร้อมใช้งาน');
+  let imported = 0;
+  let matchedScans = 0;
+
+  for (const group of groups) {
+    const marketplaceRef = doc(firestoreDb, 'marketplaceOrders', `${group.platform}__${group.orderId}`);
+    await setDoc(marketplaceRef, {
+      platform: group.platform,
+      orderId: group.orderId,
+      trackingNo: group.trackingNo,
+      normalizedTrackingNo: group.normalizedTrackingNo,
+      marketplaceSkus: group.marketplaceSkus,
+      importSource: 'web_upload',
+      importedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
+    imported += 1;
+
+    const matches = await getDocs(query(
+      collection(firestoreDb, 'orders'),
+      where('normalizedCode', '==', group.normalizedTrackingNo),
+    ));
+    let batch = writeBatch(firestoreDb);
+    let batchSize = 0;
+    for (const match of matches.docs) {
+      batch.set(match.ref, {
+        marketplaceOrderId: group.orderId,
+        marketplaceSkus: group.marketplaceSkus,
+      }, { merge: true });
+      batchSize += 1;
+      matchedScans += 1;
+      if (batchSize >= 400) {
+        await batch.commit();
+        batch = writeBatch(firestoreDb);
+        batchSize = 0;
+      }
+    }
+    if (batchSize > 0) await batch.commit();
+  }
+
+  return { imported, matchedScans };
 }
 
 async function findMarketplaceMetadataByTracking(trackingNo) {

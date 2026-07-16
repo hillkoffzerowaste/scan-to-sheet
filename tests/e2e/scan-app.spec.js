@@ -19,6 +19,13 @@ test.describe('Scan to Sheet — Packer Tab', () => {
     await expect(loginBtn).toBeVisible();
   });
 
+  test('shows marketplace upload button and protects it until Firebase login', async ({ page }) => {
+    const uploadButton = page.locator('.marketplace-upload-panel .secondary-button');
+    await expect(uploadButton).toBeVisible();
+    await expect(uploadButton).toContainText('เลือกไฟล์ออเดอร์');
+    await expect(uploadButton).toBeDisabled();
+  });
+
   test('renders courier list', async ({ page }) => {
     const couriers = page.locator('.courier-button');
     await expect(couriers.first()).toBeVisible();

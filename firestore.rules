@@ -51,7 +51,37 @@ service cloud.firestore {
 
     match /marketplaceOrders/{orderId} {
       allow read: if isSignedIn();
-      allow write: if false;
+      allow create: if isSignedIn()
+        && request.resource.data.keys().hasOnly([
+          'platform', 'orderId', 'trackingNo', 'normalizedTrackingNo',
+          'marketplaceSkus', 'importSource', 'importedAt', 'updatedAt'
+        ])
+        && request.resource.data.platform in ['shopee', 'lazada', 'tiktok']
+        && request.resource.data.orderId is string
+        && request.resource.data.trackingNo is string
+        && request.resource.data.normalizedTrackingNo is string
+        && request.resource.data.marketplaceSkus is list
+        && request.resource.data.marketplaceSkus.size() <= 100
+        && request.resource.data.importSource == 'web_upload'
+        && request.resource.data.importedAt is timestamp
+        && request.resource.data.updatedAt is timestamp
+        && request.resource.data.platform + '__' + request.resource.data.orderId == orderId;
+      allow update: if isSignedIn()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'platform', 'orderId', 'trackingNo', 'normalizedTrackingNo',
+          'marketplaceSkus', 'importSource', 'importedAt', 'updatedAt'
+        ])
+        && request.resource.data.platform in ['shopee', 'lazada', 'tiktok']
+        && request.resource.data.orderId is string
+        && request.resource.data.trackingNo is string
+        && request.resource.data.normalizedTrackingNo is string
+        && request.resource.data.marketplaceSkus is list
+        && request.resource.data.marketplaceSkus.size() <= 100
+        && request.resource.data.importSource == 'web_upload'
+        && request.resource.data.importedAt is timestamp
+        && request.resource.data.updatedAt is timestamp
+        && request.resource.data.platform + '__' + request.resource.data.orderId == orderId;
+      allow delete: if false;
     }
 
     match /syncStatus/{platform} {

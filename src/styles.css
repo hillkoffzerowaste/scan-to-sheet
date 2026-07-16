@@ -694,6 +694,52 @@ select:hover {
   font-weight: 800;
 }
 
+.marketplace-upload-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px 20px;
+  margin-bottom: 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--glass-border);
+  border-radius: 18px;
+  background: var(--glass-bg);
+}
+
+.marketplace-upload-panel p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.marketplace-upload-result {
+  grid-column: 1 / -1;
+  padding: 9px 12px;
+  border-radius: 10px;
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.marketplace-upload-result.success { background: var(--success-bg); color: var(--success); }
+.marketplace-upload-result.error { background: var(--danger-bg); color: var(--danger); }
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 700px) {
+  .marketplace-upload-panel { grid-template-columns: 1fr; }
+  .marketplace-upload-panel .secondary-button { width: 100%; }
+}
+
 .courier-list {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

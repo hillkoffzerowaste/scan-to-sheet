@@ -13,8 +13,10 @@ export function normalizeTrackingNo(value) {
 export function marketplaceMetadata(order) {
   const marketplaceOrderId = normalizeText(order?.orderId);
   const marketplaceSkus = [...new Set(
-    (Array.isArray(order?.items) ? order.items : [])
-      .map((item) => normalizeText(item?.sku))
+    (Array.isArray(order?.marketplaceSkus)
+      ? order.marketplaceSkus
+      : (Array.isArray(order?.items) ? order.items.map((item) => item?.sku) : []))
+      .map((sku) => normalizeText(sku))
       .filter(Boolean),
   )];
 
