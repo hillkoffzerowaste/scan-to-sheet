@@ -2,6 +2,10 @@ function cleanCell(value) {
   return String(value ?? '').replace(/^\uFEFF/, '').replace(/\t+$/g, '').trim();
 }
 
+export function normalizeMarketplaceTracking(value) {
+  return cleanCell(value).toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
 export function parseCsvText(text) {
   const rows = [];
   let row = [];
@@ -82,7 +86,7 @@ export function parseMarketplaceRows(rows) {
 export function groupMarketplaceRows(rows) {
   const groups = new Map();
   for (const row of rows) {
-    const normalizedTrackingNo = cleanCell(row.trackingNo).toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const normalizedTrackingNo = normalizeMarketplaceTracking(row.trackingNo);
     if (!normalizedTrackingNo) continue;
     const key = `${row.platform}__${row.orderId}__${normalizedTrackingNo}`;
     const current = groups.get(key) ?? {
@@ -97,4 +101,23 @@ export function groupMarketplaceRows(rows) {
     groups.set(key, current);
   }
   return [...groups.values()];
+}
+
+export function buildSheetBackfillUpdates(sheetName, rows, groups) {
+  const groupMap = new Map(groups.map((group) => [group.normalizedTrackingNo, group]));
+  const escapedSheet = `'${String(sheetName).replace(/'/g, "''")}'`;
+  const data = [];
+  let matchedRows = 0;
+  rows.forEach((row, index) => {
+    const group = groupMap.get(normalizeMarketplaceTracking(row[5]))
+      ?? groupMap.get(normalizeMarketplaceTracking(row[12]));
+    if (!group) return;
+    const rowNumber = index + 2;
+    const skuText = group.marketplaceSkus.join(' | ');
+    if (String(row[13] ?? '') !== group.platform) data.push({ range: `${escapedSheet}!N${rowNumber}`, values: [[group.platform]] });
+    if (String(row[14] ?? '') !== group.orderId) data.push({ range: `${escapedSheet}!O${rowNumber}`, values: [[group.orderId]] });
+    if (String(row[17] ?? '') !== skuText) data.push({ range: `${escapedSheet}!R${rowNumber}`, values: [[skuText]] });
+    matchedRows += 1;
+  });
+  return { data, matchedRows };
 }

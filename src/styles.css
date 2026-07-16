@@ -722,6 +722,7 @@ select:hover {
 
 .marketplace-upload-result.success { background: var(--success-bg); color: var(--success); }
 .marketplace-upload-result.error { background: var(--danger-bg); color: var(--danger); }
+.marketplace-upload-result.warning { background: var(--warning-bg); color: var(--warning); }
 
 .visually-hidden {
   position: absolute;

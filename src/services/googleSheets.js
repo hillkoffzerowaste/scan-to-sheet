@@ -1,3 +1,5 @@
+import { buildSheetBackfillUpdates } from './marketplaceImport.js';
+
 const DRIVE_API = 'https://www.googleapis.com/drive/v3';
 const SHEETS_API = 'https://sheets.googleapis.com/v4/spreadsheets';
 const USERINFO_API = 'https://www.googleapis.com/oauth2/v3/userinfo';
@@ -853,6 +855,33 @@ async function updateDailyRow({ token, spreadsheetId, date, rowNumber, row }) {
   const spreadsheet = await getSpreadsheet(token, spreadsheetId);
   const sheetId = spreadsheet.sheets?.find((sheet) => sheet.properties.title === date)?.properties.sheetId;
   if (sheetId) await applyStatusCellColors({ token, spreadsheetId, date, sheetId });
+}
+
+export async function backfillMarketplaceOrdersGoogle({ token, config, groups }) {
+  const spreadsheetId = config?.master?.id;
+  if (!spreadsheetId) throw new Error('ไม่พบ Google Sheet Master');
+  const spreadsheet = await getSpreadsheet(token, spreadsheetId);
+  const dateSheets = (spreadsheet.sheets ?? [])
+    .map((item) => item.properties.title)
+    .filter((title) => /^\d{4}-\d{2}-\d{2}(?:_conflict\d+)?$/.test(title));
+  const updates = [];
+  let matchedRows = 0;
+  let updatedSheets = 0;
+  for (const sheetName of dateSheets) {
+    const rows = await readDailyRows({ token, spreadsheetId, date: sheetName });
+    const result = buildSheetBackfillUpdates(sheetName, rows, groups);
+    if (result.matchedRows > 0) updatedSheets += 1;
+    matchedRows += result.matchedRows;
+    updates.push(...result.data);
+  }
+  for (let index = 0; index < updates.length; index += 400) {
+    await apiFetch(`${SHEETS_API}/${spreadsheetId}/values:batchUpdate`, token, {
+      method: 'POST',
+      body: JSON.stringify({ valueInputOption: 'USER_ENTERED', data: updates.slice(index, index + 400) }),
+    });
+  }
+  if (updates.length > 0) await ensureManagementSheets({ token, spreadsheetId });
+  return { matchedRows, updatedCells: updates.length, updatedSheets };
 }
 
 export async function getTodayRowsGoogle({ token, config, courier, date = getBangkokParts().date }) {

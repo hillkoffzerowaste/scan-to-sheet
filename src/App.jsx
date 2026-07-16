@@ -33,6 +33,7 @@ import {
   COURIERS,
   appendScanGoogle,
   appendAdminScanGoogle,
+  backfillMarketplaceOrdersGoogle,
   colorAllHistoricalSheetsGoogle,
   ensureGoogleSheetOrganization,
   checkMissingOrders,
@@ -78,6 +79,7 @@ import {
   getDriveRowsFirestore,
   getScanReportFirestore,
   getTodayRowsFirestore,
+  getUploadedMarketplaceOrders,
   markSheetSyncResult,
   mirrorScanToFirestore,
   recordAdminScanPrimary,
@@ -257,6 +259,7 @@ function App() {
   const [marketplaceUploadBusy, setMarketplaceUploadBusy] = useState(false);
   const [marketplaceUploadResult, setMarketplaceUploadResult] = useState(null);
   const marketplaceFileRef = useRef(null);
+  const marketplaceBackfillStartedRef = useRef(false);
   const inputRef = useRef(null);
   const audioContextRef = useRef(null);
   const cameraRef = useRef(null);
@@ -307,16 +310,49 @@ function App() {
       const groups = groupMarketplaceRows(parsedRows);
       if (!groups.length) throw new Error('ไม่พบออเดอร์ที่มีเลขพัสดุในไฟล์');
       const result = await importMarketplaceOrders(groups);
-      setMarketplaceUploadResult({
-        type: 'success',
-        message: `นำเข้า ${result.imported} ออเดอร์ และเติมรายการสแกนแล้ว ${result.matchedScans} รายการ`,
-      });
+      try {
+        const sheetResult = await runWithGoogleRetry((accessToken, googleConfig) => (
+          backfillMarketplaceOrdersGoogle({ token: accessToken, config: googleConfig, groups })
+        ));
+        setMarketplaceUploadResult({
+          type: 'success',
+          message: `นำเข้า ${result.imported} ออเดอร์ เติม Firebase ${result.matchedScans} รายการ และ Google Sheet ${sheetResult.matchedRows} แถว`,
+        });
+      } catch (sheetError) {
+        setMarketplaceUploadResult({
+          type: 'warning',
+          message: `Firebase สำเร็จ ${result.imported} ออเดอร์ แต่ Google Sheet ยังไม่สำเร็จ: ${sheetError.message}`,
+        });
+      }
     } catch (error) {
       setMarketplaceUploadResult({ type: 'error', message: error.message });
     } finally {
       setMarketplaceUploadBusy(false);
     }
   }
+
+  useEffect(() => {
+    if (!firebaseUser || !token || !config?.master?.id || marketplaceBackfillStartedRef.current) return;
+    marketplaceBackfillStartedRef.current = true;
+
+    void (async () => {
+      try {
+        const groups = await getUploadedMarketplaceOrders();
+        if (!groups.length) return;
+        const firebaseResult = await importMarketplaceOrders(groups);
+        const sheetResult = await runWithGoogleRetry((accessToken, googleConfig) => (
+          backfillMarketplaceOrdersGoogle({ token: accessToken, config: googleConfig, groups })
+        ));
+        setMarketplaceUploadResult({
+          type: 'success',
+          message: `เติมย้อนหลังอัตโนมัติแล้ว: Firebase ${firebaseResult.matchedScans} รายการ, Google Sheet ${sheetResult.matchedRows} แถว`,
+        });
+      } catch (error) {
+        marketplaceBackfillStartedRef.current = false;
+        setMarketplaceUploadResult({ type: 'warning', message: `เติมย้อนหลังยังไม่ครบ: ${error.message}` });
+      }
+    })();
+  }, [firebaseUser, token, config]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;

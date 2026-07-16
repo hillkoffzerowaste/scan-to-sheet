@@ -254,6 +254,19 @@ export async function importMarketplaceOrders(groups) {
   return { imported, matchedScans };
 }
 
+export async function getUploadedMarketplaceOrders() {
+  if (!canWriteFirestore()) return [];
+  const snap = await getDocs(query(collection(firestoreDb, 'marketplaceOrders'), where('importSource', '==', 'web_upload')));
+  return snap.docs.map((item) => {
+    const data = item.data();
+    return {
+      platform: data.platform ?? '', orderId: data.orderId ?? '', trackingNo: data.trackingNo ?? '',
+      normalizedTrackingNo: data.normalizedTrackingNo ?? '',
+      marketplaceSkus: Array.isArray(data.marketplaceSkus) ? data.marketplaceSkus : [],
+    };
+  }).filter((item) => item.orderId && item.normalizedTrackingNo);
+}
+
 async function findMarketplaceMetadataByTracking(trackingNo) {
   const order = await findMarketplaceOrderByTracking({ trackingNo });
   return marketplaceMetadata(order);

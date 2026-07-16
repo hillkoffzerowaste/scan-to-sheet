@@ -47,6 +47,13 @@ service cloud.firestore {
           'failed'
         ];
       allow delete: if false;
+      allow update: if isSignedIn()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'marketplaceOrderId', 'marketplaceSkus'
+        ])
+        && request.resource.data.marketplaceOrderId is string
+        && request.resource.data.marketplaceSkus is list
+        && request.resource.data.marketplaceSkus.size() <= 100;
     }
 
     match /marketplaceOrders/{orderId} {
