@@ -2,7 +2,43 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
-import { orderDocumentId } from './normalize.js';
+import { marketplaceMetadata, orderDocumentId } from './normalize.js';
+
+const MAX_BATCH_WRITES = 400;
+
+async function reconcileScannedOrders({ db, orders }) {
+  let batch = db.batch();
+  let batchSize = 0;
+  let reconciled = 0;
+
+  async function commitBatch() {
+    if (batchSize === 0) return;
+    await batch.commit();
+    batch = db.batch();
+    batchSize = 0;
+  }
+
+  for (const order of orders) {
+    const metadata = marketplaceMetadata(order);
+    if (!metadata || !order.normalizedTrackingNo) continue;
+
+    const matches = await db.collection('orders')
+      .where('normalizedCode', '==', order.normalizedTrackingNo)
+      .get();
+
+    for (const match of matches.docs) {
+      batch.set(match.ref, metadata, { merge: true });
+      batchSize += 1;
+      reconciled += 1;
+      if (batchSize >= MAX_BATCH_WRITES) {
+        await commitBatch();
+      }
+    }
+  }
+
+  await commitBatch();
+  return reconciled;
+}
 
 export async function initFirestore({ config, baseDir }) {
   const serviceAccountPath = path.resolve(baseDir, config.serviceAccountPath);
@@ -46,7 +82,7 @@ export async function upsertOrders({ db, config, platform, orders, machineName }
     upserted += 1;
     batchSize += 1;
 
-    if (batchSize >= 400) {
+    if (batchSize >= MAX_BATCH_WRITES) {
       await batch.commit();
       batch = db.batch();
       batchSize = 0;
@@ -56,6 +92,8 @@ export async function upsertOrders({ db, config, platform, orders, machineName }
   if (batchSize > 0) {
     await batch.commit();
   }
+
+  await reconcileScannedOrders({ db, orders });
 
   return upserted;
 }

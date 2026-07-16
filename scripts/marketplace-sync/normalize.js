@@ -10,6 +10,17 @@ export function normalizeTrackingNo(value) {
   return normalizeCode(value).replace(/[^A-Z0-9]/g, '');
 }
 
+export function marketplaceMetadata(order) {
+  const marketplaceOrderId = normalizeText(order?.orderId);
+  const marketplaceSkus = [...new Set(
+    (Array.isArray(order?.items) ? order.items : [])
+      .map((item) => normalizeText(item?.sku))
+      .filter(Boolean),
+  )];
+
+  return marketplaceOrderId ? { marketplaceOrderId, marketplaceSkus } : null;
+}
+
 export function safeDocPart(value) {
   return normalizeText(value).replace(/[\/\\#?\[\]]/g, '_').slice(0, 160);
 }

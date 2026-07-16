@@ -33,6 +33,7 @@ yarn-error.log*
 firebase-service-account*.json
 scripts/marketplace-sync/config.json
 scripts/marketplace-sync/profiles/
+scripts/marketplace-sync/marketplace-profile/
 scripts/marketplace-sync/logs/
 scripts/marketplace-sync/screenshots/
 

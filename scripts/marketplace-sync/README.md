@@ -96,6 +96,11 @@ Orders are upserted into `marketplaceOrders` with document id:
 
 If `orderId` is missing, the worker uses tracking number.
 
+After each import, the worker matches `normalizedTrackingNo` to scanned
+`orders.normalizedCode` and fills only `marketplaceOrderId` and
+`marketplaceSkus`. The scan app performs the same lookup when a later scan is
+saved, so both import-before-scan and scan-before-import flows are supported.
+
 Sync status is written to:
 
 ```txt

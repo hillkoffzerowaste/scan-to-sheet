@@ -13,6 +13,7 @@ import {
   where,
 } from 'firebase/firestore';
 import { firestoreDb, isFirebaseConfigured, serverTimestamp } from './firebase.js';
+import { marketplaceMetadata } from '../../scripts/marketplace-sync/normalize.js';
 
 function canWriteFirestore() {
   return Boolean(isFirebaseConfigured && firestoreDb);
@@ -208,6 +209,19 @@ export async function findMarketplaceOrderByTracking({ trackingNo }) {
   return exactDoc ? { id: exactDoc.id, ...exactDoc.data() } : null;
 }
 
+async function findMarketplaceMetadataByTracking(trackingNo) {
+  const order = await findMarketplaceOrderByTracking({ trackingNo });
+  return marketplaceMetadata(order);
+}
+
+async function backfillLateMarketplaceMetadata(id, trackingNo, existingMetadata) {
+  if (existingMetadata || !id) return;
+  const metadata = await findMarketplaceMetadataByTracking(trackingNo);
+  if (metadata) {
+    await setDoc(doc(firestoreDb, 'orders', id), metadata, { merge: true });
+  }
+}
+
 export async function upsertFirebaseUser(user) {
   if (!canWriteFirestore() || !user?.uid) {
     return;
@@ -250,14 +264,18 @@ export async function recordPackerScanPrimary({ code, courier, date, time, user,
   }
 
   const normalizedCode = normalizeCode(code);
+  const marketplaceData = await findMarketplaceMetadataByTracking(normalizedCode);
   const recent = await findRecentAdminOrderByCode({ normalizedCode }) ?? await findRecentOrder({ courier, normalizedCode });
   const ref = doc(firestoreDb, 'orders', recent?.id ?? orderId({ date, courier, code: normalizedCode }));
 
-  return runTransaction(firestoreDb, async (transaction) => {
+  const result = await runTransaction(firestoreDb, async (transaction) => {
     const snap = await transaction.get(ref);
     const existing = snap.exists() ? snap.data() : null;
 
     if (existing?.packerScan?.scannedAt && note !== 'ลูกค้ายกเลิก') {
+      if (marketplaceData) {
+        transaction.set(ref, marketplaceData, { merge: true });
+      }
       return {
         status: 'duplicate',
         id: ref.id,
@@ -295,6 +313,10 @@ export async function recordPackerScanPrimary({ code, courier, date, time, user,
           createdAtIso: nowIso(),
         };
 
+    if (marketplaceData) {
+      Object.assign(payload, marketplaceData);
+    }
+
     transaction.set(ref, payload, { merge: true });
 
     return {
@@ -306,6 +328,9 @@ export async function recordPackerScanPrimary({ code, courier, date, time, user,
       sheetSyncStatus: 'pending',
     };
   });
+
+  await backfillLateMarketplaceMetadata(result?.id, normalizedCode, marketplaceData);
+  return result;
 }
 
 export async function recordAdminScanPrimary({ code, courier, date, time, user }) {
@@ -314,14 +339,18 @@ export async function recordAdminScanPrimary({ code, courier, date, time, user }
   }
 
   const normalizedCode = normalizeCode(code);
+  const marketplaceData = await findMarketplaceMetadataByTracking(normalizedCode);
   const recent = await findRecentOrder({ courier, normalizedCode });
   const ref = doc(firestoreDb, 'orders', recent?.id ?? orderId({ date, courier, code: normalizedCode }));
 
-  return runTransaction(firestoreDb, async (transaction) => {
+  const result = await runTransaction(firestoreDb, async (transaction) => {
     const snap = await transaction.get(ref);
     const existing = snap.exists() ? snap.data() : null;
 
     if (existing?.admin?.scannedAt) {
+      if (marketplaceData) {
+        transaction.set(ref, marketplaceData, { merge: true });
+      }
       return {
         status: 'duplicate',
         id: ref.id,
@@ -351,6 +380,10 @@ export async function recordAdminScanPrimary({ code, courier, date, time, user }
           createdAtIso: nowIso(),
         };
 
+    if (marketplaceData) {
+      Object.assign(payload, marketplaceData);
+    }
+
     transaction.set(ref, payload, { merge: true });
 
     return {
@@ -360,6 +393,9 @@ export async function recordAdminScanPrimary({ code, courier, date, time, user }
       sheetSyncStatus: 'pending',
     };
   });
+
+  await backfillLateMarketplaceMetadata(result?.id, normalizedCode, marketplaceData);
+  return result;
 }
 
 export async function markSheetSyncResult({ orderId: id, ok, result = null, error = null }) {
