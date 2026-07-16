@@ -183,7 +183,7 @@ export function validateScanCode(courier, value) {
 }
 
 async function apiFetch(url, token, options = {}) {
-  const maxRetries = 2;
+  const maxRetries = 4;
   let lastError;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -198,7 +198,14 @@ async function apiFetch(url, token, options = {}) {
 
     if (response.status === 429 && attempt < maxRetries) {
       lastError = new Error(`Google API rate limited (429) after ${attempt + 1} attempts`);
-      await new Promise((resolve) => setTimeout(resolve, 1000 * (attempt + 1)));
+      const retryAfter = response.headers.get('Retry-After');
+      const retryAfterSeconds = Number(retryAfter);
+      const retryAfterMs = Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
+        ? retryAfterSeconds * 1000
+        : 0;
+      const exponentialMs = Math.min(2000 * (2 ** attempt), 30000);
+      const jitterMs = Math.floor(Math.random() * 500);
+      await new Promise((resolve) => setTimeout(resolve, Math.max(retryAfterMs, exponentialMs) + jitterMs));
       continue;
     }
 
@@ -840,6 +847,28 @@ async function readDailyRows({ token, spreadsheetId, date }) {
   return data.values ?? [];
 }
 
+async function batchReadDailyRows({ token, spreadsheetId, sheetNames }) {
+  const rowsBySheet = new Map();
+  const chunkSize = 50;
+
+  for (let index = 0; index < sheetNames.length; index += chunkSize) {
+    const chunk = sheetNames.slice(index, index + chunkSize);
+    const params = new URLSearchParams({ majorDimension: 'ROWS' });
+    chunk.forEach((sheetName) => {
+      params.append('ranges', `${escapeSheetName(sheetName)}!A2:${sheetEndColumn()}`);
+    });
+    const data = await apiFetch(
+      `${SHEETS_API}/${spreadsheetId}/values:batchGet?${params}`,
+      token,
+    );
+    chunk.forEach((sheetName, chunkIndex) => {
+      rowsBySheet.set(sheetName, data.valueRanges?.[chunkIndex]?.values ?? []);
+    });
+  }
+
+  return rowsBySheet;
+}
+
 async function updateDailyRow({ token, spreadsheetId, date, rowNumber, row }) {
   const range = `${escapeSheetName(date)}!A${rowNumber}:${sheetEndColumn()}${rowNumber}`;
   await apiFetch(
@@ -864,11 +893,12 @@ export async function backfillMarketplaceOrdersGoogle({ token, config, groups })
   const dateSheets = (spreadsheet.sheets ?? [])
     .map((item) => item.properties.title)
     .filter((title) => /^\d{4}-\d{2}-\d{2}(?:_conflict\d+)?$/.test(title));
+  const rowsBySheet = await batchReadDailyRows({ token, spreadsheetId, sheetNames: dateSheets });
   const updates = [];
   let matchedRows = 0;
   let updatedSheets = 0;
   for (const sheetName of dateSheets) {
-    const rows = await readDailyRows({ token, spreadsheetId, date: sheetName });
+    const rows = rowsBySheet.get(sheetName) ?? [];
     const result = buildSheetBackfillUpdates(sheetName, rows, groups);
     if (result.matchedRows > 0) updatedSheets += 1;
     matchedRows += result.matchedRows;
@@ -880,7 +910,6 @@ export async function backfillMarketplaceOrdersGoogle({ token, config, groups })
       body: JSON.stringify({ valueInputOption: 'USER_ENTERED', data: updates.slice(index, index + 400) }),
     });
   }
-  if (updates.length > 0) await ensureManagementSheets({ token, spreadsheetId });
   return { matchedRows, updatedCells: updates.length, updatedSheets };
 }
 
