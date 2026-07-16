@@ -99,6 +99,7 @@ const GOOGLE_SCOPES = [
   'https://www.googleapis.com/auth/spreadsheets',
 ];
 const SCOPES = GOOGLE_SCOPES.join(' ');
+const MARKETPLACE_BACKFILL_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 
 const EMPTY_USER = {
   email: 'ยังไม่ได้เข้าสู่ระบบ',
@@ -316,7 +317,7 @@ function App() {
         ));
         setMarketplaceUploadResult({
           type: 'success',
-          message: `เพิ่มใหม่ ${result.imported} ออเดอร์ ข้ามรายการซ้ำ ${result.duplicates} ออเดอร์ เติม Firebase ${result.matchedScans} รายการ และ Google Sheet ${sheetResult.matchedRows} แถว`,
+          message: `เพิ่มใหม่ ${result.imported} ออเดอร์ ข้ามรายการซ้ำ ${result.duplicates} ออเดอร์ อัปเดต Firebase ${result.updatedScans} รายการ และ Google Sheet ${sheetResult.matchedRows} แถว`,
         });
       } catch (sheetError) {
         setMarketplaceUploadResult({
@@ -333,19 +334,27 @@ function App() {
 
   useEffect(() => {
     if (!firebaseUser || !token || !config?.master?.id || marketplaceBackfillStartedRef.current) return;
+    const backfillKey = `scan-to-sheet:marketplace-backfill:${firebaseUser.uid}:${config.master.id}`;
+    const lastSuccessfulBackfill = Number(localStorage.getItem(backfillKey) ?? 0);
+    if (Date.now() - lastSuccessfulBackfill < MARKETPLACE_BACKFILL_COOLDOWN_MS) {
+      marketplaceBackfillStartedRef.current = true;
+      return;
+    }
     marketplaceBackfillStartedRef.current = true;
 
     void (async () => {
       try {
         const groups = await getUploadedMarketplaceOrders();
         if (!groups.length) return;
-        const firebaseResult = await importMarketplaceOrders(groups);
+        const knownExistingOrderIds = groups.map((group) => `${group.platform}__${group.orderId}`);
+        const firebaseResult = await importMarketplaceOrders(groups, { knownExistingOrderIds });
         const sheetResult = await runWithGoogleRetry((accessToken, googleConfig) => (
           backfillMarketplaceOrdersGoogle({ token: accessToken, config: googleConfig, groups })
         ));
+        localStorage.setItem(backfillKey, String(Date.now()));
         setMarketplaceUploadResult({
           type: 'success',
-          message: `เติมย้อนหลังอัตโนมัติแล้ว: Firebase ${firebaseResult.matchedScans} รายการ, Google Sheet ${sheetResult.matchedRows} แถว`,
+          message: `เติมย้อนหลังอัตโนมัติแล้ว: อัปเดต Firebase ${firebaseResult.updatedScans} รายการ, Google Sheet ${sheetResult.matchedRows} แถว`,
         });
       } catch (error) {
         marketplaceBackfillStartedRef.current = false;

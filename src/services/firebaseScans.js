@@ -2,6 +2,7 @@ import {
   addDoc,
   collection,
   doc,
+  documentId,
   getDoc,
   getDocs,
   limit,
@@ -210,19 +211,46 @@ export async function findMarketplaceOrderByTracking({ trackingNo }) {
   return exactDoc ? { id: exactDoc.id, ...exactDoc.data() } : null;
 }
 
-export async function importMarketplaceOrders(groups) {
-  if (!canWriteFirestore()) throw new Error('Firebase ยังไม่พร้อมใช้งาน');
-  let imported = 0;
-  let duplicates = 0;
-  let matchedScans = 0;
+function sameStringList(left, right) {
+  if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) return false;
+  return left.every((value, index) => value === right[index]);
+}
 
-  for (const group of groups) {
-    const marketplaceRef = doc(firestoreDb, 'marketplaceOrders', `${group.platform}__${group.orderId}`);
-    const existingMarketplaceOrder = await getDoc(marketplaceRef);
-    if (existingMarketplaceOrder.exists()) {
-      duplicates += 1;
-    } else {
-      await setDoc(marketplaceRef, {
+async function commitMarketplaceWrites(writes) {
+  for (let index = 0; index < writes.length; index += 400) {
+    const batch = writeBatch(firestoreDb);
+    writes.slice(index, index + 400).forEach((write) => {
+      batch.set(write.ref, write.data, write.options);
+    });
+    await batch.commit();
+  }
+}
+
+export async function importMarketplaceOrders(groups, { knownExistingOrderIds = null } = {}) {
+  if (!canWriteFirestore()) throw new Error('Firebase ยังไม่พร้อมใช้งาน');
+  const marketplaceCollection = collection(firestoreDb, 'marketplaceOrders');
+  const existingOrderIds = new Set(knownExistingOrderIds ?? []);
+  const groupByTracking = new Map(groups.map((group) => [group.normalizedTrackingNo, group]));
+  const groupIds = groups.map((group) => `${group.platform}__${group.orderId}`);
+  const idsToCheck = [...new Set(groupIds.filter((id) => !existingOrderIds.has(id)))];
+  let readQueries = 0;
+
+  for (let index = 0; index < idsToCheck.length; index += 30) {
+    const snap = await getDocs(query(
+      marketplaceCollection,
+      where(documentId(), 'in', idsToCheck.slice(index, index + 30)),
+    ));
+    readQueries += 1;
+    snap.docs.forEach((item) => existingOrderIds.add(item.id));
+  }
+
+  const writes = [];
+  const imported = groups.filter((group, index) => {
+    const id = groupIds[index];
+    if (existingOrderIds.has(id)) return false;
+    writes.push({
+      ref: doc(marketplaceCollection, id),
+      data: {
         platform: group.platform,
         orderId: group.orderId,
         trackingNo: group.trackingNo,
@@ -231,33 +259,38 @@ export async function importMarketplaceOrders(groups) {
         importSource: 'web_upload',
         importedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-      });
-      imported += 1;
-    }
-
+      },
+    });
+    return true;
+  }).length;
+  const duplicates = groups.length - imported;
+  let matchedScans = 0;
+  let updatedScans = 0;
+  const trackingCodes = [...groupByTracking.keys()].filter(Boolean);
+  for (let index = 0; index < trackingCodes.length; index += 30) {
     const matches = await getDocs(query(
       collection(firestoreDb, 'orders'),
-      where('normalizedCode', '==', group.normalizedTrackingNo),
+      where('normalizedCode', 'in', trackingCodes.slice(index, index + 30)),
     ));
-    let batch = writeBatch(firestoreDb);
-    let batchSize = 0;
+    readQueries += 1;
     for (const match of matches.docs) {
-      batch.set(match.ref, {
+      matchedScans += 1;
+      const current = match.data();
+      const group = groupByTracking.get(current.normalizedCode);
+      if (!group || (
+        current.marketplaceOrderId === group.orderId
+        && sameStringList(current.marketplaceSkus, group.marketplaceSkus)
+      )) continue;
+      writes.push({ ref: match.ref, data: {
         marketplaceOrderId: group.orderId,
         marketplaceSkus: group.marketplaceSkus,
-      }, { merge: true });
-      batchSize += 1;
-      matchedScans += 1;
-      if (batchSize >= 400) {
-        await batch.commit();
-        batch = writeBatch(firestoreDb);
-        batchSize = 0;
-      }
+      }, options: { merge: true } });
+      updatedScans += 1;
     }
-    if (batchSize > 0) await batch.commit();
   }
 
-  return { imported, duplicates, matchedScans };
+  await commitMarketplaceWrites(writes);
+  return { imported, duplicates, matchedScans, updatedScans, readQueries, writes: writes.length };
 }
 
 export async function getUploadedMarketplaceOrders() {
