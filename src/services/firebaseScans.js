@@ -213,21 +213,27 @@ export async function findMarketplaceOrderByTracking({ trackingNo }) {
 export async function importMarketplaceOrders(groups) {
   if (!canWriteFirestore()) throw new Error('Firebase ยังไม่พร้อมใช้งาน');
   let imported = 0;
+  let duplicates = 0;
   let matchedScans = 0;
 
   for (const group of groups) {
     const marketplaceRef = doc(firestoreDb, 'marketplaceOrders', `${group.platform}__${group.orderId}`);
-    await setDoc(marketplaceRef, {
-      platform: group.platform,
-      orderId: group.orderId,
-      trackingNo: group.trackingNo,
-      normalizedTrackingNo: group.normalizedTrackingNo,
-      marketplaceSkus: group.marketplaceSkus,
-      importSource: 'web_upload',
-      importedAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    }, { merge: true });
-    imported += 1;
+    const existingMarketplaceOrder = await getDoc(marketplaceRef);
+    if (existingMarketplaceOrder.exists()) {
+      duplicates += 1;
+    } else {
+      await setDoc(marketplaceRef, {
+        platform: group.platform,
+        orderId: group.orderId,
+        trackingNo: group.trackingNo,
+        normalizedTrackingNo: group.normalizedTrackingNo,
+        marketplaceSkus: group.marketplaceSkus,
+        importSource: 'web_upload',
+        importedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      imported += 1;
+    }
 
     const matches = await getDocs(query(
       collection(firestoreDb, 'orders'),
@@ -251,7 +257,7 @@ export async function importMarketplaceOrders(groups) {
     if (batchSize > 0) await batch.commit();
   }
 
-  return { imported, matchedScans };
+  return { imported, duplicates, matchedScans };
 }
 
 export async function getUploadedMarketplaceOrders() {

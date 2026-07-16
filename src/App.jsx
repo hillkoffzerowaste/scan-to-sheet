@@ -316,12 +316,12 @@ function App() {
         ));
         setMarketplaceUploadResult({
           type: 'success',
-          message: `นำเข้า ${result.imported} ออเดอร์ เติม Firebase ${result.matchedScans} รายการ และ Google Sheet ${sheetResult.matchedRows} แถว`,
+          message: `เพิ่มใหม่ ${result.imported} ออเดอร์ ข้ามรายการซ้ำ ${result.duplicates} ออเดอร์ เติม Firebase ${result.matchedScans} รายการ และ Google Sheet ${sheetResult.matchedRows} แถว`,
         });
       } catch (sheetError) {
         setMarketplaceUploadResult({
           type: 'warning',
-          message: `Firebase สำเร็จ ${result.imported} ออเดอร์ แต่ Google Sheet ยังไม่สำเร็จ: ${sheetError.message}`,
+          message: `Firebase เพิ่มใหม่ ${result.imported} ออเดอร์ ข้ามรายการซ้ำ ${result.duplicates} ออเดอร์ แต่ Google Sheet ยังไม่สำเร็จ: ${sheetError.message}`,
         });
       }
     } catch (error) {
