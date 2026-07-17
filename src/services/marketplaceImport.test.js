@@ -19,9 +19,11 @@ test('accepts both KEX Lazada barcode prefixes and rejects near misses', () => {
   assert.equal(validateScanCode('KEX Lazada', 'KEXDLM12345678').ok, false);
 });
 
-test('parses and groups Lazada rows', () => {
-  const rows = [['orderNumber', 'sellerSku', 'trackingCode'], ['L1', 'SKU-A', 'LEX123'], ['L1', 'SKU-B', 'LEX123']];
-  assert.deepEqual(groupMarketplaceRows(parseMarketplaceRows(rows))[0].marketplaceSkus, ['SKU-A', 'SKU-B']);
+test('parses and groups Lazada rows with buyer name', () => {
+  const rows = [['orderNumber', 'sellerSku', 'trackingCode', 'customerName'], ['L1', 'SKU-A', 'LEX123', 'Buyer A'], ['L1', 'SKU-B', 'LEX123', '']];
+  const group = groupMarketplaceRows(parseMarketplaceRows(rows))[0];
+  assert.deepEqual(group.marketplaceSkus, ['SKU-A', 'SKU-B']);
+  assert.equal(group.buyerName, 'Buyer A');
 });
 
 test('parses Shopee headers', () => {
@@ -36,10 +38,10 @@ test('parses Shopee headers', () => {
 });
 
 test('parses TikTok BOM headers and trims tab suffixes', () => {
-  const rows = [['\uFEFFOrder ID', 'Seller SKU', 'Tracking ID'], ['T1\t', 'SKU-T', 'JT123\t']];
+  const rows = [['\uFEFFOrder ID', 'Seller SKU', 'Tracking ID', 'Buyer Username'], ['T1\t', 'SKU-T', 'JT123\t', 'buyer-t\t']];
   assert.deepEqual(parseMarketplaceRows(rows)[0], {
     platform: 'tiktok', orderId: 'T1', sku: 'SKU-T', trackingNo: 'JT123',
-    sellerOrderStatus: '', expectedShipAt: '',
+    sellerOrderStatus: '', expectedShipAt: '', buyerName: 'buyer-t',
   });
 });
 
@@ -130,4 +132,5 @@ test('parses expected ship metadata from the real Shopee export', { skip: !exist
   assert.ok(groups.length > 0);
   assert.ok(groups.every((group) => group.expectedShipAt));
   assert.ok(groups.every((group) => group.sellerOrderStatus));
+  assert.ok(groups.every((group) => group.buyerName));
 });
