@@ -2,6 +2,18 @@ function cleanCell(value) {
   return String(value ?? '').replace(/^\uFEFF/, '').replace(/\t+$/g, '').trim();
 }
 
+const SCIENTIFIC_NOTATION = /^[+-]?\d+(?:\.\d+)?e[+-]?\d+$/i;
+
+export function validateMarketplaceIdentifier(value, { platform, rowNumber, field }) {
+  const text = cleanCell(value);
+  const unsafeExcelNumber = typeof value === 'number'
+    && (!Number.isSafeInteger(value) || Math.abs(value) >= 1_000_000_000_000_000);
+  if (!unsafeExcelNumber && !SCIENTIFIC_NOTATION.test(text)) return text;
+  throw new Error(
+    `ไฟล์ ${platform} แถว ${rowNumber} ช่อง ${field} มีเลขยาวที่ Excel ปัดค่าเป็น "${text}" กรุณาตั้งคอลัมน์นี้เป็น Text แล้วดาวน์โหลดไฟล์ใหม่`,
+  );
+}
+
 export function normalizeMarketplaceTracking(value) {
   return cleanCell(value).toUpperCase().replace(/[^A-Z0-9]/g, '');
 }
@@ -75,11 +87,17 @@ export function parseMarketplaceRows(rows) {
     throw new Error(`ไฟล์ ${platform} ขาดคอลัมน์เลขคำสั่งซื้อ, SKU หรือเลขพัสดุ`);
   }
 
-  return rows.slice(1).map((row) => ({
+  return rows.slice(1).map((row, index) => ({
     platform,
-    orderId: cleanCell(row[orderIndex]),
-    sku: cleanCell(row[skuIndex]),
-    trackingNo: cleanCell(row[trackingIndex]),
+    orderId: validateMarketplaceIdentifier(row[orderIndex], {
+      platform, rowNumber: index + 2, field: 'เลขคำสั่งซื้อ',
+    }),
+    sku: validateMarketplaceIdentifier(row[skuIndex], {
+      platform, rowNumber: index + 2, field: 'SKU',
+    }),
+    trackingNo: validateMarketplaceIdentifier(row[trackingIndex], {
+      platform, rowNumber: index + 2, field: 'เลขพัสดุ',
+    }),
   })).filter((row) => (
     row.orderId
     && row.trackingNo

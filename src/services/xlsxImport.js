@@ -12,7 +12,7 @@ export async function parseXlsxArrayBuffer(arrayBuffer) {
   return XLSX.utils.sheet_to_json(worksheet, {
     header: 1,
     defval: '',
-    raw: false,
+    raw: true,
     blankrows: false,
-  }).map((row) => row.map((cell) => String(cell ?? '')));
+  }).map((row) => row.map((cell) => cell ?? ''));
 }

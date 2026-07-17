@@ -4,7 +4,9 @@ import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { buildSheetBackfillUpdates, groupMarketplaceRows, parseMarketplaceRows } from './marketplaceImport.js';
+import {
+  buildSheetBackfillUpdates, groupMarketplaceRows, parseMarketplaceRows, validateMarketplaceIdentifier,
+} from './marketplaceImport.js';
 import { parseXlsxArrayBuffer } from './xlsxImport.js';
 
 test('parses and groups Lazada rows', () => {
@@ -20,6 +22,31 @@ test('parses Shopee headers', () => {
 test('parses TikTok BOM headers and trims tab suffixes', () => {
   const rows = [['\uFEFFOrder ID', 'Seller SKU', 'Tracking ID'], ['T1\t', 'SKU-T', 'JT123\t']];
   assert.deepEqual(parseMarketplaceRows(rows)[0], { platform: 'tiktok', orderId: 'T1', sku: 'SKU-T', trackingNo: 'JT123' });
+});
+
+test('rejects scientific notation and unsafe numeric marketplace identifiers', () => {
+  assert.throws(
+    () => parseMarketplaceRows([['Order ID', 'Seller SKU', 'Tracking ID'], ['5.85049E+17', 'SKU-1', 'JT123']]),
+    /แถว 2.*เลขคำสั่งซื้อ.*5\.85049E\+17/,
+  );
+  assert.throws(
+    () => validateMarketplaceIdentifier(585049777788585346, {
+      platform: 'tiktok', rowNumber: 3, field: 'เลขคำสั่งซื้อ',
+    }),
+    /แถว 3.*เลขคำสั่งซื้อ/,
+  );
+});
+
+test('accepts long identifiers stored as text and normal alphanumeric values', () => {
+  assert.equal(validateMarketplaceIdentifier('585049777788585346', {
+    platform: 'tiktok', rowNumber: 3, field: 'เลขคำสั่งซื้อ',
+  }), '585049777788585346');
+  assert.equal(validateMarketplaceIdentifier('JTTH201519776802', {
+    platform: 'tiktok', rowNumber: 3, field: 'เลขพัสดุ',
+  }), 'JTTH201519776802');
+  assert.equal(validateMarketplaceIdentifier('IG-HK-0653_1', {
+    platform: 'tiktok', rowNumber: 3, field: 'SKU',
+  }), 'IG-HK-0653_1');
 });
 
 test('builds only N, O and R updates for a matching historical row', () => {
