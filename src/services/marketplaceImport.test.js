@@ -13,6 +13,7 @@ import { validateScanCode } from './googleSheets.js';
 
 test('accepts both KEX Lazada barcode prefixes and rejects near misses', () => {
   assert.equal(validateScanCode('KEX Lazada', 'KEXD0LM0003766710').ok, true);
+  assert.equal(validateScanCode('KEX Lazada', 'KEXDOLM000376671').ok, true);
   assert.equal(validateScanCode('KEX Lazada', 'KEXLM12345678').ok, true);
   assert.equal(validateScanCode('KEX Lazada', 'KEX0LM12345678').ok, false);
   assert.equal(validateScanCode('KEX Lazada', 'KEXDLM12345678').ok, false);

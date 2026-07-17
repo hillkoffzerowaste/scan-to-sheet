@@ -60,8 +60,8 @@ export const COURIER_RULES = {
     valid: /^LEX[A-Z0-9]{8,35}$/i,
   },
   'KEX Lazada': {
-    label: 'เลข KEX Lazada ต้องขึ้นต้นด้วย KEXLM หรือ KEXD0LM แล้วตามด้วยตัวเลข',
-    valid: /^KEX(?:D0)?LM\d{8,20}$/i,
+    label: 'เลข KEX Lazada ต้องขึ้นต้นด้วย KEXLM, KEXD0LM หรือ KEXDOLM แล้วตามด้วยตัวเลข',
+    valid: /^KEX(?:D[0O])?LM\d{8,20}$/i,
   },
   'Lazada Flash': {
     label: 'เลข Lazada Flash ต้องขึ้นต้นด้วย TH',
