@@ -159,6 +159,12 @@ export function classifyLateOrder(order, now = new Date()) {
   return { key: 'future', label: 'รอดำเนินการ', color: 'neutral' };
 }
 
+export function isCompleteScanOrder(order) {
+  if (!order || typeof order !== 'object') return false;
+  return order.status === 'matched'
+    || Boolean(order.admin?.scannedAt && order.packerScan?.scannedAt);
+}
+
 export function buildSheetBackfillUpdates(sheetName, rows, groups) {
   const groupMap = new Map(groups.map((group) => [group.normalizedTrackingNo, group]));
   const escapedSheet = `'${String(sheetName).replace(/'/g, "''")}'`;

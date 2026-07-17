@@ -16,6 +16,7 @@ import {
 } from 'firebase/firestore';
 import { firestoreDb, isFirebaseConfigured, serverTimestamp } from './firebase.js';
 import { marketplaceMetadata } from '../../scripts/marketplace-sync/normalize.js';
+import { isCompleteScanOrder } from './marketplaceImport.js';
 
 function canWriteFirestore() {
   return Boolean(isFirebaseConfigured && firestoreDb);
@@ -302,7 +303,9 @@ export async function importMarketplaceOrders(groups, { knownExistingOrderIds = 
     for (const match of matches.docs) {
       matchedScans += 1;
       const current = match.data();
-      scannedTrackingCodes.add(normalizeCode(current.normalizedCode || current.code).replace(/[^A-Z0-9]/g, ''));
+      if (isCompleteScanOrder(current)) {
+        scannedTrackingCodes.add(normalizeCode(current.normalizedCode || current.code).replace(/[^A-Z0-9]/g, ''));
+      }
       const group = groupByTracking.get(current.normalizedCode);
       if (!group || (
         current.marketplaceOrderId === group.orderId
