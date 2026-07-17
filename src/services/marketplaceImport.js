@@ -179,32 +179,54 @@ export function marketplaceMetadataChanged(existing, incoming) {
 }
 
 export function buildSheetBackfillUpdates(sheetName, rows, groups) {
-  const groupMap = new Map(groups.map((group) => [group.normalizedTrackingNo, group]));
-  const groupsByOrderId = new Map();
+  const groupsByTracking = new Map();
+  const groupsByPlatformTracking = new Map();
+  const blankTrackingGroupsByPlatformOrderId = new Map();
   groups.forEach((group) => {
+    const platform = cleanCell(group.platform).toLowerCase();
+    const normalizedTrackingNo = normalizeMarketplaceTracking(group.normalizedTrackingNo ?? group.trackingNo);
     const orderId = cleanCell(group.orderId);
-    if (!orderId) return;
-    const matches = groupsByOrderId.get(orderId) ?? [];
-    matches.push(group);
-    groupsByOrderId.set(orderId, matches);
+    if (normalizedTrackingNo) {
+      const trackingMatches = groupsByTracking.get(normalizedTrackingNo) ?? [];
+      trackingMatches.push(group);
+      groupsByTracking.set(normalizedTrackingNo, trackingMatches);
+
+      const platformTrackingKey = `${platform}__${normalizedTrackingNo}`;
+      const platformTrackingMatches = groupsByPlatformTracking.get(platformTrackingKey) ?? [];
+      platformTrackingMatches.push(group);
+      groupsByPlatformTracking.set(platformTrackingKey, platformTrackingMatches);
+      return;
+    }
+    if (!platform || !orderId) return;
+    const platformOrderKey = `${platform}__${orderId}`;
+    const orderMatches = blankTrackingGroupsByPlatformOrderId.get(platformOrderKey) ?? [];
+    orderMatches.push(group);
+    blankTrackingGroupsByPlatformOrderId.set(platformOrderKey, orderMatches);
   });
   const escapedSheet = `'${String(sheetName).replace(/'/g, "''")}'`;
   const data = [];
   let matchedRows = 0;
   rows.forEach((row, index) => {
-    const trackingMatch = groupMap.get(normalizeMarketplaceTracking(row[5]))
-      ?? groupMap.get(normalizeMarketplaceTracking(row[12]));
-    const orderId = cleanCell(row[14]);
-    const orderIdMatches = groupsByOrderId.get(orderId) ?? [];
     const platform = cleanCell(row[13]).toLowerCase();
-    const platformMatches = platform
-      ? orderIdMatches.filter((candidate) => candidate.platform === platform)
-      : orderIdMatches;
-    // Fall back to Order ID only where it identifies one imported order. A
-    // single order can legitimately have several tracking numbers, so an
-    // ambiguous Order ID must not copy an SKU onto the wrong sheet row.
+    const sheetTrackings = [...new Set([
+      normalizeMarketplaceTracking(row[5]),
+      normalizeMarketplaceTracking(row[12]),
+    ].filter(Boolean))];
+    const trackingCandidates = sheetTrackings.flatMap((trackingNo) => (
+      platform
+        ? groupsByPlatformTracking.get(`${platform}__${trackingNo}`) ?? []
+        : groupsByTracking.get(trackingNo) ?? []
+    ));
+    const uniqueTrackingCandidates = [...new Set(trackingCandidates)];
+    const trackingMatch = uniqueTrackingCandidates.length === 1 ? uniqueTrackingCandidates[0] : null;
+    const orderId = cleanCell(row[14]);
+    const orderIdMatches = platform && orderId
+      ? blankTrackingGroupsByPlatformOrderId.get(`${platform}__${orderId}`) ?? []
+      : [];
+    // Fall back only for exports whose tracking is blank. A nonblank imported
+    // tracking that differs from the sheet must never copy data onto that row.
     const group = trackingMatch
-      ?? (platformMatches.length === 1 ? platformMatches[0] : null);
+      ?? (orderIdMatches.length === 1 ? orderIdMatches[0] : null);
     if (!group) return;
     const rowNumber = index + 2;
     const skuText = group.marketplaceSkus.join(' | ');
