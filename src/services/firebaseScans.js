@@ -16,7 +16,7 @@ import {
 } from 'firebase/firestore';
 import { firestoreDb, isFirebaseConfigured, serverTimestamp } from './firebase.js';
 import { marketplaceMetadata } from '../../scripts/marketplace-sync/normalize.js';
-import { isCompleteScanOrder } from './marketplaceImport.js';
+import { isCompleteScanOrder, marketplaceMetadataChanged } from './marketplaceImport.js';
 
 function canWriteFirestore() {
   return Boolean(isFirebaseConfigured && firestoreDb);
@@ -196,9 +196,14 @@ export async function findMarketplaceOrderByTracking({ trackingNo }) {
   const normalizedSnap = await getDocs(query(
     ordersRef,
     where('normalizedTrackingNo', '==', normalizedTrackingNo),
-    limit(1),
   ));
-  const normalizedDoc = normalizedSnap.docs[0];
+  const normalizedDoc = [...normalizedSnap.docs].sort((left, right) => {
+    const score = (item) => {
+      const data = item.data();
+      return (data.orderId ? 2 : 0) + (Array.isArray(data.marketplaceSkus) && data.marketplaceSkus.length ? 1 : 0);
+    };
+    return score(right) - score(left);
+  })[0];
   if (normalizedDoc) {
     return { id: normalizedDoc.id, ...normalizedDoc.data() };
   }
@@ -206,9 +211,14 @@ export async function findMarketplaceOrderByTracking({ trackingNo }) {
   const exactSnap = await getDocs(query(
     ordersRef,
     where('trackingNo', '==', String(trackingNo).trim()),
-    limit(1),
   ));
-  const exactDoc = exactSnap.docs[0];
+  const exactDoc = [...exactSnap.docs].sort((left, right) => {
+    const score = (item) => {
+      const data = item.data();
+      return (data.orderId ? 2 : 0) + (Array.isArray(data.marketplaceSkus) && data.marketplaceSkus.length ? 1 : 0);
+    };
+    return score(right) - score(left);
+  })[0];
   return exactDoc ? { id: exactDoc.id, ...exactDoc.data() } : null;
 }
 
@@ -255,15 +265,19 @@ export async function importMarketplaceOrders(groups, { knownExistingOrderIds = 
     const id = groupIds[index];
     if (existingOrderIds.has(id)) {
       const existing = existingOrders.get(id);
-      if (existing && (
-        String(existing.sellerOrderStatus ?? '') !== String(group.sellerOrderStatus ?? '')
-        || String(existing.expectedShipAt ?? '') !== String(group.expectedShipAt ?? '')
-      )) {
+      const canonicalMetadata = {
+        trackingNo: group.trackingNo,
+        normalizedTrackingNo: group.normalizedTrackingNo,
+        marketplaceSkus: group.marketplaceSkus,
+        sellerOrderStatus: group.sellerOrderStatus ?? '',
+        expectedShipAt: group.expectedShipAt ?? '',
+        importSource: 'web_upload',
+      };
+      if (existing && marketplaceMetadataChanged(existing, canonicalMetadata)) {
         writes.push({
           ref: doc(marketplaceCollection, id),
           data: {
-            sellerOrderStatus: group.sellerOrderStatus ?? '',
-            expectedShipAt: group.expectedShipAt ?? '',
+            ...canonicalMetadata,
             updatedAt: serverTimestamp(),
           },
           options: { merge: true },

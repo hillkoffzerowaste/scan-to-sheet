@@ -165,6 +165,20 @@ export function isCompleteScanOrder(order) {
     || Boolean(order.admin?.scannedAt && order.packerScan?.scannedAt);
 }
 
+export function marketplaceMetadataChanged(existing, incoming) {
+  if (!existing || !incoming) return true;
+  const sameSkus = Array.isArray(existing.marketplaceSkus)
+    && Array.isArray(incoming.marketplaceSkus)
+    && existing.marketplaceSkus.length === incoming.marketplaceSkus.length
+    && existing.marketplaceSkus.every((value, index) => value === incoming.marketplaceSkus[index]);
+  return String(existing.trackingNo ?? '') !== String(incoming.trackingNo ?? '')
+    || String(existing.normalizedTrackingNo ?? '') !== String(incoming.normalizedTrackingNo ?? '')
+    || !sameSkus
+    || String(existing.sellerOrderStatus ?? '') !== String(incoming.sellerOrderStatus ?? '')
+    || String(existing.expectedShipAt ?? '') !== String(incoming.expectedShipAt ?? '')
+    || existing.importSource !== 'web_upload';
+}
+
 export function buildSheetBackfillUpdates(sheetName, rows, groups) {
   const groupMap = new Map(groups.map((group) => [group.normalizedTrackingNo, group]));
   const escapedSheet = `'${String(sheetName).replace(/'/g, "''")}'`;

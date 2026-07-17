@@ -6,7 +6,7 @@ import path from 'node:path';
 import test from 'node:test';
 import {
   buildSheetBackfillUpdates, classifyLateOrder, groupMarketplaceRows, isCompleteScanOrder,
-  parseMarketplaceRows, validateMarketplaceIdentifier,
+  marketplaceMetadataChanged, parseMarketplaceRows, validateMarketplaceIdentifier,
 } from './marketplaceImport.js';
 import { parseXlsxArrayBuffer } from './xlsxImport.js';
 
@@ -53,6 +53,17 @@ test('marks Late Orders green only after both admin and packer scans', () => {
     status: 'matched', admin: { scannedAt: '2026-07-17T08:00:00' }, packerScan: { scannedAt: '2026-07-17T08:30:00' },
   }), true);
   assert.equal(isCompleteScanOrder({ status: 'matched' }), true);
+});
+
+test('updates duplicate marketplace metadata when SKU or legacy source differs', () => {
+  const canonical = {
+    trackingNo: 'TH123', normalizedTrackingNo: 'TH123', marketplaceSkus: ['SKU-A'],
+    sellerOrderStatus: 'ready', expectedShipAt: '2026-07-17 23:59', importSource: 'web_upload',
+  };
+  assert.equal(marketplaceMetadataChanged({ ...canonical, marketplaceSkus: ['SKU-A'] }, canonical), false);
+  assert.equal(marketplaceMetadataChanged({ ...canonical, marketplaceSkus: [] }, canonical), true);
+  assert.equal(marketplaceMetadataChanged({ ...canonical, importSource: undefined }, canonical), true);
+  assert.equal(marketplaceMetadataChanged({ ...canonical, trackingNo: 'TH999' }, canonical), true);
 });
 
 test('rejects scientific notation and unsafe numeric marketplace identifiers', () => {
