@@ -259,10 +259,16 @@ function marketplaceItemsText(order) {
     .join(' | ');
 }
 
-function marketplaceSkusText(order) {
+export function marketplaceSkusText(order) {
   const items = Array.isArray(order?.items) ? order.items : [];
-  return items
+  const itemSkus = items
     .map((item) => String(item?.sku ?? '').trim())
+    .filter(Boolean)
+    .join(' | ');
+  if (itemSkus) return itemSkus;
+
+  return (Array.isArray(order?.marketplaceSkus) ? order.marketplaceSkus : [])
+    .map((sku) => String(sku ?? '').trim())
     .filter(Boolean)
     .join(' | ');
 }

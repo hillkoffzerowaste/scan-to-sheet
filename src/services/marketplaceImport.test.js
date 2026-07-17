@@ -9,7 +9,7 @@ import {
   marketplaceMetadataChanged, parseMarketplaceRows, validateMarketplaceIdentifier,
 } from './marketplaceImport.js';
 import { parseXlsxArrayBuffer } from './xlsxImport.js';
-import { buildDailyRowUpdateData, validateScanCode } from './googleSheets.js';
+import { buildDailyRowUpdateData, marketplaceSkusText, validateScanCode } from './googleSheets.js';
 
 test('accepts both KEX Lazada barcode prefixes and rejects near misses', () => {
   assert.equal(validateScanCode('KEX Lazada', 'KEXD0LM0003766710').ok, true);
@@ -26,6 +26,10 @@ test('preserves manual Buyer Name when updating an existing scan row', () => {
   assert.deepEqual(data.map((item) => item.range), ["'2026-07-17'!A9:O9", "'2026-07-17'!Q9:W9"]);
   assert.deepEqual(data[0].values, [row.slice(0, 15)]);
   assert.deepEqual(data[1].values, [row.slice(16)]);
+});
+
+test('writes imported marketplaceSkus when scan metadata has no items array', () => {
+  assert.equal(marketplaceSkusText({ marketplaceSkus: ['RB-HK-0359', 'EQ-CC-0005'] }), 'RB-HK-0359 | EQ-CC-0005');
 });
 
 test('parses and groups Lazada rows', () => {
