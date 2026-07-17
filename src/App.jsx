@@ -50,6 +50,7 @@ import {
   loadGoogleConfig,
   prepareGoogleSheets,
   searchScansGoogle,
+  syncLateOrdersGoogle,
   updateScanIssueGoogle,
   validateScanCode,
 } from './services/googleSheets.js';
@@ -310,9 +311,12 @@ function App() {
         const sheetResult = await runWithGoogleRetry((accessToken, googleConfig) => (
           backfillMarketplaceOrdersGoogle({ token: accessToken, config: googleConfig, groups })
         ));
+        const lateResult = await runWithGoogleRetry((accessToken, googleConfig) => (
+          syncLateOrdersGoogle({ token: accessToken, config: googleConfig, orders: result.orderStates })
+        ));
         setMarketplaceUploadResult({
           type: 'success',
-          message: `เพิ่มใหม่ ${result.imported} ออเดอร์ ข้ามรายการซ้ำ ${result.duplicates} ออเดอร์ อัปเดต Firebase ${result.updatedScans} รายการ และ Google Sheet ${sheetResult.matchedRows} แถว`,
+          message: `เพิ่มใหม่ ${result.imported} ออเดอร์ ข้ามรายการซ้ำ ${result.duplicates} ออเดอร์ อัปเดตกำหนดส่ง ${result.metadataUpdated} ออเดอร์ อัปเดต Firebase ${result.updatedScans} รายการ, Google Sheet ${sheetResult.matchedRows} แถว และ Late Orders ${lateResult.rows} ออเดอร์ (ล่าช้า ${lateResult.counts.overdue ?? 0})`,
         });
       } catch (sheetError) {
         setMarketplaceUploadResult({
@@ -346,10 +350,13 @@ function App() {
         const sheetResult = await runWithGoogleRetry((accessToken, googleConfig) => (
           backfillMarketplaceOrdersGoogle({ token: accessToken, config: googleConfig, groups })
         ));
+        const lateResult = await runWithGoogleRetry((accessToken, googleConfig) => (
+          syncLateOrdersGoogle({ token: accessToken, config: googleConfig, orders: firebaseResult.orderStates })
+        ));
         localStorage.setItem(backfillKey, String(Date.now()));
         setMarketplaceUploadResult({
           type: 'success',
-          message: `เติมย้อนหลังอัตโนมัติแล้ว: อัปเดต Firebase ${firebaseResult.updatedScans} รายการ, Google Sheet ${sheetResult.matchedRows} แถว`,
+          message: `เติมย้อนหลังอัตโนมัติแล้ว: อัปเดต Firebase ${firebaseResult.updatedScans} รายการ, Google Sheet ${sheetResult.matchedRows} แถว และ Late Orders ${lateResult.rows} ออเดอร์`,
         });
       } catch (error) {
         marketplaceBackfillStartedRef.current = false;

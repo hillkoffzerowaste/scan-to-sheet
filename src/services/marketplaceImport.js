@@ -60,6 +60,8 @@ export function parseMarketplaceRows(rows) {
   let orderHeader = '';
   let skuHeader = '';
   let trackingHeader = '';
+  let statusHeader = '';
+  let expectedShipHeader = '';
 
   if (lowerHeaders.includes('ordernumber')) {
     platform = 'lazada';
@@ -71,6 +73,8 @@ export function parseMarketplaceRows(rows) {
     orderHeader = 'หมายเลขคำสั่งซื้อ';
     skuHeader = 'เลขอ้างอิง sku (sku reference no.)';
     trackingHeader = '*หมายเลขติดตามพัสดุ';
+    statusHeader = 'สถานะการสั่งซื้อ';
+    expectedShipHeader = 'วันที่คาดว่าจะทำการจัดส่งสินค้า';
   } else if (lowerHeaders.includes('order id')) {
     platform = 'tiktok';
     orderHeader = 'order id';
@@ -83,6 +87,8 @@ export function parseMarketplaceRows(rows) {
   const orderIndex = lowerHeaders.indexOf(orderHeader);
   const skuIndex = lowerHeaders.indexOf(skuHeader);
   const trackingIndex = lowerHeaders.indexOf(trackingHeader);
+  const statusIndex = statusHeader ? lowerHeaders.indexOf(statusHeader) : -1;
+  const expectedShipIndex = expectedShipHeader ? lowerHeaders.indexOf(expectedShipHeader) : -1;
   if ([orderIndex, skuIndex, trackingIndex].some((index) => index < 0)) {
     throw new Error(`ไฟล์ ${platform} ขาดคอลัมน์เลขคำสั่งซื้อ, SKU หรือเลขพัสดุ`);
   }
@@ -98,6 +104,8 @@ export function parseMarketplaceRows(rows) {
     trackingNo: validateMarketplaceIdentifier(row[trackingIndex], {
       platform, rowNumber: index + 2, field: 'เลขพัสดุ',
     }),
+    sellerOrderStatus: statusIndex >= 0 ? cleanCell(row[statusIndex]) : '',
+    expectedShipAt: expectedShipIndex >= 0 ? cleanCell(row[expectedShipIndex]) : '',
   })).filter((row) => (
     row.orderId
     && row.trackingNo
@@ -118,12 +126,37 @@ export function groupMarketplaceRows(rows) {
       trackingNo: cleanCell(row.trackingNo),
       normalizedTrackingNo,
       marketplaceSkus: [],
+      sellerOrderStatus: cleanCell(row.sellerOrderStatus),
+      expectedShipAt: cleanCell(row.expectedShipAt),
     };
+    if (!current.sellerOrderStatus) current.sellerOrderStatus = cleanCell(row.sellerOrderStatus);
+    if (!current.expectedShipAt) current.expectedShipAt = cleanCell(row.expectedShipAt);
     const sku = cleanCell(row.sku);
     if (sku && !current.marketplaceSkus.includes(sku)) current.marketplaceSkus.push(sku);
     groups.set(key, current);
   }
   return [...groups.values()];
+}
+
+function bangkokDateTime(now) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+  }).formatToParts(now);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day} ${values.hour}:${values.minute}`;
+}
+
+export function classifyLateOrder(order, now = new Date()) {
+  if (order.scanned) return { key: 'scanned', label: 'สแกนแล้ว', color: 'green' };
+  const expected = cleanCell(order.expectedShipAt).replace('T', ' ').slice(0, 16);
+  if (!expected) return { key: 'unknown', label: 'ไม่พบกำหนดส่ง', color: 'neutral' };
+  const current = bangkokDateTime(now);
+  if (expected < current) return { key: 'overdue', label: 'ล่าช้า', color: 'red' };
+  if (expected.slice(0, 10) === current.slice(0, 10)) {
+    return { key: 'due_today', label: 'ครบกำหนดวันนี้', color: 'orange' };
+  }
+  return { key: 'future', label: 'รอดำเนินการ', color: 'neutral' };
 }
 
 export function buildSheetBackfillUpdates(sheetName, rows, groups) {

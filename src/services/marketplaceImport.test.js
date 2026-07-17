@@ -5,7 +5,7 @@ import { homedir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import {
-  buildSheetBackfillUpdates, groupMarketplaceRows, parseMarketplaceRows, validateMarketplaceIdentifier,
+  buildSheetBackfillUpdates, classifyLateOrder, groupMarketplaceRows, parseMarketplaceRows, validateMarketplaceIdentifier,
 } from './marketplaceImport.js';
 import { parseXlsxArrayBuffer } from './xlsxImport.js';
 
@@ -15,13 +15,30 @@ test('parses and groups Lazada rows', () => {
 });
 
 test('parses Shopee headers', () => {
-  const rows = [['หมายเลขคำสั่งซื้อ', 'เลขอ้างอิง SKU (SKU Reference No.)', '*หมายเลขติดตามพัสดุ'], ['S1', 'SKU-S', 'TH123']];
-  assert.equal(parseMarketplaceRows(rows)[0].platform, 'shopee');
+  const rows = [[
+    'หมายเลขคำสั่งซื้อ', 'เลขอ้างอิง SKU (SKU Reference No.)', '*หมายเลขติดตามพัสดุ',
+    'สถานะการสั่งซื้อ', 'วันที่คาดว่าจะทำการจัดส่งสินค้า',
+  ], ['S1', 'SKU-S', 'TH123', 'ที่ต้องจัดส่ง', '2026-07-17 23:59']];
+  const parsed = parseMarketplaceRows(rows)[0];
+  assert.equal(parsed.platform, 'shopee');
+  assert.equal(parsed.sellerOrderStatus, 'ที่ต้องจัดส่ง');
+  assert.equal(parsed.expectedShipAt, '2026-07-17 23:59');
 });
 
 test('parses TikTok BOM headers and trims tab suffixes', () => {
   const rows = [['\uFEFFOrder ID', 'Seller SKU', 'Tracking ID'], ['T1\t', 'SKU-T', 'JT123\t']];
-  assert.deepEqual(parseMarketplaceRows(rows)[0], { platform: 'tiktok', orderId: 'T1', sku: 'SKU-T', trackingNo: 'JT123' });
+  assert.deepEqual(parseMarketplaceRows(rows)[0], {
+    platform: 'tiktok', orderId: 'T1', sku: 'SKU-T', trackingNo: 'JT123',
+    sellerOrderStatus: '', expectedShipAt: '',
+  });
+});
+
+test('classifies Late Orders in Bangkok without affecting identifiers', () => {
+  const now = new Date('2026-07-17T01:00:00Z');
+  assert.equal(classifyLateOrder({ scanned: true, expectedShipAt: '2026-07-16 23:59' }, now).key, 'scanned');
+  assert.equal(classifyLateOrder({ scanned: false, expectedShipAt: '2026-07-16 23:59' }, now).key, 'overdue');
+  assert.equal(classifyLateOrder({ scanned: false, expectedShipAt: '2026-07-17 23:59' }, now).key, 'due_today');
+  assert.equal(classifyLateOrder({ scanned: false, expectedShipAt: '2026-07-18 23:59' }, now).key, 'future');
 });
 
 test('rejects scientific notation and unsafe numeric marketplace identifiers', () => {
@@ -71,4 +88,14 @@ test('parses the real TikTok Seller Center xlsx export', { skip: !existsSync(tik
   assert.equal(groups[0].orderId, '585049777788585346');
   assert.equal(groups[0].marketplaceSkus[0], 'EQ-WG-0319');
   assert.equal(groups[0].trackingNo, 'JTTH201519776802');
+});
+
+const shopeeXlsxPath = path.join(homedir(), 'Downloads', 'Order.toship.20260715_20260716.xlsx');
+test('parses expected ship metadata from the real Shopee export', { skip: !existsSync(shopeeXlsxPath) }, async () => {
+  const file = await readFile(shopeeXlsxPath);
+  const buffer = file.buffer.slice(file.byteOffset, file.byteOffset + file.byteLength);
+  const groups = groupMarketplaceRows(parseMarketplaceRows(await parseXlsxArrayBuffer(buffer)));
+  assert.equal(groups.length, 49);
+  assert.ok(groups.every((group) => group.expectedShipAt));
+  assert.ok(groups.every((group) => group.sellerOrderStatus));
 });

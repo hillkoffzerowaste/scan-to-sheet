@@ -230,6 +230,7 @@ export async function importMarketplaceOrders(groups, { knownExistingOrderIds = 
   if (!canWriteFirestore()) throw new Error('Firebase ยังไม่พร้อมใช้งาน');
   const marketplaceCollection = collection(firestoreDb, 'marketplaceOrders');
   const existingOrderIds = new Set(knownExistingOrderIds ?? []);
+  const existingOrders = new Map();
   const groupByTracking = new Map(groups.map((group) => [group.normalizedTrackingNo, group]));
   const groupIds = groups.map((group) => `${group.platform}__${group.orderId}`);
   const idsToCheck = [...new Set(groupIds.filter((id) => !existingOrderIds.has(id)))];
@@ -241,13 +242,35 @@ export async function importMarketplaceOrders(groups, { knownExistingOrderIds = 
       where(documentId(), 'in', idsToCheck.slice(index, index + 30)),
     ));
     readQueries += 1;
-    snap.docs.forEach((item) => existingOrderIds.add(item.id));
+    snap.docs.forEach((item) => {
+      existingOrderIds.add(item.id);
+      existingOrders.set(item.id, item.data());
+    });
   }
 
   const writes = [];
+  let metadataUpdated = 0;
   const imported = groups.filter((group, index) => {
     const id = groupIds[index];
-    if (existingOrderIds.has(id)) return false;
+    if (existingOrderIds.has(id)) {
+      const existing = existingOrders.get(id);
+      if (existing && (
+        String(existing.sellerOrderStatus ?? '') !== String(group.sellerOrderStatus ?? '')
+        || String(existing.expectedShipAt ?? '') !== String(group.expectedShipAt ?? '')
+      )) {
+        writes.push({
+          ref: doc(marketplaceCollection, id),
+          data: {
+            sellerOrderStatus: group.sellerOrderStatus ?? '',
+            expectedShipAt: group.expectedShipAt ?? '',
+            updatedAt: serverTimestamp(),
+          },
+          options: { merge: true },
+        });
+        metadataUpdated += 1;
+      }
+      return false;
+    }
     writes.push({
       ref: doc(marketplaceCollection, id),
       data: {
@@ -256,6 +279,8 @@ export async function importMarketplaceOrders(groups, { knownExistingOrderIds = 
         trackingNo: group.trackingNo,
         normalizedTrackingNo: group.normalizedTrackingNo,
         marketplaceSkus: group.marketplaceSkus,
+        sellerOrderStatus: group.sellerOrderStatus ?? '',
+        expectedShipAt: group.expectedShipAt ?? '',
         importSource: 'web_upload',
         importedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -266,6 +291,7 @@ export async function importMarketplaceOrders(groups, { knownExistingOrderIds = 
   const duplicates = groups.length - imported;
   let matchedScans = 0;
   let updatedScans = 0;
+  const scannedTrackingCodes = new Set();
   const trackingCodes = [...groupByTracking.keys()].filter(Boolean);
   for (let index = 0; index < trackingCodes.length; index += 30) {
     const matches = await getDocs(query(
@@ -276,6 +302,7 @@ export async function importMarketplaceOrders(groups, { knownExistingOrderIds = 
     for (const match of matches.docs) {
       matchedScans += 1;
       const current = match.data();
+      scannedTrackingCodes.add(normalizeCode(current.normalizedCode || current.code).replace(/[^A-Z0-9]/g, ''));
       const group = groupByTracking.get(current.normalizedCode);
       if (!group || (
         current.marketplaceOrderId === group.orderId
@@ -290,7 +317,14 @@ export async function importMarketplaceOrders(groups, { knownExistingOrderIds = 
   }
 
   await commitMarketplaceWrites(writes);
-  return { imported, duplicates, matchedScans, updatedScans, readQueries, writes: writes.length };
+  const orderStates = groups.map((group) => ({
+    ...group,
+    scanned: scannedTrackingCodes.has(group.normalizedTrackingNo),
+  }));
+  return {
+    imported, duplicates, metadataUpdated, matchedScans, updatedScans,
+    readQueries, writes: writes.length, orderStates,
+  };
 }
 
 export async function getUploadedMarketplaceOrders() {
@@ -302,6 +336,8 @@ export async function getUploadedMarketplaceOrders() {
       platform: data.platform ?? '', orderId: data.orderId ?? '', trackingNo: data.trackingNo ?? '',
       normalizedTrackingNo: data.normalizedTrackingNo ?? '',
       marketplaceSkus: Array.isArray(data.marketplaceSkus) ? data.marketplaceSkus : [],
+      sellerOrderStatus: data.sellerOrderStatus ?? '',
+      expectedShipAt: data.expectedShipAt ?? '',
     };
   }).filter((item) => item.orderId && item.normalizedTrackingNo);
 }

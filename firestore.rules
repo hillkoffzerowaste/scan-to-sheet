@@ -61,7 +61,8 @@ service cloud.firestore {
       allow create: if isSignedIn()
         && request.resource.data.keys().hasOnly([
           'platform', 'orderId', 'trackingNo', 'normalizedTrackingNo',
-          'marketplaceSkus', 'importSource', 'importedAt', 'updatedAt'
+          'marketplaceSkus', 'sellerOrderStatus', 'expectedShipAt',
+          'importSource', 'importedAt', 'updatedAt'
         ])
         && request.resource.data.platform in ['shopee', 'lazada', 'tiktok']
         && request.resource.data.orderId is string
@@ -69,6 +70,8 @@ service cloud.firestore {
         && request.resource.data.normalizedTrackingNo is string
         && request.resource.data.marketplaceSkus is list
         && request.resource.data.marketplaceSkus.size() <= 100
+        && request.resource.data.sellerOrderStatus is string
+        && request.resource.data.expectedShipAt is string
         && request.resource.data.importSource == 'web_upload'
         && request.resource.data.importedAt is timestamp
         && request.resource.data.updatedAt is timestamp
@@ -76,7 +79,8 @@ service cloud.firestore {
       allow update: if isSignedIn()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'platform', 'orderId', 'trackingNo', 'normalizedTrackingNo',
-          'marketplaceSkus', 'importSource', 'importedAt', 'updatedAt'
+          'marketplaceSkus', 'sellerOrderStatus', 'expectedShipAt',
+          'importSource', 'importedAt', 'updatedAt'
         ])
         && request.resource.data.platform in ['shopee', 'lazada', 'tiktok']
         && request.resource.data.orderId is string
@@ -84,6 +88,8 @@ service cloud.firestore {
         && request.resource.data.normalizedTrackingNo is string
         && request.resource.data.marketplaceSkus is list
         && request.resource.data.marketplaceSkus.size() <= 100
+        && request.resource.data.sellerOrderStatus is string
+        && request.resource.data.expectedShipAt is string
         && request.resource.data.importSource == 'web_upload'
         && request.resource.data.importedAt is timestamp
         && request.resource.data.updatedAt is timestamp

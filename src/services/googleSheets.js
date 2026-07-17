@@ -1,4 +1,4 @@
-import { buildSheetBackfillUpdates } from './marketplaceImport.js';
+import { buildSheetBackfillUpdates, classifyLateOrder } from './marketplaceImport.js';
 
 const DRIVE_API = 'https://www.googleapis.com/drive/v3';
 const SHEETS_API = 'https://sheets.googleapis.com/v4/spreadsheets';
@@ -911,6 +911,93 @@ export async function backfillMarketplaceOrdersGoogle({ token, config, groups })
     });
   }
   return { matchedRows, updatedCells: updates.length, updatedSheets };
+}
+
+export async function syncLateOrdersGoogle({ token, config, orders, now = new Date() }) {
+  const spreadsheetId = config?.master?.id;
+  if (!spreadsheetId) throw new Error('ไม่พบ Google Sheet Master');
+  const title = 'Late Orders';
+  let spreadsheet = await getSpreadsheet(token, spreadsheetId);
+  let properties = spreadsheet.sheets?.find((sheet) => sheet.properties.title === title)?.properties;
+  if (!properties) {
+    await apiFetch(`${SHEETS_API}/${spreadsheetId}:batchUpdate`, token, {
+      method: 'POST',
+      body: JSON.stringify({ requests: [{ addSheet: {
+        properties: { title, index: 0, gridProperties: { rowCount: Math.max(100, orders.length + 10), columnCount: 9 } },
+      } }] }),
+    });
+    spreadsheet = await getSpreadsheet(token, spreadsheetId);
+    properties = spreadsheet.sheets?.find((sheet) => sheet.properties.title === title)?.properties;
+  }
+  if (!properties) throw new Error('สร้างชีต Late Orders ไม่สำเร็จ');
+
+  const classified = orders.map((order) => ({ order, status: classifyLateOrder(order, now) }));
+  const updatedAt = getBangkokParts(now);
+  const values = [[
+    'Platform', 'Order ID', 'Tracking', 'SKUs', 'Expected Ship',
+    'Seller Status', 'Scan Status', 'Alert', 'Updated At',
+  ], ...classified.map(({ order, status }) => [
+    order.platform, order.orderId, order.trackingNo, order.marketplaceSkus.join(' | '),
+    order.expectedShipAt || '', order.sellerOrderStatus || '',
+    order.scanned ? 'สแกนแล้ว' : 'ยังไม่สแกน', status.label,
+    `${updatedAt.date} ${updatedAt.time}`,
+  ])];
+
+  await apiFetch(
+    `${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent(`${title}!A1:I`)}:clear`,
+    token,
+    { method: 'POST', body: '{}' },
+  );
+  await apiFetch(
+    `${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent(`${title}!A1:I${values.length}`)}?valueInputOption=RAW`,
+    token,
+    { method: 'PUT', body: JSON.stringify({ values }) },
+  );
+
+  const color = {
+    green: { red: 0.80, green: 0.94, blue: 0.82 },
+    red: { red: 0.96, green: 0.78, blue: 0.76 },
+    orange: { red: 1, green: 0.90, blue: 0.68 },
+  };
+  const requests = [
+    { updateSheetProperties: {
+      properties: { sheetId: properties.sheetId, gridProperties: {
+        frozenRowCount: 1, rowCount: Math.max(properties.gridProperties?.rowCount ?? 100, values.length + 10), columnCount: 9,
+      } },
+      fields: 'gridProperties(frozenRowCount,rowCount,columnCount)',
+    } },
+    { repeatCell: {
+      range: { sheetId: properties.sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 9 },
+      cell: { userEnteredFormat: { backgroundColor: { red: 0.18, green: 0.35, blue: 0.55 }, textFormat: { bold: true, foregroundColor: { red: 1, green: 1, blue: 1 } } } },
+      fields: 'userEnteredFormat(backgroundColor,textFormat)',
+    } },
+    { repeatCell: {
+      range: { sheetId: properties.sheetId, startRowIndex: 1, endRowIndex: Math.max(2, values.length), startColumnIndex: 0, endColumnIndex: 9 },
+      cell: { userEnteredFormat: { backgroundColor: { red: 1, green: 1, blue: 1 } } },
+      fields: 'userEnteredFormat.backgroundColor',
+    } },
+    { setBasicFilter: { filter: { range: {
+      sheetId: properties.sheetId, startRowIndex: 0, endRowIndex: Math.max(2, values.length), startColumnIndex: 0, endColumnIndex: 9,
+    } } } },
+    { autoResizeDimensions: { dimensions: { sheetId: properties.sheetId, dimension: 'COLUMNS', startIndex: 0, endIndex: 9 } } },
+  ];
+  classified.forEach(({ status }, index) => {
+    if (!color[status.color]) return;
+    requests.push({ repeatCell: {
+      range: { sheetId: properties.sheetId, startRowIndex: index + 1, endRowIndex: index + 2, startColumnIndex: 0, endColumnIndex: 9 },
+      cell: { userEnteredFormat: { backgroundColor: color[status.color] } },
+      fields: 'userEnteredFormat.backgroundColor',
+    } });
+  });
+  await apiFetch(`${SHEETS_API}/${spreadsheetId}:batchUpdate`, token, {
+    method: 'POST', body: JSON.stringify({ requests }),
+  });
+
+  const counts = classified.reduce((result, item) => {
+    result[item.status.key] = (result[item.status.key] ?? 0) + 1;
+    return result;
+  }, {});
+  return { rows: classified.length, counts };
 }
 
 export async function getTodayRowsGoogle({ token, config, courier, date = getBangkokParts().date }) {
