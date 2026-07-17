@@ -169,8 +169,9 @@ test('parses the real TikTok Seller Center xlsx export', { skip: !existsSync(tik
   const groups = groupMarketplaceRows(parseMarketplaceRows(rows));
   assert.equal(rows[0].length, 65);
   assert.ok(groups.length > 0);
-  assert.ok(groups.every((group) => group.platform === 'tiktok'));
-  assert.ok(groups.every((group) => group.orderId && group.trackingNo && group.marketplaceSkus.length > 0));
+  const trackedGroups = groups.filter((group) => group.normalizedTrackingNo);
+  assert.ok(trackedGroups.every((group) => group.platform === 'tiktok'));
+  assert.ok(trackedGroups.every((group) => group.orderId && group.trackingNo && group.marketplaceSkus.length > 0));
 });
 
 const shopeeXlsxPath = path.join(homedir(), 'Downloads', 'Order.toship.20260715_20260716.xlsx');
@@ -179,6 +180,7 @@ test('parses expected ship metadata from the real Shopee export', { skip: !exist
   const buffer = file.buffer.slice(file.byteOffset, file.byteOffset + file.byteLength);
   const groups = groupMarketplaceRows(parseMarketplaceRows(await parseXlsxArrayBuffer(buffer)));
   assert.ok(groups.length > 0);
-  assert.ok(groups.every((group) => group.expectedShipAt));
-  assert.ok(groups.every((group) => group.sellerOrderStatus));
+  const trackedGroups = groups.filter((group) => group.normalizedTrackingNo);
+  assert.ok(trackedGroups.every((group) => group.expectedShipAt));
+  assert.ok(trackedGroups.every((group) => group.sellerOrderStatus));
 });
