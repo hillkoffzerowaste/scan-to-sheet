@@ -48,6 +48,18 @@ test('parses Shopee headers', () => {
   assert.equal(parsed.expectedShipAt, '2026-07-17 23:59');
 });
 
+test('accepts an order with SKU before its tracking number is assigned', () => {
+  const rows = [[
+    'หมายเลขคำสั่งซื้อ', 'เลขอ้างอิง SKU (SKU Reference No.)', '*หมายเลขติดตามพัสดุ',
+  ], ['260717VGBPF7AW', 'SY-HK-0024_2', '']];
+  const groups = groupMarketplaceRows(parseMarketplaceRows(rows));
+
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0].orderId, '260717VGBPF7AW');
+  assert.equal(groups[0].normalizedTrackingNo, '');
+  assert.deepEqual(groups[0].marketplaceSkus, ['SY-HK-0024_2']);
+});
+
 test('parses TikTok BOM headers and trims tab suffixes', () => {
   const rows = [['\uFEFFOrder ID', 'Seller SKU', 'Tracking ID'], ['T1\t', 'SKU-T', 'JT123\t']];
   assert.deepEqual(parseMarketplaceRows(rows)[0], {

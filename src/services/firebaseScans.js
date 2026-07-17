@@ -365,7 +365,7 @@ export async function getUploadedMarketplaceOrders() {
       sellerOrderStatus: data.sellerOrderStatus ?? '',
       expectedShipAt: data.expectedShipAt ?? '',
     };
-  }).filter((item) => item.orderId && item.normalizedTrackingNo);
+  }).filter((item) => item.orderId && (item.normalizedTrackingNo || item.marketplaceSkus.length));
 }
 
 async function findMarketplaceMetadataByTracking(trackingNo) {

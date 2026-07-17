@@ -108,9 +108,9 @@ export function parseMarketplaceRows(rows) {
     expectedShipAt: expectedShipIndex >= 0 ? cleanCell(row[expectedShipIndex]) : '',
   })).filter((row) => (
     row.orderId
-    && row.trackingNo
+    && (row.trackingNo || row.sku)
     && row.orderId.toLowerCase() !== 'platform unique order id.'
-    && row.trackingNo.toLowerCase() !== "the order's tracking number."
+    && (!row.trackingNo || row.trackingNo.toLowerCase() !== "the order's tracking number.")
   ));
 }
 
@@ -118,7 +118,6 @@ export function groupMarketplaceRows(rows) {
   const groups = new Map();
   for (const row of rows) {
     const normalizedTrackingNo = normalizeMarketplaceTracking(row.trackingNo);
-    if (!normalizedTrackingNo) continue;
     const key = `${row.platform}__${row.orderId}__${normalizedTrackingNo}`;
     const current = groups.get(key) ?? {
       platform: row.platform,
