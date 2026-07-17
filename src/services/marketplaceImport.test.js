@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
 import { buildSheetBackfillUpdates, groupMarketplaceRows, parseMarketplaceRows } from './marketplaceImport.js';
+import { parseXlsxArrayBuffer } from './xlsxImport.js';
 
 test('parses and groups Lazada rows', () => {
   const rows = [['orderNumber', 'sellerSku', 'trackingCode'], ['L1', 'SKU-A', 'LEX123'], ['L1', 'SKU-B', 'LEX123']];
@@ -25,4 +30,18 @@ test('builds only N, O and R updates for a matching historical row', () => {
   }]);
   assert.equal(result.matchedRows, 1);
   assert.deepEqual(result.data.map((item) => item.range), ["'2026-07-16'!N2", "'2026-07-16'!O2", "'2026-07-16'!R2"]);
+});
+
+const tiktokXlsxPath = path.join(homedir(), 'Downloads', 'ที่จะจัดส่ง คำสั่งซื้อ-2026-07-16-18_18.xlsx');
+test('parses the real TikTok Seller Center xlsx export', { skip: !existsSync(tiktokXlsxPath) }, async () => {
+  const file = await readFile(tiktokXlsxPath);
+  const buffer = file.buffer.slice(file.byteOffset, file.byteOffset + file.byteLength);
+  const rows = await parseXlsxArrayBuffer(buffer);
+  const groups = groupMarketplaceRows(parseMarketplaceRows(rows));
+  assert.equal(rows[0].length, 65);
+  assert.equal(groups.length, 5);
+  assert.equal(groups[0].platform, 'tiktok');
+  assert.equal(groups[0].orderId, '585049777788585346');
+  assert.equal(groups[0].marketplaceSkus[0], 'EQ-WG-0319');
+  assert.equal(groups[0].trackingNo, 'JTTH201519776802');
 });

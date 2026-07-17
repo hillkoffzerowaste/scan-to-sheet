@@ -80,7 +80,12 @@ export function parseMarketplaceRows(rows) {
     orderId: cleanCell(row[orderIndex]),
     sku: cleanCell(row[skuIndex]),
     trackingNo: cleanCell(row[trackingIndex]),
-  })).filter((row) => row.orderId && row.trackingNo);
+  })).filter((row) => (
+    row.orderId
+    && row.trackingNo
+    && row.orderId.toLowerCase() !== 'platform unique order id.'
+    && row.trackingNo.toLowerCase() !== "the order's tracking number."
+  ));
 }
 
 export function groupMarketplaceRows(rows) {

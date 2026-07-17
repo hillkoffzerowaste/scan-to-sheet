@@ -89,6 +89,7 @@ import {
   importMarketplaceOrders,
 } from './services/firebaseScans.js';
 import { groupMarketplaceRows, parseCsvText, parseMarketplaceRows } from './services/marketplaceImport.js';
+import { parseXlsxArrayBuffer } from './services/xlsxImport.js';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 const GOOGLE_SCOPES = [
@@ -298,13 +299,7 @@ function App() {
         if (file.name.toLowerCase().endsWith('.csv')) {
           rows = parseCsvText(await file.text());
         } else {
-          const ExcelJS = await import('exceljs');
-          const workbook = new ExcelJS.Workbook();
-          await workbook.xlsx.load(await file.arrayBuffer());
-          const worksheet = workbook.worksheets[0];
-          rows = worksheet
-            ? Array.from({ length: worksheet.rowCount }, (_, index) => worksheet.getRow(index + 1).values.slice(1))
-            : [];
+          rows = await parseXlsxArrayBuffer(await file.arrayBuffer());
         }
         parsedRows.push(...parseMarketplaceRows(rows));
       }
