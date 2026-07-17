@@ -129,8 +129,7 @@ function orderToRow(order, id = '') {
   };
 }
 
-async function findRecentOrder({ courier, normalizedCode, days = 3 }) {
-  const orders = await getRecentOrders(500);
+function findRecentOrder(orders, { courier, normalizedCode, days = 3 }) {
   const now = Date.now();
   const lookbackMs = (days + 1) * 24 * 60 * 60 * 1000;
   return orders.find((order) => {
@@ -141,8 +140,7 @@ async function findRecentOrder({ courier, normalizedCode, days = 3 }) {
   }) ?? null;
 }
 
-async function findRecentAdminOrderByCode({ normalizedCode, days = 3 }) {
-  const orders = await getRecentOrders(500);
+function findRecentAdminOrderByCode(orders, { normalizedCode, days = 3 }) {
   const now = Date.now();
   const lookbackMs = (days + 1) * 24 * 60 * 60 * 1000;
   return orders.find((order) => {
@@ -151,6 +149,17 @@ async function findRecentAdminOrderByCode({ normalizedCode, days = 3 }) {
       && normalizeCode(order.normalizedCode || order.code) === normalizedCode
       && (!Number.isFinite(updated) || now - updated <= lookbackMs);
   }) ?? null;
+}
+
+async function getRecentOrdersByCode(normalizedCode, maxRows = 10) {
+  if (!canWriteFirestore() || !normalizedCode) return [];
+  const snap = await getDocs(query(
+    collection(firestoreDb, 'orders'),
+    where('normalizedCode', '==', normalizedCode),
+    orderBy('updatedAt', 'desc'),
+    limit(maxRows),
+  ));
+  return snap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
 }
 
 function reportDay(date) {
@@ -415,7 +424,9 @@ export async function recordPackerScanPrimary({ code, courier, date, time, user,
 
   const normalizedCode = normalizeCode(code);
   const marketplaceData = await findMarketplaceMetadataByTracking(normalizedCode);
-  const recent = await findRecentAdminOrderByCode({ normalizedCode }) ?? await findRecentOrder({ courier, normalizedCode });
+  const recentCandidates = await getRecentOrdersByCode(normalizedCode);
+  const recent = findRecentAdminOrderByCode(recentCandidates, { normalizedCode })
+    ?? findRecentOrder(recentCandidates, { courier, normalizedCode });
   const ref = doc(firestoreDb, 'orders', recent?.id ?? orderId({ date, courier, code: normalizedCode }));
 
   const result = await runTransaction(firestoreDb, async (transaction) => {
@@ -490,7 +501,7 @@ export async function recordAdminScanPrimary({ code, courier, date, time, user }
 
   const normalizedCode = normalizeCode(code);
   const marketplaceData = await findMarketplaceMetadataByTracking(normalizedCode);
-  const recent = await findRecentOrder({ courier, normalizedCode });
+  const recent = findRecentOrder(await getRecentOrdersByCode(normalizedCode), { courier, normalizedCode });
   const ref = doc(firestoreDb, 'orders', recent?.id ?? orderId({ date, courier, code: normalizedCode }));
 
   const result = await runTransaction(firestoreDb, async (transaction) => {
