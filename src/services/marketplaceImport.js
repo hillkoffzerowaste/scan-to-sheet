@@ -62,14 +62,12 @@ export function parseMarketplaceRows(rows) {
   let trackingHeader = '';
   let statusHeader = '';
   let expectedShipHeader = '';
-  let buyerIndex = -1;
 
   if (lowerHeaders.includes('ordernumber')) {
     platform = 'lazada';
     orderHeader = 'ordernumber';
     skuHeader = 'sellersku';
     trackingHeader = 'trackingcode';
-    buyerIndex = lowerHeaders.indexOf('customername');
   } else if (headers.includes('หมายเลขคำสั่งซื้อ')) {
     platform = 'shopee';
     orderHeader = 'หมายเลขคำสั่งซื้อ';
@@ -82,7 +80,6 @@ export function parseMarketplaceRows(rows) {
     orderHeader = 'order id';
     skuHeader = 'seller sku';
     trackingHeader = 'tracking id';
-    buyerIndex = lowerHeaders.indexOf('buyer username');
   } else {
     throw new Error('ไม่พบรูปแบบไฟล์ Shopee, Lazada หรือ TikTok');
   }
@@ -92,7 +89,6 @@ export function parseMarketplaceRows(rows) {
   const trackingIndex = lowerHeaders.indexOf(trackingHeader);
   const statusIndex = statusHeader ? lowerHeaders.indexOf(statusHeader) : -1;
   const expectedShipIndex = expectedShipHeader ? lowerHeaders.indexOf(expectedShipHeader) : -1;
-  if (platform === 'shopee') buyerIndex = 5; // "ชื่อผู้ใช้ (ผู้ซื้อ)" in Shopee's export.
   if ([orderIndex, skuIndex, trackingIndex].some((index) => index < 0)) {
     throw new Error(`ไฟล์ ${platform} ขาดคอลัมน์เลขคำสั่งซื้อ, SKU หรือเลขพัสดุ`);
   }
@@ -110,7 +106,6 @@ export function parseMarketplaceRows(rows) {
     }),
     sellerOrderStatus: statusIndex >= 0 ? cleanCell(row[statusIndex]) : '',
     expectedShipAt: expectedShipIndex >= 0 ? cleanCell(row[expectedShipIndex]) : '',
-    buyerName: buyerIndex >= 0 ? cleanCell(row[buyerIndex]) : '',
   })).filter((row) => (
     row.orderId
     && row.trackingNo
@@ -133,11 +128,9 @@ export function groupMarketplaceRows(rows) {
       marketplaceSkus: [],
       sellerOrderStatus: cleanCell(row.sellerOrderStatus),
       expectedShipAt: cleanCell(row.expectedShipAt),
-      buyerName: cleanCell(row.buyerName),
     };
     if (!current.sellerOrderStatus) current.sellerOrderStatus = cleanCell(row.sellerOrderStatus);
     if (!current.expectedShipAt) current.expectedShipAt = cleanCell(row.expectedShipAt);
-    if (!current.buyerName) current.buyerName = cleanCell(row.buyerName);
     const sku = cleanCell(row.sku);
     if (sku && !current.marketplaceSkus.includes(sku)) current.marketplaceSkus.push(sku);
     groups.set(key, current);
@@ -183,7 +176,6 @@ export function marketplaceMetadataChanged(existing, incoming) {
     || !sameSkus
     || String(existing.sellerOrderStatus ?? '') !== String(incoming.sellerOrderStatus ?? '')
     || String(existing.expectedShipAt ?? '') !== String(incoming.expectedShipAt ?? '')
-    || String(existing.buyerName ?? '') !== String(incoming.buyerName ?? '')
     || existing.importSource !== 'web_upload';
 }
 
