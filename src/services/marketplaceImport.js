@@ -181,12 +181,31 @@ export function marketplaceMetadataChanged(existing, incoming) {
 
 export function buildSheetBackfillUpdates(sheetName, rows, groups) {
   const groupMap = new Map(groups.map((group) => [group.normalizedTrackingNo, group]));
+  const groupsByOrderId = new Map();
+  groups.forEach((group) => {
+    const orderId = cleanCell(group.orderId);
+    if (!orderId) return;
+    const matches = groupsByOrderId.get(orderId) ?? [];
+    matches.push(group);
+    groupsByOrderId.set(orderId, matches);
+  });
   const escapedSheet = `'${String(sheetName).replace(/'/g, "''")}'`;
   const data = [];
   let matchedRows = 0;
   rows.forEach((row, index) => {
-    const group = groupMap.get(normalizeMarketplaceTracking(row[5]))
+    const trackingMatch = groupMap.get(normalizeMarketplaceTracking(row[5]))
       ?? groupMap.get(normalizeMarketplaceTracking(row[12]));
+    const orderId = cleanCell(row[14]);
+    const orderIdMatches = groupsByOrderId.get(orderId) ?? [];
+    const platform = cleanCell(row[13]).toLowerCase();
+    const platformMatches = platform
+      ? orderIdMatches.filter((candidate) => candidate.platform === platform)
+      : orderIdMatches;
+    // Fall back to Order ID only where it identifies one imported order. A
+    // single order can legitimately have several tracking numbers, so an
+    // ambiguous Order ID must not copy an SKU onto the wrong sheet row.
+    const group = trackingMatch
+      ?? (platformMatches.length === 1 ? platformMatches[0] : null);
     if (!group) return;
     const rowNumber = index + 2;
     const skuText = group.marketplaceSkus.join(' | ');

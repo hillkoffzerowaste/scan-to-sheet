@@ -119,6 +119,32 @@ test('builds only N, O and R updates for a matching historical row', () => {
   assert.deepEqual(result.data.map((item) => item.range), ["'2026-07-16'!N2", "'2026-07-16'!O2", "'2026-07-16'!R2"]);
 });
 
+test('backfills SKU by an unambiguous Order ID when tracking differs', () => {
+  const rows = [Array(23).fill('')];
+  rows[0][13] = 'shopee';
+  rows[0][14] = 'ORDER-1';
+  rows[0][17] = '';
+  const result = buildSheetBackfillUpdates('2026-07-16', rows, [{
+    platform: 'shopee', orderId: 'ORDER-1', normalizedTrackingNo: 'TH123', marketplaceSkus: ['SKU-A'],
+  }]);
+
+  assert.equal(result.matchedRows, 1);
+  assert.deepEqual(result.data, [{ range: "'2026-07-16'!R2", values: [['SKU-A']] }]);
+});
+
+test('does not backfill by Order ID when several imports could match', () => {
+  const rows = [Array(23).fill('')];
+  rows[0][13] = 'shopee';
+  rows[0][14] = 'ORDER-1';
+  const result = buildSheetBackfillUpdates('2026-07-16', rows, [
+    { platform: 'shopee', orderId: 'ORDER-1', normalizedTrackingNo: 'TH123', marketplaceSkus: ['SKU-A'] },
+    { platform: 'shopee', orderId: 'ORDER-1', normalizedTrackingNo: 'TH456', marketplaceSkus: ['SKU-B'] },
+  ]);
+
+  assert.equal(result.matchedRows, 0);
+  assert.deepEqual(result.data, []);
+});
+
 const tiktokXlsxPath = path.join(homedir(), 'Downloads', 'ที่จะจัดส่ง คำสั่งซื้อ-2026-07-16-18_18.xlsx');
 test('parses the real TikTok Seller Center xlsx export', { skip: !existsSync(tiktokXlsxPath) }, async () => {
   const file = await readFile(tiktokXlsxPath);
