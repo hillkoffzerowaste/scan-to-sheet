@@ -9,6 +9,14 @@ import {
   marketplaceMetadataChanged, parseMarketplaceRows, validateMarketplaceIdentifier,
 } from './marketplaceImport.js';
 import { parseXlsxArrayBuffer } from './xlsxImport.js';
+import { validateScanCode } from './googleSheets.js';
+
+test('accepts both KEX Lazada barcode prefixes and rejects near misses', () => {
+  assert.equal(validateScanCode('KEX Lazada', 'KEXD0LM0003766710').ok, true);
+  assert.equal(validateScanCode('KEX Lazada', 'KEXLM12345678').ok, true);
+  assert.equal(validateScanCode('KEX Lazada', 'KEX0LM12345678').ok, false);
+  assert.equal(validateScanCode('KEX Lazada', 'KEXDLM12345678').ok, false);
+});
 
 test('parses and groups Lazada rows', () => {
   const rows = [['orderNumber', 'sellerSku', 'trackingCode'], ['L1', 'SKU-A', 'LEX123'], ['L1', 'SKU-B', 'LEX123']];
