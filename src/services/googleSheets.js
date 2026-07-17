@@ -869,15 +869,32 @@ async function batchReadDailyRows({ token, spreadsheetId, sheetNames }) {
   return rowsBySheet;
 }
 
+export function buildDailyRowUpdateData(date, rowNumber, row) {
+  const sheetName = escapeSheetName(date);
+  return [
+    {
+      range: `${sheetName}!A${rowNumber}:O${rowNumber}`,
+      values: [row.slice(0, 15)],
+    },
+    {
+      range: `${sheetName}!Q${rowNumber}:${sheetEndColumn()}${rowNumber}`,
+      values: [row.slice(16, TOTAL_COLUMNS)],
+    },
+  ];
+}
+
 async function updateDailyRow({ token, spreadsheetId, date, rowNumber, row }) {
-  const range = `${escapeSheetName(date)}!A${rowNumber}:${sheetEndColumn()}${rowNumber}`;
+  // Buyer Name (P) is edited manually in Sheets. Never include it in a
+  // scan-driven row update, otherwise an empty marketplace payload erases it.
+  const data = buildDailyRowUpdateData(date, rowNumber, row);
   await apiFetch(
-    `${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`,
+    `${SHEETS_API}/${spreadsheetId}/values:batchUpdate`,
     token,
     {
-      method: 'PUT',
+      method: 'POST',
       body: JSON.stringify({
-        values: [row],
+        valueInputOption: 'USER_ENTERED',
+        data,
       }),
     },
   );

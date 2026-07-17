@@ -9,7 +9,7 @@ import {
   marketplaceMetadataChanged, parseMarketplaceRows, validateMarketplaceIdentifier,
 } from './marketplaceImport.js';
 import { parseXlsxArrayBuffer } from './xlsxImport.js';
-import { validateScanCode } from './googleSheets.js';
+import { buildDailyRowUpdateData, validateScanCode } from './googleSheets.js';
 
 test('accepts both KEX Lazada barcode prefixes and rejects near misses', () => {
   assert.equal(validateScanCode('KEX Lazada', 'KEXD0LM0003766710').ok, true);
@@ -17,6 +17,15 @@ test('accepts both KEX Lazada barcode prefixes and rejects near misses', () => {
   assert.equal(validateScanCode('KEX Lazada', 'KEXLM12345678').ok, true);
   assert.equal(validateScanCode('KEX Lazada', 'KEX0LM12345678').ok, false);
   assert.equal(validateScanCode('KEX Lazada', 'KEXDLM12345678').ok, false);
+});
+
+test('preserves manual Buyer Name when updating an existing scan row', () => {
+  const row = Array.from({ length: 23 }, (_, index) => `cell-${index}`);
+  const data = buildDailyRowUpdateData('2026-07-17', 9, row);
+
+  assert.deepEqual(data.map((item) => item.range), ["'2026-07-17'!A9:O9", "'2026-07-17'!Q9:W9"]);
+  assert.deepEqual(data[0].values, [row.slice(0, 15)]);
+  assert.deepEqual(data[1].values, [row.slice(16)]);
 });
 
 test('parses and groups Lazada rows', () => {
