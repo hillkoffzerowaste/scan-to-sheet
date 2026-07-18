@@ -280,6 +280,16 @@ function App() {
     () => summary.find((item) => item.courier === selectedCourier)?.count ?? 0,
     [selectedCourier, summary],
   );
+  const displayedCourierCounts = useMemo(() => {
+    if (activeTab !== 'drive') {
+      return summary;
+    }
+
+    return COURIERS.map((courier) => ({
+      courier,
+      count: driveRecentRows.filter((row) => row.courier === courier).length,
+    }));
+  }, [activeTab, driveRecentRows, summary]);
   const totalTodayCount = useMemo(() => summary.reduce((sum, item) => sum + item.count, 0), [summary]);
   const displayedRecentRows = showAllRecentRows ? recentRows : recentRows.slice(0, 3);
   const sheetUrl = config?.master?.webViewLink;
@@ -2204,7 +2214,7 @@ function App() {
       </section>
 
       <section className="workspace-grid">
-        <aside className="side-panel">
+        <aside className={`side-panel workflow-${activeTab}`}>
           <div className="panel-heading">
             <Truck size={18} />
             <span>เลือกขนส่ง</span>
@@ -2224,7 +2234,7 @@ function App() {
                 disabled={!isSignedIn || cameraActive}
               >
                 <span>{courier}</span>
-                <strong>{summary.find((item) => item.courier === courier)?.count ?? 0}</strong>
+                <strong>{displayedCourierCounts.find((item) => item.courier === courier)?.count ?? 0}</strong>
               </button>
             ))}
           </div>
