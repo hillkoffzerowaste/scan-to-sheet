@@ -874,6 +874,7 @@ function buildStatusFormattingRequests(sheetId) {
   return [
     rule(statusRange, '=$I2="Success"', { red: 0.85, green: 0.95, blue: 0.88 }, { red: 0.1, green: 0.45, blue: 0.2 }),
     rule(statusRange, '=$I2="Cancelled"', { red: 0.98, green: 0.82, blue: 0.82 }, { red: 0.65, green: 0.05, blue: 0.05 }, true),
+    rule(orderStatusRange, '=$U2="ยกเลิก"', { red: 0.98, green: 0.82, blue: 0.82 }, { red: 0.65, green: 0.05, blue: 0.05 }, true),
     rule(orderStatusRange, '=$U2="ส่งออกแล้ว"', { red: 0.85, green: 0.95, blue: 0.88 }, { red: 0.1, green: 0.45, blue: 0.2 }),
     rule(orderStatusRange, '=$U2="รอแพ็ค"', { red: 1, green: 0.95, blue: 0.75 }, { red: 0.55, green: 0.35, blue: 0 }),
     rule(orderStatusRange, '=$U2="รอแพ็คเกิน 1 วัน"', { red: 0.98, green: 0.82, blue: 0.82 }, { red: 0.65, green: 0.05, blue: 0.05 }, true),
