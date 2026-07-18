@@ -17,6 +17,7 @@ import {
 import { firestoreDb, isFirebaseConfigured, serverTimestamp } from './firebase.js';
 import { marketplaceMetadata } from '../../scripts/marketplace-sync/normalize.js';
 import { isCompleteScanOrder, marketplaceMetadataChanged } from './marketplaceImport.js';
+import { nextCalendarDate } from './calendarDate.js';
 
 function canWriteFirestore() {
   return Boolean(isFirebaseConfigured && firestoreDb);
@@ -179,6 +180,21 @@ async function getOrdersByDate(date) {
   }
 
   const snap = await getDocs(query(collection(firestoreDb, 'orders'), where('date', '==', date)));
+  return snap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+}
+
+async function getPackerOrdersByScanDate(date) {
+  if (!canWriteFirestore()) {
+    return [];
+  }
+
+  const start = `${date}T00:00:00`;
+  const end = `${nextCalendarDate(date)}T00:00:00`;
+  const snap = await getDocs(query(
+    collection(firestoreDb, 'orders'),
+    where('packerScan.scannedAt', '>=', start),
+    where('packerScan.scannedAt', '<', end),
+  ));
   return snap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
 }
 
@@ -663,10 +679,7 @@ export async function backfillOrdersFromSheetRows({ rows, user }) {
 }
 
 export async function fetchTodaySummaryFirestore({ couriers = [], date }) {
-  const orders = (await getRecentOrders(1000)).filter((order) => {
-    const scanDate = order.packerScan?.scannedAt?.split('T')[0];
-    return scanDate === date;
-  });
+  const orders = await getPackerOrdersByScanDate(date);
   const courierCounts = couriers.map((courier) => ({
     courier,
     count: orders.filter((order) => order.courier === courier && order.packerScan?.scannedAt && !isCancelledOrder(order)).length,
