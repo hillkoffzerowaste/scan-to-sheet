@@ -1221,6 +1221,19 @@ function App() {
       if (result.status === 'success' && isSignedIn) {
         setScanFlash(true);
         setTimeout(() => setScanFlash(false), 600);
+        setSummary((current) =>
+          current.map((item) =>
+            item.courier === scanCourier ? { ...item, count: item.count + 1 } : item,
+          ),
+        );
+        if (packerName) {
+          setPackerCounts((current) => {
+            const existing = current.find((item) => item.packer === packerName);
+            return existing
+              ? current.map((item) => (item.packer === packerName ? { ...item, count: item.count + 1 } : item))
+              : [...current, { packer: packerName, count: 1 }];
+          });
+        }
         scheduleCountRefresh();
       }
 
