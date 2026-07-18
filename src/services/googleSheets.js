@@ -828,6 +828,7 @@ async function applyStatusCellColors({ token, spreadsheetId, date, sheetId }) {
     success: { backgroundColor: { red: 0.85, green: 0.95, blue: 0.88 }, foregroundColor: { red: 0.1, green: 0.45, blue: 0.2 } },
     pending: { backgroundColor: { red: 1, green: 0.95, blue: 0.75 }, foregroundColor: { red: 0.55, green: 0.35, blue: 0 } },
     overdue: { backgroundColor: { red: 0.98, green: 0.82, blue: 0.82 }, foregroundColor: { red: 0.65, green: 0.05, blue: 0.05 } },
+    cancelled: { backgroundColor: { red: 0.98, green: 0.82, blue: 0.82 }, foregroundColor: { red: 0.65, green: 0.05, blue: 0.05 } },
     crossDay: { backgroundColor: { red: 1, green: 0.9, blue: 0.75 }, foregroundColor: { red: 0.65, green: 0.35, blue: 0 } },
   };
   rows.slice(0, 500).forEach((row, index) => {
@@ -839,14 +840,16 @@ async function applyStatusCellColors({ token, spreadsheetId, date, sheetId }) {
     const adminAt = hasAdmin ? parseDateTime(adminDate, String(row[11] ?? '').trim()) : null;
     const overdue = hasAdmin && !hasPacker && adminAt
       && Date.now() - adminAt.getTime() >= 24 * 60 * 60 * 1000;
-    const style = status === 'Success'
+    const style = status === 'Cancelled'
+      ? colors.cancelled
+      : status === 'Success'
       ? colors.success
       : hasAdmin && !hasPacker
         ? overdue ? colors.overdue : colors.pending
         : null;
     const rowStart = index + 1;
     if (style) requests.push({ repeatCell: { range: { sheetId, startRowIndex: rowStart, endRowIndex: rowStart + 1, startColumnIndex: 8, endColumnIndex: 9 }, cell: { userEnteredFormat: { backgroundColor: style.backgroundColor, textFormat: { foregroundColor: style.foregroundColor, bold: status !== 'Success' } } }, fields: 'userEnteredFormat(backgroundColor,textFormat)' } });
-    if (style) requests.push({ repeatCell: { range: { sheetId, startRowIndex: rowStart, endRowIndex: rowStart + 1, startColumnIndex: 20, endColumnIndex: 21 }, cell: { userEnteredFormat: { backgroundColor: style.backgroundColor, textFormat: { foregroundColor: style.foregroundColor, bold: status !== 'Success' } } }, fields: 'userEnteredFormat(backgroundColor,textFormat)' } });
+    if (style && status !== 'Cancelled') requests.push({ repeatCell: { range: { sheetId, startRowIndex: rowStart, endRowIndex: rowStart + 1, startColumnIndex: 20, endColumnIndex: 21 }, cell: { userEnteredFormat: { backgroundColor: style.backgroundColor, textFormat: { foregroundColor: style.foregroundColor, bold: status !== 'Success' } } }, fields: 'userEnteredFormat(backgroundColor,textFormat)' } });
     if (hasAdmin && hasPacker && scanDate && adminDate && scanDate !== adminDate) requests.push({ repeatCell: { range: { sheetId, startRowIndex: rowStart, endRowIndex: rowStart + 1, startColumnIndex: 21, endColumnIndex: 22 }, cell: { userEnteredFormat: { backgroundColor: colors.crossDay.backgroundColor, textFormat: { foregroundColor: colors.crossDay.foregroundColor, bold: true } } }, fields: 'userEnteredFormat(backgroundColor,textFormat)' } });
   });
   if (requests.length > 0) await apiFetch(`${SHEETS_API}/${spreadsheetId}:batchUpdate`, token, { method: 'POST', body: JSON.stringify({ requests }) });
@@ -870,6 +873,7 @@ function buildStatusFormattingRequests(sheetId) {
   });
   return [
     rule(statusRange, '=$I2="Success"', { red: 0.85, green: 0.95, blue: 0.88 }, { red: 0.1, green: 0.45, blue: 0.2 }),
+    rule(statusRange, '=$I2="Cancelled"', { red: 0.98, green: 0.82, blue: 0.82 }, { red: 0.65, green: 0.05, blue: 0.05 }, true),
     rule(orderStatusRange, '=$U2="ส่งออกแล้ว"', { red: 0.85, green: 0.95, blue: 0.88 }, { red: 0.1, green: 0.45, blue: 0.2 }),
     rule(orderStatusRange, '=$U2="รอแพ็ค"', { red: 1, green: 0.95, blue: 0.75 }, { red: 0.55, green: 0.35, blue: 0 }),
     rule(orderStatusRange, '=$U2="รอแพ็คเกิน 1 วัน"', { red: 0.98, green: 0.82, blue: 0.82 }, { red: 0.65, green: 0.05, blue: 0.05 }, true),
