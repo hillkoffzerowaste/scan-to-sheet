@@ -2147,7 +2147,7 @@ function App() {
           onClick={() => { setActiveTab('packer'); setScanPopupOpen(false); void stopCamera(); }}
         >
           <PackageCheck size={18} />
-          <span>📦 แพ็ค</span>
+          <span>📦 แพ็กสินค้า (Packer)</span>
         </button>
         <button
           className={`tab-button ${activeTab === 'drive' ? 'active' : ''}`}
@@ -2155,12 +2155,20 @@ function App() {
           onClick={() => { setActiveTab('drive'); setScanPopupOpen(false); void stopCamera(); }}
         >
           <Upload size={18} />
-          <span>📥 ลง Drive</span>
+          <span>📥 รับเข้า Drive (Admin)</span>
           {missingAlertBadge > 0 && (
             <span className="tab-badge">{missingAlertBadge}</span>
           )}
         </button>
       </nav>
+
+      <section className={`workflow-guide ${activeTab === 'drive' ? 'drive-workflow-guide' : 'packer-workflow-guide'}`}>
+        {activeTab === 'drive' ? <Upload size={24} /> : <PackageCheck size={24} />}
+        <div>
+          <strong>{activeTab === 'drive' ? 'รับเข้า Drive' : 'แพ็กสินค้า'}</strong>
+          <p>{activeTab === 'drive' ? 'สแกนรับพัสดุเข้าระบบก่อนส่งให้ Packer แพ็กสินค้า' : 'สแกนพัสดุหลังแพ็กเสร็จ เพื่อบันทึกผู้แพ็กและสถานะ'}</p>
+        </div>
+      </section>
 
       <section className="marketplace-upload-panel" aria-labelledby="marketplace-upload-title">
         <div>
@@ -2243,13 +2251,13 @@ function App() {
           </div>
         </aside>
 
-        <section className="scan-panel">
+        <section className={`scan-panel workflow-${activeTab}`}>
           <div className="scan-header">
             <div>
-              <p className="eyebrow">{activeTab === 'drive' ? 'ลง Drive →' : 'ขนส่งที่เลือก'}</p>
+              <p className="eyebrow">{activeTab === 'drive' ? 'รับเข้า Drive →' : 'ขนส่งที่เลือก'}</p>
               <h2>{selectedCourier}</h2>
               {activeTab === 'drive' && (
-                <span className="drive-mode-label">📥 กำลังลง Drive — รอ Packer สแกนส่ง</span>
+                <span className="drive-mode-label">📥 รับเข้า Drive ก่อนส่งให้ Packer สแกนแพ็ก</span>
               )}
             </div>
             <div className="date-box">
@@ -2339,14 +2347,14 @@ function App() {
             </div>
           )}
 
-          <div className="current-courier-badge">
+          <div className={`current-courier-badge workflow-${activeTab}`}>
             <Truck size={18} />
-            <span>{activeTab === 'drive' ? 'กำลังลง Drive' : 'กำลังสแกน'}</span>
+            <span>{activeTab === 'drive' ? 'กำลังรับเข้า Drive' : 'กำลังสแกนแพ็ก'}</span>
             <strong>{selectedCourier}</strong>
           </div>
 
           {scanMethod === 'camera' ? (
-            <div className="camera-panel">
+            <div className={`camera-panel workflow-${activeTab}`}>
               <div className={`camera-stage ${cameraActive ? 'active' : ''}`}>
                 <div id={CAMERA_REGION_ID} className="camera-reader" />
                 <div className="scan-frame" aria-hidden="true">
@@ -2371,9 +2379,9 @@ function App() {
               </div>
             </div>
           ) : (
-            <form className="scan-form" onSubmit={handleScanSubmit}>
+            <form className={`scan-form workflow-${activeTab}`} onSubmit={handleScanSubmit}>
               <label htmlFor="scan-input">
-                {activeTab === 'drive' ? 'Tracking / Barcode (ลง Drive)' : 'Tracking / Barcode'}
+                {activeTab === 'drive' ? 'Tracking / Barcode (รับเข้า Drive)' : 'Tracking / Barcode (แพ็กสินค้า)'}
               </label>
               <div className={`scan-input-row ${scanFlash ? 'flash' : ''}`}>
                 <ScanLine size={24} />
@@ -2385,7 +2393,7 @@ function App() {
                   placeholder={
                     isSignedIn
                       ? activeTab === 'drive'
-                        ? 'ยิงบาร์โค้ดหรือ QR แล้วกด Enter (ลง Drive)'
+                        ? 'ยิงบาร์โค้ดหรือ QR แล้วกด Enter เพื่อรับเข้า Drive'
                         : isPackerReady
                           ? 'ยิงบาร์โค้ดหรือ QR แล้วกด Enter'
                           : 'เลือก Packer ก่อนเริ่มสแกน'
@@ -2396,7 +2404,7 @@ function App() {
                 />
                 <button type="submit" disabled={busy || !isSignedIn || (activeTab === 'packer' && !isPackerReady)}>
                   {busy ? <RefreshCw size={18} className="spin" /> : <Play size={18} />}
-                  <span>{activeTab === 'drive' ? 'ลง Drive' : 'บันทึก'}</span>
+                  <span>{activeTab === 'drive' ? 'รับเข้า Drive' : 'บันทึกแพ็ก'}</span>
                 </button>
               </div>
             </form>
@@ -3028,12 +3036,12 @@ function App() {
 
       {scanPopupOpen && (
         <div className="scan-popup-overlay" onClick={() => { setScanPopupOpen(false); void stopCamera(); }}>
-          <div className="scan-popup-sheet" onClick={(e) => e.stopPropagation()}>
+          <div className={`scan-popup-sheet workflow-${activeTab}`} onClick={(e) => e.stopPropagation()}>
             <div className="scan-popup-handle" />
 
-            <div className="current-courier-badge">
+            <div className={`current-courier-badge workflow-${activeTab}`}>
               <Truck size={18} />
-              <span>{activeTab === 'drive' ? 'กำลังลง Drive' : 'กำลังสแกน'}</span>
+              <span>{activeTab === 'drive' ? 'กำลังรับเข้า Drive' : 'กำลังสแกนแพ็ก'}</span>
               <strong>{selectedCourier}</strong>
             </div>
 
@@ -3081,7 +3089,7 @@ function App() {
             )}
 
             {scanMethod === 'camera' ? (
-              <div className="camera-panel">
+              <div className={`camera-panel workflow-${activeTab}`}>
                 <div className={`camera-stage ${cameraActive ? 'active' : ''}`}>
                   <div id={CAMERA_POPUP_ID} className="camera-reader" />
                   <div className="scan-frame" aria-hidden="true"><span /></div>
@@ -3102,7 +3110,7 @@ function App() {
                 </div>
               </div>
             ) : (
-              <form className="scan-form" onSubmit={handleScanSubmit}>
+              <form className={`scan-form workflow-${activeTab}`} onSubmit={handleScanSubmit}>
                 <div className={`scan-input-row ${scanFlash ? 'flash' : ''}`}>
                   <ScanLine size={24} />
                   <input
@@ -3112,7 +3120,7 @@ function App() {
                     onChange={(e) => setScanValue(e.target.value)}
                     placeholder={
                       activeTab === 'drive'
-                        ? 'ยิงบาร์โค้ด แล้วกด Enter (ลง Drive)'
+                        ? 'ยิงบาร์โค้ด แล้วกด Enter เพื่อรับเข้า Drive'
                         : isPackerReady
                           ? 'ยิงบาร์โค้ด แล้วกด Enter'
                           : 'เลือก Packer ก่อน'
@@ -3122,7 +3130,7 @@ function App() {
                   />
                   <button type="submit" disabled={busy || !isSignedIn || (activeTab === 'packer' && !isPackerReady)}>
                     {busy ? <RefreshCw size={18} className="spin" /> : <Play size={18} />}
-                    <span>{activeTab === 'drive' ? 'ลง Drive' : 'บันทึก'}</span>
+                    <span>{activeTab === 'drive' ? 'รับเข้า Drive' : 'บันทึกแพ็ก'}</span>
                   </button>
                 </div>
               </form>
