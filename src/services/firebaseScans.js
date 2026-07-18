@@ -453,7 +453,15 @@ export async function recordPackerScanPrimary({ code, courier, date, time, user,
       if (marketplaceData) {
         transaction.set(ref, marketplaceData, { merge: true });
       }
-      const needsSheetRetry = existing.sheetSyncStatus !== 'synced';
+      const needsSheetRetry = existing.sheetSyncStatus === 'failed';
+      if (needsSheetRetry) {
+        transaction.set(ref, {
+          sheetSyncStatus: 'pending',
+          sheetSyncError: '',
+          updatedAt: serverTimestamp(),
+          updatedAtIso: nowIso(),
+        }, { merge: true });
+      }
       return {
         status: needsSheetRetry ? (existing.admin?.scannedAt ? 'matched' : 'created') : 'duplicate',
         id: ref.id,
@@ -529,7 +537,15 @@ export async function recordAdminScanPrimary({ code, courier, date, time, user }
       if (marketplaceData) {
         transaction.set(ref, marketplaceData, { merge: true });
       }
-      const needsSheetRetry = existing.sheetSyncStatus !== 'synced';
+      const needsSheetRetry = existing.sheetSyncStatus === 'failed';
+      if (needsSheetRetry) {
+        transaction.set(ref, {
+          sheetSyncStatus: 'pending',
+          sheetSyncError: '',
+          updatedAt: serverTimestamp(),
+          updatedAtIso: nowIso(),
+        }, { merge: true });
+      }
       return {
         status: needsSheetRetry ? (existing.packerScan?.scannedAt ? 'matched' : 'created') : 'duplicate',
         id: ref.id,

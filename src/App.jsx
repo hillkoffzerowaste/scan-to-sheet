@@ -112,7 +112,7 @@ const GOOGLE_SESSION_KEY = 'scan-to-sheet-google-session-v1';
 const LOGGED_OUT_FLAG = 'scan-to-sheet-logged-out-v1';
 const CAMERA_REGION_ID = 'camera-reader';
 const CAMERA_POPUP_ID = 'camera-reader-popup';
-const CAMERA_COOLDOWN_MS = 2500;
+const CAMERA_COOLDOWN_MS = 5000;
 const CAMERA_SCAN_FPS = 18;
 const ISSUE_CUSTOMER_CANCELLED = 'ลูกค้ายกเลิก';
 const ISSUE_DAMAGED = 'สินค้าเสียหาย';
@@ -1095,6 +1095,7 @@ function App() {
         : null;
 
       if (firestorePrimary?.status === 'duplicate') {
+        const syncPending = firestorePrimary.sheetSyncStatus === 'pending';
         const duplicateResult = {
           status: 'duplicate',
           courier: selectedCourier,
@@ -1107,10 +1108,12 @@ function App() {
         };
         setStatus({
           type: 'duplicate',
-          title: 'เลขซ้ำ',
-          message: `${validation.code} มีอยู่แล้วใน Firebase สำหรับ ${selectedCourier}`,
+          title: syncPending ? 'กำลังซิงก์ Google Sheet' : 'เลขซ้ำ',
+          message: syncPending
+            ? `${validation.code} บันทึกใน Firebase แล้ว และกำลังซิงก์ Google Sheet อยู่`
+            : `${validation.code} มีอยู่แล้วใน Firebase สำหรับ ${selectedCourier}`,
         });
-        showCameraMessage(`เลขซ้ำ: ${validation.code}`, 'duplicate');
+        showCameraMessage(syncPending ? `${validation.code} กำลังซิงก์ Sheet` : `เลขซ้ำ: ${validation.code}`, 'duplicate');
         playTone('duplicate');
         setScanRemark('');
         return duplicateResult;
@@ -1336,6 +1339,7 @@ function App() {
         : null;
 
       if (firestorePrimary?.status === 'duplicate') {
+        const syncPending = firestorePrimary.sheetSyncStatus === 'pending';
         const duplicateResult = {
           status: 'duplicate',
           courier: selectedCourier,
@@ -1347,10 +1351,12 @@ function App() {
         };
         setStatus({
           type: 'duplicate',
-          title: 'เลขซ้ำใน Firebase',
-          message: `${validation.code} เคยลง Drive สำหรับ ${selectedCourier} แล้ว`,
+          title: syncPending ? 'กำลังซิงก์ Google Sheet' : 'เลขซ้ำใน Firebase',
+          message: syncPending
+            ? `${validation.code} บันทึกใน Firebase แล้ว และกำลังซิงก์ Google Sheet อยู่`
+            : `${validation.code} เคยลง Drive สำหรับ ${selectedCourier} แล้ว`,
         });
-        showCameraMessage(`ลงแล้ว: ${validation.code}`, 'duplicate');
+        showCameraMessage(syncPending ? `${validation.code} กำลังซิงก์ Sheet` : `ลงแล้ว: ${validation.code}`, 'duplicate');
         playTone('duplicate');
         return duplicateResult;
       }
