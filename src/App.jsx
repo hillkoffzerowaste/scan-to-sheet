@@ -1421,7 +1421,15 @@ function App() {
       setDriveRecentRows(result.rows ?? []);
       setDriveTotalCount(result.rows?.length ?? 0);
 
-      if (result.status === 'admin_scan') {
+      if (result.status === 'admin_scan' && result.sheetSyncStatus === 'pending') {
+        setStatus({
+          type: 'warning',
+          title: 'บันทึก Firebase แล้ว กำลังลง Sheet',
+          message: `${result.code} บันทึกแล้ว กรุณารอการซิงก์ Google Sheet`,
+        });
+        showCameraMessage(`${result.code} กำลังลง Sheet`, 'warning');
+        playTone('success');
+      } else if (result.status === 'admin_scan') {
         setScanFlash(true);
         setTimeout(() => setScanFlash(false), 600);
         setStatus({

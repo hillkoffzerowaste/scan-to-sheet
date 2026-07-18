@@ -54,6 +54,23 @@ export const ALL_HEADERS = [...SCAN_HEADERS, ...ADMIN_HEADERS, ...MARKETPLACE_HE
 
 export const TOTAL_COLUMNS = ALL_HEADERS.length; // 23
 
+export function parseAppendUpdatedRange(updatedRange, expectedSheetName) {
+  if (typeof updatedRange !== 'string' || !updatedRange.includes('!')) {
+    throw new Error('Google Sheet append did not return a valid updated range');
+  }
+  const separator = updatedRange.lastIndexOf('!');
+  const rawSheetName = updatedRange.slice(0, separator);
+  const cellRange = updatedRange.slice(separator + 1);
+  const sheetName = rawSheetName.startsWith("'") && rawSheetName.endsWith("'")
+    ? rawSheetName.slice(1, -1).replace(/''/g, "'")
+    : rawSheetName;
+  const match = /^\$?A\$?(\d+):\$?W\$?(\d+)$/.exec(cellRange);
+  if (sheetName !== expectedSheetName || !match || match[1] !== match[2]) {
+    throw new Error(`Google Sheet appended outside ${expectedSheetName}!A:W (${updatedRange})`);
+  }
+  return Number(match[1]);
+}
+
 export const COURIER_RULES = {
   Lazada: {
     label: 'เลข Lazada ต้องขึ้นต้นด้วย LEX',
@@ -222,6 +239,25 @@ async function apiFetch(url, token, options = {}) {
   }
 
   throw lastError ?? new Error('Google API max retries exceeded');
+}
+
+async function clearSheetRange({ token, spreadsheetId, range }) {
+  await apiFetch(`${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent(range)}:clear`, token, {
+    method: 'POST',
+    body: '{}',
+  });
+}
+
+async function getSafeAppendedRowNumber({ token, spreadsheetId, date, appendResult }) {
+  const updatedRange = appendResult?.updates?.updatedRange;
+  try {
+    return parseAppendUpdatedRange(updatedRange, date);
+  } catch (error) {
+    if (typeof updatedRange === 'string' && updatedRange.includes('!')) {
+      await clearSheetRange({ token, spreadsheetId, range: updatedRange }).catch(() => {});
+    }
+    throw error;
+  }
 }
 
 function escapeQuery(value) {
@@ -1538,7 +1574,7 @@ export async function appendScanGoogle({ token, config, courier, code, email, pa
   ], marketplaceOrder);
 
   const range = `${escapeSheetName(date)}!A:${sheetEndColumn()}`;
-  await apiFetch(
+  const appendResult = await apiFetch(
     `${SHEETS_API}/${sheet.id}/values/${encodeURIComponent(range)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
     token,
     {
@@ -1549,22 +1585,20 @@ export async function appendScanGoogle({ token, config, courier, code, email, pa
     },
   );
 
+  const appendedRowNumber = await getSafeAppendedRowNumber({
+    token, spreadsheetId: sheet.id, date, appendResult,
+  });
+
   const updatedRows = await readDailyRows({ token, spreadsheetId: sheet.id, date });
   const updatedParsedRows = updatedRows.map((row, idx) => rowFromSheet(row, idx));
-  const insertedIdx = updatedParsedRows.findIndex((row) => String(row.no) === placeholder);
+  const insertedIdx = appendedRowNumber - 2;
 
-  if (insertedIdx === -1) {
-    const courierCount = updatedParsedRows.filter((row) => row.courier === courier).length;
-    return {
-      status: 'success',
-      courier,
-      date,
-      time,
-      code: normalizedCode,
-      count: courierCount,
-      rows: updatedParsedRows.filter((row) => row.courier === courier).reverse().slice(0, 20),
-      sheetUrl: sheet.webViewLink,
-    };
+  if (String(updatedParsedRows[insertedIdx]?.no) !== placeholder) {
+    await clearSheetRange({
+      token, spreadsheetId: sheet.id,
+      range: `${escapeSheetName(date)}!A${appendedRowNumber}:${sheetEndColumn()}${appendedRowNumber}`,
+    }).catch(() => {});
+    throw new Error('Google Sheet append could not be verified; please scan again');
   }
 
   const updatedCourierRows = updatedParsedRows.filter((row) => row.courier === courier);
@@ -1745,7 +1779,7 @@ export async function appendAdminScanGoogle({ token, config, courier, code, emai
   ], marketplaceOrder);
 
   const range = `${escapeSheetName(date)}!A:${sheetEndColumn()}`;
-  await apiFetch(
+  const appendResult = await apiFetch(
     `${SHEETS_API}/${sheet.id}/values/${encodeURIComponent(range)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
     token,
     {
@@ -1756,11 +1790,23 @@ export async function appendAdminScanGoogle({ token, config, courier, code, emai
     },
   );
 
+  const appendedRowNumber = await getSafeAppendedRowNumber({
+    token, spreadsheetId: sheet.id, date, appendResult,
+  });
+
   const updatedRows = await readDailyRows({ token, spreadsheetId: sheet.id, date });
   const updatedParsedRows = updatedRows.map((row, idx) => rowFromSheet(row, idx));
-  const insertedIdx = updatedParsedRows.findIndex((row) => String(row.no) === placeholder);
+  const insertedIdx = appendedRowNumber - 2;
 
-  const correctNo = insertedIdx >= 0 ? insertedIdx + 1 : updatedParsedRows.length + 1;
+  if (String(updatedParsedRows[insertedIdx]?.no) !== placeholder) {
+    await clearSheetRange({
+      token, spreadsheetId: sheet.id,
+      range: `${escapeSheetName(date)}!A${appendedRowNumber}:${sheetEndColumn()}${appendedRowNumber}`,
+    }).catch(() => {});
+    throw new Error('Google Sheet append could not be verified; please scan again');
+  }
+
+  const correctNo = insertedIdx + 1;
   const courierAdminCount = updatedParsedRows.filter(
     (r) => r.courier === courier && r.adminCode && r.adminCode.trim() !== '',
   ).length + (insertedIdx >= 0 ? 1 : 0);
@@ -1782,15 +1828,13 @@ export async function appendAdminScanGoogle({ token, config, courier, code, emai
     normalizedCode,
   ], marketplaceOrder);
 
-  if (insertedIdx >= 0) {
-    await updateDailyRow({
-      token,
-      spreadsheetId: sheet.id,
-      date,
-      rowNumber: insertedIdx + 2,
-      row: correctedRow,
-    });
-  }
+  await updateDailyRow({
+    token,
+    spreadsheetId: sheet.id,
+    date,
+    rowNumber: appendedRowNumber,
+    row: correctedRow,
+  });
 
   const driveRows = updatedParsedRows
     .filter((row) => row.adminCode && row.adminCode.trim() !== '')
