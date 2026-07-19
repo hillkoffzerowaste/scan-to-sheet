@@ -10,7 +10,7 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:chromium": "playwright test --project=chromium",
-    "test:marketplace": "node --test scripts/marketplace-sync/normalize.test.js src/services/marketplaceImport.test.js src/services/googleSheets.test.js src/services/firebaseScans.test.js",
+    "test:marketplace": "node --test scripts/marketplace-sync/normalize.test.js src/services/marketplaceImport.test.js src/services/googleSheets.test.js src/services/firebaseScans.test.js src/services/scanCommit.test.js",
     "marketplace:login": "node scripts/marketplace-sync/worker.js --login",
     "marketplace:sync": "node scripts/marketplace-sync/worker.js",
     "marketplace:sync:once": "node scripts/marketplace-sync/worker.js --once",

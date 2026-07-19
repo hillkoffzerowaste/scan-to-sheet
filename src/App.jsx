@@ -91,6 +91,7 @@ import {
 } from './services/firebaseScans.js';
 import { groupMarketplaceRows, parseCsvText, parseMarketplaceRows } from './services/marketplaceImport.js';
 import { parseXlsxArrayBuffer } from './services/xlsxImport.js';
+import { commitFallbackScan } from './services/scanCommit.js';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 const GOOGLE_SCOPES = [
@@ -1198,18 +1199,28 @@ function App() {
       } else {
         try {
           const marketplaceOrder = await marketplaceOrderPromise;
-          result = await runWithGoogleRetry((accessToken, googleConfig) =>
-            appendScanGoogle({
-              token: accessToken,
-              config: googleConfig,
+          result = await commitFallbackScan({
+            appendToSheet: () => runWithGoogleRetry((accessToken, googleConfig) =>
+              appendScanGoogle({
+                token: accessToken,
+                config: googleConfig,
+                courier: scanCourier,
+                code: validation.code,
+                email: scanEmail,
+                packer: packerName,
+                note: scanNote,
+                marketplaceOrder,
+              }),
+            ),
+            mirrorToFirestore: (sheetResult) => mirrorScanToFirestore({
+              type: 'packer',
+              result: sheetResult,
               courier: scanCourier,
-              code: validation.code,
-              email: scanEmail,
+              user: scanUser,
               packer: packerName,
               note: scanNote,
-              marketplaceOrder,
             }),
-          );
+          });
         } catch (sheetError) {
           throw sheetError;
         }
@@ -1240,7 +1251,15 @@ function App() {
         scheduleCountRefresh();
       }
 
-      if (result.status === 'cancelled') {
+      if (result.status === 'firestore_unconfirmed') {
+        setStatus({
+          type: 'error',
+          title: 'ยังยืนยัน Firestore ไม่สำเร็จ',
+          message: result.message,
+        });
+        showCameraMessage(result.message, 'error');
+        playTone('error');
+      } else if (result.status === 'cancelled') {
         setStatus({
           type: 'success',
           title: 'บันทึกยกเลิกแล้ว',
@@ -1270,14 +1289,6 @@ function App() {
         setScanRemark('');
       }
       if (!firestorePrimary?.id) {
-        await mirrorScanToFirestore({
-          type: 'packer',
-          result,
-          courier: scanCourier,
-          user: scanUser,
-          packer: packerName,
-          note: scanNote,
-        }).catch(() => {});
         await refreshSelectedCourierRows().catch(() => {});
       }
       return { ...result, status: result.status };
@@ -1428,16 +1439,24 @@ function App() {
       } else {
         try {
           const marketplaceOrder = await marketplaceOrderPromise;
-          result = await runWithGoogleRetry((accessToken, googleConfig) =>
-            appendAdminScanGoogle({
-              token: accessToken,
-              config: googleConfig,
+          result = await commitFallbackScan({
+            appendToSheet: () => runWithGoogleRetry((accessToken, googleConfig) =>
+              appendAdminScanGoogle({
+                token: accessToken,
+                config: googleConfig,
+                courier: scanCourier,
+                code: validation.code,
+                email: scanEmail,
+                marketplaceOrder,
+              }),
+            ),
+            mirrorToFirestore: (sheetResult) => mirrorScanToFirestore({
+              type: 'admin',
+              result: sheetResult,
               courier: scanCourier,
-              code: validation.code,
-              email: scanEmail,
-              marketplaceOrder,
+              user: scanUser,
             }),
-          );
+          });
         } catch (sheetError) {
           throw sheetError;
         }
@@ -1450,7 +1469,15 @@ function App() {
       setDriveRecentRows(result.rows ?? []);
       setDriveTotalCount(result.rows?.length ?? 0);
 
-      if (result.status === 'admin_scan' && result.sheetSyncStatus === 'pending') {
+      if (result.status === 'firestore_unconfirmed') {
+        setStatus({
+          type: 'error',
+          title: 'ยังยืนยัน Firestore ไม่สำเร็จ',
+          message: result.message,
+        });
+        showCameraMessage(result.message, 'error');
+        playTone('error');
+      } else if (result.status === 'admin_scan' && result.sheetSyncStatus === 'pending') {
         setStatus({
           type: 'warning',
           title: 'บันทึก Firebase แล้ว กำลังลง Sheet',
@@ -1492,12 +1519,6 @@ function App() {
       setTimeout(() => runAutoCheck(), 2000);
 
       if (!firestorePrimary?.id) {
-        await mirrorScanToFirestore({
-          type: 'admin',
-          result,
-          courier: scanCourier,
-          user: scanUser,
-        }).catch(() => {});
         await refreshDriveRows().catch(() => {});
       }
 

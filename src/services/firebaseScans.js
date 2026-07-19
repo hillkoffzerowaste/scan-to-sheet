@@ -413,7 +413,11 @@ export async function upsertFirebaseUser(user) {
 }
 
 export async function mirrorScanToFirestore({ type, result, courier, user, packer = '', note = '' }) {
-  if (!canWriteFirestore() || !result?.code) {
+  if (!canWriteFirestore()) {
+    throw new Error('Firestore unavailable');
+  }
+
+  if (!result?.code) {
     return;
   }
 
