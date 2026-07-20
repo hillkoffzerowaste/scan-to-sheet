@@ -27,6 +27,7 @@ import {
   MonitorCheck,
   ShieldAlert,
   ArrowRightLeft,
+  Plus,
 } from 'lucide-react';
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import {
@@ -88,6 +89,9 @@ import {
   searchScansFirestore,
   upsertFirebaseUser,
   importMarketplaceOrders,
+  addCourier,
+  claimRecoverableSheetSyncs,
+  subscribeCouriers,
 } from './services/firebaseScans.js';
 import { groupMarketplaceRows, parseCsvText, parseMarketplaceRows } from './services/marketplaceImport.js';
 import { parseXlsxArrayBuffer } from './services/xlsxImport.js';
@@ -211,6 +215,9 @@ function App() {
   const [firebaseUser, setFirebaseUser] = useState(null);
   const [config, setConfig] = useState(() => loadGoogleConfig());
   const [selectedCourier, setSelectedCourier] = useState(COURIERS[0]);
+  const [couriers, setCouriers] = useState(COURIERS);
+  const [newCourierName, setNewCourierName] = useState('');
+  const [addingCourier, setAddingCourier] = useState(false);
   const [scanValue, setScanValue] = useState('');
   const [selectedPacker, setSelectedPacker] = useState(PACKER_UNASSIGNED);
   const [scanRemark, setScanRemark] = useState('');
@@ -234,6 +241,7 @@ function App() {
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [theme, setTheme] = useState(() => localStorage.getItem(THEME_KEY) || 'light');
   const [scanMethod, setScanMethod] = useState('camera');
+  const [allowAnyTrackingFormat, setAllowAnyTrackingFormat] = useState(false);
   const [scanMode, setScanMode] = useState('single');
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraMessage, setCameraMessage] = useState('เปิดกล้อง แล้วเล็งบาร์โค้ดหลักให้อยู่ในกรอบ');
@@ -273,6 +281,7 @@ function App() {
   const refreshTimerRef = useRef(null);
   const autoCheckTimerRef = useRef(null);
   const lastAutoCheckRef = useRef(0);
+  const sheetRecoveryRunningRef = useRef(false);
 
   const isGoogleReady = isFirebaseConfigured || Boolean(GOOGLE_CLIENT_ID);
   const isSheetConnected = Boolean(token && config);
@@ -286,11 +295,11 @@ function App() {
       return summary;
     }
 
-    return COURIERS.map((courier) => ({
+    return couriers.map((courier) => ({
       courier,
       count: driveRecentRows.filter((row) => row.courier === courier).length,
     }));
-  }, [activeTab, driveRecentRows, summary]);
+  }, [activeTab, couriers, driveRecentRows, summary]);
   const totalTodayCount = useMemo(() => summary.reduce((sum, item) => sum + item.count, 0), [summary]);
   const displayedRecentRows = showAllRecentRows ? recentRows : recentRows.slice(0, 3);
   const sheetUrl = config?.master?.webViewLink;
@@ -451,6 +460,25 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (!firebaseUser) {
+      setCouriers(COURIERS);
+      return () => {};
+    }
+    return subscribeCouriers({
+      defaultCouriers: COURIERS,
+      onChange: (nextCouriers) => {
+        setCouriers(nextCouriers);
+        setSelectedCourier((current) => (nextCouriers.includes(current) ? current : nextCouriers[0] ?? COURIERS[0]));
+        setSummary((current) => nextCouriers.map((courier) => (
+          current.find((item) => item.courier === courier) ?? { courier, count: 0 }
+        )));
+        scheduleCountRefresh();
+      },
+      onError: (error) => console.warn('Courier list sync failed:', error),
+    });
+  }, [firebaseUser]);
+
+  useEffect(() => {
     if (isSignedIn) {
       inputRef.current?.focus();
     }
@@ -485,6 +513,11 @@ function App() {
       refreshDriveRows();
     }
   }, [selectedCourier, today.date, isSignedIn, activeTab]);
+
+  useEffect(() => {
+    if (!firebaseUser || !token || !config?.master?.id || sheetRecoveryRunningRef.current) return;
+    void recoverPendingSheetSyncs();
+  }, [firebaseUser, token, config]);
 
   useEffect(() => {
     setShowAllRecentRows(false);
@@ -904,7 +937,7 @@ function App() {
     setToken(null);
     setUser(EMPTY_USER);
     setFirebaseUser(null);
-    setSummary(COURIERS.map((courier) => ({ courier, count: 0 })));
+    setSummary(couriers.map((courier) => ({ courier, count: 0 })));
     setPackerCounts(PACKERS.filter((p) => p !== PACKER_UNASSIGNED).map((p) => ({ packer: p, count: 0 })));
     setRecentRows([]);
     setDriveRecentRows([]);
@@ -935,8 +968,8 @@ function App() {
     }
 
     const data = canUseFirestorePrimary()
-      ? await fetchTodaySummaryFirestore({ couriers: COURIERS, date: getBangkokParts().date })
-      : await runWithGoogleRetry((t, c) => fetchTodaySummary({ token: t, config: c }));
+      ? await fetchTodaySummaryFirestore({ couriers, date: getBangkokParts().date })
+      : await runWithGoogleRetry((t, c) => fetchTodaySummary({ token: t, config: c, couriers }));
     if (data) {
       setSummary(data.courierCounts);
       setPackerCounts(data.packerCounts);
@@ -968,8 +1001,8 @@ function App() {
       refreshTimerRef.current = null;
       if (isSignedIn) {
         const summaryPromise = canUseFirestorePrimary()
-          ? fetchTodaySummaryFirestore({ couriers: COURIERS, date: getBangkokParts().date })
-          : fetchTodaySummary({ token, config });
+          ? fetchTodaySummaryFirestore({ couriers, date: getBangkokParts().date })
+          : fetchTodaySummary({ token, config, couriers });
         summaryPromise.then((data) => {
           if (data) {
             setSummary(data.courierCounts);
@@ -1041,6 +1074,65 @@ function App() {
     }
   }
 
+  async function recoverPendingSheetSyncs() {
+    if (sheetRecoveryRunningRef.current || !firebaseUser || !token || !config?.master?.id) return;
+    sheetRecoveryRunningRef.current = true;
+    try {
+      const orders = await claimRecoverableSheetSyncs({ maxRows: 20 });
+      for (const order of orders) {
+        const code = order.code || order.normalizedCode;
+        if (!code || !order.courier) continue;
+        try {
+          const marketplaceOrder = await findMarketplaceOrderByTracking({ trackingNo: code }).catch(() => null);
+          const email = order.packerScan?.scannedBy?.email || order.admin?.scannedBy?.email || order.user?.email || user.email;
+          const sheetResult = order.packerScan?.scannedAt
+            ? await runWithGoogleRetry((accessToken, googleConfig) => appendScanGoogle({
+                token: accessToken,
+                config: googleConfig,
+                courier: order.courier,
+                code,
+                email,
+                packer: order.packerScan?.packer ?? order.packer ?? '',
+                note: order.packerScan?.note ?? order.note ?? '',
+                marketplaceOrder,
+              }))
+            : await runWithGoogleRetry((accessToken, googleConfig) => appendAdminScanGoogle({
+                token: accessToken,
+                config: googleConfig,
+                courier: order.courier,
+                code,
+                email,
+                marketplaceOrder,
+              }));
+          await markSheetSyncResult({ orderId: order.id, attemptId: order.sheetSyncAttemptId, ok: true, result: sheetResult });
+        } catch (error) {
+          await markSheetSyncResult({ orderId: order.id, attemptId: order.sheetSyncAttemptId, ok: false, error }).catch(() => {});
+        }
+      }
+      if (orders.length) scheduleCountRefresh();
+    } finally {
+      sheetRecoveryRunningRef.current = false;
+    }
+  }
+
+  async function handleAddCourier() {
+    if (!firebaseUser) {
+      setStatus({ type: 'warning', title: 'ต้องเข้าสู่ระบบก่อน', message: 'เข้าสู่ระบบ Firebase ก่อนเพิ่มขนส่งใหม่' });
+      return;
+    }
+    setAddingCourier(true);
+    try {
+      const courier = await addCourier({ name: newCourierName, user: firebaseUser });
+      setSelectedCourier(courier);
+      setNewCourierName('');
+      setStatus({ type: 'success', title: 'เพิ่มขนส่งแล้ว', message: `${courier} ใช้ได้ทั้งหน้าแพ็กและรับเข้า Drive` });
+    } catch (error) {
+      setStatus({ type: 'error', title: 'เพิ่มขนส่งไม่สำเร็จ', message: error.message });
+    } finally {
+      setAddingCourier(false);
+    }
+  }
+
   async function saveScannedCode(rawCode, source = 'manual') {
     if (!isSignedIn) {
       setStatus({
@@ -1063,7 +1155,9 @@ function App() {
       return { status: 'error' };
     }
 
-    const validation = validateScanCode(selectedCourier, rawCode);
+    const validation = validateScanCode(selectedCourier, rawCode, {
+      allowAnyFormat: source === 'manual' && allowAnyTrackingFormat,
+    });
     if (!validation.ok) {
       const isEmpty = !validation.code;
       setStatus({
@@ -1175,10 +1269,10 @@ function App() {
                 marketplaceOrder,
               }),
             );
-            await markSheetSyncResult({ orderId: firestorePrimary.id, ok: true, result: sheetResult }).catch(() => {});
+            await markSheetSyncResult({ orderId: firestorePrimary.id, attemptId: firestorePrimary.sheetSyncAttemptId, ok: true, result: sheetResult }).catch(() => {});
             backgroundResult = { ...result, ...sheetResult, sheetSyncStatus: 'synced' };
           } catch (sheetError) {
-            await markSheetSyncResult({ orderId: firestorePrimary.id, ok: false, error: sheetError }).catch(() => {});
+            await markSheetSyncResult({ orderId: firestorePrimary.id, attemptId: firestorePrimary.sheetSyncAttemptId, ok: false, error: sheetError }).catch(() => {});
             backgroundResult = {
               ...result,
               sheetSyncStatus: 'failed',
@@ -1319,7 +1413,9 @@ function App() {
       return { status: 'error' };
     }
 
-    const validation = validateScanCode(selectedCourier, rawCode);
+    const validation = validateScanCode(selectedCourier, rawCode, {
+      allowAnyFormat: source === 'manual' && allowAnyTrackingFormat,
+    });
     if (!validation.ok) {
       const isEmpty = !validation.code;
       setStatus({
@@ -1417,10 +1513,10 @@ function App() {
                 marketplaceOrder,
               }),
             );
-            await markSheetSyncResult({ orderId: firestorePrimary.id, ok: true, result: sheetResult }).catch(() => {});
+            await markSheetSyncResult({ orderId: firestorePrimary.id, attemptId: firestorePrimary.sheetSyncAttemptId, ok: true, result: sheetResult }).catch(() => {});
             backgroundResult = { ...result, ...sheetResult, sheetSyncStatus: 'synced' };
           } catch (sheetError) {
-            await markSheetSyncResult({ orderId: firestorePrimary.id, ok: false, error: sheetError }).catch(() => {});
+            await markSheetSyncResult({ orderId: firestorePrimary.id, attemptId: firestorePrimary.sheetSyncAttemptId, ok: false, error: sheetError }).catch(() => {});
             backgroundResult = {
               ...result,
               sheetSyncStatus: 'failed',
@@ -1833,7 +1929,7 @@ function App() {
       const results = canUseFirestorePrimary()
         ? await searchScansFirestore({
             query,
-            couriers: searchScope === 'all' ? COURIERS : [selectedCourier],
+            couriers: searchScope === 'all' ? couriers : [selectedCourier],
             dates: searchMode === 'all' ? null : dates,
           })
         : await runWithGoogleRetry((accessToken, googleConfig) =>
@@ -1841,7 +1937,7 @@ function App() {
               token: accessToken,
               config: googleConfig,
               query,
-              couriers: searchScope === 'all' ? COURIERS : [selectedCourier],
+              couriers: searchScope === 'all' ? couriers : [selectedCourier],
               dates: searchMode === 'all' ? null : dates,
             }),
           );
@@ -1945,9 +2041,9 @@ function App() {
     setReportBusy(true);
     try {
       const data = canUseFirestorePrimary()
-        ? await getScanReportFirestore({ couriers: COURIERS, dates })
+        ? await getScanReportFirestore({ couriers, dates })
         : await runWithGoogleRetry((accessToken, googleConfig) =>
-            getScanReportGoogle({ token: accessToken, config: googleConfig, dates }),
+          getScanReportGoogle({ token: accessToken, config: googleConfig, dates, couriers }),
           );
       setReportData({
         ...data,
@@ -2053,7 +2149,7 @@ function App() {
       `สินค้าเสียหาย: ${data.damagedTotal ?? 0} รายการ`,
       '',
       'ยอดแยกตามขนส่ง',
-      ...COURIERS.map((courier) => {
+      ...couriers.map((courier) => {
         const count = data.couriers?.find((item) => item.courier === courier)?.count ?? 0;
         return `${courier}: ${count} รายการ`;
       }),
@@ -2261,7 +2357,7 @@ function App() {
           </div>
 
           <div className="courier-list">
-            {COURIERS.map((courier) => (
+            {couriers.map((courier) => (
               <button
                 className={`courier-button ${courier === selectedCourier ? 'active' : ''}`}
                 key={courier}
@@ -2278,6 +2374,24 @@ function App() {
               </button>
             ))}
           </div>
+
+          <form className="courier-add-form" onSubmit={(event) => { event.preventDefault(); void handleAddCourier(); }}>
+            <label htmlFor="new-courier-name">เพิ่มขนส่งใหม่</label>
+            <div>
+              <input
+                id="new-courier-name"
+                value={newCourierName}
+                onChange={(event) => setNewCourierName(event.target.value)}
+                placeholder="เช่น DHL"
+                maxLength={80}
+                disabled={!firebaseUser || addingCourier}
+              />
+              <button type="submit" disabled={!firebaseUser || addingCourier || !newCourierName.trim()} title="เพิ่มขนส่ง">
+                <Plus size={16} />
+              </button>
+            </div>
+            <small>ผู้ใช้ที่ลงชื่อเข้าใช้เพิ่มได้ และจะแสดงทั้งหน้าแพ็ก/Drive</small>
+          </form>
 
           <div className="scan-tool-panel" aria-label="เลือกวิธีสแกน">
             <div className="segmented-control">
@@ -2298,6 +2412,17 @@ function App() {
                 <span>กล้องมือถือ</span>
               </button>
             </div>
+            {scanMethod === 'manual' && (
+              <label className="manual-format-option">
+                <input
+                  type="checkbox"
+                  checked={allowAnyTrackingFormat}
+                  onChange={(event) => setAllowAnyTrackingFormat(event.target.checked)}
+                  disabled={!isSignedIn || busy}
+                />
+                <span>เลขพิเศษ: ไม่ตรวจรูปแบบ Tracking</span>
+              </label>
+            )}
           </div>
         </aside>
 
@@ -2951,7 +3076,7 @@ function App() {
           </div>
 
           <div className="report-grid">
-            {COURIERS.map((courier) => {
+            {couriers.map((courier) => {
               const count = reportData?.couriers?.find((item) => item.courier === courier)?.count ?? 0;
               return (
                 <div className="report-card" key={courier}>
@@ -2973,7 +3098,7 @@ function App() {
                   <th>ส่งจริง</th>
                   <th>ยกเลิก</th>
                   <th>เสียหาย</th>
-                  {COURIERS.map((courier) => (
+                  {couriers.map((courier) => (
                     <th key={courier}>{courier}</th>
                   ))}
                 </tr>
@@ -2981,7 +3106,7 @@ function App() {
               <tbody>
                 {!reportData ? (
                   <tr>
-                    <td colSpan={COURIERS.length + 4} className="empty-cell">
+                    <td colSpan={couriers.length + 4} className="empty-cell">
                       เลือกรูปแบบรายงานแล้วกดสร้างรายงาน
                     </td>
                   </tr>
@@ -2992,7 +3117,7 @@ function App() {
                       <td>{day.total}</td>
                       <td>{day.cancelledTotal ?? 0}</td>
                       <td>{day.damagedTotal ?? 0}</td>
-                      {COURIERS.map((courier) => (
+                      {couriers.map((courier) => (
                         <td key={courier}>{day.couriers.find((item) => item.courier === courier)?.count ?? 0}</td>
                       ))}
                     </tr>

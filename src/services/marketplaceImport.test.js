@@ -19,6 +19,12 @@ test('accepts both KEX Lazada barcode prefixes and rejects near misses', () => {
   assert.equal(validateScanCode('KEX Lazada', 'KEXDLM12345678').ok, false);
 });
 
+test('accepts a non-empty special tracking value only when the operator opts out of courier validation', () => {
+  assert.equal(validateScanCode('J&T', 'SPECIAL-001').ok, false);
+  assert.equal(validateScanCode('J&T', 'SPECIAL-001', { allowAnyFormat: true }).ok, true);
+  assert.equal(validateScanCode('J&T', '   ', { allowAnyFormat: true }).ok, false);
+});
+
 test('preserves manual Buyer Name when updating an existing scan row', () => {
   const row = Array.from({ length: 23 }, (_, index) => `cell-${index}`);
   const data = buildDailyRowUpdateData('2026-07-17', 9, row);
@@ -63,9 +69,18 @@ test('accepts an order with SKU before its tracking number is assigned', () => {
 test('parses TikTok BOM headers and trims tab suffixes', () => {
   const rows = [['\uFEFFOrder ID', 'Seller SKU', 'Tracking ID'], ['T1\t', 'SKU-T', 'JT123\t']];
   assert.deepEqual(parseMarketplaceRows(rows)[0], {
-    platform: 'tiktok', orderId: 'T1', sku: 'SKU-T', trackingNo: 'JT123',
+    platform: 'tiktok', orderId: 'T1', sku: 'SKU-T', itemName: '', quantity: '', trackingNo: 'JT123',
     sellerOrderStatus: '', expectedShipAt: '',
   });
+});
+
+test('retains product names and quantities from Seller exports with SKU', () => {
+  const rows = [[
+    'Order ID', 'Seller SKU', 'Tracking ID', 'Product Name', 'Quantity',
+  ], ['T1', 'SKU-T', 'JT123', 'Coffee Drip Bag', '2']];
+  const group = groupMarketplaceRows(parseMarketplaceRows(rows))[0];
+  assert.deepEqual(group.items, [{ name: 'Coffee Drip Bag', sku: 'SKU-T', quantity: 2 }]);
+  assert.deepEqual(group.marketplaceSkus, ['SKU-T']);
 });
 
 test('classifies Late Orders in Bangkok without affecting identifiers', () => {
@@ -125,14 +140,15 @@ test('accepts long identifiers stored as text and normal alphanumeric values', (
   }), 'IG-HK-0653_1');
 });
 
-test('builds only N, O and R updates for a matching historical row', () => {
+test('backfills product names, SKU and quantities into existing Sheet columns', () => {
   const rows = [Array(23).fill('')];
   rows[0][12] = ' th-123 ';
   const result = buildSheetBackfillUpdates('2026-07-16', rows, [{
     platform: 'shopee', orderId: 'ORDER-1', normalizedTrackingNo: 'TH123', marketplaceSkus: ['SKU-A', 'SKU-B'],
+    items: [{ name: 'Coffee', sku: 'SKU-A', quantity: 2 }, { name: 'Tea', sku: 'SKU-B', quantity: 1 }],
   }]);
   assert.equal(result.matchedRows, 1);
-  assert.deepEqual(result.data.map((item) => item.range), ["'2026-07-16'!N2", "'2026-07-16'!O2", "'2026-07-16'!R2"]);
+  assert.deepEqual(result.data.map((item) => item.range), ["'2026-07-16'!N2", "'2026-07-16'!O2", "'2026-07-16'!Q2", "'2026-07-16'!R2", "'2026-07-16'!S2"]);
 });
 
 test('backfills SKU by Order ID only when imported tracking is blank', () => {

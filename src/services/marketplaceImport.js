@@ -2,6 +2,10 @@ function cleanCell(value) {
   return String(value ?? '').replace(/^\uFEFF/, '').replace(/\t+$/g, '').trim();
 }
 
+function firstHeaderIndex(headers, candidates) {
+  return headers.findIndex((header) => candidates.some((candidate) => header.includes(candidate)));
+}
+
 const SCIENTIFIC_NOTATION = /^[+-]?\d+(?:\.\d+)?e[+-]?\d+$/i;
 
 export function validateMarketplaceIdentifier(value, { platform, rowNumber, field }) {
@@ -62,6 +66,11 @@ export function parseMarketplaceRows(rows) {
   let trackingHeader = '';
   let statusHeader = '';
   let expectedShipHeader = '';
+  const itemNameIndex = firstHeaderIndex(lowerHeaders, [
+    'product name', 'item name', 'product title', 'item title', 'product description',
+    'ชื่อสินค้า', 'ชื่อผลิตภัณฑ์', 'ชื่อรายการ',
+  ]);
+  const quantityIndex = firstHeaderIndex(lowerHeaders, ['quantity', 'qty', 'จำนวน']);
 
   if (lowerHeaders.includes('ordernumber')) {
     platform = 'lazada';
@@ -101,6 +110,8 @@ export function parseMarketplaceRows(rows) {
     sku: validateMarketplaceIdentifier(row[skuIndex], {
       platform, rowNumber: index + 2, field: 'SKU',
     }),
+    itemName: itemNameIndex >= 0 ? cleanCell(row[itemNameIndex]) : '',
+    quantity: quantityIndex >= 0 ? cleanCell(row[quantityIndex]) : '',
     trackingNo: validateMarketplaceIdentifier(row[trackingIndex], {
       platform, rowNumber: index + 2, field: 'เลขพัสดุ',
     }),
@@ -125,6 +136,7 @@ export function groupMarketplaceRows(rows) {
       trackingNo: cleanCell(row.trackingNo),
       normalizedTrackingNo,
       marketplaceSkus: [],
+      items: [],
       sellerOrderStatus: cleanCell(row.sellerOrderStatus),
       expectedShipAt: cleanCell(row.expectedShipAt),
     };
@@ -132,6 +144,16 @@ export function groupMarketplaceRows(rows) {
     if (!current.expectedShipAt) current.expectedShipAt = cleanCell(row.expectedShipAt);
     const sku = cleanCell(row.sku);
     if (sku && !current.marketplaceSkus.includes(sku)) current.marketplaceSkus.push(sku);
+    const item = {
+      name: cleanCell(row.itemName),
+      sku,
+      quantity: Number(row.quantity) || '',
+    };
+    if ((item.name || item.sku) && !current.items.some((existing) => (
+      existing.name === item.name && existing.sku === item.sku
+    ))) {
+      current.items.push(item);
+    }
     groups.set(key, current);
   }
   return [...groups.values()];
@@ -170,9 +192,12 @@ export function marketplaceMetadataChanged(existing, incoming) {
     && Array.isArray(incoming.marketplaceSkus)
     && existing.marketplaceSkus.length === incoming.marketplaceSkus.length
     && existing.marketplaceSkus.every((value, index) => value === incoming.marketplaceSkus[index]);
+  const sameItems = JSON.stringify(Array.isArray(existing.items) ? existing.items : [])
+    === JSON.stringify(Array.isArray(incoming.items) ? incoming.items : []);
   return String(existing.trackingNo ?? '') !== String(incoming.trackingNo ?? '')
     || String(existing.normalizedTrackingNo ?? '') !== String(incoming.normalizedTrackingNo ?? '')
     || !sameSkus
+    || !sameItems
     || String(existing.sellerOrderStatus ?? '') !== String(incoming.sellerOrderStatus ?? '')
     || String(existing.expectedShipAt ?? '') !== String(incoming.expectedShipAt ?? '')
     || existing.importSource !== 'web_upload';
@@ -230,9 +255,17 @@ export function buildSheetBackfillUpdates(sheetName, rows, groups) {
     if (!group) return;
     const rowNumber = index + 2;
     const skuText = group.marketplaceSkus.join(' | ');
+    const itemText = (Array.isArray(group.items) ? group.items : [])
+      .map((item) => `${cleanCell(item?.name)}${item?.quantity ? ` x${item.quantity}` : ''}`.trim())
+      .filter(Boolean)
+      .join(' | ');
+    const itemQty = (Array.isArray(group.items) ? group.items : [])
+      .reduce((total, item) => total + (Number(item?.quantity) || 0), 0) || '';
     if (String(row[13] ?? '') !== group.platform) data.push({ range: `${escapedSheet}!N${rowNumber}`, values: [[group.platform]] });
     if (String(row[14] ?? '') !== group.orderId) data.push({ range: `${escapedSheet}!O${rowNumber}`, values: [[group.orderId]] });
+    if (itemText && String(row[16] ?? '') !== itemText) data.push({ range: `${escapedSheet}!Q${rowNumber}`, values: [[itemText]] });
     if (String(row[17] ?? '') !== skuText) data.push({ range: `${escapedSheet}!R${rowNumber}`, values: [[skuText]] });
+    if (itemQty && String(row[18] ?? '') !== String(itemQty)) data.push({ range: `${escapedSheet}!S${rowNumber}`, values: [[itemQty]] });
     matchedRows += 1;
   });
   return { data, matchedRows };

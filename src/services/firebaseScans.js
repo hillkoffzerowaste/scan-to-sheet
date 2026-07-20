@@ -3,14 +3,13 @@ import {
   collection,
   doc,
   documentId,
-  getDoc,
   getDocs,
   limit,
+  onSnapshot,
   orderBy,
   query,
   runTransaction,
   setDoc,
-  updateDoc,
   where,
   writeBatch,
 } from 'firebase/firestore';
@@ -18,6 +17,7 @@ import { firestoreDb, isFirebaseConfigured, serverTimestamp } from './firebase.j
 import { marketplaceMetadata } from '../../scripts/marketplace-sync/normalize.js';
 import { isCompleteScanOrder, marketplaceMetadataChanged } from './marketplaceImport.js';
 import { nextCalendarDate } from './calendarDate.js';
+import { isSheetSyncClaimable } from './sheetSync.js';
 
 function canWriteFirestore() {
   return Boolean(isFirebaseConfigured && firestoreDb);
@@ -45,7 +45,20 @@ function nowIso() {
   return new Date().toISOString();
 }
 
-function baseOrderPayload({ type, code, courier, date, time, user, packer = '', note = '' }) {
+function newSheetSyncAttemptId() {
+  return `sheet_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function pendingSheetSyncFields(attemptId = newSheetSyncAttemptId()) {
+  return {
+    sheetSyncStatus: 'pending',
+    sheetSyncError: '',
+    sheetSyncAttemptId: attemptId,
+    sheetSyncStartedAtIso: nowIso(),
+  };
+}
+
+function baseOrderPayload({ type, code, courier, date, time, user, packer = '', note = '', sheetSyncAttemptId = undefined }) {
   return {
     code,
     normalizedCode: normalizeCode(code),
@@ -54,8 +67,7 @@ function baseOrderPayload({ type, code, courier, date, time, user, packer = '', 
     packer,
     note,
     status: type === 'admin' ? 'pending' : 'packer_scanned',
-    sheetSyncStatus: 'pending',
-    sheetSyncError: '',
+    ...pendingSheetSyncFields(sheetSyncAttemptId),
     updatedAt: serverTimestamp(),
     updatedAtIso: nowIso(),
     user: userPayload(user),
@@ -294,6 +306,7 @@ export async function importMarketplaceOrders(groups, { knownExistingOrderIds = 
         trackingNo: group.trackingNo,
         normalizedTrackingNo: group.normalizedTrackingNo,
         marketplaceSkus: group.marketplaceSkus,
+        items: Array.isArray(group.items) ? group.items : [],
         sellerOrderStatus: group.sellerOrderStatus ?? '',
         expectedShipAt: group.expectedShipAt ?? '',
         importSource: 'web_upload',
@@ -319,6 +332,7 @@ export async function importMarketplaceOrders(groups, { knownExistingOrderIds = 
         trackingNo: group.trackingNo,
         normalizedTrackingNo: group.normalizedTrackingNo,
         marketplaceSkus: group.marketplaceSkus,
+        items: Array.isArray(group.items) ? group.items : [],
         sellerOrderStatus: group.sellerOrderStatus ?? '',
         expectedShipAt: group.expectedShipAt ?? '',
         importSource: 'web_upload',
@@ -349,10 +363,13 @@ export async function importMarketplaceOrders(groups, { knownExistingOrderIds = 
       if (!group || (
         current.marketplaceOrderId === group.orderId
         && sameStringList(current.marketplaceSkus, group.marketplaceSkus)
+        && JSON.stringify(Array.isArray(current.marketplaceItems) ? current.marketplaceItems : [])
+          === JSON.stringify(Array.isArray(group.items) ? group.items : [])
       )) continue;
       writes.push({ ref: match.ref, data: {
         marketplaceOrderId: group.orderId,
         marketplaceSkus: group.marketplaceSkus,
+        marketplaceItems: Array.isArray(group.items) ? group.items : [],
       }, options: { merge: true } });
       updatedScans += 1;
     }
@@ -378,6 +395,7 @@ export async function getUploadedMarketplaceOrders() {
       platform: data.platform ?? '', orderId: data.orderId ?? '', trackingNo: data.trackingNo ?? '',
       normalizedTrackingNo: data.normalizedTrackingNo ?? '',
       marketplaceSkus: Array.isArray(data.marketplaceSkus) ? data.marketplaceSkus : [],
+      items: Array.isArray(data.items) ? data.items : [],
       sellerOrderStatus: data.sellerOrderStatus ?? '',
       expectedShipAt: data.expectedShipAt ?? '',
     };
@@ -448,6 +466,7 @@ export async function recordPackerScanPrimary({ code, courier, date, time, user,
   const recent = findRecentAdminOrderByCode(recentCandidates, { normalizedCode })
     ?? findRecentOrder(recentCandidates, { courier, normalizedCode });
   const ref = doc(firestoreDb, 'orders', recent?.id ?? orderId({ date, courier, code: normalizedCode }));
+  const attemptId = newSheetSyncAttemptId();
 
   const result = await runTransaction(firestoreDb, async (transaction) => {
     const snap = await transaction.get(ref);
@@ -457,11 +476,10 @@ export async function recordPackerScanPrimary({ code, courier, date, time, user,
       if (marketplaceData) {
         transaction.set(ref, marketplaceData, { merge: true });
       }
-      const needsSheetRetry = existing.sheetSyncStatus === 'failed';
+      const needsSheetRetry = isSheetSyncClaimable(existing);
       if (needsSheetRetry) {
         transaction.set(ref, {
-          sheetSyncStatus: 'pending',
-          sheetSyncError: '',
+          ...pendingSheetSyncFields(attemptId),
           updatedAt: serverTimestamp(),
           updatedAtIso: nowIso(),
         }, { merge: true });
@@ -470,6 +488,7 @@ export async function recordPackerScanPrimary({ code, courier, date, time, user,
         status: needsSheetRetry ? (existing.admin?.scannedAt ? 'matched' : 'created') : 'duplicate',
         id: ref.id,
         existing,
+        sheetSyncAttemptId: needsSheetRetry ? attemptId : (existing.sheetSyncAttemptId ?? ''),
         sheetSyncStatus: needsSheetRetry ? 'pending' : (existing.sheetSyncStatus ?? 'pending'),
       };
     }
@@ -484,8 +503,7 @@ export async function recordPackerScanPrimary({ code, courier, date, time, user,
           packer,
           note: correctedNote,
           status: nextStatus,
-          sheetSyncStatus: 'pending',
-          sheetSyncError: '',
+          ...pendingSheetSyncFields(attemptId),
           updatedAt: serverTimestamp(),
           updatedAtIso: nowIso(),
           user: userPayload(user),
@@ -497,7 +515,7 @@ export async function recordPackerScanPrimary({ code, courier, date, time, user,
           },
         }
       : {
-          ...baseOrderPayload({ type: 'packer', code: normalizedCode, courier, date, time, user, packer, note }),
+          ...baseOrderPayload({ type: 'packer', code: normalizedCode, courier, date, time, user, packer, note, sheetSyncAttemptId: attemptId }),
           status: nextStatus,
           createdAt: serverTimestamp(),
           createdAtIso: nowIso(),
@@ -516,6 +534,7 @@ export async function recordPackerScanPrimary({ code, courier, date, time, user,
       wrongCourier,
       courier: existing?.courier ?? courier,
       sheetSyncStatus: 'pending',
+      sheetSyncAttemptId: attemptId,
     };
   });
 
@@ -532,6 +551,7 @@ export async function recordAdminScanPrimary({ code, courier, date, time, user }
   const marketplaceData = await findMarketplaceMetadataByTracking(normalizedCode);
   const recent = findRecentOrder(await getRecentOrdersByCode(normalizedCode), { courier, normalizedCode });
   const ref = doc(firestoreDb, 'orders', recent?.id ?? orderId({ date, courier, code: normalizedCode }));
+  const attemptId = newSheetSyncAttemptId();
 
   const result = await runTransaction(firestoreDb, async (transaction) => {
     const snap = await transaction.get(ref);
@@ -541,11 +561,10 @@ export async function recordAdminScanPrimary({ code, courier, date, time, user }
       if (marketplaceData) {
         transaction.set(ref, marketplaceData, { merge: true });
       }
-      const needsSheetRetry = existing.sheetSyncStatus === 'failed';
+      const needsSheetRetry = isSheetSyncClaimable(existing);
       if (needsSheetRetry) {
         transaction.set(ref, {
-          sheetSyncStatus: 'pending',
-          sheetSyncError: '',
+          ...pendingSheetSyncFields(attemptId),
           updatedAt: serverTimestamp(),
           updatedAtIso: nowIso(),
         }, { merge: true });
@@ -554,6 +573,7 @@ export async function recordAdminScanPrimary({ code, courier, date, time, user }
         status: needsSheetRetry ? (existing.packerScan?.scannedAt ? 'matched' : 'created') : 'duplicate',
         id: ref.id,
         existing,
+        sheetSyncAttemptId: needsSheetRetry ? attemptId : (existing.sheetSyncAttemptId ?? ''),
         sheetSyncStatus: needsSheetRetry ? 'pending' : (existing.sheetSyncStatus ?? 'pending'),
       };
     }
@@ -562,8 +582,7 @@ export async function recordAdminScanPrimary({ code, courier, date, time, user }
     const payload = existing
       ? {
           status: nextStatus,
-          sheetSyncStatus: 'pending',
-          sheetSyncError: '',
+          ...pendingSheetSyncFields(attemptId),
           updatedAt: serverTimestamp(),
           updatedAtIso: nowIso(),
           user: userPayload(user),
@@ -573,7 +592,7 @@ export async function recordAdminScanPrimary({ code, courier, date, time, user }
           },
         }
       : {
-          ...baseOrderPayload({ type: 'admin', code: normalizedCode, courier, date, time, user }),
+          ...baseOrderPayload({ type: 'admin', code: normalizedCode, courier, date, time, user, sheetSyncAttemptId: attemptId }),
           status: nextStatus,
           createdAt: serverTimestamp(),
           createdAtIso: nowIso(),
@@ -590,6 +609,7 @@ export async function recordAdminScanPrimary({ code, courier, date, time, user }
       id: ref.id,
       existing,
       sheetSyncStatus: 'pending',
+      sheetSyncAttemptId: attemptId,
     };
   });
 
@@ -597,26 +617,94 @@ export async function recordAdminScanPrimary({ code, courier, date, time, user }
   return result;
 }
 
-export async function markSheetSyncResult({ orderId: id, ok, result = null, error = null }) {
+export async function markSheetSyncResult({ orderId: id, attemptId = '', ok, result = null, error = null }) {
   if (!canWriteFirestore() || !id) {
-    return;
+    return false;
   }
 
   const ref = doc(firestoreDb, 'orders', id);
-  const snap = await getDoc(ref);
-  if (!snap.exists()) {
-    return;
+  return runTransaction(firestoreDb, async (transaction) => {
+    const snap = await transaction.get(ref);
+    if (!snap.exists()) return false;
+    const current = snap.data();
+    if (attemptId && current.sheetSyncAttemptId !== attemptId) return false;
+    transaction.update(ref, {
+      sheetSyncStatus: ok ? 'synced' : 'failed',
+      sheetSyncError: ok ? '' : String(error?.message ?? error ?? 'Unknown sync error'),
+      sheetSyncedAt: ok ? serverTimestamp() : null,
+      sheetResultStatus: result?.status ?? '',
+      sheetUrl: result?.sheetUrl ?? '',
+      updatedAt: serverTimestamp(),
+      updatedAtIso: nowIso(),
+    });
+    return true;
+  });
+}
+
+export async function claimRecoverableSheetSyncs({ maxRows = 20 } = {}) {
+  if (!canWriteFirestore()) return [];
+  const statuses = ['pending', 'failed'];
+  const snapshots = await Promise.all(statuses.map((status) => getDocs(query(
+    collection(firestoreDb, 'orders'), where('sheetSyncStatus', '==', status), limit(maxRows),
+  ))));
+  const candidates = snapshots.flatMap((snap) => snap.docs).slice(0, maxRows);
+  const claimed = [];
+
+  for (const candidate of candidates) {
+    const ref = candidate.ref;
+    const attemptId = newSheetSyncAttemptId();
+    const order = await runTransaction(firestoreDb, async (transaction) => {
+      const snap = await transaction.get(ref);
+      if (!snap.exists()) return null;
+      const current = snap.data();
+      if (!isSheetSyncClaimable(current)) return null;
+      transaction.update(ref, {
+        ...pendingSheetSyncFields(attemptId),
+        updatedAt: serverTimestamp(),
+        updatedAtIso: nowIso(),
+      });
+      return { id: ref.id, ...current, sheetSyncAttemptId: attemptId, sheetSyncStatus: 'pending' };
+    });
+    if (order) claimed.push(order);
   }
 
-  await updateDoc(ref, {
-    sheetSyncStatus: ok ? 'synced' : 'failed',
-    sheetSyncError: ok ? '' : String(error?.message ?? error ?? 'Unknown sync error'),
-    sheetSyncedAt: ok ? serverTimestamp() : null,
-    sheetResultStatus: result?.status ?? '',
-    sheetUrl: result?.sheetUrl ?? '',
+  return claimed;
+}
+
+function courierDocId(name) {
+  return String(name ?? '').trim().toLowerCase().replace(/[\/\\#?\[\]]/g, '_').slice(0, 120);
+}
+
+function mergeCouriers(defaultCouriers, extraCouriers) {
+  return [...new Set([...defaultCouriers, ...extraCouriers]
+    .map((name) => String(name ?? '').trim())
+    .filter(Boolean))];
+}
+
+export function subscribeCouriers({ defaultCouriers = [], onChange, onError }) {
+  if (!canWriteFirestore()) {
+    onChange?.(mergeCouriers(defaultCouriers, []));
+    return () => {};
+  }
+  return onSnapshot(collection(firestoreDb, 'couriers'), (snapshot) => {
+    const customCouriers = snapshot.docs.map((item) => item.data().name);
+    onChange?.(mergeCouriers(defaultCouriers, customCouriers));
+  }, onError);
+}
+
+export async function addCourier({ name, user }) {
+  if (!canWriteFirestore()) throw new Error('Firebase ยังไม่พร้อมใช้งาน');
+  const courier = String(name ?? '').trim();
+  if (!courier) throw new Error('กรุณาระบุชื่อขนส่ง');
+  if (courier.length > 80) throw new Error('ชื่อขนส่งยาวเกิน 80 ตัวอักษร');
+  const id = courierDocId(courier);
+  if (!id) throw new Error('ชื่อขนส่งไม่ถูกต้อง');
+  await setDoc(doc(firestoreDb, 'couriers', id), {
+    name: courier,
+    createdBy: userPayload(user),
     updatedAt: serverTimestamp(),
-    updatedAtIso: nowIso(),
-  });
+  }, { merge: true });
+  return courier;
 }
 
 export async function backfillOrdersFromSheetRows({ rows, user }) {
