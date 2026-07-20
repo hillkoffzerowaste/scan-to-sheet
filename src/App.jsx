@@ -263,6 +263,7 @@ function App() {
   const [activeTab, setActiveTab] = useState('packer');
   const [driveRecentRows, setDriveRecentRows] = useState([]);
   const [driveTotalCount, setDriveTotalCount] = useState(0);
+  const [driveSyncBusy, setDriveSyncBusy] = useState(false);
   const [missingResults, setMissingResults] = useState(null);
   const [missingBusy, setMissingBusy] = useState(false);
   const [missingAlertBadge, setMissingAlertBadge] = useState(0);
@@ -1074,14 +1075,31 @@ function App() {
     }
   }
 
-  async function recoverPendingSheetSyncs() {
-    if (sheetRecoveryRunningRef.current || !firebaseUser || !token || !config?.master?.id) return;
+  async function recoverPendingSheetSyncs({ showStatus = false } = {}) {
+    if (sheetRecoveryRunningRef.current) {
+      if (showStatus) {
+        setStatus({ type: 'warning', title: 'กำลังอัปเดตอยู่', message: 'ระบบกำลังซิงก์ออเดอร์ค้างชุดก่อนหน้า' });
+      }
+      return { busy: true, claimed: 0, synced: 0, failed: 0 };
+    }
+    if (!firebaseUser || !token || !config?.master?.id) {
+      if (showStatus) {
+        setStatus({ type: 'warning', title: 'ยังอัปเดต Sheet ไม่ได้', message: 'กรุณาเข้าสู่ระบบ Google และเชื่อม Master Sheet ก่อน' });
+      }
+      return { busy: false, claimed: 0, synced: 0, failed: 0 };
+    }
     sheetRecoveryRunningRef.current = true;
+    if (showStatus) setDriveSyncBusy(true);
+    let synced = 0;
+    let failed = 0;
     try {
       const orders = await claimRecoverableSheetSyncs({ maxRows: 20 });
       for (const order of orders) {
         const code = order.code || order.normalizedCode;
-        if (!code || !order.courier) continue;
+        if (!code || !order.courier) {
+          failed += 1;
+          continue;
+        }
         try {
           const marketplaceOrder = await findMarketplaceOrderByTracking({ trackingNo: code }).catch(() => null);
           const email = order.packerScan?.scannedBy?.email || order.admin?.scannedBy?.email || order.user?.email || user.email;
@@ -1103,15 +1121,27 @@ function App() {
                 code,
                 email,
                 marketplaceOrder,
-              }));
+          }));
           await markSheetSyncResult({ orderId: order.id, attemptId: order.sheetSyncAttemptId, ok: true, result: sheetResult });
+          synced += 1;
         } catch (error) {
+          failed += 1;
           await markSheetSyncResult({ orderId: order.id, attemptId: order.sheetSyncAttemptId, ok: false, error }).catch(() => {});
         }
       }
       if (orders.length) scheduleCountRefresh();
+      if (showStatus) {
+        await refreshDriveRows().catch(() => {});
+        setStatus(
+          failed > 0
+            ? { type: 'warning', title: 'อัปเดต Sheet ยังไม่ครบ', message: `ซิงก์สำเร็จ ${synced} รายการ, ยังไม่สำเร็จ ${failed} รายการ` }
+            : { type: 'success', title: 'อัปเดต Sheet แล้ว', message: orders.length ? `ซิงก์ออเดอร์ค้างสำเร็จ ${synced} รายการ` : 'ไม่พบออเดอร์ค้างที่ต้องอัปเดต' },
+        );
+      }
+      return { busy: false, claimed: orders.length, synced, failed };
     } finally {
       sheetRecoveryRunningRef.current = false;
+      if (showStatus) setDriveSyncBusy(false);
     }
   }
 
@@ -2934,6 +2964,16 @@ function App() {
               <div className="recent-header">
                 <h3>รายการที่ลง Drive</h3>
                 <div className="recent-actions">
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    onClick={() => { void recoverPendingSheetSyncs({ showStatus: true }); }}
+                    disabled={driveSyncBusy || !firebaseUser || !token || !config?.master?.id}
+                    title="ซิงก์รายการที่บันทึกใน Firestore แต่ยังค้าง Google Sheet"
+                  >
+                    {driveSyncBusy ? <RefreshCw size={14} className="spin" /> : <RefreshCw size={14} />}
+                    <span>{driveSyncBusy ? 'กำลังอัปเดต...' : 'อัปเดตออเดอร์ค้างใน Sheet'}</span>
+                  </button>
                   {sheetUrl && (
                     <a href={sheetUrl} target="_blank" rel="noreferrer">
                       เปิด Sheet <ExternalLink size={14} />
