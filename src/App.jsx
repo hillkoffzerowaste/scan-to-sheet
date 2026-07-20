@@ -34,6 +34,7 @@ import {
   COURIERS,
   appendScanGoogle,
   appendAdminScanGoogle,
+  batchAppendScanGoogle,
   backfillMarketplaceOrdersGoogle,
   colorAllHistoricalSheetsGoogle,
   ensureGoogleSheetOrganization,
@@ -107,8 +108,8 @@ const GOOGLE_SCOPES = [
 ];
 const SCOPES = GOOGLE_SCOPES.join(' ');
 const MARKETPLACE_BACKFILL_COOLDOWN_MS = 24 * 60 * 60 * 1000;
-const SHEET_RECOVERY_BATCH_SIZE = 3;
-const SHEET_RECOVERY_COOLDOWN_MS = 60 * 1000;
+const SHEET_RECOVERY_BATCH_SIZE = 20;
+const SHEET_RECOVERY_COOLDOWN_MS = 5 * 1000;
 
 const EMPTY_USER = {
   email: 'ยังไม่ได้เข้าสู่ระบบ',
@@ -532,6 +533,15 @@ function App() {
       generateReport();
     }
   }, [isSignedIn]);
+
+  // Auto-retry sheet sync every 30 seconds
+  useEffect(() => {
+    if (!firebaseUser || !token || !config?.master?.id) return;
+    const interval = setInterval(() => {
+      void recoverPendingSheetSyncs();
+    }, 30 * 1000);
+    return () => clearInterval(interval);
+  }, [firebaseUser, token, config]);
 
   // Auto-check for missing orders
   useEffect(() => {
@@ -1109,42 +1119,64 @@ function App() {
       if (orders.length) {
         sheetRecoveryNextAllowedAtRef.current = Date.now() + SHEET_RECOVERY_COOLDOWN_MS;
       }
-      for (const order of orders) {
-        const code = order.code || order.normalizedCode;
-        if (!code || !order.courier) {
-          failed += 1;
-          continue;
+      if (orders.length === 0) {
+        if (showStatus) {
+          setStatus({ type: 'success', title: 'อัปเดต Sheet แล้ว', message: 'ไม่พบออเดอร์ค้างที่ต้องอัปเดต' });
         }
-        try {
-          const marketplaceOrder = await findMarketplaceOrderByTracking({ trackingNo: code }).catch(() => null);
-          const email = order.packerScan?.scannedBy?.email || order.admin?.scannedBy?.email || order.user?.email || user.email;
-          const sheetResult = order.packerScan?.scannedAt
-            ? await runWithGoogleRetry((accessToken, googleConfig) => appendScanGoogle({
-                token: accessToken,
-                config: googleConfig,
-                courier: order.courier,
-                code,
-                email,
-                packer: order.packerScan?.packer ?? order.packer ?? '',
-                note: order.packerScan?.note ?? order.note ?? '',
-                marketplaceOrder,
-              }))
-            : await runWithGoogleRetry((accessToken, googleConfig) => appendAdminScanGoogle({
-                token: accessToken,
-                config: googleConfig,
-                courier: order.courier,
-                code,
-                email,
-                marketplaceOrder,
-          }));
-          await markSheetSyncResult({ orderId: order.id, attemptId: order.sheetSyncAttemptId, ok: true, result: sheetResult });
+        return { busy: false, claimed: 0, synced: 0, failed: 0 };
+      }
+
+      // Build batch order list
+      const batchOrders = orders.map((order) => {
+        const isPacker = Boolean(order.packerScan?.scannedAt);
+        return {
+          code: order.code || order.normalizedCode,
+          courier: order.courier,
+          email: order.packerScan?.scannedBy?.email || order.admin?.scannedBy?.email || order.user?.email || user.email,
+          packer: order.packerScan?.packer ?? order.packer ?? '',
+          note: order.packerScan?.note ?? order.note ?? '',
+          isPacker,
+          marketplaceOrder: null, // Will be overridden below if found
+        };
+      });
+
+      // Pre-fetch marketplace metadata if possible (best effort, non-blocking)
+      const marketplaceResults = await Promise.all(
+        batchOrders.map((bo) => findMarketplaceOrderByTracking({ trackingNo: bo.code }).catch(() => null)),
+      );
+      batchOrders.forEach((bo, i) => {
+        if (marketplaceResults[i]) bo.marketplaceOrder = marketplaceResults[i];
+      });
+
+      // Execute one batch call
+      const results = await runWithGoogleRetry((accessToken, googleConfig) =>
+        batchAppendScanGoogle({ token: accessToken, config: googleConfig, orders: batchOrders }),
+      );
+
+      // Mark individual results
+      for (let i = 0; i < results.length; i++) {
+        const { order: batchOrder, result, error } = results[i];
+        const firestoreOrder = orders[i];
+        if (result) {
+          await markSheetSyncResult({
+            orderId: firestoreOrder.id,
+            attemptId: firestoreOrder.sheetSyncAttemptId,
+            ok: true,
+            result,
+          }).catch(() => {});
           synced += 1;
-        } catch (error) {
+        } else {
           failed += 1;
-          await markSheetSyncResult({ orderId: order.id, attemptId: order.sheetSyncAttemptId, ok: false, error }).catch(() => {});
+          await markSheetSyncResult({
+            orderId: firestoreOrder.id,
+            attemptId: firestoreOrder.sheetSyncAttemptId,
+            ok: false,
+            error: error || new Error('Batch sync returned no result'),
+          }).catch(() => {});
         }
       }
-      if (orders.length) scheduleCountRefresh();
+
+      scheduleCountRefresh();
       if (showStatus) {
         await refreshDriveRows().catch(() => {});
         setStatus(
@@ -1153,13 +1185,16 @@ function App() {
             : {
                 type: 'success',
                 title: 'อัปเดต Sheet แล้ว',
-                message: orders.length
-                  ? `ซิงก์ออเดอร์ค้างสำเร็จ ${synced} รายการ${orders.length === SHEET_RECOVERY_BATCH_SIZE ? ' หากยังมีรายการค้าง ให้กดอีกครั้งหลัง 1 นาที' : ''}`
-                  : 'ไม่พบออเดอร์ค้างที่ต้องอัปเดต',
+                message: `ซิงก์ออเดอร์ค้างสำเร็จ ${synced} รายการ${orders.length === SHEET_RECOVERY_BATCH_SIZE ? ' หากยังมีรายการค้าง ให้กดอีกครั้ง' : ''}`,
               },
         );
       }
       return { busy: false, claimed: orders.length, synced, failed };
+    } catch (error) {
+      if (showStatus) {
+        setStatus({ type: 'error', title: 'อัปเดต Sheet ไม่สำเร็จ', message: error.message });
+      }
+      return { busy: false, claimed: 0, synced, failed: orders?.length ?? 0 };
     } finally {
       sheetRecoveryRunningRef.current = false;
       if (showStatus) setDriveSyncBusy(false);

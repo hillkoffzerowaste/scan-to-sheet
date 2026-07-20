@@ -2108,3 +2108,160 @@ function parseDateTime(dateStr, timeStr) {
   }
   return d;
 }
+
+/**
+ * batchAppendScanGoogle — appends multiple packer/admin scan orders into the
+ * same daily worksheet in ONE round of API calls (get sheet → append all →
+ * batch-update all).  This avoids the per-order loop that hits the 60 req/min
+ * Sheets quota when recovering more than a handful of pending syncs.
+ *
+ * @param {{ token, config, orders }} params
+ *   orders: Array<{ code, courier, date?, email, packer?, note?, isPacker, marketplaceOrder? }>
+ * @returns {Promise<Array<{ order, result, error? }>>}
+ */
+export async function batchAppendScanGoogle({ token, config, orders }) {
+  if (!orders?.length) return [];
+  const sheet = config?.master;
+  if (!sheet?.id) throw new Error('ไม่พบ Google Sheet Master');
+
+  const { date: todayDate, time: todayTime } = getBangkokParts();
+
+  // 1. Normalize and group by date
+  const normalizedOrders = orders.map((order) => ({
+    ...order,
+    normalizedCode: normalizeScanCode(order.code || ''),
+    date: order.date || todayDate,
+    time: order.time || todayTime,
+  }));
+  const byDate = new Map();
+  for (const order of normalizedOrders) {
+    if (!byDate.has(order.date)) byDate.set(order.date, []);
+    byDate.get(order.date).push(order);
+  }
+
+  const results = [];
+
+  // 2. Process each date sheet
+  for (const [date, dateOrders] of byDate) {
+    try {
+      // a) Ensure the daily worksheet exists (1 read + optional create)
+      await ensureDailyWorksheet({ token, spreadsheetId: sheet.id, date });
+
+      // b) Read existing rows once (1 read)
+      const existingRows = await readDailyRows({ token, spreadsheetId: sheet.id, date });
+      const existingParsed = existingRows.map((row, idx) => rowFromSheet(row, idx));
+
+      // c) Build placeholder rows and batch-append all at once (1 write)
+      const placeholders = [];
+      const placeholderMeta = []; // track which placeholder maps to which order
+      for (const order of dateOrders) {
+        const { normalizedCode, courier, email, packer, note, isPacker } = order;
+        const placeholder = `_TEMP_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        const status = isPacker ? 'Success' : 'รอแพ็ค';
+        const placeholderRow = withMarketplaceCells([
+          placeholder, placeholder, date, order.time, courier,
+          isPacker ? normalizedCode : '', email,
+          isPacker ? (packer || '') : '',
+          status, note || '',
+          isPacker ? '' : date, isPacker ? '' : order.time, isPacker ? '' : normalizedCode,
+        ], order.marketplaceOrder ?? null);
+        placeholders.push(placeholderRow);
+        placeholderMeta.push({ order, placeholder, isPacker });
+      }
+
+      const range = `${escapeSheetName(date)}!A:${sheetEndColumn()}`;
+      const appendResult = await apiFetch(
+        `${SHEETS_API}/${sheet.id}/values/${encodeURIComponent(range)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+        token,
+        { method: 'POST', body: JSON.stringify({ values: placeholders }) },
+      );
+
+      // d) Determine appended row numbers and re-read (1 read)
+      const currentRows = await readDailyRows({ token, spreadsheetId: sheet.id, date });
+      const currentParsed = currentRows.map((row, idx) => rowFromSheet(row, idx));
+
+      // e) Build batch update data — replace all placeholders with real data (1 write)
+      const batchData = [];
+      for (let i = 0; i < placeholderMeta.length; i++) {
+        const { order, placeholder, isPacker } = placeholderMeta[i];
+        // Find the placeholder row in current parsed data
+        const placeholderIdx = currentParsed.findIndex(
+          (row) => String(row.no) === placeholder,
+        );
+        if (placeholderIdx === -1) {
+          results.push({ order, result: null, error: new Error('ไม่พบแถวที่เพิ่มใน Sheet (placeholder mismatch)') });
+          continue;
+        }
+
+        const rowNumber = placeholderIdx + 2; // 1-based sheet row
+        const correctNo = placeholderIdx + 1;
+
+        // Count courier rows
+        const courierRows = currentParsed.filter((r) => r.courier === order.courier);
+        const courierRowIdx = courierRows.findIndex((r) => String(r.no) === placeholder);
+        const correctCourierNo = courierRowIdx >= 0 ? courierRowIdx + 1 : correctNo;
+
+        // Check for concurrent duplicates
+        const concurrentCodes = courierRows.filter(
+          (r) => normalizeScanCode(r.code) === order.normalizedCode,
+        );
+        const concurrentDuplicate = concurrentCodes.length > 1;
+
+        const { normalizedCode, courier, email, packer, note } = order;
+        const correctedRow = withMarketplaceCells([
+          correctNo, correctCourierNo, date, order.time, courier,
+          isPacker ? normalizedCode : '', email,
+          isPacker ? (packer || '') : '',
+          concurrentDuplicate ? 'Duplicate' : isPacker ? 'Success' : 'รอแพ็ค',
+          concurrentDuplicate ? 'Duplicate (concurrent scan)' : (note || ''),
+          isPacker ? '' : date, isPacker ? '' : order.time, isPacker ? '' : normalizedCode,
+        ], order.marketplaceOrder ?? null);
+
+        const data = buildDailyRowUpdateData(date, rowNumber, correctedRow);
+        batchData.push(...data);
+
+        results.push({
+          order,
+          result: {
+            status: concurrentDuplicate ? 'duplicate' : isPacker ? 'success' : 'admin_scan',
+            courier,
+            date,
+            time: order.time,
+            code: normalizedCode,
+            count: concurrentDuplicate
+              ? courierRows.length
+              : courierRows.filter((r) => normalizeScanCode(r.code) !== placeholder).length + 1,
+            row: rowFromSheet(correctedRow),
+            rows: [],
+            sheetUrl: sheet.webViewLink,
+          },
+        });
+      }
+
+      // f) Execute batch update (1 write)
+      if (batchData.length > 0) {
+        await apiFetch(
+          `${SHEETS_API}/${sheet.id}/values:batchUpdate`,
+          token,
+          { method: 'POST', body: JSON.stringify({ valueInputOption: 'USER_ENTERED', data: batchData }) },
+        );
+      }
+
+      // g) Apply status cell colors (1 read + 1 write, optional)
+      try {
+        const spreadsheet = await getSpreadsheet(token, sheet.id);
+        const sheetId = spreadsheet.sheets?.find((s) => s.properties.title === date)?.properties.sheetId;
+        if (sheetId) await applyStatusCellColors({ token, spreadsheetId: sheet.id, date, sheetId });
+      } catch {
+        // Colors are nice-to-have, not critical
+      }
+    } catch (error) {
+      // If the whole date batch fails, mark all orders in this group as failed
+      for (const order of dateOrders) {
+        results.push({ order, result: null, error });
+      }
+    }
+  }
+
+  return results;
+}
