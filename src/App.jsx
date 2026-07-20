@@ -107,6 +107,8 @@ const GOOGLE_SCOPES = [
 ];
 const SCOPES = GOOGLE_SCOPES.join(' ');
 const MARKETPLACE_BACKFILL_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+const SHEET_RECOVERY_BATCH_SIZE = 3;
+const SHEET_RECOVERY_COOLDOWN_MS = 60 * 1000;
 
 const EMPTY_USER = {
   email: 'ยังไม่ได้เข้าสู่ระบบ',
@@ -283,6 +285,7 @@ function App() {
   const autoCheckTimerRef = useRef(null);
   const lastAutoCheckRef = useRef(0);
   const sheetRecoveryRunningRef = useRef(false);
+  const sheetRecoveryNextAllowedAtRef = useRef(0);
 
   const isGoogleReady = isFirebaseConfigured || Boolean(GOOGLE_CLIENT_ID);
   const isSheetConnected = Boolean(token && config);
@@ -1088,12 +1091,24 @@ function App() {
       }
       return { busy: false, claimed: 0, synced: 0, failed: 0 };
     }
+    const waitMs = sheetRecoveryNextAllowedAtRef.current - Date.now();
+    if (showStatus && waitMs > 0) {
+      setStatus({
+        type: 'warning',
+        title: 'รอ Google Sheets quota',
+        message: `กรุณารออีกประมาณ ${Math.ceil(waitMs / 1000)} วินาทีก่อนอัปเดตรอบถัดไป`,
+      });
+      return { busy: false, claimed: 0, synced: 0, failed: 0 };
+    }
     sheetRecoveryRunningRef.current = true;
     if (showStatus) setDriveSyncBusy(true);
     let synced = 0;
     let failed = 0;
     try {
-      const orders = await claimRecoverableSheetSyncs({ maxRows: 20 });
+      const orders = await claimRecoverableSheetSyncs({ maxRows: SHEET_RECOVERY_BATCH_SIZE });
+      if (orders.length) {
+        sheetRecoveryNextAllowedAtRef.current = Date.now() + SHEET_RECOVERY_COOLDOWN_MS;
+      }
       for (const order of orders) {
         const code = order.code || order.normalizedCode;
         if (!code || !order.courier) {
@@ -1135,7 +1150,13 @@ function App() {
         setStatus(
           failed > 0
             ? { type: 'warning', title: 'อัปเดต Sheet ยังไม่ครบ', message: `ซิงก์สำเร็จ ${synced} รายการ, ยังไม่สำเร็จ ${failed} รายการ` }
-            : { type: 'success', title: 'อัปเดต Sheet แล้ว', message: orders.length ? `ซิงก์ออเดอร์ค้างสำเร็จ ${synced} รายการ` : 'ไม่พบออเดอร์ค้างที่ต้องอัปเดต' },
+            : {
+                type: 'success',
+                title: 'อัปเดต Sheet แล้ว',
+                message: orders.length
+                  ? `ซิงก์ออเดอร์ค้างสำเร็จ ${synced} รายการ${orders.length === SHEET_RECOVERY_BATCH_SIZE ? ' หากยังมีรายการค้าง ให้กดอีกครั้งหลัง 1 นาที' : ''}`
+                  : 'ไม่พบออเดอร์ค้างที่ต้องอัปเดต',
+              },
         );
       }
       return { busy: false, claimed: orders.length, synced, failed };
