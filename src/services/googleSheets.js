@@ -164,7 +164,7 @@ export function normalizeScanCode(value) {
   return normalizeCode(value).toUpperCase();
 }
 
-export function validateScanCode(courier, value) {
+export function validateScanCode(courier, value, { allowAnyFormat = false } = {}) {
   const normalizedCode = normalizeScanCode(value);
   const rule = COURIER_RULES[courier];
 
@@ -173,6 +173,14 @@ export function validateScanCode(courier, value) {
       ok: false,
       code: normalizedCode,
       reason: 'ยังไม่มีเลขสแกน',
+    };
+  }
+
+  if (allowAnyFormat) {
+    return {
+      ok: true,
+      code: normalizedCode,
+      reason: '',
     };
   }
 
@@ -284,7 +292,9 @@ function sheetEndColumn() {
 }
 
 function marketplaceItemsText(order) {
-  const items = Array.isArray(order?.items) ? order.items : [];
+  const items = Array.isArray(order?.items)
+    ? order.items
+    : (Array.isArray(order?.marketplaceItems) ? order.marketplaceItems : []);
   return items
     .map((item) => {
       const name = String(item?.name ?? '').trim();
@@ -296,7 +306,9 @@ function marketplaceItemsText(order) {
 }
 
 export function marketplaceSkusText(order) {
-  const items = Array.isArray(order?.items) ? order.items : [];
+  const items = Array.isArray(order?.items)
+    ? order.items
+    : (Array.isArray(order?.marketplaceItems) ? order.marketplaceItems : []);
   const itemSkus = items
     .map((item) => String(item?.sku ?? '').trim())
     .filter(Boolean)
@@ -310,7 +322,9 @@ export function marketplaceSkusText(order) {
 }
 
 function marketplaceQtyText(order) {
-  const items = Array.isArray(order?.items) ? order.items : [];
+  const items = Array.isArray(order?.items)
+    ? order.items
+    : (Array.isArray(order?.marketplaceItems) ? order.marketplaceItems : []);
   const total = items.reduce((sum, item) => sum + (Number(item?.quantity) || 0), 0);
   return total || '';
 }
@@ -1125,7 +1139,7 @@ export async function fetchTodayPackerCounts({ token, config }) {
   return data?.packerCounts ?? [];
 }
 
-export async function fetchTodaySummary({ token, config }) {
+export async function fetchTodaySummary({ token, config, couriers = COURIERS }) {
   const sheet = config?.master;
   if (!sheet?.id) {
     return null;
@@ -1144,7 +1158,7 @@ export async function fetchTodaySummary({ token, config }) {
   }))).flat();
   const shippedRows = parsedRows.filter((row) => row.status === 'Success' && row.date === date);
 
-  const courierCounts = COURIERS.map((courier) => ({
+  const courierCounts = couriers.map((courier) => ({
     courier,
     count: shippedRows.filter((r) => r.courier === courier).length,
   }));
@@ -1164,7 +1178,7 @@ export async function fetchTodaySummary({ token, config }) {
   return { courierCounts, packerCounts };
 }
 
-export async function getScanReportGoogle({ token, config, dates }) {
+export async function getScanReportGoogle({ token, config, dates, couriers = COURIERS }) {
   const uniqueDates = [...new Set(dates)].filter(Boolean).sort();
   const dayMap = new Map(
     uniqueDates.map((date) => [
@@ -1175,11 +1189,11 @@ export async function getScanReportGoogle({ token, config, dates }) {
         cancelledTotal: 0,
         returnedTotal: 0,
         damagedTotal: 0,
-        couriers: COURIERS.map((courier) => ({ courier, count: 0 })),
+        couriers: couriers.map((courier) => ({ courier, count: 0 })),
       },
     ]),
   );
-  const courierTotals = COURIERS.map((courier) => ({ courier, count: 0 }));
+  const courierTotals = couriers.map((courier) => ({ courier, count: 0 }));
   const cancelledRows = [];
   const returnedRows = [];
   const damagedRows = [];

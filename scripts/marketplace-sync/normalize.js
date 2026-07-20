@@ -20,7 +20,18 @@ export function marketplaceMetadata(order) {
       .filter(Boolean),
   )];
 
-  return marketplaceOrderId ? { marketplaceOrderId, marketplaceSkus } : null;
+  const marketplaceItems = (Array.isArray(order?.items) ? order.items : [])
+    .map((item) => ({
+      name: normalizeText(item?.name),
+      sku: normalizeText(item?.sku),
+      quantity: Number.isFinite(Number(item?.quantity)) ? Number(item.quantity) : '',
+    }))
+    .filter((item) => item.name || item.sku)
+    .filter((item, index, items) => items.findIndex((candidate) => (
+      candidate.name === item.name && candidate.sku === item.sku && candidate.quantity === item.quantity
+    )) === index);
+
+  return marketplaceOrderId ? { marketplaceOrderId, marketplaceSkus, marketplaceItems } : null;
 }
 
 export function safeDocPart(value) {

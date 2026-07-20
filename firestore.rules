@@ -49,11 +49,13 @@ service cloud.firestore {
       allow delete: if false;
       allow update: if isSignedIn()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'marketplaceOrderId', 'marketplaceSkus'
+          'marketplaceOrderId', 'marketplaceSkus', 'marketplaceItems'
         ])
         && request.resource.data.marketplaceOrderId is string
         && request.resource.data.marketplaceSkus is list
-        && request.resource.data.marketplaceSkus.size() <= 100;
+        && request.resource.data.marketplaceSkus.size() <= 100
+        && request.resource.data.marketplaceItems is list
+        && request.resource.data.marketplaceItems.size() <= 100;
     }
 
     match /marketplaceOrders/{orderId} {
@@ -61,7 +63,7 @@ service cloud.firestore {
       allow create: if isSignedIn()
         && request.resource.data.keys().hasOnly([
           'platform', 'orderId', 'trackingNo', 'normalizedTrackingNo',
-          'marketplaceSkus', 'sellerOrderStatus', 'expectedShipAt',
+          'marketplaceSkus', 'items', 'sellerOrderStatus', 'expectedShipAt',
           'importSource', 'importedAt', 'updatedAt'
         ])
         && request.resource.data.platform in ['shopee', 'lazada', 'tiktok']
@@ -70,6 +72,8 @@ service cloud.firestore {
         && request.resource.data.normalizedTrackingNo is string
         && request.resource.data.marketplaceSkus is list
         && request.resource.data.marketplaceSkus.size() <= 100
+        && request.resource.data.items is list
+        && request.resource.data.items.size() <= 100
         && request.resource.data.sellerOrderStatus is string
         && request.resource.data.expectedShipAt is string
         && request.resource.data.importSource == 'web_upload'
@@ -79,7 +83,7 @@ service cloud.firestore {
       allow update: if isSignedIn()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'platform', 'orderId', 'trackingNo', 'normalizedTrackingNo',
-          'marketplaceSkus', 'sellerOrderStatus', 'expectedShipAt',
+          'marketplaceSkus', 'items', 'sellerOrderStatus', 'expectedShipAt',
           'importSource', 'importedAt', 'updatedAt'
         ])
         && request.resource.data.platform in ['shopee', 'lazada', 'tiktok']
@@ -88,6 +92,8 @@ service cloud.firestore {
         && request.resource.data.normalizedTrackingNo is string
         && request.resource.data.marketplaceSkus is list
         && request.resource.data.marketplaceSkus.size() <= 100
+        && request.resource.data.items is list
+        && request.resource.data.items.size() <= 100
         && request.resource.data.sellerOrderStatus is string
         && request.resource.data.expectedShipAt is string
         && request.resource.data.importSource == 'web_upload'
@@ -100,6 +106,15 @@ service cloud.firestore {
     match /syncStatus/{platform} {
       allow read: if isSignedIn();
       allow write: if false;
+    }
+
+    match /couriers/{courierId} {
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn()
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 80;
+      allow delete: if false;
     }
   }
 }
