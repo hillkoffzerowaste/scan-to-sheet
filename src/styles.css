@@ -845,6 +845,32 @@ select:hover {
   background: var(--accent);
 }
 
+.courier-add-row select {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.88rem;
+}
+
+.courier-add-divider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted-text);
+  font-size: 0.75rem;
+}
+
+.courier-add-divider::before,
+.courier-add-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+
 .manual-format-option {
   display: flex;
   align-items: center;

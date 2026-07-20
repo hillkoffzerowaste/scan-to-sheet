@@ -221,6 +221,7 @@ function App() {
   const [couriers, setCouriers] = useState(COURIERS);
   const [newCourierName, setNewCourierName] = useState('');
   const [addingCourier, setAddingCourier] = useState(false);
+  const [courierSelectValue, setCourierSelectValue] = useState('');
   const [scanValue, setScanValue] = useState('');
   const [selectedPacker, setSelectedPacker] = useState(PACKER_UNASSIGNED);
   const [scanRemark, setScanRemark] = useState('');
@@ -2462,7 +2463,29 @@ function App() {
           </div>
 
           <form className="courier-add-form" onSubmit={(event) => { event.preventDefault(); void handleAddCourier(); }}>
-            <label htmlFor="new-courier-name">เพิ่มขนส่งใหม่</label>
+            <label htmlFor="courier-select">เพิ่มขนส่งเอง</label>
+            <div className="courier-add-row">
+              <select
+                id="courier-select"
+                value={courierSelectValue}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  if (value) {
+                    setSelectedCourier(value);
+                    setCourierSelectValue('');
+                  }
+                }}
+                disabled={!firebaseUser || addingCourier}
+              >
+                <option value="">เลือกจากขนส่งที่มี...</option>
+                {couriers.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </div>
+            <div className="courier-add-divider">
+              <span>หรือพิมพ์ชื่อขนส่งใหม่</span>
+            </div>
             <div>
               <input
                 id="new-courier-name"
