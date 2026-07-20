@@ -1592,25 +1592,30 @@ export async function appendScanGoogle({ token, config, courier, code, email, pa
     '',
   ], marketplaceOrder);
 
-  const range = `${escapeSheetName(date)}!A:${sheetEndColumn()}`;
-  const appendResult = await apiFetch(
-    `${SHEETS_API}/${sheet.id}/values/${encodeURIComponent(range)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+  // Read existing rows to find the next empty row (avoid unreliable append API)
+  const colARange = `${escapeSheetName(date)}!A:A`;
+  const colAData = await apiFetch(
+    `${SHEETS_API}/${sheet.id}/values/${encodeURIComponent(colARange)}?majorDimension=COLUMNS`,
+    token,
+  );
+  const existingColA = colAData.values?.[0] ?? [];
+  // Row 1 = header, so next row = existingColA.length + 1
+  const appendedRowNumber = existingColA.length + 1;
+  const insertedIdx = appendedRowNumber - 2;
+
+  // Write placeholder row using UPDATE (PUT) at the computed row — avoids append pitfalls
+  const writeRange = `${escapeSheetName(date)}!A${appendedRowNumber}:${sheetEndColumn()}${appendedRowNumber}`;
+  await apiFetch(
+    `${SHEETS_API}/${sheet.id}/values/${encodeURIComponent(writeRange)}?valueInputOption=USER_ENTERED`,
     token,
     {
-      method: 'POST',
-      body: JSON.stringify({
-        values: [placeholderRow],
-      }),
+      method: 'PUT',
+      body: JSON.stringify({ values: [placeholderRow] }),
     },
   );
 
-  const appendedRowNumber = await getSafeAppendedRowNumber({
-    token, spreadsheetId: sheet.id, date, appendResult,
-  });
-
   const updatedRows = await readDailyRows({ token, spreadsheetId: sheet.id, date });
   const updatedParsedRows = updatedRows.map((row, idx) => rowFromSheet(row, idx));
-  const insertedIdx = appendedRowNumber - 2;
 
   if (String(updatedParsedRows[insertedIdx]?.no) !== placeholder) {
     await clearSheetRange({
@@ -1778,7 +1783,7 @@ export async function appendAdminScanGoogle({ token, config, courier, code, emai
     return { status: 'admin_matched', courier, date, time, code: normalizedCode, rows: crossDayMatch.parsedRows.filter((row) => row.courier === courier).reverse().slice(0, 20), sheetUrl: sheet.webViewLink, crossDay: true };
   }
 
-  // 3) New admin-only row — append with placeholder
+  // 3) New admin-only row — write with computed next row (avoid unreliable append API)
   const placeholder = `_TEMP_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
   const placeholderRow = withMarketplaceCells([
@@ -1797,25 +1802,28 @@ export async function appendAdminScanGoogle({ token, config, courier, code, emai
     normalizedCode,
   ], marketplaceOrder);
 
-  const range = `${escapeSheetName(date)}!A:${sheetEndColumn()}`;
-  const appendResult = await apiFetch(
-    `${SHEETS_API}/${sheet.id}/values/${encodeURIComponent(range)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+  // Read column A to compute next empty row
+  const colARange = `${escapeSheetName(date)}!A:A`;
+  const colAData = await apiFetch(
+    `${SHEETS_API}/${sheet.id}/values/${encodeURIComponent(colARange)}?majorDimension=COLUMNS`,
+    token,
+  );
+  const existingColA = colAData.values?.[0] ?? [];
+  const appendedRowNumber = existingColA.length + 1;
+  const insertedIdx = appendedRowNumber - 2;
+
+  const writeRange = `${escapeSheetName(date)}!A${appendedRowNumber}:${sheetEndColumn()}${appendedRowNumber}`;
+  await apiFetch(
+    `${SHEETS_API}/${sheet.id}/values/${encodeURIComponent(writeRange)}?valueInputOption=USER_ENTERED`,
     token,
     {
-      method: 'POST',
-      body: JSON.stringify({
-        values: [placeholderRow],
-      }),
+      method: 'PUT',
+      body: JSON.stringify({ values: [placeholderRow] }),
     },
   );
 
-  const appendedRowNumber = await getSafeAppendedRowNumber({
-    token, spreadsheetId: sheet.id, date, appendResult,
-  });
-
   const updatedRows = await readDailyRows({ token, spreadsheetId: sheet.id, date });
   const updatedParsedRows = updatedRows.map((row, idx) => rowFromSheet(row, idx));
-  const insertedIdx = appendedRowNumber - 2;
 
   if (String(updatedParsedRows[insertedIdx]?.no) !== placeholder) {
     await clearSheetRange({
