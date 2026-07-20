@@ -1614,26 +1614,33 @@ export async function appendScanGoogle({ token, config, courier, code, email, pa
     },
   );
 
-  const updatedRows = await readDailyRows({ token, spreadsheetId: sheet.id, date });
-  const updatedParsedRows = updatedRows.map((row, idx) => rowFromSheet(row, idx));
-
-  if (String(updatedParsedRows[insertedIdx]?.no) !== placeholder) {
+  // Verify placeholder was written correctly by reading the specific cell
+  const verifyRange = `${escapeSheetName(date)}!A${appendedRowNumber}`;
+  const verifyData = await apiFetch(
+    `${SHEETS_API}/${sheet.id}/values/${encodeURIComponent(verifyRange)}`,
+    token,
+  );
+  const writtenCell = verifyData.values?.[0]?.[0];
+  if (String(writtenCell) !== placeholder) {
     await clearSheetRange({
       token, spreadsheetId: sheet.id,
       range: `${escapeSheetName(date)}!A${appendedRowNumber}:${sheetEndColumn()}${appendedRowNumber}`,
     }).catch(() => {});
-    throw new Error('Google Sheet append could not be verified; please scan again');
+    throw new Error('Google Sheet write verification failed; please scan again');
   }
 
+  const updatedRows = await readDailyRows({ token, spreadsheetId: sheet.id, date });
+  const updatedParsedRows = updatedRows.map((row, idx) => rowFromSheet(row, idx));
   const updatedCourierRows = updatedParsedRows.filter((row) => row.courier === courier);
 
   const concurrentCodes = updatedCourierRows.filter(
     (row) => normalizeScanCode(row.code) === normalizeScanCode(normalizedCode),
   );
-
   const concurrentDuplicate = concurrentCodes.length > 1;
 
-  const correctNo = insertedIdx + 1;
+  // Find the placeholder row index; may differ from insertedIdx if other inserts happened concurrently
+  const placeholderIdx = updatedParsedRows.findIndex((row) => String(row.no) === placeholder);
+  const correctNo = placeholderIdx >= 0 ? placeholderIdx + 1 : insertedIdx + 1;
   const correctCourierNo =
     updatedCourierRows.findIndex((row) => String(row.no) === placeholder) + 1;
 
@@ -1653,11 +1660,12 @@ export async function appendScanGoogle({ token, config, courier, code, email, pa
     '',
   ], marketplaceOrder);
 
+  const targetRowNumber = placeholderIdx >= 0 ? placeholderIdx + 2 : insertedIdx + 2;
   await updateDailyRow({
     token,
     spreadsheetId: sheet.id,
     date,
-    rowNumber: insertedIdx + 2,
+    rowNumber: targetRowNumber,
     row: correctedRow,
   });
 
@@ -1822,16 +1830,23 @@ export async function appendAdminScanGoogle({ token, config, courier, code, emai
     },
   );
 
-  const updatedRows = await readDailyRows({ token, spreadsheetId: sheet.id, date });
-  const updatedParsedRows = updatedRows.map((row, idx) => rowFromSheet(row, idx));
-
-  if (String(updatedParsedRows[insertedIdx]?.no) !== placeholder) {
+  // Verify placeholder was written correctly by reading the specific cell
+  const verifyRange = `${escapeSheetName(date)}!A${appendedRowNumber}`;
+  const verifyData = await apiFetch(
+    `${SHEETS_API}/${sheet.id}/values/${encodeURIComponent(verifyRange)}`,
+    token,
+  );
+  const writtenCell = verifyData.values?.[0]?.[0];
+  if (String(writtenCell) !== placeholder) {
     await clearSheetRange({
       token, spreadsheetId: sheet.id,
       range: `${escapeSheetName(date)}!A${appendedRowNumber}:${sheetEndColumn()}${appendedRowNumber}`,
     }).catch(() => {});
     throw new Error('Google Sheet append could not be verified; please scan again');
   }
+
+  const updatedRows = await readDailyRows({ token, spreadsheetId: sheet.id, date });
+  const updatedParsedRows = updatedRows.map((row, idx) => rowFromSheet(row, idx));
 
   const correctNo = insertedIdx + 1;
   const courierAdminCount = updatedParsedRows.filter(
@@ -2177,14 +2192,22 @@ export async function batchAppendScanGoogle({ token, config, orders }) {
         placeholderMeta.push({ order, placeholder, isPacker });
       }
 
-      const range = `${escapeSheetName(date)}!A:${sheetEndColumn()}`;
-      const appendResult = await apiFetch(
-        `${SHEETS_API}/${sheet.id}/values/${encodeURIComponent(range)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+      // c.2) Compute next row from column A and write via PUT
+      const colARange = `${escapeSheetName(date)}!A:A`;
+      const colAData = await apiFetch(
+        `${SHEETS_API}/${sheet.id}/values/${encodeURIComponent(colARange)}?majorDimension=COLUMNS`,
         token,
-        { method: 'POST', body: JSON.stringify({ values: placeholders }) },
+      );
+      const existingColA = colAData.values?.[0] ?? [];
+      const startRow = existingColA.length + 1;
+      const writeRange = `${escapeSheetName(date)}!A${startRow}:${sheetEndColumn()}${startRow + placeholders.length - 1}`;
+      await apiFetch(
+        `${SHEETS_API}/${sheet.id}/values/${encodeURIComponent(writeRange)}?valueInputOption=USER_ENTERED`,
+        token,
+        { method: 'PUT', body: JSON.stringify({ values: placeholders }) },
       );
 
-      // d) Determine appended row numbers and re-read (1 read)
+      // d) Re-read (1 read)
       const currentRows = await readDailyRows({ token, spreadsheetId: sheet.id, date });
       const currentParsed = currentRows.map((row, idx) => rowFromSheet(row, idx));
 
