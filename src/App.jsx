@@ -2472,6 +2472,7 @@ function App() {
                   const value = event.target.value;
                   if (value) {
                     setSelectedCourier(value);
+                    setAllowAnyTrackingFormat(true);
                     setCourierSelectValue('');
                   }
                 }}
