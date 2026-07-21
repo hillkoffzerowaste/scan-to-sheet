@@ -535,12 +535,12 @@ function App() {
     }
   }, [isSignedIn]);
 
-  // Auto-retry sheet sync every 30 seconds
+  // Auto-retry sheet sync every 5 minutes (reduces Firestore reads)
   useEffect(() => {
     if (!firebaseUser || !token || !config?.master?.id) return;
     const interval = setInterval(() => {
       void recoverPendingSheetSyncs();
-    }, 30 * 1000);
+    }, 5 * 60 * 1000);
     return () => clearInterval(interval);
   }, [firebaseUser, token, config]);
 
