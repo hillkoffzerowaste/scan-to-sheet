@@ -1261,6 +1261,27 @@ function App() {
       setScanValue('');
     }
 
+    // Prevent duplicate admin scan on the same day across all couriers
+    const normalizedForDup = validation.code.toUpperCase().trim();
+    const alreadyInDrive = driveRecentRows.some(
+      (row) => (row.adminCode && row.adminCode.toUpperCase().trim() === normalizedForDup) ||
+               (row.code && row.code.toUpperCase().trim() === normalizedForDup)
+    );
+    const alreadyInPacker = recentRows.some(
+      (row) => row.code && row.code.toUpperCase().trim() === normalizedForDup
+    );
+    if (alreadyInDrive || alreadyInPacker) {
+      const location = alreadyInDrive ? 'Drive' : 'Packer';
+      setStatus({
+        type: 'duplicate',
+        title: 'เลขซ้ำ — ลงแล้ว',
+        message: `${validation.code} ${alreadyInDrive ? 'เคยลง Drive แล้ว' : 'Packer สแกนแล้ว'} กรุณาตรวจสอบ`,
+      });
+      showCameraMessage(`ลงแล้ว: ${validation.code}`, 'duplicate');
+      playTone('duplicate');
+      return { status: 'duplicate', code: validation.code };
+    }
+
     setBusy(true);
     try {
       const nowParts = getBangkokParts();
