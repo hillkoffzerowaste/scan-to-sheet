@@ -2494,6 +2494,8 @@ function App() {
                   if (value) {
                     setSelectedCourier(value);
                     setAllowAnyTrackingFormat(true);
+                    setScanPopupOpen(true);
+                    setScanRemark('');
                     setCourierSelectValue('');
                   }
                 }}
@@ -2650,6 +2652,13 @@ function App() {
                   <span>ต่อเนื่อง</span>
                 </button>
               </div>
+            </div>
+          )}
+
+          {allowAnyTrackingFormat && (
+            <div className="any-format-warning">
+              <AlertTriangle size={16} />
+              <span>⚠️ ข้ามการตรวจรูปแบบ Tracking: เลขอะไรก็สแกนผ่าน</span>
             </div>
           )}
 
