@@ -1025,7 +1025,7 @@ function App() {
           }
         }).catch(() => {});
       }
-    }, 8000);
+    }, 60000);
   }
 
   function runAfterScanCommit(task) {
