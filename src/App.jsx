@@ -1365,6 +1365,14 @@ function App() {
           let backgroundResult = result;
           try {
             const marketplaceOrder = await marketplaceOrderPromise;
+            // If admin scanned first, include admin K-M data so Sheet row gets admin columns
+            const adminData = firestorePrimary?.admin?.scannedAt
+              ? {
+                  adminDate: firestorePrimary.admin.date || nowParts.date,
+                  adminTime: firestorePrimary.admin.time || firestorePrimary.admin.scannedAt?.split('T')?.[1]?.substring?.(0, 8) || nowParts.time,
+                  adminCode: firestorePrimary.adminCode || firestorePrimary.code || validation.code,
+                }
+              : {};
             const sheetResult = await runWithGoogleRetry((accessToken, googleConfig) =>
               appendScanGoogle({
                 token: accessToken,
@@ -1375,6 +1383,7 @@ function App() {
                 packer: packerName,
                 note: scanNote,
                 marketplaceOrder,
+                ...adminData,
               }),
             );
             await markSheetSyncResult({ orderId: firestorePrimary.id, attemptId: firestorePrimary.sheetSyncAttemptId, ok: true, result: sheetResult }).catch(() => {});
