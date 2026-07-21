@@ -1563,26 +1563,124 @@ function App() {
         : null;
 
       if (firestorePrimary?.status === 'duplicate') {
-        const syncPending = firestorePrimary.sheetSyncStatus === 'pending';
-        const duplicateResult = {
-          status: 'duplicate',
+        const order = firestorePrimary;
+        
+        // If already synced to Sheet → genuine duplicate
+        if (order.sheetSyncStatus === 'synced') {
+          setStatus({
+            type: 'duplicate',
+            title: 'เลขซ้ำใน Firebase',
+            message: `${validation.code} เคยลง Drive สำหรับ ${selectedCourier} แล้ว`,
+          });
+          showCameraMessage(`ลงแล้ว: ${validation.code}`, 'duplicate');
+          playTone('duplicate');
+          return {
+            status: 'duplicate',
+            courier: selectedCourier,
+            date: nowParts.date,
+            time: nowParts.time,
+            code: validation.code,
+            rows: driveRecentRows,
+            sheetUrl,
+          };
+        }
+        
+        // Still syncing → prevent double-scan
+        if (order.sheetSyncStatus === 'pending') {
+          setStatus({
+            type: 'duplicate',
+            title: 'กำลังซิงก์ Google Sheet',
+            message: `${validation.code} บันทึกใน Firebase แล้ว และกำลังซิงก์ Google Sheet อยู่`,
+          });
+          showCameraMessage(`${validation.code} กำลังซิงก์ Sheet`, 'duplicate');
+          playTone('duplicate');
+          return {
+            status: 'duplicate',
+            courier: selectedCourier,
+            date: nowParts.date,
+            time: nowParts.time,
+            code: validation.code,
+            rows: driveRecentRows,
+            sheetUrl,
+          };
+        }
+        
+        // Failed → reclaim: write to Sheet with admin data from Firestore
+        const adminReclaim = {
+          adminDate: order.admin?.date || order.date || nowParts.date,
+          adminTime: order.admin?.time || nowParts.time,
+          adminCode: order.adminCode || order.code || validation.code,
+        };
+        
+        // Build rows and continue below (fall through to normal admin scan flow)
+        const reclaimRow = {
+          no: order.id,
+          date: nowParts.date,
+          time: nowParts.time,
+          courier: selectedCourier,
+          code: '',
+          adminCode: adminReclaim.adminCode,
+          adminDate: adminReclaim.adminDate,
+          adminTime: adminReclaim.adminTime,
+          email: user.email,
+          status: order.status === 'matched' ? 'Success' : 'Pending',
+          sheetSyncStatus: 'pending',
+        };
+        
+        setScanFlash(true);
+        setTimeout(() => setScanFlash(false), 600);
+        setStatus({
+          type: 'success',
+          title: 'ลง Drive สำเร็จ (กู้คืน)',
+          message: `${validation.code} เคยลง Drive แล้ว แต่ Sheet ยังไม่สมบูรณ์ กำลังเขียน Sheet ใหม่`,
+        });
+        showCameraMessage(`${validation.code} ลง Drive สำเร็จ`, 'success');
+        playTone('success');
+        setDriveRecentRows([reclaimRow, ...driveRecentRows].slice(0, 50));
+        setDriveTotalCount((prev) => prev + 1);
+        setToday({ date: nowParts.date, time: nowParts.time });
+        if (source !== 'manual') setScanValue(validation.code);
+        
+        // Background: re-sync to Sheet via appendAdminScanGoogle
+        runAfterScanCommit(async () => {
+          try {
+            const marketplaceOrder = await findMarketplaceOrderByTracking({ trackingNo: validation.code }).catch(() => null);
+            const sheetResult = await runWithGoogleRetry((accessToken, googleConfig) =>
+              appendAdminScanGoogle({
+                token: accessToken,
+                config: googleConfig,
+                courier: selectedCourier,
+                code: adminReclaim.adminCode,
+                email: user.email,
+                marketplaceOrder,
+              }),
+            );
+            await markSheetSyncResult({
+              orderId: order.id,
+              attemptId: order.sheetSyncAttemptId || `reclaim_${Date.now()}`,
+              ok: true,
+              result: sheetResult,
+            }).catch(() => {});
+          } catch (sheetError) {
+            await markSheetSyncResult({
+              orderId: order.id,
+              attemptId: order.sheetSyncAttemptId || `reclaim_${Date.now()}`,
+              ok: false,
+              error: sheetError,
+            }).catch(() => {});
+          }
+          scheduleCountRefresh();
+        });
+        
+        return {
+          status: 'admin_scan',
           courier: selectedCourier,
           date: nowParts.date,
           time: nowParts.time,
           code: validation.code,
-          rows: driveRecentRows,
+          rows: [reclaimRow, ...driveRecentRows].slice(0, 50),
           sheetUrl,
         };
-        setStatus({
-          type: 'duplicate',
-          title: syncPending ? 'กำลังซิงก์ Google Sheet' : 'เลขซ้ำใน Firebase',
-          message: syncPending
-            ? `${validation.code} บันทึกใน Firebase แล้ว และกำลังซิงก์ Google Sheet อยู่`
-            : `${validation.code} เคยลง Drive สำหรับ ${selectedCourier} แล้ว`,
-        });
-        showCameraMessage(syncPending ? `${validation.code} กำลังซิงก์ Sheet` : `ลงแล้ว: ${validation.code}`, 'duplicate');
-        playTone('duplicate');
-        return duplicateResult;
       }
 
       const scanCourier = selectedCourier;
