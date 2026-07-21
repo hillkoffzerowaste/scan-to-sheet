@@ -466,18 +466,38 @@ export async function recordPackerScanPrimary({ code, courier, date, time, user,
 
   const normalizedCode = normalizeCode(code);
   const marketplaceData = await findMarketplaceMetadataByTracking(normalizedCode);
-  const recentCandidates = await getRecentOrdersByCode(normalizedCode);
+
+  // Search broadly — older docs may only have `code` not `normalizedCode`
+  const byNormalized = await getRecentOrdersByCode(normalizedCode, 50);
+  const existingIds = new Set(byNormalized.map((o) => o.id));
+
+  // Also search by raw code (backwards compat for orders created before normalizedCode existed)
+  let byRawCode = [];
+  try {
+    const rawSnap = await getDocs(query(
+      collection(firestoreDb, 'orders'),
+      where('code', '==', code),
+      limit(50),
+    ));
+    byRawCode = rawSnap.docs
+      .filter((d) => !existingIds.has(d.id))
+      .map((d) => ({ id: d.id, ...d.data() }));
+  } catch {
+    // Field may be missing on some documents — safe to ignore
+  }
+
+  const allCandidates = [...byNormalized, ...byRawCode];
 
   // Find best matching existing order — prioritize admin-scanned, then any packer
   // For cancellation/damage, ignore courier constraint so cross-courier edits work
   const isCancelling = note === 'ลูกค้ายกเลิก';
   const anyCourier = isCancelling;
-  const recent = findRecentAdminOrderByCode(recentCandidates, { normalizedCode, days: 365 })
-    ?? findRecentOrder(recentCandidates, { courier, normalizedCode, days: 365, anyCourier });
+  const recent = findRecentAdminOrderByCode(allCandidates, { normalizedCode, days: 365 })
+    ?? findRecentOrder(allCandidates, { courier, normalizedCode, days: 365, anyCourier });
 
   // If still not found, look for ANY order with this code regardless of courier/recency
   const fallbackByCode = !recent
-    ? recentCandidates.find((order) => normalizeCode(order.normalizedCode || order.code) === normalizedCode)
+    ? allCandidates.find((order) => normalizeCode(order.normalizedCode || order.code) === normalizedCode)
     : null;
 
   // Always use existing document ID when found; otherwise generate ID using the original order's date
