@@ -275,6 +275,7 @@ function App() {
   const [backfillBusy, setBackfillBusy] = useState(false);
   const [marketplaceUploadBusy, setMarketplaceUploadBusy] = useState(false);
   const [marketplaceUploadResult, setMarketplaceUploadResult] = useState(null);
+  const [marketplaceFilterPlatform, setMarketplaceFilterPlatform] = useState('all');
   const marketplaceFileRef = useRef(null);
   const marketplaceBackfillStartedRef = useRef(false);
   const inputRef = useRef(null);
@@ -330,8 +331,12 @@ function App() {
         }
         parsedRows.push(...parseMarketplaceRows(rows));
       }
-      const groups = groupMarketplaceRows(parsedRows);
-      if (!groups.length) throw new Error('ไม่พบออเดอร์ที่มีเลขพัสดุในไฟล์');
+      const allGroups = groupMarketplaceRows(parsedRows);
+      if (!allGroups.length) throw new Error('ไม่พบออเดอร์ที่มีเลขพัสดุในไฟล์');
+      const groups = marketplaceFilterPlatform === 'all'
+        ? allGroups
+        : allGroups.filter((g) => g.platform.toLowerCase() === marketplaceFilterPlatform.toLowerCase());
+      if (!groups.length) throw new Error(`ไม่พบออเดอร์จาก ${marketplaceFilterPlatform} ในไฟล์`);
       const result = await importMarketplaceOrders(groups);
       try {
         const sheetResult = await runWithGoogleRetry((accessToken, googleConfig) => (
@@ -2542,24 +2547,39 @@ function App() {
           </div>
           <p>เลือกไฟล์ .xlsx หรือ .csv จาก Shopee, Lazada และ TikTok ได้หลายไฟล์พร้อมกัน</p>
         </div>
-        <input
-          ref={marketplaceFileRef}
-          className="visually-hidden"
-          type="file"
-          accept=".xlsx,.csv"
-          multiple
-          onChange={uploadMarketplaceFiles}
-          aria-label="เลือกไฟล์ออเดอร์ Seller Center"
-        />
-        <button
-          className="secondary-button"
-          type="button"
-          onClick={() => marketplaceFileRef.current?.click()}
-          disabled={!firebaseUser || marketplaceUploadBusy}
-        >
-          {marketplaceUploadBusy ? <RefreshCw size={16} className="spin" /> : <Upload size={16} />}
-          <span>{marketplaceUploadBusy ? 'กำลังอัปโหลด...' : 'เลือกไฟล์ออเดอร์'}</span>
-        </button>
+        <div className="marketplace-upload-controls">
+          <label className="field-control marketplace-filter">
+            <span>กรองแพลตฟอร์ม</span>
+            <select
+              value={marketplaceFilterPlatform}
+              onChange={(e) => setMarketplaceFilterPlatform(e.target.value)}
+              disabled={!firebaseUser || marketplaceUploadBusy}
+            >
+              <option value="all">ทุกแพลตฟอร์ม</option>
+              <option value="shopee">Shopee</option>
+              <option value="lazada">Lazada</option>
+              <option value="tiktok">TikTok</option>
+            </select>
+          </label>
+          <input
+            ref={marketplaceFileRef}
+            className="visually-hidden"
+            type="file"
+            accept=".xlsx,.csv"
+            multiple
+            onChange={uploadMarketplaceFiles}
+            aria-label="เลือกไฟล์ออเดอร์ Seller Center"
+          />
+          <button
+            className="secondary-button"
+            type="button"
+            onClick={() => marketplaceFileRef.current?.click()}
+            disabled={!firebaseUser || marketplaceUploadBusy}
+          >
+            {marketplaceUploadBusy ? <RefreshCw size={16} className="spin" /> : <Upload size={16} />}
+            <span>{marketplaceUploadBusy ? 'กำลังอัปโหลด...' : 'เลือกไฟล์ออเดอร์'}</span>
+          </button>
+        </div>
         {marketplaceUploadResult && (
           <div className={`marketplace-upload-result ${marketplaceUploadResult.type}`} role="status">
             {marketplaceUploadResult.message}

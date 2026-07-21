@@ -5,7 +5,6 @@ import {
   documentId,
   getDocs,
   limit,
-  onSnapshot,
   orderBy,
   query,
   runTransaction,
@@ -142,14 +141,18 @@ function orderToRow(order, id = '') {
   };
 }
 
-function findRecentOrder(orders, { courier, normalizedCode, days = 3 }) {
+function findRecentOrder(orders, { courier, normalizedCode, days = 3, anyCourier = false }) {
   const now = Date.now();
   const lookbackMs = (days + 1) * 24 * 60 * 60 * 1000;
   return orders.find((order) => {
-    const sameOrder = order.courier === courier
+    const matchesCourier = anyCourier || order.courier === courier;
+    const sameOrder = matchesCourier
       && normalizeCode(order.normalizedCode || order.code) === normalizedCode;
+    if (!sameOrder) return false;
     const updated = new Date(order.updatedAtIso ?? 0).getTime();
-    return sameOrder && (!Number.isFinite(updated) || now - updated <= lookbackMs);
+    const withinLookback = !Number.isFinite(updated) || now - updated <= lookbackMs;
+    // For cancellation / damage, ignore recency and always match
+    return withinLookback || days >= 365;
   }) ?? null;
 }
 
@@ -157,10 +160,11 @@ function findRecentAdminOrderByCode(orders, { normalizedCode, days = 3 }) {
   const now = Date.now();
   const lookbackMs = (days + 1) * 24 * 60 * 60 * 1000;
   return orders.find((order) => {
+    if (!order.admin?.scannedAt) return false;
+    if (normalizeCode(order.normalizedCode || order.code) !== normalizedCode) return false;
     const updated = new Date(order.updatedAtIso ?? 0).getTime();
-    return order.admin?.scannedAt
-      && normalizeCode(order.normalizedCode || order.code) === normalizedCode
-      && (!Number.isFinite(updated) || now - updated <= lookbackMs);
+    const withinLookback = !Number.isFinite(updated) || now - updated <= lookbackMs;
+    return withinLookback || days >= 365;
   }) ?? null;
 }
 
@@ -463,9 +467,26 @@ export async function recordPackerScanPrimary({ code, courier, date, time, user,
   const normalizedCode = normalizeCode(code);
   const marketplaceData = await findMarketplaceMetadataByTracking(normalizedCode);
   const recentCandidates = await getRecentOrdersByCode(normalizedCode);
-  const recent = findRecentAdminOrderByCode(recentCandidates, { normalizedCode })
-    ?? findRecentOrder(recentCandidates, { courier, normalizedCode });
-  const ref = doc(firestoreDb, 'orders', recent?.id ?? orderId({ date, courier, code: normalizedCode }));
+
+  // Find best matching existing order — prioritize admin-scanned, then any packer
+  // For cancellation/damage, ignore courier constraint so cross-courier edits work
+  const isCancelling = note === 'ลูกค้ายกเลิก';
+  const anyCourier = isCancelling;
+  const recent = findRecentAdminOrderByCode(recentCandidates, { normalizedCode, days: 365 })
+    ?? findRecentOrder(recentCandidates, { courier, normalizedCode, days: 365, anyCourier });
+
+  // If still not found, look for ANY order with this code regardless of courier/recency
+  const fallbackByCode = !recent
+    ? recentCandidates.find((order) => normalizeCode(order.normalizedCode || order.code) === normalizedCode)
+    : null;
+
+  // Always use existing document ID when found; otherwise generate ID using the original order's date
+  const existingOrder = recent || fallbackByCode;
+  const ref = doc(firestoreDb, 'orders', existingOrder?.id ?? orderId({
+    date: existingOrder?.date ?? date,
+    courier: existingOrder?.courier ?? courier,
+    code: normalizedCode,
+  }));
   const attemptId = newSheetSyncAttemptId();
 
   const result = await runTransaction(firestoreDb, async (transaction) => {
@@ -681,15 +702,64 @@ function mergeCouriers(defaultCouriers, extraCouriers) {
     .filter(Boolean))];
 }
 
+const COURIER_CACHE_KEY = 'scan-to-sheet-couriers-cache-v1';
+const COURIER_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+function loadCachedCouriers() {
+  try {
+    const cached = JSON.parse(localStorage.getItem(COURIER_CACHE_KEY));
+    if (cached && cached.time && Date.now() - cached.time < COURIER_CACHE_TTL_MS) {
+      return cached.data;
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
+function saveCachedCouriers(data) {
+  try {
+    localStorage.setItem(COURIER_CACHE_KEY, JSON.stringify({ time: Date.now(), data }));
+  } catch {
+    // ignore
+  }
+}
+
 export function subscribeCouriers({ defaultCouriers = [], onChange, onError }) {
   if (!canWriteFirestore()) {
     onChange?.(mergeCouriers(defaultCouriers, []));
     return () => {};
   }
-  return onSnapshot(collection(firestoreDb, 'couriers'), (snapshot) => {
-    const customCouriers = snapshot.docs.map((item) => item.data().name);
-    onChange?.(mergeCouriers(defaultCouriers, customCouriers));
-  }, onError);
+
+  let cancelled = false;
+
+  void (async () => {
+    // Serve cache immediately if available
+    const cached = loadCachedCouriers();
+    if (cached && !cancelled) {
+      onChange?.(mergeCouriers(defaultCouriers, cached));
+    }
+
+    try {
+      const snapshot = await getDocs(collection(firestoreDb, 'couriers'));
+      if (cancelled) return;
+      const customCouriers = snapshot.docs.map((item) => item.data().name);
+      saveCachedCouriers(customCouriers);
+      onChange?.(mergeCouriers(defaultCouriers, customCouriers));
+    } catch (error) {
+      if (!cancelled) {
+        // Fallback to cache on error
+        if (cached) {
+          onChange?.(mergeCouriers(defaultCouriers, cached));
+        }
+        onError?.(error);
+      }
+    }
+  })();
+
+  return () => {
+    cancelled = true;
+  };
 }
 
 export async function addCourier({ name, user }) {
