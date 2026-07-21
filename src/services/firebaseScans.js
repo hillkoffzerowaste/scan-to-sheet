@@ -471,7 +471,7 @@ export async function recordPackerScanPrimary({ code, courier, date, time, user,
   const byNormalized = await getRecentOrdersByCode(normalizedCode, 50);
   const existingIds = new Set(byNormalized.map((o) => o.id));
 
-  // Also search by raw code (backwards compat for orders created before normalizedCode existed)
+  // Also search by raw code field (backwards compat for orders created before normalizedCode existed)
   let byRawCode = [];
   try {
     const rawSnap = await getDocs(query(
@@ -486,7 +486,38 @@ export async function recordPackerScanPrimary({ code, courier, date, time, user,
     // Field may be missing on some documents — safe to ignore
   }
 
-  const allCandidates = [...byNormalized, ...byRawCode];
+  // Fallback: search scanEvents for orders that were recorded via the mirror path
+  // (commitFallbackScan → mirrorScanToFirestore writes to scanEvents, not orders)
+  let byScanEvents = [];
+  try {
+    const scanSnap = await getDocs(query(
+      collection(firestoreDb, 'scanEvents'),
+      where('code', '==', code),
+      limit(10),
+    ));
+    for (const d of scanSnap.docs) {
+      const data = d.data();
+      // Only include if this code hasn't already been found in orders
+      if (existingIds.has(d.id)) continue;
+      // Create a synthetic order-like object so the rest of the logic works
+      byScanEvents.push({
+        fromScanEvents: true,
+        id: orderId({ date: data.date, courier: data.courier, code: normalizeCode(data.code || code) }),
+        code: data.code || code,
+        normalizedCode: normalizeCode(data.code || code),
+        courier: data.courier,
+        date: data.date,
+        packerScan: data.packer ? { scannedAt: `${data.date}T${data.time}`, packer: data.packer } : null,
+        admin: data.type === 'admin' ? { scannedAt: `${data.date}T${data.time}` } : null,
+        status: data.status === 'cancelled' ? 'cancelled' : (data.packer ? 'packer_scanned' : 'pending'),
+        updatedAtIso: data.createdAt ? (typeof data.createdAt.toDate === 'function' ? data.createdAt.toDate().toISOString() : data.createdAt) : '',
+      });
+    }
+  } catch {
+    // scanEvents may not exist or field missing — safe to ignore
+  }
+
+  const allCandidates = [...byNormalized, ...byRawCode, ...byScanEvents];
 
   // Find best matching existing order — prioritize admin-scanned, then any packer
   // For cancellation/damage, ignore courier constraint so cross-courier edits work
@@ -534,16 +565,25 @@ export async function recordPackerScanPrimary({ code, courier, date, time, user,
       };
     }
 
-    const wrongCourier = Boolean(existing?.admin?.scannedAt && existing.courier && existing.courier !== courier);
+    // When the order was found only via scanEvents (not in orders), treat the synthetic as existing
+    // so we update with the correct original date and courier instead of today's values
+    const effectiveExisting = existing
+      ?? (existingOrder?.fromScanEvents ? existingOrder : null);
+
+    const wrongCourier = Boolean(effectiveExisting?.admin?.scannedAt && effectiveExisting.courier && effectiveExisting.courier !== courier);
     const correctedNote = wrongCourier
       ? [note, `แพ็คเกอร์เลือกขนส่งไม่ตรงกับแอดมิน (เลือก ${courier})`].filter(Boolean).join(' | ')
       : note;
-    const nextStatus = existing?.admin?.scannedAt ? 'matched' : note ? 'issue' : 'packer_scanned';
-    const payload = existing
+    const nextStatus = effectiveExisting?.admin?.scannedAt ? 'matched' : note ? 'issue' : 'packer_scanned';
+    const effectiveDate = effectiveExisting?.date ?? date;
+    const effectiveCourier = effectiveExisting?.courier ?? courier;
+    const payload = effectiveExisting
       ? {
           packer,
+          date: effectiveDate,
           note: correctedNote,
           status: nextStatus,
+          courier: effectiveCourier,
           ...pendingSheetSyncFields(attemptId),
           updatedAt: serverTimestamp(),
           updatedAtIso: nowIso(),
