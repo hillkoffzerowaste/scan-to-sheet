@@ -35,7 +35,7 @@ test.describe('Scan to Sheet — Packer Tab', () => {
   });
 
   test('packer tab is active by default', async ({ page }) => {
-    const packerTab = page.locator('.tab-button:has-text("แพ็ค")');
+    const packerTab = page.getByTestId('packer-tab');
     await expect(packerTab).toHaveClass(/active/);
   });
 
@@ -75,21 +75,21 @@ test.describe('Scan to Sheet — Drive Tab', () => {
   });
 
   test('can switch to drive tab', async ({ page }) => {
-    const driveTab = page.locator('.tab-button:has-text("ลง Drive")');
+    const driveTab = page.getByTestId('drive-tab');
     await driveTab.click();
     await expect(driveTab).toHaveClass(/active/);
     await expect(page.locator('.drive-mode-label')).toBeVisible();
   });
 
   test('missing order check panel visible in drive tab', async ({ page }) => {
-    const driveTab = page.locator('.tab-button:has-text("ลง Drive")');
+    const driveTab = page.getByTestId('drive-tab');
     await driveTab.click();
     await expect(page.locator('.missing-check-panel')).toBeVisible();
     await expect(page.locator('.missing-check-panel h3')).toContainText('จับคู่ Admin');
   });
 
   test('threshold minutes selector has options', async ({ page }) => {
-    const driveTab = page.locator('.tab-button:has-text("ลง Drive")');
+    const driveTab = page.getByTestId('drive-tab');
     await driveTab.click();
     const select = page.locator('.missing-check-controls select');
     await expect(select).toBeVisible();

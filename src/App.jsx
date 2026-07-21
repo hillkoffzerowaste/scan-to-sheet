@@ -29,7 +29,6 @@ import {
   ArrowRightLeft,
   Plus,
 } from 'lucide-react';
-import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import {
   COURIERS,
   appendScanGoogle,
@@ -96,6 +95,7 @@ import {
 } from './services/firebaseScans.js';
 import { groupMarketplaceRows, parseCsvText, parseMarketplaceRows } from './services/marketplaceImport.js';
 import { parseXlsxArrayBuffer } from './services/xlsxImport.js';
+import { loadHtml5Qrcode } from './services/cameraLoader.js';
 import { commitFallbackScan } from './services/scanCommit.js';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
@@ -1376,8 +1376,8 @@ function App() {
             // If admin scanned first, include admin K-M data so Sheet row gets admin columns
             const adminData = firestorePrimary?.admin?.scannedAt
               ? {
-                  adminDate: firestorePrimary.admin.date || nowParts.date,
-                  adminTime: firestorePrimary.admin.time || firestorePrimary.admin.scannedAt?.split('T')?.[1]?.substring?.(0, 8) || nowParts.time,
+                  adminDate: firestorePrimary.adminDate || firestorePrimary.admin.scannedAt?.split('T')?.[0] || nowParts.date,
+                  adminTime: firestorePrimary.adminTime || firestorePrimary.admin.scannedAt?.split('T')?.[1]?.substring?.(0, 8) || nowParts.time,
                   adminCode: firestorePrimary.adminCode || firestorePrimary.code || validation.code,
                 }
               : {};
@@ -1935,6 +1935,7 @@ function App() {
 
     try {
       showCameraMessage('กำลังเปิดกล้อง...', 'idle');
+      const { Html5Qrcode, Html5QrcodeSupportedFormats } = await loadHtml5Qrcode();
       const scanner = new Html5Qrcode(regionId, {
         useBarCodeDetectorIfSupported: true,
         formatsToSupport: [
@@ -2511,6 +2512,7 @@ function App() {
       {/* Tab Bar */}
       <nav className="tab-bar" aria-label="เลือกโหมดการทำงาน">
         <button
+          data-testid="packer-tab"
           className={`tab-button ${activeTab === 'packer' ? 'active' : ''}`}
           type="button"
           onClick={() => { setActiveTab('packer'); setScanPopupOpen(false); void stopCamera(); }}
@@ -2519,6 +2521,7 @@ function App() {
           <span>📦 แพ็กสินค้า (Packer)</span>
         </button>
         <button
+          data-testid="drive-tab"
           className={`tab-button ${activeTab === 'drive' ? 'active' : ''}`}
           type="button"
           onClick={() => { setActiveTab('drive'); setScanPopupOpen(false); void stopCamera(); }}

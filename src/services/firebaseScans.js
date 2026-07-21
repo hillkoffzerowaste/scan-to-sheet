@@ -8,6 +8,7 @@ import {
   orderBy,
   query,
   runTransaction,
+  startAfter,
   setDoc,
   where,
   writeBatch,
@@ -17,6 +18,8 @@ import { marketplaceMetadata } from '../../scripts/marketplace-sync/normalize.js
 import { isCompleteScanOrder, marketplaceMetadataChanged } from './marketplaceImport.js';
 import { nextCalendarDate } from './calendarDate.js';
 import { isSheetSyncClaimable } from './sheetSync.js';
+import { collectFirestorePages } from './firestorePagination.js';
+import { buildRecoveredOrderFields, mergeExistingOrderWithCandidate, mergeScanEventIntoOrder } from './orderRecovery.js';
 
 function canWriteFirestore() {
   return Boolean(isFirebaseConfigured && firestoreDb);
@@ -214,13 +217,67 @@ async function getPackerOrdersByScanDate(date) {
   return snap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
 }
 
-async function getRecentOrders(maxRows = 500) {
+async function getAllOrders(pageSize = 500) {
   if (!canWriteFirestore()) {
     return [];
   }
 
-  const snap = await getDocs(query(collection(firestoreDb, 'orders'), orderBy('updatedAt', 'desc'), limit(maxRows)));
-  return snap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+  return collectFirestorePages(async (cursor, size) => {
+    const constraints = [
+      collection(firestoreDb, 'orders'),
+      orderBy('updatedAt', 'desc'),
+      limit(size),
+    ];
+    if (cursor) {
+      constraints.push(startAfter(cursor));
+    }
+    const snap = await getDocs(query(...constraints));
+    return {
+      items: snap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() })),
+      nextCursor: snap.docs.at(-1) ?? null,
+    };
+  }, { pageSize });
+}
+
+async function getScanEventCandidates(normalizedCode, rawCode) {
+  if (!canWriteFirestore() || !normalizedCode) return [];
+
+  const snapshots = await Promise.all([
+    getDocs(query(
+      collection(firestoreDb, 'scanEvents'),
+      where('normalizedCode', '==', normalizedCode),
+      limit(50),
+    )),
+    getDocs(query(
+      collection(firestoreDb, 'scanEvents'),
+      where('code', '==', rawCode),
+      limit(50),
+    )),
+  ]);
+  const candidates = new Map();
+
+  for (const snap of snapshots) {
+    for (const docSnap of snap.docs) {
+      const data = docSnap.data();
+      const candidateId = orderId({
+        date: data.date,
+        courier: data.courier,
+        code: data.normalizedCode || data.code || normalizedCode,
+      });
+      const event = {
+        ...data,
+        id: docSnap.id,
+        createdAtIso: data.createdAt
+          ? (typeof data.createdAt.toDate === 'function' ? data.createdAt.toDate().toISOString() : data.createdAt)
+          : '',
+      };
+      const current = candidates.get(candidateId);
+      const merged = mergeScanEventIntoOrder(current, event);
+      candidates.set(candidateId, { ...merged, id: candidateId, fromScanEvents: true });
+    }
+  }
+
+  return [...candidates.values()];
 }
 
 export function canUseFirestorePrimary() {
@@ -446,6 +503,7 @@ export async function mirrorScanToFirestore({ type, result, courier, user, packe
   await addDoc(collection(firestoreDb, 'scanEvents'), {
     type,
     code: result.code,
+    normalizedCode: normalizeCode(result.code).toUpperCase(),
     courier,
     status: result.status,
     date: result.date,
@@ -464,7 +522,7 @@ export async function recordPackerScanPrimary({ code, courier, date, time, user,
     return null;
   }
 
-  const normalizedCode = normalizeCode(code);
+  const normalizedCode = normalizeCode(code).toUpperCase();
   const marketplaceData = await findMarketplaceMetadataByTracking(normalizedCode);
 
   // Search broadly — older docs may only have `code` not `normalizedCode`
@@ -486,37 +544,7 @@ export async function recordPackerScanPrimary({ code, courier, date, time, user,
     // Field may be missing on some documents — safe to ignore
   }
 
-  // Fallback: search scanEvents for orders that were recorded via the mirror path
-  // (commitFallbackScan → mirrorScanToFirestore writes to scanEvents, not orders)
-  let byScanEvents = [];
-  try {
-    const scanSnap = await getDocs(query(
-      collection(firestoreDb, 'scanEvents'),
-      where('code', '==', code),
-      limit(10),
-    ));
-    for (const d of scanSnap.docs) {
-      const data = d.data();
-      // Only include if this code hasn't already been found in orders
-      if (existingIds.has(d.id)) continue;
-      // Create a synthetic order-like object so the rest of the logic works
-      byScanEvents.push({
-        fromScanEvents: true,
-        id: orderId({ date: data.date, courier: data.courier, code: normalizeCode(data.code || code) }),
-        code: data.code || code,
-        normalizedCode: normalizeCode(data.code || code),
-        courier: data.courier,
-        date: data.date,
-        packerScan: data.packer ? { scannedAt: `${data.date}T${data.time}`, packer: data.packer } : null,
-        admin: data.type === 'admin' ? { scannedAt: `${data.date}T${data.time}` } : null,
-        status: data.status === 'cancelled' ? 'cancelled' : (data.packer ? 'packer_scanned' : 'pending'),
-        updatedAtIso: data.createdAt ? (typeof data.createdAt.toDate === 'function' ? data.createdAt.toDate().toISOString() : data.createdAt) : '',
-      });
-    }
-  } catch {
-    // scanEvents may not exist or field missing — safe to ignore
-  }
-
+  const byScanEvents = await getScanEventCandidates(normalizedCode, code).catch(() => []);
   const allCandidates = [...byNormalized, ...byRawCode, ...byScanEvents];
 
   // Find best matching existing order — prioritize admin-scanned, then any packer
@@ -567,8 +595,10 @@ export async function recordPackerScanPrimary({ code, courier, date, time, user,
 
     // When the order was found only via scanEvents (not in orders), treat the synthetic as existing
     // so we update with the correct original date and courier instead of today's values
+    const recoveryCandidate = existingOrder?.fromScanEvents ? existingOrder : null;
     const effectiveExisting = existing
-      ?? (existingOrder?.fromScanEvents ? existingOrder : null);
+      ? mergeExistingOrderWithCandidate(existing, recoveryCandidate)
+      : recoveryCandidate;
 
     const wrongCourier = Boolean(effectiveExisting?.admin?.scannedAt && effectiveExisting.courier && effectiveExisting.courier !== courier);
     const correctedNote = wrongCourier
@@ -577,8 +607,21 @@ export async function recordPackerScanPrimary({ code, courier, date, time, user,
     const nextStatus = effectiveExisting?.admin?.scannedAt ? 'matched' : note ? 'issue' : 'packer_scanned';
     const effectiveDate = effectiveExisting?.date ?? date;
     const effectiveCourier = effectiveExisting?.courier ?? courier;
+    const recoveredFields = effectiveExisting
+      ? buildRecoveredOrderFields({
+          effectiveExisting,
+          date,
+          time,
+          courier,
+          code: normalizedCode,
+          packer,
+          note: correctedNote,
+          user,
+        })
+      : null;
     const payload = effectiveExisting
       ? {
+          ...recoveredFields,
           packer,
           date: effectiveDate,
           note: correctedNote,
@@ -608,12 +651,17 @@ export async function recordPackerScanPrimary({ code, courier, date, time, user,
 
     transaction.set(ref, payload, { merge: true });
 
+    const adminScannedAt = effectiveExisting?.admin?.scannedAt ?? '';
     return {
-      status: existing?.admin?.scannedAt ? 'matched' : 'created',
+      status: effectiveExisting?.admin?.scannedAt ? 'matched' : 'created',
       id: ref.id,
-      existing,
+      existing: existing ?? effectiveExisting,
       wrongCourier,
-      courier: existing?.courier ?? courier,
+      courier: effectiveCourier,
+      admin: effectiveExisting?.admin ?? null,
+      adminDate: adminScannedAt.split('T')[0] || effectiveDate,
+      adminTime: adminScannedAt.split('T')[1] || '',
+      adminCode: effectiveExisting?.code || normalizedCode,
       sheetSyncStatus: 'pending',
       sheetSyncAttemptId: attemptId,
     };
@@ -628,9 +676,11 @@ export async function recordAdminScanPrimary({ code, courier, date, time, user }
     return null;
   }
 
-  const normalizedCode = normalizeCode(code);
+  const normalizedCode = normalizeCode(code).toUpperCase();
   const marketplaceData = await findMarketplaceMetadataByTracking(normalizedCode);
-  const recent = findRecentOrder(await getRecentOrdersByCode(normalizedCode), { courier, normalizedCode });
+  const orderCandidates = await getRecentOrdersByCode(normalizedCode);
+  const scanEventCandidates = await getScanEventCandidates(normalizedCode, code).catch(() => []);
+  const recent = findRecentOrder([...orderCandidates, ...scanEventCandidates], { courier, normalizedCode });
   const ref = doc(firestoreDb, 'orders', recent?.id ?? orderId({ date, courier, code: normalizedCode }));
   const attemptId = newSheetSyncAttemptId();
 
@@ -659,9 +709,20 @@ export async function recordAdminScanPrimary({ code, courier, date, time, user }
       };
     }
 
-    const nextStatus = existing?.packerScan?.scannedAt ? 'matched' : 'pending';
+    const recoveryCandidate = recent?.fromScanEvents ? recent : null;
+    const effectiveExisting = existing
+      ? mergeExistingOrderWithCandidate(existing, recoveryCandidate)
+      : recoveryCandidate;
+    const nextStatus = effectiveExisting?.packerScan?.scannedAt ? 'matched' : 'pending';
     const payload = existing
       ? {
+          code: effectiveExisting?.code || normalizedCode,
+          normalizedCode: effectiveExisting?.normalizedCode || normalizedCode,
+          courier: effectiveExisting?.courier || courier,
+          date: effectiveExisting?.date || date,
+          packer: effectiveExisting?.packer || '',
+          note: effectiveExisting?.note || '',
+          ...(effectiveExisting?.packerScan ? { packerScan: effectiveExisting.packerScan } : {}),
           status: nextStatus,
           ...pendingSheetSyncFields(attemptId),
           updatedAt: serverTimestamp(),
@@ -672,6 +733,27 @@ export async function recordAdminScanPrimary({ code, courier, date, time, user }
             scannedBy: userPayload(user),
           },
         }
+      : effectiveExisting
+        ? {
+            code: effectiveExisting.code || normalizedCode,
+            normalizedCode: effectiveExisting.normalizedCode || normalizedCode,
+            courier: effectiveExisting.courier || courier,
+            date: effectiveExisting.date || date,
+            packer: effectiveExisting.packer || '',
+            note: effectiveExisting.note || '',
+            status: nextStatus,
+            admin: {
+              scannedAt: `${date}T${time}`,
+              scannedBy: userPayload(user),
+            },
+            packerScan: effectiveExisting.packerScan || null,
+            ...pendingSheetSyncFields(attemptId),
+            updatedAt: serverTimestamp(),
+            updatedAtIso: nowIso(),
+            user: userPayload(user),
+            createdAt: serverTimestamp(),
+            createdAtIso: nowIso(),
+          }
       : {
           ...baseOrderPayload({ type: 'admin', code: normalizedCode, courier, date, time, user, sheetSyncAttemptId: attemptId }),
           status: nextStatus,
@@ -686,9 +768,9 @@ export async function recordAdminScanPrimary({ code, courier, date, time, user }
     transaction.set(ref, payload, { merge: true });
 
     return {
-      status: existing?.packerScan?.scannedAt ? 'matched' : 'created',
+      status: effectiveExisting?.packerScan?.scannedAt ? 'matched' : 'created',
       id: ref.id,
-      existing,
+      existing: existing ?? effectiveExisting,
       sheetSyncStatus: 'pending',
       sheetSyncAttemptId: attemptId,
     };
@@ -959,7 +1041,7 @@ export async function searchScansFirestore({ query: searchQuery, couriers = [], 
   const term = normalizeCode(searchQuery);
   const sourceOrders = dates?.length
     ? (await Promise.all(dates.map((date) => getOrdersByDate(date)))).flat()
-    : await getRecentOrders(1000);
+    : await getAllOrders();
 
   return sourceOrders
     .filter((order) => {
@@ -974,7 +1056,7 @@ export async function searchScansFirestore({ query: searchQuery, couriers = [], 
 
 export async function getScanReportFirestore({ couriers = [], dates }) {
   const uniqueDates = [...new Set(dates)].filter(Boolean).sort();
-  const orders = (await getRecentOrders(2000)).filter((order) => {
+  const orders = (await getAllOrders()).filter((order) => {
     const eventDate = order.packerScan?.scannedAt?.split('T')[0]
       || order.admin?.scannedAt?.split('T')[0]
       || order.date;
@@ -1033,7 +1115,7 @@ export async function getScanReportFirestore({ couriers = [], dates }) {
 }
 
 export async function checkMissingOrdersFirestore({ courier = null, hoursLookback = 48, thresholdMinutes = 30 }) {
-  const orders = await getRecentOrders(1000);
+  const orders = await getAllOrders();
   const now = Date.now();
   const lookbackMs = hoursLookback * 60 * 60 * 1000;
   const thresholdMs = thresholdMinutes * 60 * 1000;
