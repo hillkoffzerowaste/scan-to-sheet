@@ -692,7 +692,10 @@ export async function recordAdminScanPrimary({ code, courier, date, time, user }
       if (marketplaceData) {
         transaction.set(ref, marketplaceData, { merge: true });
       }
-      const needsSheetRetry = isSheetSyncClaimable(existing);
+      // A manual rescan is an explicit request to reconcile the Sheet. Keep
+      // the Firestore document as the source of truth, but issue a fresh
+      // attempt for every unsynced state, including a recent pending attempt.
+      const needsSheetRetry = existing.sheetSyncStatus !== 'synced';
       if (needsSheetRetry) {
         transaction.set(ref, {
           ...pendingSheetSyncFields(attemptId),
@@ -701,7 +704,7 @@ export async function recordAdminScanPrimary({ code, courier, date, time, user }
         }, { merge: true });
       }
       return {
-        status: needsSheetRetry ? (existing.packerScan?.scannedAt ? 'matched' : 'created') : 'duplicate',
+        status: needsSheetRetry ? (existing.packerScan?.scannedAt ? 'matched' : 'retry') : 'duplicate',
         id: ref.id,
         existing,
         sheetSyncAttemptId: needsSheetRetry ? attemptId : (existing.sheetSyncAttemptId ?? ''),

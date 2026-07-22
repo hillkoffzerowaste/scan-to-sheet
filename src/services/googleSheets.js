@@ -1,4 +1,5 @@
 import { buildSheetBackfillUpdates, classifyLateOrder } from './marketplaceImport.js';
+import { findScanReconciliation } from './sheetSyncReconciliation.js';
 
 const DRIVE_API = 'https://www.googleapis.com/drive/v3';
 const SHEETS_API = 'https://sheets.googleapis.com/v4/spreadsheets';
@@ -1382,7 +1383,21 @@ export function listDatesInMonth(yearMonth) {
  * If the tracking code already exists in the admin columns (K-M),
  * merge the packer data into that existing row instead of rejecting as duplicate.
  */
-export async function appendScanGoogle({ token, config, courier, code, email, packer = '', note = '', marketplaceOrder = null }) {
+export async function appendScanGoogle({
+  token,
+  config,
+  courier,
+  code,
+  email,
+  packer = '',
+  note = '',
+  marketplaceOrder = null,
+  scanDate = null,
+  scanTime = null,
+  adminDate = null,
+  adminTime = null,
+  adminCode = null,
+}) {
   const normalizedCode = normalizeScanCode(code);
   const isCancelled = note === 'ลูกค้ายกเลิก';
   const sheet = config?.master;
@@ -1390,7 +1405,12 @@ export async function appendScanGoogle({ token, config, courier, code, email, pa
     throw new Error('ไม่พบ Google Sheet Master');
   }
 
-  const { date, time } = getBangkokParts();
+  const nowParts = getBangkokParts();
+  const date = scanDate || nowParts.date;
+  const time = scanTime || nowParts.time;
+  const effectiveAdminDate = adminDate || '';
+  const effectiveAdminTime = adminTime || '';
+  const effectiveAdminCode = normalizeScanCode(adminCode || '');
   await ensureDailyWorksheet({ token, spreadsheetId: sheet.id, date });
   const rows = await readDailyRows({ token, spreadsheetId: sheet.id, date });
   const parsedRows = rows.map(rowFromSheet);
@@ -1487,7 +1507,7 @@ export async function appendScanGoogle({ token, config, courier, code, email, pa
         const mergedRow = withMarketplaceCells([
           overallNo,
           courierNo,
-          currentRow.adminDate || currentRow.date || date,
+          currentRow.adminDate || effectiveAdminDate || currentRow.date || date,
           time,
           courier,
           normalizedCode,
@@ -1495,9 +1515,9 @@ export async function appendScanGoogle({ token, config, courier, code, email, pa
           packer,
           'Success',
           note,
-          currentRow.adminDate || date,
-          currentRow.adminTime || time,
-          currentRow.adminCode || normalizedCode,
+          currentRow.adminDate || effectiveAdminDate || date,
+          currentRow.adminTime || effectiveAdminTime || time,
+          currentRow.adminCode || effectiveAdminCode,
         ], marketplaceOrder ?? marketplaceOrderFromRow(currentRow));
 
         await updateDailyRow({
@@ -1536,7 +1556,7 @@ export async function appendScanGoogle({ token, config, courier, code, email, pa
       const currentRow = crossDayMatch.row;
       const mergedRow = withMarketplaceCells([
         currentRow.no, currentRow.courierNo, date, time, courier, normalizedCode, email, packer,
-        'Success', note, currentRow.adminDate || crossDayMatch.date, currentRow.adminTime || '', currentRow.adminCode || normalizedCode,
+        'Success', note, currentRow.adminDate || effectiveAdminDate || crossDayMatch.date, currentRow.adminTime || effectiveAdminTime || '', currentRow.adminCode || effectiveAdminCode,
       ], marketplaceOrder ?? marketplaceOrderFromRow(currentRow));
       await updateDailyRow({ token, spreadsheetId: sheet.id, date: crossDayMatch.date, rowNumber: currentRow.sheetRowNumber, row: mergedRow });
       return { status: 'success', courier, date, time, code: normalizedCode, rows: crossDayMatch.parsedRows.filter((row) => row.courier === courier).reverse().slice(0, 20), sheetUrl: sheet.webViewLink, merged: true, crossDay: true };
@@ -1556,7 +1576,7 @@ export async function appendScanGoogle({ token, config, courier, code, email, pa
       const correctedNote = [currentRow.note, `แพ็คเกอร์เลือกขนส่งไม่ตรงกับแอดมิน (เลือก ${courier})`].filter(Boolean).join(' | ');
       const mergedRow = withMarketplaceCells([
         currentRow.no, currentRow.courierNo, date, time, currentRow.courier, normalizedCode, email, packer,
-        'Success', correctedNote, currentRow.adminDate || adminMatchAnyCourier.date, currentRow.adminTime || '', currentRow.adminCode || normalizedCode,
+        'Success', correctedNote, currentRow.adminDate || effectiveAdminDate || adminMatchAnyCourier.date, currentRow.adminTime || effectiveAdminTime || '', currentRow.adminCode || effectiveAdminCode,
       ], marketplaceOrder ?? marketplaceOrderFromRow(currentRow));
       await updateDailyRow({ token, spreadsheetId: sheet.id, date: adminMatchAnyCourier.date, rowNumber: currentRow.sheetRowNumber, row: mergedRow });
       return {
@@ -1645,9 +1665,9 @@ export async function appendScanGoogle({ token, config, courier, code, email, pa
     packer,
     isCancelled ? 'Cancelled' : 'Success',
     note,
-    '',
-    '',
-    '',
+    effectiveAdminDate,
+    effectiveAdminTime,
+    effectiveAdminCode,
   ], marketplaceOrder);
 
   // Read existing rows to find the next empty row (avoid unreliable append API)
@@ -1713,9 +1733,9 @@ export async function appendScanGoogle({ token, config, courier, code, email, pa
     packer,
     concurrentDuplicate ? 'Duplicate' : isCancelled ? 'Cancelled' : 'Success',
     concurrentDuplicate ? 'Duplicate (concurrent scan)' : note,
-    '',
-    '',
-    '',
+    effectiveAdminDate,
+    effectiveAdminTime,
+    effectiveAdminCode,
   ], marketplaceOrder);
 
   const targetRowNumber = placeholderIdx >= 0 ? placeholderIdx + 2 : insertedIdx + 2;
@@ -1753,23 +1773,42 @@ export async function appendScanGoogle({ token, config, courier, code, email, pa
  * Admin "down Drive" scan — saves tracking number into columns K, L, M.
  * If packer already scanned this code (column F), merge admin data into that row.
  */
-export async function appendAdminScanGoogle({ token, config, courier, code, email, marketplaceOrder = null }) {
+export async function appendAdminScanGoogle({
+  token,
+  config,
+  courier,
+  code,
+  email,
+  marketplaceOrder = null,
+  scanDate = null,
+  scanTime = null,
+  adminDate = null,
+  adminTime = null,
+  adminCode = null,
+}) {
   const normalizedCode = normalizeScanCode(code);
   const sheet = config?.master;
   if (!sheet?.id) {
     throw new Error('ไม่พบ Google Sheet Master');
   }
 
-  const { date, time } = getBangkokParts();
+  const nowParts = getBangkokParts();
+  const date = scanDate || nowParts.date;
+  const time = scanTime || nowParts.time;
+  const effectiveAdminDate = adminDate || date;
+  const effectiveAdminTime = adminTime || time;
+  const effectiveAdminCode = normalizeScanCode(adminCode || normalizedCode);
   await ensureDailyWorksheet({ token, spreadsheetId: sheet.id, date });
   const rows = await readDailyRows({ token, spreadsheetId: sheet.id, date });
   const parsedRows = rows.map(rowFromSheet);
 
-  // 1) Check if admin already saved this code (duplicate admin scan)
-  const adminDuplicate = parsedRows.find(
-    (row) => normalizeScanCode(row.adminCode) === normalizedCode && row.courier === courier,
-  );
-  if (adminDuplicate) {
+  // 1) Reconcile against the existing row before any write.
+  const reconciliation = findScanReconciliation(parsedRows, {
+    courier,
+    code: normalizedCode,
+    isPacker: false,
+  });
+  if (reconciliation.action === 'skip') {
     return {
       status: 'duplicate',
       courier,
@@ -1781,10 +1820,8 @@ export async function appendAdminScanGoogle({ token, config, courier, code, emai
     };
   }
 
-  // 2) Check if packer already scanned this code (column F)
-  const packerRow = parsedRows.find(
-    (row) => normalizeScanCode(row.code) === normalizedCode && row.courier === courier,
-  );
+  // 2) If Packer already scanned, merge Admin data into that row.
+  const packerRow = reconciliation.action === 'merge-admin' ? reconciliation.row : null;
 
   if (packerRow) {
     // Merge: update existing row with admin fields
@@ -1808,9 +1845,9 @@ export async function appendAdminScanGoogle({ token, config, courier, code, emai
         currentRow.packer,
         currentRow.status || 'Success',
         currentRow.note || '',
-        date,
-        time,
-        normalizedCode,
+        effectiveAdminDate,
+        effectiveAdminTime,
+        effectiveAdminCode,
       ], marketplaceOrder ?? marketplaceOrderFromRow(currentRow));
 
       await updateDailyRow({
@@ -1838,12 +1875,26 @@ export async function appendAdminScanGoogle({ token, config, courier, code, emai
     }
   }
 
+  const crossDayAdminMatch = await findRowsAcrossDays({ token, spreadsheetId: sheet.id, currentDate: date, courier, code: effectiveAdminCode, field: 'adminCode' });
+  if (crossDayAdminMatch) {
+    return {
+      status: 'duplicate',
+      courier,
+      date,
+      time,
+      code: normalizedCode,
+      rows: crossDayAdminMatch.parsedRows.filter((row) => row.courier === courier).reverse().slice(0, 20),
+      sheetUrl: sheet.webViewLink,
+      crossDay: true,
+    };
+  }
+
   const crossDayMatch = await findRowsAcrossDays({ token, spreadsheetId: sheet.id, currentDate: date, courier, code: normalizedCode, field: 'code' });
   if (crossDayMatch) {
     const currentRow = crossDayMatch.row;
     const mergedRow = withMarketplaceCells([
       currentRow.no, currentRow.courierNo, currentRow.date, currentRow.time, currentRow.courier, currentRow.code,
-      currentRow.email, currentRow.packer, currentRow.status || 'Success', currentRow.note || '', date, time, normalizedCode,
+      currentRow.email, currentRow.packer, currentRow.status || 'Success', currentRow.note || '', effectiveAdminDate, effectiveAdminTime, effectiveAdminCode,
     ], marketplaceOrder ?? marketplaceOrderFromRow(currentRow));
     await updateDailyRow({ token, spreadsheetId: sheet.id, date: crossDayMatch.date, rowNumber: currentRow.sheetRowNumber, row: mergedRow });
     return { status: 'admin_matched', courier, date, time, code: normalizedCode, rows: crossDayMatch.parsedRows.filter((row) => row.courier === courier).reverse().slice(0, 20), sheetUrl: sheet.webViewLink, crossDay: true };
@@ -1863,9 +1914,9 @@ export async function appendAdminScanGoogle({ token, config, courier, code, emai
     '',
     'รอแพ็ค',
     '',
-    date,
-    time,
-    normalizedCode,
+    effectiveAdminDate,
+    effectiveAdminTime,
+    effectiveAdminCode,
   ], marketplaceOrder);
 
   // Read column A to compute next empty row
@@ -1923,9 +1974,9 @@ export async function appendAdminScanGoogle({ token, config, courier, code, emai
     '',
     'รอแพ็ค',
     '',
-    date,
-    time,
-    normalizedCode,
+    effectiveAdminDate,
+    effectiveAdminTime,
+    effectiveAdminCode,
   ], marketplaceOrder);
 
   await updateDailyRow({
@@ -2246,8 +2297,80 @@ export async function batchAppendScanGoogle({ token, config, orders }) {
       // c) Build placeholder rows and batch-append all at once (1 write)
       const placeholders = [];
       const placeholderMeta = []; // track which placeholder maps to which order
+      const directUpdates = [];
       for (const order of dateOrders) {
-        const { normalizedCode, courier, email, packer, note, isPacker } = order;
+        const { normalizedCode, courier, email, packer, note, isPacker, adminDate, adminTime, adminCode } = order;
+        const reconciliation = findScanReconciliation(existingParsed, { courier, code: normalizedCode, isPacker });
+
+        if (reconciliation.action === 'skip') {
+          results.push({
+            order,
+            result: {
+              status: 'duplicate',
+              courier,
+              date,
+              time: order.time,
+              code: normalizedCode,
+              row: reconciliation.row,
+              rows: existingParsed.filter((row) => row.courier === courier).reverse().slice(0, 20),
+              sheetUrl: sheet.webViewLink,
+            },
+          });
+          continue;
+        }
+
+        if (reconciliation.action === 'merge-admin' || reconciliation.action === 'merge-packer') {
+          const currentRow = reconciliation.row;
+          const mergedRow = reconciliation.action === 'merge-admin'
+            ? withMarketplaceCells([
+                currentRow.no,
+                currentRow.courierNo,
+                currentRow.date,
+                currentRow.time,
+                currentRow.courier,
+                currentRow.code,
+                currentRow.email,
+                currentRow.packer,
+                currentRow.status || 'Success',
+                currentRow.note || '',
+                adminDate || date,
+                adminTime || order.time,
+                adminCode || normalizedCode,
+              ], order.marketplaceOrder ?? marketplaceOrderFromRow(currentRow))
+            : withMarketplaceCells([
+                currentRow.no,
+                currentRow.courierNo,
+                date,
+                order.time,
+                currentRow.courier,
+                normalizedCode,
+                email,
+                packer || '',
+                'Success',
+                note || '',
+                currentRow.adminDate || adminDate || '',
+                currentRow.adminTime || adminTime || '',
+                currentRow.adminCode || adminCode || '',
+              ], order.marketplaceOrder ?? marketplaceOrderFromRow(currentRow));
+          directUpdates.push({ rowNumber: currentRow.sheetRowNumber, row: mergedRow });
+          results.push({
+            order,
+            result: {
+              status: reconciliation.action === 'merge-admin' ? 'admin_matched' : 'success',
+              courier,
+              date,
+              time: order.time,
+              code: normalizedCode,
+              row: rowFromSheet(mergedRow),
+              rows: [],
+              sheetUrl: sheet.webViewLink,
+              merged: true,
+            },
+          });
+          continue;
+        }
+
+        const hasAdmin = Boolean(adminCode);
         const placeholder = `_TEMP_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
         const status = isPacker ? 'Success' : 'รอแพ็ค';
         const placeholderRow = withMarketplaceCells([
@@ -2255,33 +2378,39 @@ export async function batchAppendScanGoogle({ token, config, orders }) {
           isPacker ? normalizedCode : '', email,
           isPacker ? (packer || '') : '',
           status, note || '',
-          isPacker ? '' : date, isPacker ? '' : order.time, isPacker ? '' : normalizedCode,
+          hasAdmin ? (adminDate || date) : '',
+          hasAdmin ? (adminTime || order.time) : '',
+          hasAdmin ? adminCode : '',
         ], order.marketplaceOrder ?? null);
         placeholders.push(placeholderRow);
         placeholderMeta.push({ order, placeholder, isPacker });
       }
 
-      // c.2) Compute next row from column A and write via PUT
-      const colARange = `${escapeSheetName(date)}!A:A`;
-      const colAData = await apiFetch(
-        `${SHEETS_API}/${sheet.id}/values/${encodeURIComponent(colARange)}?majorDimension=COLUMNS`,
-        token,
-      );
-      const existingColA = colAData.values?.[0] ?? [];
-      const startRow = existingColA.length + 1;
-      const writeRange = `${escapeSheetName(date)}!A${startRow}:${sheetEndColumn()}${startRow + placeholders.length - 1}`;
-      await apiFetch(
-        `${SHEETS_API}/${sheet.id}/values/${encodeURIComponent(writeRange)}?valueInputOption=USER_ENTERED`,
-        token,
-        { method: 'PUT', body: JSON.stringify({ values: placeholders }) },
-      );
+      // c.2) Compute next row from column A and write via PUT only for new rows.
+      if (placeholders.length > 0) {
+        const colARange = `${escapeSheetName(date)}!A:A`;
+        const colAData = await apiFetch(
+          `${SHEETS_API}/${sheet.id}/values/${encodeURIComponent(colARange)}?majorDimension=COLUMNS`,
+          token,
+        );
+        const existingColA = colAData.values?.[0] ?? [];
+        const startRow = existingColA.length + 1;
+        const writeRange = `${escapeSheetName(date)}!A${startRow}:${sheetEndColumn()}${startRow + placeholders.length - 1}`;
+        await apiFetch(
+          `${SHEETS_API}/${sheet.id}/values/${encodeURIComponent(writeRange)}?valueInputOption=USER_ENTERED`,
+          token,
+          { method: 'PUT', body: JSON.stringify({ values: placeholders }) },
+        );
+      }
 
       // d) Re-read (1 read)
       const currentRows = await readDailyRows({ token, spreadsheetId: sheet.id, date });
       const currentParsed = currentRows.map((row, idx) => rowFromSheet(row, idx));
 
       // e) Build batch update data — replace all placeholders with real data (1 write)
-      const batchData = [];
+      const batchData = directUpdates.flatMap(({ rowNumber, row }) => (
+        buildDailyRowUpdateData(date, rowNumber, row)
+      ));
       for (let i = 0; i < placeholderMeta.length; i++) {
         const { order, placeholder, isPacker } = placeholderMeta[i];
         // Find the placeholder row in current parsed data
@@ -2307,14 +2436,17 @@ export async function batchAppendScanGoogle({ token, config, orders }) {
         );
         const concurrentDuplicate = concurrentCodes.length > 1;
 
-        const { normalizedCode, courier, email, packer, note } = order;
+        const { normalizedCode, courier, email, packer, note, adminDate, adminTime, adminCode } = order;
+        const hasAdmin = Boolean(adminCode);
         const correctedRow = withMarketplaceCells([
           correctNo, correctCourierNo, date, order.time, courier,
           isPacker ? normalizedCode : '', email,
           isPacker ? (packer || '') : '',
           concurrentDuplicate ? 'Duplicate' : isPacker ? 'Success' : 'รอแพ็ค',
           concurrentDuplicate ? 'Duplicate (concurrent scan)' : (note || ''),
-          isPacker ? '' : date, isPacker ? '' : order.time, isPacker ? '' : normalizedCode,
+          hasAdmin ? (adminDate || date) : '',
+          hasAdmin ? (adminTime || order.time) : '',
+          hasAdmin ? adminCode : '',
         ], order.marketplaceOrder ?? null);
 
         const data = buildDailyRowUpdateData(date, rowNumber, correctedRow);
@@ -2357,6 +2489,9 @@ export async function batchAppendScanGoogle({ token, config, orders }) {
       }
     } catch (error) {
       // If the whole date batch fails, mark all orders in this group as failed
+      for (let index = results.length - 1; index >= 0; index -= 1) {
+        if (dateOrders.includes(results[index].order)) results.splice(index, 1);
+      }
       for (const order of dateOrders) {
         results.push({ order, result: null, error });
       }

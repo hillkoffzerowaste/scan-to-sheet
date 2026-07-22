@@ -97,6 +97,7 @@ import { groupMarketplaceRows, parseCsvText, parseMarketplaceRows } from './serv
 import { parseXlsxArrayBuffer } from './services/xlsxImport.js';
 import { loadHtml5Qrcode } from './services/cameraLoader.js';
 import { commitFallbackScan } from './services/scanCommit.js';
+import { getAdminScanTiming, shouldBlockPackerScan } from './services/sheetSyncReconciliation.js';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 const GOOGLE_SCOPES = [
@@ -1135,13 +1136,24 @@ function App() {
       // Build batch order list
       const batchOrders = orders.map((order) => {
         const isPacker = Boolean(order.packerScan?.scannedAt);
+        const timing = getAdminScanTiming(order, {
+          fallbackDate: getBangkokParts().date,
+          fallbackTime: getBangkokParts().time,
+        });
+        const hasAdmin = Boolean(order.admin?.scannedAt);
         return {
+          id: order.id,
           code: order.code || order.normalizedCode,
           courier: order.courier,
+          date: timing.sheetDate,
+          time: timing.sheetTime,
           email: order.packerScan?.scannedBy?.email || order.admin?.scannedBy?.email || order.user?.email || user.email,
           packer: order.packerScan?.packer ?? order.packer ?? '',
           note: order.packerScan?.note ?? order.note ?? '',
           isPacker,
+          adminDate: hasAdmin ? timing.adminDate : '',
+          adminTime: hasAdmin ? timing.adminTime : '',
+          adminCode: hasAdmin ? (order.code || order.normalizedCode) : '',
           marketplaceOrder: null, // Will be overridden below if found
         };
       });
@@ -1162,7 +1174,7 @@ function App() {
       // Mark individual results
       for (let i = 0; i < results.length; i++) {
         const { order: batchOrder, result, error } = results[i];
-        const firestoreOrder = orders[i];
+        const firestoreOrder = orders.find((order) => order.id === batchOrder?.id) ?? orders[i];
         if (result) {
           await markSheetSyncResult({
             orderId: firestoreOrder.id,
@@ -1266,19 +1278,11 @@ function App() {
       setScanValue('');
     }
 
-    // Prevent duplicate admin scan on the same day across all couriers
-    // Exception: if cancelling, allow re-scan to apply cancellation status
+    // Prevent only a true duplicate Packer scan. An Admin-only row must still
+    // reach the backend so the Packer fields can be merged into that row.
     if (scanRemark !== ISSUE_CUSTOMER_CANCELLED) {
-      const normalizedForDup = validation.code.toUpperCase().trim();
-      const alreadyInDrive = driveRecentRows.some(
-        (row) => (row.adminCode && row.adminCode.toUpperCase().trim() === normalizedForDup) ||
-                 (row.code && row.code.toUpperCase().trim() === normalizedForDup)
-      );
-      const alreadyInPacker = recentRows.some(
-        (row) => row.code && row.code.toUpperCase().trim() === normalizedForDup
-      );
-      if (alreadyInDrive || alreadyInPacker) {
-        const location = alreadyInDrive ? 'Drive' : 'Packer';
+      const alreadyInPacker = shouldBlockPackerScan(recentRows, validation.code, selectedCourier);
+      if (alreadyInPacker) {
         setStatus({
           type: 'duplicate',
           title: 'เลขซ้ำ — ลงแล้ว',
@@ -1726,15 +1730,42 @@ function App() {
           let backgroundResult = result;
           try {
             const marketplaceOrder = await marketplaceOrderPromise;
+            const adminScanTiming = getAdminScanTiming(
+              firestorePrimary?.existing ?? firestorePrimary,
+              { fallbackDate: nowParts.date, fallbackTime: nowParts.time },
+            );
+            const existingPackerScan = firestorePrimary?.existing?.packerScan;
+            const hasPackerScan = Boolean(existingPackerScan?.scannedAt);
             const sheetResult = await runWithGoogleRetry((accessToken, googleConfig) =>
-              appendAdminScanGoogle({
-                token: accessToken,
-                config: googleConfig,
-                courier: scanCourier,
-                code: validation.code,
-                email: scanEmail,
-                marketplaceOrder,
-              }),
+              hasPackerScan
+                ? appendScanGoogle({
+                    token: accessToken,
+                    config: googleConfig,
+                    courier: scanCourier,
+                    code: validation.code,
+                    email: existingPackerScan.scannedBy?.email || scanEmail,
+                    packer: existingPackerScan.packer || firestorePrimary?.existing?.packer || '',
+                    note: existingPackerScan.note || firestorePrimary?.existing?.note || '',
+                    marketplaceOrder,
+                    scanDate: adminScanTiming.sheetDate,
+                    scanTime: adminScanTiming.sheetTime,
+                    adminDate: adminScanTiming.adminDate,
+                    adminTime: adminScanTiming.adminTime,
+                    adminCode: firestorePrimary?.existing?.code || validation.code,
+                  })
+                : appendAdminScanGoogle({
+                    token: accessToken,
+                    config: googleConfig,
+                    courier: scanCourier,
+                    code: validation.code,
+                    email: scanEmail,
+                    marketplaceOrder,
+                    scanDate: adminScanTiming.sheetDate,
+                    scanTime: adminScanTiming.sheetTime,
+                    adminDate: adminScanTiming.adminDate,
+                    adminTime: adminScanTiming.adminTime,
+                    adminCode: firestorePrimary?.existing?.code || validation.code,
+                  }),
             );
             await markSheetSyncResult({ orderId: firestorePrimary.id, attemptId: firestorePrimary.sheetSyncAttemptId, ok: true, result: sheetResult }).catch(() => {});
             backgroundResult = { ...result, ...sheetResult, sheetSyncStatus: 'synced' };
