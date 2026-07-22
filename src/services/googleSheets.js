@@ -1398,6 +1398,64 @@ export async function appendScanGoogle({ token, config, courier, code, email, pa
   const duplicateRow = courierRows.find((row) => normalizeScanCode(row.code) === normalizeScanCode(normalizedCode));
   const duplicate = Boolean(duplicateRow);
 
+  // A cancellation can be scanned after the original packer row's day has
+  // rolled over. Find and update that historical row before appending today.
+  if (!duplicate && isCancelled) {
+    const crossDayMatch = await findRowsAcrossDays({
+      token,
+      spreadsheetId: sheet.id,
+      currentDate: date,
+      courier,
+      code: normalizedCode,
+      matcher: (candidateRows) => findCancellationRow(candidateRows, { courier, code: normalizedCode }),
+    });
+
+    if (crossDayMatch) {
+      const currentRow = crossDayMatch.row;
+      const updatedRow = withMarketplaceCells([
+        currentRow.no,
+        currentRow.courierNo,
+        currentRow.date,
+        currentRow.time,
+        currentRow.courier,
+        currentRow.code,
+        currentRow.email,
+        currentRow.packer,
+        'Cancelled',
+        note,
+        currentRow.adminDate || '',
+        currentRow.adminTime || '',
+        currentRow.adminCode || '',
+      ], marketplaceOrder ?? marketplaceOrderFromRow(currentRow));
+
+      await updateDailyRow({
+        token,
+        spreadsheetId: sheet.id,
+        date: crossDayMatch.date,
+        rowNumber: currentRow.sheetRowNumber,
+        row: updatedRow,
+      });
+
+      const nextRows = crossDayMatch.parsedRows
+        .map((row) => row.sheetRowNumber === currentRow.sheetRowNumber ? rowFromSheet(updatedRow) : row)
+        .filter((row) => row.courier === courier)
+        .reverse();
+
+      return {
+        status: 'cancelled',
+        courier,
+        date,
+        time,
+        code: normalizedCode,
+        count: crossDayMatch.parsedRows.filter((row) => row.courier === courier).length,
+        rows: nextRows,
+        sheetUrl: sheet.webViewLink,
+        crossDay: true,
+        updatedDate: crossDayMatch.date,
+      };
+    }
+  }
+
   // If packer scans a code that admin already put in column M, merge into that row
   if (!duplicate && !isCancelled) {
     const adminMatchRow = parsedRows.find(
@@ -2101,7 +2159,7 @@ function getLookbackDates(date, days = CROSS_DAY_LOOKBACK) {
   });
 }
 
-async function findRowsAcrossDays({ token, spreadsheetId, currentDate, courier = null, code, field }) {
+async function findRowsAcrossDays({ token, spreadsheetId, currentDate, courier = null, code, field, matcher = null }) {
   const normalizedCode = normalizeScanCode(code);
   const spreadsheet = await getSpreadsheet(token, spreadsheetId);
   const titles = new Set((spreadsheet.sheets ?? []).map((item) => item.properties.title));
@@ -2109,12 +2167,23 @@ async function findRowsAcrossDays({ token, spreadsheetId, currentDate, courier =
     if (!titles.has(date)) continue;
     const rows = await readDailyRows({ token, spreadsheetId, date });
     const parsedRows = rows.map((row, index) => rowFromSheet(row, index));
-    const match = parsedRows.find(
-      (row) => (!courier || row.courier === courier) && normalizeScanCode(row[field]) === normalizedCode,
-    );
+    const match = matcher
+      ? matcher(parsedRows)
+      : parsedRows.find(
+          (row) => (!courier || row.courier === courier) && normalizeScanCode(row[field]) === normalizedCode,
+        );
     if (match) return { date, parsedRows, row: match };
   }
   return null;
+}
+
+export function findCancellationRow(rows, { courier, code }) {
+  const normalizedCode = normalizeScanCode(code);
+  return rows.find(
+    (row) => row.courier === courier && normalizeScanCode(row.code) === normalizedCode,
+  ) ?? rows.find(
+    (row) => row.courier === courier && normalizeScanCode(row.adminCode) === normalizedCode,
+  ) ?? null;
 }
 
 function parseDateTime(dateStr, timeStr) {
