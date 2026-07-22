@@ -97,7 +97,7 @@ import { groupMarketplaceRows, parseCsvText, parseMarketplaceRows } from './serv
 import { parseXlsxArrayBuffer } from './services/xlsxImport.js';
 import { loadHtml5Qrcode } from './services/cameraLoader.js';
 import { commitFallbackScan } from './services/scanCommit.js';
-import { getAdminScanTiming, shouldBlockPackerScan } from './services/sheetSyncReconciliation.js';
+import { getAdminScanTiming, getScanIssueMeta, shouldBlockPackerScan } from './services/sheetSyncReconciliation.js';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 const GOOGLE_SCOPES = [
@@ -124,6 +124,7 @@ const CAMERA_POPUP_ID = 'camera-reader-popup';
 const CAMERA_COOLDOWN_MS = 5000;
 const CAMERA_SCAN_FPS = 18;
 const ISSUE_CUSTOMER_CANCELLED = 'ลูกค้ายกเลิก';
+const ISSUE_RETURNED = 'สินค้าตีกลับ';
 const ISSUE_DAMAGED = 'สินค้าเสียหาย';
 const PACKER_UNASSIGNED = 'ยังไม่ระบุ';
 const PACKERS = [PACKER_UNASSIGNED, 'กิต', 'มาย', 'ยุทธ', 'หล้า', 'มุก'];
@@ -311,7 +312,7 @@ function App() {
   const totalTodayCount = useMemo(() => summary.reduce((sum, item) => sum + item.count, 0), [summary]);
   const displayedRecentRows = showAllRecentRows ? recentRows : recentRows.slice(0, 3);
   const sheetUrl = config?.master?.webViewLink;
-  const requiresPacker = scanRemark !== ISSUE_CUSTOMER_CANCELLED && activeTab === 'packer';
+  const requiresPacker = !getScanIssueMeta(scanRemark).isIssue && activeTab === 'packer';
   const isPackerReady = !requiresPacker || selectedPacker !== PACKER_UNASSIGNED;
   const isDriveReady = isSignedIn && scanMethod === 'manual' ? true : isSignedIn;
 
@@ -1248,7 +1249,7 @@ function App() {
       return { status: 'error' };
     }
 
-    if (scanRemark !== ISSUE_CUSTOMER_CANCELLED && selectedPacker === PACKER_UNASSIGNED) {
+    if (!getScanIssueMeta(scanRemark).isIssue && selectedPacker === PACKER_UNASSIGNED) {
       setStatus({
         type: 'warning',
         title: 'เลือก Packer ก่อนสแกน',
@@ -1280,7 +1281,7 @@ function App() {
 
     // Prevent only a true duplicate Packer scan. An Admin-only row must still
     // reach the backend so the Packer fields can be merged into that row.
-    if (scanRemark !== ISSUE_CUSTOMER_CANCELLED) {
+    if (!getScanIssueMeta(scanRemark).isIssue) {
       const alreadyInPacker = shouldBlockPackerScan(recentRows, validation.code, selectedCourier);
       if (alreadyInPacker) {
         setStatus({
@@ -1343,8 +1344,9 @@ function App() {
       let result;
 
       if (firestorePrimary?.id) {
-        const rowStatus = scanNote === ISSUE_CUSTOMER_CANCELLED
-          ? 'Cancelled'
+        const issueMeta = getScanIssueMeta(scanNote);
+        const rowStatus = issueMeta.isIssue
+          ? issueMeta.sheetStatus
           : scanNote === ISSUE_DAMAGED
             ? 'Damaged'
             : 'Success';
@@ -1362,7 +1364,7 @@ function App() {
           sheetSyncStatus: 'pending',
         };
         result = {
-          status: scanNote === ISSUE_CUSTOMER_CANCELLED ? 'cancelled' : 'success',
+          status: issueMeta.resultStatus,
           courier: scanCourier,
           date: nowParts.date,
           time: nowParts.time,
@@ -1489,6 +1491,15 @@ function App() {
           message: `${result.code} ถูกทำเครื่องหมาย ${ISSUE_CUSTOMER_CANCELLED} ใน ${selectedCourier}`,
         });
         showCameraMessage(`${result.code} ยกเลิกแล้ว`, 'success');
+        playTone('success');
+        setScanRemark('');
+      } else if (result.status === 'returned') {
+        setStatus({
+          type: 'success',
+          title: 'บันทึกสินค้าตีกลับแล้ว',
+          message: `${result.code} ถูกทำเครื่องหมาย ${ISSUE_RETURNED} ใน ${selectedCourier}`,
+        });
+        showCameraMessage(`${result.code} ตีกลับแล้ว`, 'success');
         playTone('success');
         setScanRemark('');
       } else if (result.status === 'duplicate') {
@@ -1939,7 +1950,7 @@ function App() {
 
     if (scanModeRef.current === 'single') {
       await stopCamera();
-      if (result.status === 'success' || result.status === 'cancelled' || result.status === 'admin_scan' || result.status === 'admin_matched') {
+      if (result.status === 'success' || result.status === 'cancelled' || result.status === 'returned' || result.status === 'admin_scan' || result.status === 'admin_matched') {
         showCameraMessage('หยุดแล้ว: สแกนทีละรายการเสร็จ', 'success');
       }
     }
@@ -2784,6 +2795,14 @@ function App() {
                 >
                   {scanRemark === ISSUE_CUSTOMER_CANCELLED ? `✓ ${ISSUE_CUSTOMER_CANCELLED}` : ISSUE_CUSTOMER_CANCELLED}
                 </button>
+                <button
+                  className={scanRemark === ISSUE_RETURNED ? 'active' : ''}
+                  type="button"
+                  onClick={() => setScanRemark((value) => (value === ISSUE_RETURNED ? '' : ISSUE_RETURNED))}
+                  disabled={!isSignedIn || busy}
+                >
+                  {scanRemark === ISSUE_RETURNED ? `✓ ${ISSUE_RETURNED}` : ISSUE_RETURNED}
+                </button>
                 <span>
                   {scanRemark
                     ? `รายการถัดไป: ${selectedPacker} / ${scanRemark}`
@@ -3535,6 +3554,7 @@ function App() {
             </div>
 
             {activeTab === 'packer' && (
+              <>
               <button
                 className={`popup-cancel-btn ${scanRemark === ISSUE_CUSTOMER_CANCELLED ? 'active' : ''}`}
                 type="button"
@@ -3543,6 +3563,15 @@ function App() {
               >
                 {scanRemark === ISSUE_CUSTOMER_CANCELLED ? '✓ ลูกค้ายกเลิก' : 'ลูกค้ายกเลิก'}
               </button>
+              <button
+                className={`popup-cancel-btn ${scanRemark === ISSUE_RETURNED ? 'active' : ''}`}
+                type="button"
+                onClick={() => setScanRemark((v) => (v === ISSUE_RETURNED ? '' : ISSUE_RETURNED))}
+                disabled={!isSignedIn || busy}
+              >
+                {scanRemark === ISSUE_RETURNED ? `✓ ${ISSUE_RETURNED}` : ISSUE_RETURNED}
+              </button>
+              </>
             )}
 
             <div className="scan-controls">

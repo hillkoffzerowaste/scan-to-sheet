@@ -1,5 +1,5 @@
 import { buildSheetBackfillUpdates, classifyLateOrder } from './marketplaceImport.js';
-import { findScanReconciliation } from './sheetSyncReconciliation.js';
+import { findHistoricalIssueRow, findScanReconciliation, getScanIssueMeta } from './sheetSyncReconciliation.js';
 
 const DRIVE_API = 'https://www.googleapis.com/drive/v3';
 const SHEETS_API = 'https://sheets.googleapis.com/v4/spreadsheets';
@@ -1399,7 +1399,8 @@ export async function appendScanGoogle({
   adminCode = null,
 }) {
   const normalizedCode = normalizeScanCode(code);
-  const isCancelled = note === 'ลูกค้ายกเลิก';
+  const issueMeta = getScanIssueMeta(note);
+  const isIssueScan = issueMeta.isIssue;
   const sheet = config?.master;
   if (!sheet?.id) {
     throw new Error('ไม่พบ Google Sheet Master');
@@ -1420,14 +1421,14 @@ export async function appendScanGoogle({
 
   // A cancellation can be scanned after the original packer row's day has
   // rolled over. Find and update that historical row before appending today.
-  if (!duplicate && isCancelled) {
+  if (!duplicate && isIssueScan) {
     const crossDayMatch = await findRowsAcrossDays({
       token,
       spreadsheetId: sheet.id,
       currentDate: date,
       courier,
       code: normalizedCode,
-      matcher: (candidateRows) => findCancellationRow(candidateRows, { courier, code: normalizedCode }),
+      matcher: (candidateRows) => findHistoricalIssueRow(candidateRows, { courier, code: normalizedCode }),
     });
 
     if (crossDayMatch) {
@@ -1441,7 +1442,7 @@ export async function appendScanGoogle({
         currentRow.code,
         currentRow.email,
         currentRow.packer,
-        'Cancelled',
+        issueMeta.sheetStatus,
         note,
         currentRow.adminDate || '',
         currentRow.adminTime || '',
@@ -1462,7 +1463,7 @@ export async function appendScanGoogle({
         .reverse();
 
       return {
-        status: 'cancelled',
+        status: issueMeta.resultStatus,
         courier,
         date,
         time,
@@ -1477,7 +1478,7 @@ export async function appendScanGoogle({
   }
 
   // If packer scans a code that admin already put in column M, merge into that row
-  if (!duplicate && !isCancelled) {
+  if (!duplicate && !isIssueScan) {
     const adminMatchRow = parsedRows.find(
       (row) => normalizeScanCode(row.adminCode) === normalizeScanCode(normalizedCode) && row.courier === courier,
     );
@@ -1563,7 +1564,7 @@ export async function appendScanGoogle({
     }
   }
 
-  if (!duplicate && !isCancelled) {
+  if (!duplicate && !isIssueScan) {
     const adminMatchAnyCourier = await findRowsAcrossDays({
       token,
       spreadsheetId: sheet.id,
@@ -1587,7 +1588,7 @@ export async function appendScanGoogle({
     }
   }
 
-  if (duplicateRow && isCancelled) {
+  if (duplicateRow && isIssueScan) {
     const verifyRows = await readDailyRows({ token, spreadsheetId: sheet.id, date });
     const verifyParsed = verifyRows.map(rowFromSheet);
     const verifyCourierRows = verifyParsed.filter((row) => row.courier === courier);
@@ -1613,7 +1614,7 @@ export async function appendScanGoogle({
         currentRow.code,
         currentRow.email,
         currentRow.packer,
-        'Cancelled',
+        issueMeta.sheetStatus,
         note,
         currentRow.adminDate || '',
         currentRow.adminTime || '',
@@ -1627,7 +1628,7 @@ export async function appendScanGoogle({
         .filter((row) => row.courier === courier)
         .reverse();
       return {
-        status: 'cancelled',
+        status: issueMeta.resultStatus,
         courier,
         date,
         time,
@@ -1639,7 +1640,7 @@ export async function appendScanGoogle({
     }
   }
 
-  if (duplicate && !isCancelled) {
+  if (duplicate && !isIssueScan) {
     return {
       status: 'duplicate',
       courier,
@@ -1663,7 +1664,7 @@ export async function appendScanGoogle({
     normalizedCode,
     email,
     packer,
-    isCancelled ? 'Cancelled' : 'Success',
+    issueMeta.sheetStatus,
     note,
     effectiveAdminDate,
     effectiveAdminTime,
@@ -1731,7 +1732,7 @@ export async function appendScanGoogle({
     normalizedCode,
     email,
     packer,
-    concurrentDuplicate ? 'Duplicate' : isCancelled ? 'Cancelled' : 'Success',
+    concurrentDuplicate ? 'Duplicate' : issueMeta.sheetStatus,
     concurrentDuplicate ? 'Duplicate (concurrent scan)' : note,
     effectiveAdminDate,
     effectiveAdminTime,
@@ -1754,7 +1755,7 @@ export async function appendScanGoogle({
     .slice(0, 20);
 
   return {
-    status: concurrentDuplicate ? 'duplicate' : isCancelled ? 'cancelled' : 'success',
+    status: concurrentDuplicate ? 'duplicate' : issueMeta.resultStatus,
     courier,
     date,
     time,

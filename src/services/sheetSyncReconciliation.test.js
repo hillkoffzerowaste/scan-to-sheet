@@ -3,9 +3,25 @@ import assert from 'node:assert/strict';
 
 import {
   findScanReconciliation,
+  findHistoricalIssueRow,
   getAdminScanTiming,
+  getScanIssueMeta,
   shouldBlockPackerScan,
 } from './sheetSyncReconciliation.js';
+
+test('classifies returned scans as historical Sheet updates', () => {
+  assert.deepEqual(getScanIssueMeta('สินค้าตีกลับ'), {
+    isIssue: true,
+    sheetStatus: 'Returned',
+    resultStatus: 'returned',
+    firestoreStatus: 'returned',
+  });
+});
+
+test('finds the existing historical row by Packer or Admin code', () => {
+  const row = { courier: 'Kerry', code: '', adminCode: 'TH123' };
+  assert.equal(findHistoricalIssueRow([row], { courier: 'Kerry', code: 'th123' }), row);
+});
 
 test('does not block a Packer scan when only the Admin code exists', () => {
   assert.equal(

@@ -118,6 +118,8 @@ function orderToRow(order, id = '') {
   const hasAdmin = Boolean(admin?.scannedAt || order.status === 'pending' || order.status === 'matched');
   const status = isCancelledOrder(order)
     ? 'Cancelled'
+    : isReturnedOrder(order)
+      ? 'Returned'
     : isDamagedOrder(order)
       ? 'Damaged'
       : hasPacker

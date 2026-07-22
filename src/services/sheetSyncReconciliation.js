@@ -8,6 +8,23 @@ function scanParts(value) {
   return { date, time: time.slice(0, 8) };
 }
 
+export function getScanIssueMeta(note = '') {
+  if (note === 'ลูกค้ายกเลิก') {
+    return { isIssue: true, sheetStatus: 'Cancelled', resultStatus: 'cancelled', firestoreStatus: 'cancelled' };
+  }
+  if (note === 'สินค้าตีกลับ') {
+    return { isIssue: true, sheetStatus: 'Returned', resultStatus: 'returned', firestoreStatus: 'returned' };
+  }
+  return { isIssue: false, sheetStatus: 'Success', resultStatus: 'success', firestoreStatus: 'packer_scanned' };
+}
+
+export function findHistoricalIssueRow(rows, { courier, code }) {
+  const normalizedCode = normalizeCode(code);
+  return rows.find((row) => row.courier === courier && normalizeCode(row.code) === normalizedCode)
+    ?? rows.find((row) => row.courier === courier && normalizeCode(row.adminCode) === normalizedCode)
+    ?? null;
+}
+
 export function shouldBlockPackerScan(rows, code, courier = null) {
   const normalizedCode = normalizeCode(code);
   return rows.some((row) => (
