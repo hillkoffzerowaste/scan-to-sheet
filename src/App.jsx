@@ -175,6 +175,24 @@ async function apiJson(url, options = {}) {
   }
 }
 
+async function acquireSheetWriteLock(resource) {
+  const lockId = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+  for (let attempt = 0; attempt < 80; attempt += 1) {
+    const result = await apiJson('/api/sheet-lock', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'acquire', resource, lockId }),
+    });
+    if (result.acquired) return async () => {
+      await apiJson('/api/sheet-lock', {
+        method: 'POST',
+        body: JSON.stringify({ action: 'release', resource, lockId }),
+      }).catch(() => {});
+    };
+    await new Promise((resolve) => setTimeout(resolve, result.retryAfterMs ?? 250));
+  }
+  throw new Error('Google Sheet is busy; please retry');
+}
+
 async function loadServerGoogleConfig() {
   const data = await apiJson('/api/google-config');
   return data.config ?? null;
@@ -912,11 +930,15 @@ function App() {
     return { accessToken, config: prepared, user: nextUser };
   }
 
-  async function runWithGoogleRetry(action) {
+  async function runWithGoogleRetry(action, { sheetWrite = false } = {}) {
     if (signingOutRef.current) {
       throw new Error('Google session is signing out');
     }
+    let releaseLock = null;
     try {
+      if (sheetWrite) {
+        releaseLock = await acquireSheetWriteLock(config?.master?.id || 'master');
+      }
       return await action(token, config);
     } catch (error) {
       if (signingOutRef.current || !isGoogleAuthError(error)) {
@@ -929,6 +951,8 @@ function App() {
       }
 
       return action(session.accessToken, session.config);
+    } finally {
+      await releaseLock?.();
     }
   }
 
@@ -1170,6 +1194,7 @@ function App() {
       // Execute one batch call
       const results = await runWithGoogleRetry((accessToken, googleConfig) =>
         batchAppendScanGoogle({ token: accessToken, config: googleConfig, orders: batchOrders }),
+        { sheetWrite: true },
       );
 
       // Mark individual results
@@ -1399,7 +1424,7 @@ function App() {
                 marketplaceOrder,
                 ...adminData,
               }),
-            );
+            { sheetWrite: true });
             await markSheetSyncResult({ orderId: firestorePrimary.id, attemptId: firestorePrimary.sheetSyncAttemptId, ok: true, result: sheetResult }).catch(() => {});
             backgroundResult = { ...result, ...sheetResult, sheetSyncStatus: 'synced' };
           } catch (sheetError) {
@@ -1436,7 +1461,7 @@ function App() {
                 note: scanNote,
                 marketplaceOrder,
               }),
-            ),
+            { sheetWrite: true }),
             mirrorToFirestore: (sheetResult) => mirrorScanToFirestore({
               type: 'packer',
               result: sheetResult,
@@ -1677,7 +1702,7 @@ function App() {
                 email: user.email,
                 marketplaceOrder,
               }),
-            );
+            { sheetWrite: true });
             await markSheetSyncResult({
               orderId: order.id,
               attemptId: order.sheetSyncAttemptId || `reclaim_${Date.now()}`,
@@ -1777,7 +1802,7 @@ function App() {
                     adminTime: adminScanTiming.adminTime,
                     adminCode: firestorePrimary?.existing?.code || validation.code,
                   }),
-            );
+            { sheetWrite: true });
             await markSheetSyncResult({ orderId: firestorePrimary.id, attemptId: firestorePrimary.sheetSyncAttemptId, ok: true, result: sheetResult }).catch(() => {});
             backgroundResult = { ...result, ...sheetResult, sheetSyncStatus: 'synced' };
           } catch (sheetError) {
@@ -1810,7 +1835,7 @@ function App() {
                 email: scanEmail,
                 marketplaceOrder,
               }),
-            ),
+            { sheetWrite: true }),
             mirrorToFirestore: (sheetResult) => mirrorScanToFirestore({
               type: 'admin',
               result: sheetResult,
@@ -2245,6 +2270,7 @@ function App() {
           row,
           issue: ISSUE_DAMAGED,
         }),
+        { sheetWrite: true },
       );
       setSearchResults((current) =>
         current?.map((item) =>
