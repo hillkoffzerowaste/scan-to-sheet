@@ -8,5 +8,8 @@ export function isSheetSyncClaimable(order, now = Date.now()) {
 }
 
 export function shouldReconcileSheetOnRescan(order, scanType) {
-  return Boolean(order?.[scanType]?.scannedAt);
+  return Boolean(
+    order?.[scanType]?.scannedAt
+    && order.sheetSyncStatus !== 'synced',
+  );
 }

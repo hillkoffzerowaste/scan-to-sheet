@@ -1147,8 +1147,10 @@ function App() {
     if (showStatus) setDriveSyncBusy(true);
     let synced = 0;
     let failed = 0;
+    let claimedCount = 0;
     try {
       const orders = await claimRecoverableSheetSyncs({ maxRows: SHEET_RECOVERY_BATCH_SIZE });
+      claimedCount = orders.length;
       if (orders.length) {
         sheetRecoveryNextAllowedAtRef.current = Date.now() + SHEET_RECOVERY_COOLDOWN_MS;
       }
@@ -1239,7 +1241,12 @@ function App() {
       if (showStatus) {
         setStatus({ type: 'error', title: 'อัปเดต Sheet ไม่สำเร็จ', message: error.message });
       }
-      return { busy: false, claimed: 0, synced, failed: orders?.length ?? 0 };
+      return {
+        busy: false,
+        claimed: claimedCount,
+        synced,
+        failed: Math.max(failed, claimedCount - synced),
+      };
     } finally {
       sheetRecoveryRunningRef.current = false;
       if (showStatus) setDriveSyncBusy(false);

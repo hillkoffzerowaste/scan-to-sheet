@@ -19,8 +19,10 @@ test('only failed or stale per-order Sheet syncs can be claimed again', () => {
   assert.equal(isSheetSyncClaimable({ sheetSyncStatus: 'pending' }, now), true);
 });
 
-test('an explicit Admin or Packer rescan reconciles the Sheet, including synced Firestore orders', () => {
-  assert.equal(shouldReconcileSheetOnRescan({ admin: { scannedAt: '2026-07-23T10:00:00' }, sheetSyncStatus: 'synced' }, 'admin'), true);
-  assert.equal(shouldReconcileSheetOnRescan({ packerScan: { scannedAt: '2026-07-23T10:00:00' }, sheetSyncStatus: 'synced' }, 'packerScan'), true);
-  assert.equal(shouldReconcileSheetOnRescan({ sheetSyncStatus: 'synced' }, 'admin'), false);
+test('a rescan retries only an unsynced scan and keeps a synced order duplicate', () => {
+  assert.equal(shouldReconcileSheetOnRescan({ admin: { scannedAt: '2026-07-23T10:00:00' }, sheetSyncStatus: 'synced' }, 'admin'), false);
+  assert.equal(shouldReconcileSheetOnRescan({ packerScan: { scannedAt: '2026-07-23T10:00:00' }, sheetSyncStatus: 'synced' }, 'packerScan'), false);
+  assert.equal(shouldReconcileSheetOnRescan({ admin: { scannedAt: '2026-07-23T10:00:00' }, sheetSyncStatus: 'pending' }, 'admin'), true);
+  assert.equal(shouldReconcileSheetOnRescan({ packerScan: { scannedAt: '2026-07-23T10:00:00' }, sheetSyncStatus: 'failed' }, 'packerScan'), true);
+  assert.equal(shouldReconcileSheetOnRescan({ sheetSyncStatus: 'failed' }, 'admin'), false);
 });
