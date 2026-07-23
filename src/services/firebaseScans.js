@@ -17,7 +17,7 @@ import { firestoreDb, isFirebaseConfigured, serverTimestamp } from './firebase.j
 import { marketplaceMetadata } from '../../scripts/marketplace-sync/normalize.js';
 import { isCompleteScanOrder, marketplaceMetadataChanged } from './marketplaceImport.js';
 import { nextCalendarDate } from './calendarDate.js';
-import { isSheetSyncClaimable } from './sheetSync.js';
+import { isSheetSyncClaimable, shouldReconcileSheetOnRescan } from './sheetSync.js';
 import { collectFirestorePages } from './firestorePagination.js';
 import { buildRecoveredOrderFields, mergeExistingOrderWithCandidate, mergeScanEventIntoOrder } from './orderRecovery.js';
 
@@ -578,7 +578,7 @@ export async function recordPackerScanPrimary({ code, courier, date, time, user,
       if (marketplaceData) {
         transaction.set(ref, marketplaceData, { merge: true });
       }
-      const needsSheetRetry = isSheetSyncClaimable(existing);
+      const needsSheetRetry = shouldReconcileSheetOnRescan(existing, 'packerScan');
       if (needsSheetRetry) {
         transaction.set(ref, {
           ...pendingSheetSyncFields(attemptId),
@@ -697,7 +697,7 @@ export async function recordAdminScanPrimary({ code, courier, date, time, user }
       // A manual rescan is an explicit request to reconcile the Sheet. Keep
       // the Firestore document as the source of truth, but issue a fresh
       // attempt for every unsynced state, including a recent pending attempt.
-      const needsSheetRetry = existing.sheetSyncStatus !== 'synced';
+      const needsSheetRetry = shouldReconcileSheetOnRescan(existing, 'admin');
       if (needsSheetRetry) {
         transaction.set(ref, {
           ...pendingSheetSyncFields(attemptId),

@@ -6,3 +6,7 @@ export function isSheetSyncClaimable(order, now = Date.now()) {
   const startedAt = new Date(order.sheetSyncStartedAtIso ?? 0).getTime();
   return !Number.isFinite(startedAt) || now - startedAt >= SHEET_SYNC_STALE_MS;
 }
+
+export function shouldReconcileSheetOnRescan(order, scanType) {
+  return Boolean(order?.[scanType]?.scannedAt);
+}
