@@ -111,6 +111,7 @@ const SCOPES = GOOGLE_SCOPES.join(' ');
 const MARKETPLACE_BACKFILL_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 const SHEET_RECOVERY_BATCH_SIZE = 20;
 const SHEET_RECOVERY_COOLDOWN_MS = 5 * 1000;
+const COUNT_REFRESH_DELAY_MS = 1000;
 
 const EMPTY_USER = {
   email: 'ยังไม่ได้เข้าสู่ระบบ',
@@ -1056,7 +1057,7 @@ function App() {
           }
         }).catch(() => {});
       }
-    }, 60000);
+    }, COUNT_REFRESH_DELAY_MS);
   }
 
   function runAfterScanCommit(task) {

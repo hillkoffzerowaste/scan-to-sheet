@@ -211,12 +211,25 @@ async function getPackerOrdersByScanDate(date) {
 
   const start = `${date}T00:00:00`;
   const end = `${nextCalendarDate(date)}T00:00:00`;
-  const snap = await getDocs(query(
-    collection(firestoreDb, 'orders'),
-    where('packerScan.scannedAt', '>=', start),
-    where('packerScan.scannedAt', '<', end),
-  ));
-  return snap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+  try {
+    const snap = await getDocs(query(
+      collection(firestoreDb, 'orders'),
+      where('packerScan.scannedAt', '>=', start),
+      where('packerScan.scannedAt', '<', end),
+    ));
+    return snap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+  } catch (error) {
+    // Keep the Packer screen usable when the nested-field query is temporarily
+    // unavailable (for example during an index/rules rollout). The daily
+    // order query is already used by the rows view, so use it as a safe
+    // fallback and filter the scan timestamp locally.
+    console.warn('Packer summary query failed; using daily-order fallback:', error);
+    const orders = await getOrdersByDate(date);
+    return orders.filter((order) => {
+      const scannedAt = String(order.packerScan?.scannedAt ?? '');
+      return scannedAt >= start && scannedAt < end;
+    });
+  }
 }
 
 async function getAllOrders(pageSize = 500) {
