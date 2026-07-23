@@ -2003,14 +2003,10 @@ function App() {
     // the existing save flow update the final status in the background.
     if (scanModeRef.current === 'single') {
       await stopCamera();
-      const result = await saveTask;
-      if (result.status === 'scan_pending') {
-        showCameraMessage(result.message, 'warning');
-        return;
-      }
-      if (result.status === 'success' || result.status === 'cancelled' || result.status === 'returned' || result.status === 'admin_scan' || result.status === 'admin_matched') {
-        showCameraMessage('หยุดแล้ว: สแกนทีละรายการเสร็จ', 'success');
-      }
+      showCameraMessage('อ่านรหัสแล้ว กำลังบันทึกต่อเบื้องหลัง', 'warning');
+      void saveTask.catch((error) => {
+        console.warn('Background camera scan failed:', error);
+      });
       return;
     }
 
