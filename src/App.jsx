@@ -122,7 +122,6 @@ const LOGGED_OUT_FLAG = 'scan-to-sheet-logged-out-v1';
 const CAMERA_REGION_ID = 'camera-reader';
 const CAMERA_POPUP_ID = 'camera-reader-popup';
 const CAMERA_COOLDOWN_MS = 5000;
-const CAMERA_SAVE_TIMEOUT_MS = 15000;
 const CAMERA_SCAN_FPS = 18;
 const ISSUE_CUSTOMER_CANCELLED = 'ลูกค้ายกเลิก';
 const ISSUE_RETURNED = 'สินค้าตีกลับ';
@@ -228,16 +227,6 @@ function setMissingCheckCache(data) {
   } catch {
     // ignore
   }
-}
-
-function withCameraSaveTimeout(task) {
-  return Promise.race([
-    task,
-    new Promise((resolve) => window.setTimeout(() => resolve({
-      status: 'scan_pending',
-      message: 'อ่านรหัสแล้ว ระบบกำลังบันทึกต่อ กรุณาตรวจสถานะในรายการล่าสุด',
-    }), CAMERA_SAVE_TIMEOUT_MS)),
-  ]);
 }
 
 function App() {
@@ -1990,38 +1979,11 @@ function App() {
 
     lastCameraScanRef.current = { code, time: now };
     cameraSavingRef.current = true;
-    showCameraMessage(`อ่านได้: ${code} กำลังบันทึก...`, 'warning');
+    showCameraMessage(`อ่านได้: ${code}`, 'idle');
 
-    const saveTask = withCameraSaveTimeout(
-      activeTab === 'drive'
-        ? saveAdminScannedCode(code, 'camera')
-        : saveScannedCode(code, 'camera'),
-    );
-
-    // Do not keep the camera callback waiting for Firestore/Sheet. The scan
-    // is already captured; stop the single-shot camera immediately and let
-    // the existing save flow update the final status in the background.
-    if (scanModeRef.current === 'single') {
-      await stopCamera();
-      setStatus({
-        type: 'success',
-        title: 'บันทึกแล้ว',
-        message: `${code} รับเข้าระบบแล้ว กำลังตรวจสอบ Google Sheet`,
-      });
-      showCameraMessage(`บันทึกแล้ว: ${code}`, 'success');
-      void saveTask.catch((error) => {
-        console.warn('Background camera scan failed:', error);
-      });
-      return;
-    }
-
-    const result = await saveTask;
-
-    if (result.status === 'scan_pending') {
-      showCameraMessage(result.message, 'warning');
-      await stopCamera();
-      return;
-    }
+    const result = activeTab === 'drive'
+      ? await saveAdminScannedCode(code, 'camera')
+      : await saveScannedCode(code, 'camera');
 
     if (scanModeRef.current === 'single') {
       await stopCamera();
