@@ -1990,13 +1990,31 @@ function App() {
 
     lastCameraScanRef.current = { code, time: now };
     cameraSavingRef.current = true;
-    showCameraMessage(`อ่านได้: ${code}`, 'idle');
+    showCameraMessage(`อ่านได้: ${code} กำลังบันทึก...`, 'warning');
 
-    const result = await withCameraSaveTimeout(
+    const saveTask = withCameraSaveTimeout(
       activeTab === 'drive'
         ? saveAdminScannedCode(code, 'camera')
         : saveScannedCode(code, 'camera'),
     );
+
+    // Do not keep the camera callback waiting for Firestore/Sheet. The scan
+    // is already captured; stop the single-shot camera immediately and let
+    // the existing save flow update the final status in the background.
+    if (scanModeRef.current === 'single') {
+      await stopCamera();
+      const result = await saveTask;
+      if (result.status === 'scan_pending') {
+        showCameraMessage(result.message, 'warning');
+        return;
+      }
+      if (result.status === 'success' || result.status === 'cancelled' || result.status === 'returned' || result.status === 'admin_scan' || result.status === 'admin_matched') {
+        showCameraMessage('หยุดแล้ว: สแกนทีละรายการเสร็จ', 'success');
+      }
+      return;
+    }
+
+    const result = await saveTask;
 
     if (result.status === 'scan_pending') {
       showCameraMessage(result.message, 'warning');
