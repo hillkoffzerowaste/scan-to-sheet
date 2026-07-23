@@ -17,7 +17,11 @@ import { firestoreDb, isFirebaseConfigured, serverTimestamp } from './firebase.j
 import { marketplaceMetadata } from '../../scripts/marketplace-sync/normalize.js';
 import { isCompleteScanOrder, marketplaceMetadataChanged } from './marketplaceImport.js';
 import { nextCalendarDate } from './calendarDate.js';
-import { isSheetSyncClaimable, shouldReconcileSheetOnRescan } from './sheetSync.js';
+import {
+  isSheetSyncClaimable,
+  prioritizeSheetSyncCandidates,
+  shouldReconcileSheetOnRescan,
+} from './sheetSync.js';
 import { collectFirestorePages } from './firestorePagination.js';
 import { buildRecoveredOrderFields, mergeExistingOrderWithCandidate, mergeScanEventIntoOrder } from './orderRecovery.js';
 
@@ -824,11 +828,15 @@ export async function markSheetSyncResult({ orderId: id, attemptId = '', ok, res
 
 export async function claimRecoverableSheetSyncs({ maxRows = 20 } = {}) {
   if (!canWriteFirestore()) return [];
-  const statuses = ['pending', 'failed'];
+  const statuses = ['failed', 'pending'];
   const snapshots = await Promise.all(statuses.map((status) => getDocs(query(
     collection(firestoreDb, 'orders'), where('sheetSyncStatus', '==', status), limit(maxRows),
   ))));
-  const candidates = snapshots.flatMap((snap) => snap.docs).slice(0, maxRows);
+  const candidates = prioritizeSheetSyncCandidates({
+    failed: snapshots[0]?.docs,
+    pending: snapshots[1]?.docs,
+    maxRows,
+  });
   const claimed = [];
 
   for (const candidate of candidates) {

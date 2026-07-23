@@ -33,6 +33,10 @@ export function shouldBlockPackerScan(rows, code, courier = null) {
   ));
 }
 
+export function getPackerDuplicateMessage(code) {
+  return `${normalizeCode(code)} Packer สแกนแล้ว กรุณาตรวจสอบ`;
+}
+
 export function findScanReconciliation(rows, { courier, code, isPacker }) {
   const normalizedCode = normalizeCode(code);
   const courierRows = rows.filter((row) => !courier || row.courier === courier);

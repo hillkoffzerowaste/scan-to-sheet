@@ -2,7 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { nextCalendarDate } from './calendarDate.js';
-import { SHEET_SYNC_STALE_MS, isSheetSyncClaimable, shouldReconcileSheetOnRescan } from './sheetSync.js';
+import {
+  SHEET_SYNC_STALE_MS,
+  isSheetSyncClaimable,
+  prioritizeSheetSyncCandidates,
+  shouldReconcileSheetOnRescan,
+} from './sheetSync.js';
 
 test('nextCalendarDate advances without depending on local timezone', () => {
   assert.equal(nextCalendarDate('2026-07-18'), '2026-07-19');
@@ -25,4 +30,13 @@ test('a rescan retries only an unsynced scan and keeps a synced order duplicate'
   assert.equal(shouldReconcileSheetOnRescan({ admin: { scannedAt: '2026-07-23T10:00:00' }, sheetSyncStatus: 'pending' }, 'admin'), true);
   assert.equal(shouldReconcileSheetOnRescan({ packerScan: { scannedAt: '2026-07-23T10:00:00' }, sheetSyncStatus: 'failed' }, 'packerScan'), true);
   assert.equal(shouldReconcileSheetOnRescan({ sheetSyncStatus: 'failed' }, 'admin'), false);
+});
+
+test('failed Sheet syncs are recovered before pending syncs', () => {
+  const failed = [{ id: 'failed-1' }, { id: 'failed-2' }];
+  const pending = [{ id: 'pending-1' }, { id: 'pending-2' }];
+  assert.deepEqual(
+    prioritizeSheetSyncCandidates({ failed, pending, maxRows: 3 }).map((item) => item.id),
+    ['failed-1', 'failed-2', 'pending-1'],
+  );
 });

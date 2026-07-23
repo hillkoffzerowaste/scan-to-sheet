@@ -5,6 +5,7 @@ import {
   findScanReconciliation,
   findHistoricalIssueRow,
   getAdminScanTiming,
+  getPackerDuplicateMessage,
   getScanIssueMeta,
   shouldBlockPackerScan,
 } from './sheetSyncReconciliation.js';
@@ -34,6 +35,13 @@ test('blocks a Packer scan only when the Packer code already exists', () => {
   assert.equal(
     shouldBlockPackerScan([{ courier: 'Kerry', code: 'TH123', adminCode: '' }], 'th123'),
     true,
+  );
+});
+
+test('Packer duplicate status does not depend on Drive-only state', () => {
+  assert.equal(
+    getPackerDuplicateMessage('th123'),
+    'TH123 Packer สแกนแล้ว กรุณาตรวจสอบ',
   );
 });
 

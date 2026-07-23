@@ -2,10 +2,10 @@ import crypto from 'node:crypto';
 
 import { getSession, redisCommand, sendJson } from './_auth.js';
 
-const LOCK_TTL_SECONDS = 20;
+export const LOCK_TTL_SECONDS = 120;
 const LOCK_PREFIX = 'scan-to-sheet:sheet-lock:';
 
-function lockKey(value) {
+export function sheetLockKey(value) {
   return `${LOCK_PREFIX}${crypto.createHash('sha256').update(String(value)).digest('hex')}`;
 }
 
@@ -28,7 +28,7 @@ export default async function handler(req, res) {
       return;
     }
 
-    const key = lockKey(`${session.email}:${resource}`);
+    const key = sheetLockKey(resource);
     if (action === 'release') {
       await redisCommand(['EVAL', 'if redis.call("GET", KEYS[1]) == ARGV[1] then return redis.call("DEL", KEYS[1]) else return 0 end', '1', key, lockId]);
       sendJson(res, 200, { acquired: true });

@@ -13,3 +13,7 @@ export function shouldReconcileSheetOnRescan(order, scanType) {
     && order.sheetSyncStatus !== 'synced',
   );
 }
+
+export function prioritizeSheetSyncCandidates({ failed = [], pending = [], maxRows = 20 }) {
+  return [...failed, ...pending].slice(0, Math.max(0, maxRows));
+}

@@ -97,7 +97,12 @@ import { groupMarketplaceRows, parseCsvText, parseMarketplaceRows } from './serv
 import { parseXlsxArrayBuffer } from './services/xlsxImport.js';
 import { loadHtml5Qrcode } from './services/cameraLoader.js';
 import { commitFallbackScan } from './services/scanCommit.js';
-import { getAdminScanTiming, getScanIssueMeta, shouldBlockPackerScan } from './services/sheetSyncReconciliation.js';
+import {
+  getAdminScanTiming,
+  getPackerDuplicateMessage,
+  getScanIssueMeta,
+  shouldBlockPackerScan,
+} from './services/sheetSyncReconciliation.js';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 const GOOGLE_SCOPES = [
@@ -1320,7 +1325,7 @@ function App() {
         setStatus({
           type: 'duplicate',
           title: 'เลขซ้ำ — ลงแล้ว',
-          message: `${validation.code} ${alreadyInDrive ? 'เคยลง Drive แล้ว' : 'Packer สแกนแล้ว'} กรุณาตรวจสอบ`,
+          message: getPackerDuplicateMessage(validation.code),
         });
         showCameraMessage(`ลงแล้ว: ${validation.code}`, 'duplicate');
         playTone('duplicate');
