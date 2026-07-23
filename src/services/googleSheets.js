@@ -1640,6 +1640,52 @@ export async function appendScanGoogle({
     }
   }
 
+  // Admin may arrive after Packer. When the Packer row already exists, merge
+  // the Admin columns into that row instead of returning duplicate and losing
+  // the Drive scan on Sheet.
+  if (duplicateRow && !isIssueScan && effectiveAdminCode) {
+    const verifyRows = await readDailyRows({ token, spreadsheetId: sheet.id, date });
+    const verifyParsed = verifyRows.map(rowFromSheet);
+    const targetIdx = verifyParsed.findIndex(
+      (row) => row.courier === courier && normalizeScanCode(row.code) === normalizedCode,
+    );
+    if (targetIdx !== -1) {
+      const currentRow = verifyParsed[targetIdx];
+      const mergedRow = withMarketplaceCells([
+        currentRow.no,
+        currentRow.courierNo,
+        currentRow.date,
+        currentRow.time,
+        currentRow.courier,
+        currentRow.code,
+        currentRow.email,
+        currentRow.packer,
+        currentRow.status || 'Success',
+        currentRow.note || note,
+        effectiveAdminDate || currentRow.adminDate || currentRow.date,
+        effectiveAdminTime || currentRow.adminTime || currentRow.time,
+        effectiveAdminCode,
+      ], marketplaceOrder ?? marketplaceOrderFromRow(currentRow));
+      await updateDailyRow({
+        token,
+        spreadsheetId: sheet.id,
+        date,
+        rowNumber: targetIdx + 2,
+        row: mergedRow,
+      });
+      return {
+        status: 'admin_matched',
+        courier,
+        date,
+        time,
+        code: normalizedCode,
+        rows: verifyParsed.filter((row) => row.courier === courier).reverse().slice(0, 20),
+        sheetUrl: sheet.webViewLink,
+        merged: true,
+      };
+    }
+  }
+
   if (duplicate && !isIssueScan) {
     return {
       status: 'duplicate',

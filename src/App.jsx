@@ -2003,7 +2003,12 @@ function App() {
     // the existing save flow update the final status in the background.
     if (scanModeRef.current === 'single') {
       await stopCamera();
-      showCameraMessage('อ่านรหัสแล้ว กำลังบันทึกต่อเบื้องหลัง', 'warning');
+      setStatus({
+        type: 'success',
+        title: 'บันทึกแล้ว',
+        message: `${code} รับเข้าระบบแล้ว กำลังตรวจสอบ Google Sheet`,
+      });
+      showCameraMessage(`บันทึกแล้ว: ${code}`, 'success');
       void saveTask.catch((error) => {
         console.warn('Background camera scan failed:', error);
       });
