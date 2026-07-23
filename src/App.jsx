@@ -122,6 +122,7 @@ const LOGGED_OUT_FLAG = 'scan-to-sheet-logged-out-v1';
 const CAMERA_REGION_ID = 'camera-reader';
 const CAMERA_POPUP_ID = 'camera-reader-popup';
 const CAMERA_COOLDOWN_MS = 5000;
+const CAMERA_SAVE_TIMEOUT_MS = 15000;
 const CAMERA_SCAN_FPS = 18;
 const ISSUE_CUSTOMER_CANCELLED = 'ลูกค้ายกเลิก';
 const ISSUE_RETURNED = 'สินค้าตีกลับ';
@@ -227,6 +228,16 @@ function setMissingCheckCache(data) {
   } catch {
     // ignore
   }
+}
+
+function withCameraSaveTimeout(task) {
+  return Promise.race([
+    task,
+    new Promise((resolve) => window.setTimeout(() => resolve({
+      status: 'scan_pending',
+      message: 'อ่านรหัสแล้ว ระบบกำลังบันทึกต่อ กรุณาตรวจสถานะในรายการล่าสุด',
+    }), CAMERA_SAVE_TIMEOUT_MS)),
+  ]);
 }
 
 function App() {
@@ -1429,6 +1440,12 @@ function App() {
             backgroundResult = { ...result, ...sheetResult, sheetSyncStatus: 'synced' };
           } catch (sheetError) {
             await markSheetSyncResult({ orderId: firestorePrimary.id, attemptId: firestorePrimary.sheetSyncAttemptId, ok: false, error: sheetError }).catch(() => {});
+            setStatus({
+              type: 'warning',
+              title: 'บันทึก Firestore แล้ว แต่ Sheet ยังไม่สำเร็จ',
+              message: `${validation.code} ถูกเก็บไว้ในคิวกู้คืนอัตโนมัติ: ${sheetError.message}`,
+            });
+            showCameraMessage(`${validation.code} รอซิงก์ Sheet`, 'warning');
             backgroundResult = {
               ...result,
               sheetSyncStatus: 'failed',
@@ -1716,6 +1733,12 @@ function App() {
               ok: false,
               error: sheetError,
             }).catch(() => {});
+            setStatus({
+              type: 'warning',
+              title: 'บันทึก Firestore แล้ว แต่ Sheet ยังไม่สำเร็จ',
+              message: `${validation.code} ถูกเก็บไว้ในคิวกู้คืนอัตโนมัติ: ${sheetError.message}`,
+            });
+            showCameraMessage(`${validation.code} รอซิงก์ Sheet`, 'warning');
           }
           scheduleCountRefresh();
         });
@@ -1969,9 +1992,17 @@ function App() {
     cameraSavingRef.current = true;
     showCameraMessage(`อ่านได้: ${code}`, 'idle');
 
-    const result = activeTab === 'drive'
-      ? await saveAdminScannedCode(code, 'camera')
-      : await saveScannedCode(code, 'camera');
+    const result = await withCameraSaveTimeout(
+      activeTab === 'drive'
+        ? saveAdminScannedCode(code, 'camera')
+        : saveScannedCode(code, 'camera'),
+    );
+
+    if (result.status === 'scan_pending') {
+      showCameraMessage(result.message, 'warning');
+      await stopCamera();
+      return;
+    }
 
     if (scanModeRef.current === 'single') {
       await stopCamera();
