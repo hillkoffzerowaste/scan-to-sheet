@@ -1211,27 +1211,29 @@ function App() {
       );
 
       // Mark individual results
+      const markOperations = [];
       for (let i = 0; i < results.length; i++) {
         const { order: batchOrder, result, error } = results[i];
         const firestoreOrder = orders.find((order) => order.id === batchOrder?.id) ?? orders[i];
         if (result && isSheetSyncResultConfirmed(result)) {
-          await markSheetSyncResult({
+          synced += 1;
+          markOperations.push(markSheetSyncResult({
             orderId: firestoreOrder.id,
             attemptId: firestoreOrder.sheetSyncAttemptId,
             ok: true,
             result,
-          }).catch(() => {});
-          synced += 1;
+          }).catch(() => {}));
         } else {
           failed += 1;
-          await markSheetSyncResult({
+          markOperations.push(markSheetSyncResult({
             orderId: firestoreOrder.id,
             attemptId: firestoreOrder.sheetSyncAttemptId,
             ok: false,
             error: error || new Error('Batch sync did not confirm the Packer row in Google Sheets'),
-          }).catch(() => {});
+          }).catch(() => {}));
         }
       }
+      await Promise.all(markOperations);
 
       scheduleCountRefresh();
       if (showStatus) {

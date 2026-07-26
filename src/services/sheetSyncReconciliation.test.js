@@ -101,4 +101,10 @@ test('does not confirm a Packer duplicate without the Packer row', () => {
     isPacker: true,
     row: { code: 'TH123', packer: 'กิต' },
   }), true);
+  assert.equal(isSheetSyncResultConfirmed({
+    status: 'duplicate',
+    code: 'TH123',
+    isPacker: false,
+    row: { code: '', adminCode: 'TH123' },
+  }), true);
 });

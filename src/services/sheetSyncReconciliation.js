@@ -82,7 +82,8 @@ export function isSheetSyncResultConfirmed(result) {
   if (result.status !== 'duplicate') return true;
 
   const row = result.row;
-  if (!row || normalizeCode(row.code) !== normalizeCode(result.code)) return false;
+  const rowCode = result.isPacker ? row?.code : (row?.adminCode || row?.code);
+  if (!row || normalizeCode(rowCode) !== normalizeCode(result.code)) return false;
   if (result.isPacker && !String(row.packer ?? '').trim()) return false;
   return true;
 }
