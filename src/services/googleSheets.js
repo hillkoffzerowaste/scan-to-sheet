@@ -917,7 +917,6 @@ export function buildMarketplaceFormattingRequests(sheetId) {
               foregroundColor: { red: 1, green: 1, blue: 1 },
               bold: true,
             },
-            horizontalAlignment: 'CENTER',
           },
         },
       },

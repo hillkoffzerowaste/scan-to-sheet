@@ -49,7 +49,7 @@ test('buildMarketplaceFormattingRequests colors platform cells with readable bra
       foregroundColor: { red: 1, green: 1, blue: 1 },
       bold: true,
     });
-    assert.equal(rule.booleanRule.format.horizontalAlignment, 'CENTER');
+    assert.equal(rule.booleanRule.format.horizontalAlignment, undefined);
   }
 
   assert.match(rules[0].booleanRule.condition.values[0].userEnteredValue, /shopee/);
