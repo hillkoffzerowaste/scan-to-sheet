@@ -24,7 +24,7 @@ import {
   shouldReconcileSheetOnRescan,
 } from './sheetSync.js';
 import { collectFirestorePages } from './firestorePagination.js';
-import { buildRecoveredOrderFields, mergeExistingOrderWithCandidate, mergeScanEventIntoOrder } from './orderRecovery.js';
+import { buildRecoveredOrderFields, chooseCanonicalOrder, mergeExistingOrderWithCandidate, mergeScanEventIntoOrder } from './orderRecovery.js';
 import {
   getMissingOrderQueryFilters,
   getMissingOrderQueryWindow,
@@ -337,6 +337,7 @@ async function getScanEventCandidates(normalizedCode, rawCode) {
   for (const snap of snapshots) {
     for (const docSnap of snap.docs) {
       const data = docSnap.data();
+      if (data.duplicateOf) continue;
       const candidateId = orderId({
         date: data.date,
         courier: data.courier,
@@ -629,7 +630,8 @@ export async function recordPackerScanPrimary({ code, courier, date, time, user,
   // For cancellation/damage, ignore courier constraint so cross-courier edits work
   const isCancelling = note === 'ลูกค้ายกเลิก';
   const anyCourier = isCancelling;
-  const recent = findRecentAdminOrderByCode(allCandidates, { normalizedCode, days: 365 })
+  const recent = chooseCanonicalOrder(allCandidates, normalizedCode)
+    ?? findRecentAdminOrderByCode(allCandidates, { normalizedCode, days: 365 })
     ?? findRecentOrder(allCandidates, { courier, normalizedCode, days: 365, anyCourier });
 
   // If still not found, look for ANY order with this code regardless of courier/recency
@@ -756,9 +758,11 @@ export async function recordAdminScanPrimary({ code, courier, date, time, user }
 
   const normalizedCode = normalizeCode(code).toUpperCase();
   const marketplaceData = await findMarketplaceMetadataByTracking(normalizedCode);
-  const orderCandidates = await getRecentOrdersByCode(normalizedCode);
+  const orderCandidates = await getRecentOrdersByCode(normalizedCode, 50);
   const scanEventCandidates = await getScanEventCandidates(normalizedCode, code).catch(() => []);
-  const recent = findRecentOrder([...orderCandidates, ...scanEventCandidates], { courier, normalizedCode });
+  const allCandidates = [...orderCandidates, ...scanEventCandidates];
+  const recent = chooseCanonicalOrder(allCandidates, normalizedCode)
+    ?? findRecentOrder(allCandidates, { courier, normalizedCode });
   const ref = doc(firestoreDb, 'orders', recent?.id ?? orderId({ date, courier, code: normalizedCode }));
   const attemptId = newSheetSyncAttemptId();
 

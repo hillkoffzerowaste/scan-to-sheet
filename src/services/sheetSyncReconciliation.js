@@ -22,14 +22,14 @@ export function findHistoricalIssueRow(rows, { courier, code }) {
   const normalizedCode = normalizeCode(code);
   return rows.find((row) => row.courier === courier && normalizeCode(row.code) === normalizedCode)
     ?? rows.find((row) => row.courier === courier && normalizeCode(row.adminCode) === normalizedCode)
+    ?? rows.find((row) => normalizeCode(row.code) === normalizedCode || normalizeCode(row.adminCode) === normalizedCode)
     ?? null;
 }
 
 export function shouldBlockPackerScan(rows, code, courier = null) {
   const normalizedCode = normalizeCode(code);
   return rows.some((row) => (
-    (!courier || row.courier === courier)
-      && normalizeCode(row.code) === normalizedCode
+    normalizeCode(row.code) === normalizedCode
   ));
 }
 
@@ -40,8 +40,10 @@ export function getPackerDuplicateMessage(code) {
 export function findScanReconciliation(rows, { courier, code, isPacker }) {
   const normalizedCode = normalizeCode(code);
   const courierRows = rows.filter((row) => !courier || row.courier === courier);
-  const adminRow = courierRows.find((row) => normalizeCode(row.adminCode) === normalizedCode);
-  const packerRow = courierRows.find((row) => normalizeCode(row.code) === normalizedCode);
+  const adminRow = courierRows.find((row) => normalizeCode(row.adminCode) === normalizedCode)
+    ?? rows.find((row) => normalizeCode(row.adminCode) === normalizedCode);
+  const packerRow = courierRows.find((row) => normalizeCode(row.code) === normalizedCode)
+    ?? rows.find((row) => normalizeCode(row.code) === normalizedCode);
 
   if (isPacker) {
     if (packerRow) {

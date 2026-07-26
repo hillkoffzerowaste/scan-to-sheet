@@ -12,6 +12,35 @@ function eventUser(event) {
   return event?.user ?? { uid: '', email: '', name: '' };
 }
 
+function orderScanTimestamp(order) {
+  return [
+    order?.admin?.scannedAt,
+    order?.packerScan?.scannedAt,
+    order?.createdAtIso,
+    order?.updatedAtIso,
+  ].filter(Boolean).map((value) => String(value)).sort()[0] ?? '';
+}
+
+export function chooseCanonicalOrder(orders = [], normalizedCode = '') {
+  const target = normalizeCode(normalizedCode);
+  return orders
+    .filter((order) => !target || normalizeCode(order?.normalizedCode || order?.code) === target)
+    .slice()
+    .sort((left, right) => {
+      const leftHasPacker = Boolean(left?.packerScan?.scannedAt);
+      const rightHasPacker = Boolean(right?.packerScan?.scannedAt);
+      if (leftHasPacker !== rightHasPacker) return leftHasPacker ? -1 : 1;
+
+      const leftIsRealOrder = !left?.fromScanEvents;
+      const rightIsRealOrder = !right?.fromScanEvents;
+      if (leftIsRealOrder !== rightIsRealOrder) return leftIsRealOrder ? -1 : 1;
+
+      const timestampOrder = orderScanTimestamp(left).localeCompare(orderScanTimestamp(right));
+      if (timestampOrder !== 0) return timestampOrder;
+      return String(left?.id ?? '').localeCompare(String(right?.id ?? ''));
+    })[0] ?? null;
+}
+
 export function mergeScanEventIntoOrder(existing, event) {
   const code = String(event?.code ?? existing?.code ?? '').trim();
   const normalizedCode = normalizeCode(event?.normalizedCode || code || existing?.normalizedCode);

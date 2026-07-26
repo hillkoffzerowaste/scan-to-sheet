@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildRecoveredOrderFields, mergeExistingOrderWithCandidate, mergeScanEventIntoOrder } from './orderRecovery.js';
+import { buildRecoveredOrderFields, chooseCanonicalOrder, mergeExistingOrderWithCandidate, mergeScanEventIntoOrder } from './orderRecovery.js';
 
 test('merges admin and packer mirror events into one complete order candidate', () => {
   const admin = mergeScanEventIntoOrder(null, {
@@ -77,4 +77,10 @@ test('recovery fills missing fields in an incomplete Firestore order from the mi
   assert.equal(merged.code, 'ABC123');
   assert.equal(merged.normalizedCode, 'ABC123');
   assert.equal(merged.admin.scannedAt, '2026-07-21T09:10:00');
+});
+
+test('chooses one canonical tracking order across courier duplicates', () => {
+  const canonical = { id: 'jnt', code: 'TH123', courier: 'J&T', admin: { scannedAt: '2026-07-26T10:26:36' } };
+  const laterDuplicate = { id: 'shopee', code: 'TH123', courier: 'Shopee', admin: { scannedAt: '2026-07-26T10:26:45' } };
+  assert.equal(chooseCanonicalOrder([laterDuplicate, canonical]).id, 'jnt');
 });

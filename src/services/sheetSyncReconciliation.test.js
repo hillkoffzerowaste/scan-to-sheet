@@ -39,6 +39,13 @@ test('blocks a Packer scan only when the Packer code already exists', () => {
   );
 });
 
+test('blocks a Packer scan when the same tracking exists under another courier', () => {
+  assert.equal(
+    shouldBlockPackerScan([{ courier: 'J&T', code: 'TH123', adminCode: '' }], 'TH123', 'Shopee'),
+    true,
+  );
+});
+
 test('Packer duplicate status does not depend on Drive-only state', () => {
   assert.equal(
     getPackerDuplicateMessage('th123'),
@@ -74,6 +81,18 @@ test('creates a row only when neither Admin nor Packer data exists', () => {
   assert.deepEqual(findScanReconciliation([], { courier: 'Kerry', code: 'TH123', isPacker: false }), {
     action: 'create',
     row: null,
+  });
+});
+
+test('reuses the same tracking row even when a different courier is selected', () => {
+  const row = { courier: 'J&T', code: '', adminCode: 'TH123' };
+  assert.deepEqual(findScanReconciliation([row], { courier: 'Shopee', code: 'TH123', isPacker: false }), {
+    action: 'skip',
+    row,
+  });
+  assert.deepEqual(findScanReconciliation([row], { courier: 'Shopee', code: 'TH123', isPacker: true }), {
+    action: 'merge-packer',
+    row,
   });
 });
 
