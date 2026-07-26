@@ -830,6 +830,7 @@ async function formatDailyWorksheet({ token, spreadsheetId, date, sheetId }) {
           },
         },
         ...buildStatusFormattingRequests(sheetId),
+        ...buildMarketplaceFormattingRequests(sheetId),
       ],
     }),
   });
@@ -895,6 +896,47 @@ function buildStatusFormattingRequests(sheetId) {
     rule(orderStatusRange, '=$U2="รอแพ็คเกิน 1 วัน"', { red: 0.98, green: 0.82, blue: 0.82 }, { red: 0.65, green: 0.05, blue: 0.05 }, true),
     rule(crossDayRange, '=$V2="ใช่"', { red: 1, green: 0.9, blue: 0.75 }, { red: 0.65, green: 0.35, blue: 0 }),
   ];
+}
+
+export function buildMarketplaceFormattingRequests(sheetId) {
+  const marketplaceRange = {
+    sheetId,
+    startRowIndex: 1,
+    startColumnIndex: 13,
+    endColumnIndex: 14,
+  };
+  const rule = (formula, backgroundColor) => ({
+    addConditionalFormatRule: {
+      rule: {
+        ranges: [marketplaceRange],
+        booleanRule: {
+          condition: { type: 'CUSTOM_FORMULA', values: [{ userEnteredValue: formula }] },
+          format: {
+            backgroundColor,
+            textFormat: {
+              foregroundColor: { red: 1, green: 1, blue: 1 },
+              bold: true,
+            },
+            horizontalAlignment: 'CENTER',
+          },
+        },
+      },
+      index: 0,
+    },
+  });
+
+  return [
+    rule('=REGEXMATCH(LOWER(TRIM($N2)),"^shopee")', { red: 0.933, green: 0.302, blue: 0.176 }),
+    rule('=REGEXMATCH(LOWER(TRIM($N2)),"^(lazada|kex lazada)")', { red: 0.102, green: 0.451, blue: 0.910 }),
+    rule('=REGEXMATCH(LOWER(TRIM($N2)),"^tiktok")', { red: 0, green: 0, blue: 0 }),
+  ];
+}
+
+async function applyMarketplaceFormatting({ token, spreadsheetId, sheetId }) {
+  await apiFetch(`${SHEETS_API}/${spreadsheetId}:batchUpdate`, token, {
+    method: 'POST',
+    body: JSON.stringify({ requests: buildMarketplaceFormattingRequests(sheetId) }),
+  });
 }
 
 async function readDailyRows({ token, spreadsheetId, date }) {
@@ -1101,7 +1143,8 @@ export async function colorAllHistoricalSheetsGoogle({ token, config }) {
   const spreadsheet = await getSpreadsheet(token, spreadsheetId);
   const dateSheets = (spreadsheet.sheets ?? [])
     .map((item) => item.properties)
-    .filter((properties) => /^\d{4}-\d{2}-\d{2}(?:_conflict\d+)?$/.test(properties.title));
+    .filter((properties) => /^\d{4}-\d{2}-\d{2}(?:_conflict\d+)?$/.test(properties.title))
+    .filter((properties) => properties.title.slice(0, 10) !== getBangkokParts().date);
   let colored = 0;
   for (const sheet of dateSheets) {
     if ((sheet.gridProperties?.columnCount ?? 0) < TOTAL_COLUMNS) {
@@ -1113,6 +1156,7 @@ export async function colorAllHistoricalSheetsGoogle({ token, config }) {
         } }] }),
       });
     }
+    await applyMarketplaceFormatting({ token, spreadsheetId, sheetId: sheet.sheetId });
     await applyStatusCellColors({ token, spreadsheetId, date: sheet.title, sheetId: sheet.sheetId });
     colored += 1;
   }
