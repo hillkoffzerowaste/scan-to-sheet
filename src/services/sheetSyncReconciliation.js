@@ -63,7 +63,7 @@ export function getAdminScanTiming(order, { fallbackDate = '', fallbackTime = ''
 
   return {
     sheetDate: hasPacker
-      ? order?.date || packerParts.date || adminDate
+      ? packerParts.date || order?.date || adminDate
       : adminDate,
     sheetTime: hasPacker
       ? packerParts.time || fallbackTime
@@ -71,4 +71,14 @@ export function getAdminScanTiming(order, { fallbackDate = '', fallbackTime = ''
     adminDate,
     adminTime,
   };
+}
+
+export function isSheetSyncResultConfirmed(result) {
+  if (!result) return false;
+  if (result.status !== 'duplicate') return true;
+
+  const row = result.row;
+  if (!row || normalizeCode(row.code) !== normalizeCode(result.code)) return false;
+  if (result.isPacker && !String(row.packer ?? '').trim()) return false;
+  return true;
 }

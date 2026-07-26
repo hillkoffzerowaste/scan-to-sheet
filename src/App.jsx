@@ -102,6 +102,7 @@ import {
   getAdminScanTiming,
   getPackerDuplicateMessage,
   getScanIssueMeta,
+  isSheetSyncResultConfirmed,
   shouldBlockPackerScan,
 } from './services/sheetSyncReconciliation.js';
 
@@ -1201,7 +1202,7 @@ function App() {
       for (let i = 0; i < results.length; i++) {
         const { order: batchOrder, result, error } = results[i];
         const firestoreOrder = orders.find((order) => order.id === batchOrder?.id) ?? orders[i];
-        if (result) {
+        if (result && isSheetSyncResultConfirmed(result)) {
           await markSheetSyncResult({
             orderId: firestoreOrder.id,
             attemptId: firestoreOrder.sheetSyncAttemptId,
@@ -1215,7 +1216,7 @@ function App() {
             orderId: firestoreOrder.id,
             attemptId: firestoreOrder.sheetSyncAttemptId,
             ok: false,
-            error: error || new Error('Batch sync returned no result'),
+            error: error || new Error('Batch sync did not confirm the Packer row in Google Sheets'),
           }).catch(() => {});
         }
       }
@@ -1430,6 +1431,9 @@ function App() {
                 ...adminData,
               }),
             { sheetWrite: true });
+            if (!isSheetSyncResultConfirmed(sheetResult)) {
+              throw new Error('Google Sheets returned duplicate without confirming the Packer row');
+            }
             await markSheetSyncResult({ orderId: firestorePrimary.id, attemptId: firestorePrimary.sheetSyncAttemptId, ok: true, result: sheetResult }).catch(() => {});
             backgroundResult = { ...result, ...sheetResult, sheetSyncStatus: 'synced' };
           } catch (sheetError) {
@@ -1820,6 +1824,9 @@ function App() {
                     adminCode: firestorePrimary?.existing?.code || validation.code,
                   }),
             { sheetWrite: true });
+            if (!isSheetSyncResultConfirmed(sheetResult)) {
+              throw new Error('Google Sheets returned duplicate without confirming the Packer row');
+            }
             await markSheetSyncResult({ orderId: firestorePrimary.id, attemptId: firestorePrimary.sheetSyncAttemptId, ok: true, result: sheetResult }).catch(() => {});
             backgroundResult = { ...result, ...sheetResult, sheetSyncStatus: 'synced' };
           } catch (sheetError) {

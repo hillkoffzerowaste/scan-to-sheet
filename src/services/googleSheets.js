@@ -1693,7 +1693,9 @@ export async function appendScanGoogle({
       date,
       time,
       code: normalizedCode,
+      isPacker: true,
       count: courierRows.length,
+      row: duplicateRow,
       rows: courierRows.reverse().slice(0, 20),
       sheetUrl: sheet.webViewLink,
     };
@@ -2358,6 +2360,7 @@ export async function batchAppendScanGoogle({ token, config, orders }) {
               date,
               time: order.time,
               code: normalizedCode,
+              isPacker: Boolean(isPacker),
               row: reconciliation.row,
               rows: existingParsed.filter((row) => row.courier === courier).reverse().slice(0, 20),
               sheetUrl: sheet.webViewLink,

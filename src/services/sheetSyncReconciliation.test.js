@@ -5,6 +5,7 @@ import {
   findScanReconciliation,
   findHistoricalIssueRow,
   getAdminScanTiming,
+  isSheetSyncResultConfirmed,
   getPackerDuplicateMessage,
   getScanIssueMeta,
   shouldBlockPackerScan,
@@ -68,18 +69,28 @@ test('creates a row only when neither Admin nor Packer data exists', () => {
   });
 });
 
-test('retry uses the original Admin scan date and time while targeting the original row date', () => {
+test('retry targets the Packer scan date when Packer scanned after the original order date', () => {
   assert.deepEqual(
     getAdminScanTiming({
       date: '2026-07-21',
       admin: { scannedAt: '2026-07-22T08:15:30' },
-      packerScan: { scannedAt: '2026-07-21T16:20:00' },
+      packerScan: { scannedAt: '2026-07-22T16:20:00' },
     }, { fallbackDate: '2026-07-22', fallbackTime: '09:00:00' }),
     {
-      sheetDate: '2026-07-21',
+      sheetDate: '2026-07-22',
       sheetTime: '16:20:00',
       adminDate: '2026-07-22',
       adminTime: '08:15:30',
     },
   );
+});
+
+test('does not confirm a Packer duplicate without the Packer row', () => {
+  assert.equal(isSheetSyncResultConfirmed({ status: 'duplicate', code: 'TH123', isPacker: true }), false);
+  assert.equal(isSheetSyncResultConfirmed({
+    status: 'duplicate',
+    code: 'TH123',
+    isPacker: true,
+    row: { code: 'TH123', packer: 'กิต' },
+  }), true);
 });
