@@ -912,7 +912,7 @@ function App() {
       console.warn('Google Sheet organization failed:', error);
     });
     organizationSyncAtRef.current = Date.now();
-    const marketplaceColorBackfillKey = `scan-to-sheet:marketplace-colors:${prepared.master?.id}:v1`;
+    const marketplaceColorBackfillKey = `scan-to-sheet:marketplace-colors:${prepared.master?.id}:v2`;
     if (prepared.master?.id && localStorage.getItem(marketplaceColorBackfillKey) !== '1') {
       try {
         await colorAllHistoricalSheetsGoogle({ token: accessToken, config: prepared });

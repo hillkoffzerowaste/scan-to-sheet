@@ -931,6 +931,12 @@ export function buildMarketplaceFormattingRequests(sheetId) {
   ];
 }
 
+export function getDailySheetPropertiesForMarketplaceBackfill(sheetProperties) {
+  return (sheetProperties ?? []).filter((properties) => (
+    /^\d{4}-\d{2}-\d{2}(?:_conflict\d+)?$/.test(properties.title)
+  ));
+}
+
 async function applyMarketplaceFormatting({ token, spreadsheetId, sheetId }) {
   await apiFetch(`${SHEETS_API}/${spreadsheetId}:batchUpdate`, token, {
     method: 'POST',
@@ -1140,10 +1146,9 @@ export async function colorAllHistoricalSheetsGoogle({ token, config }) {
   const spreadsheetId = config?.master?.id;
   if (!spreadsheetId) return { colored: 0, total: 0 };
   const spreadsheet = await getSpreadsheet(token, spreadsheetId);
-  const dateSheets = (spreadsheet.sheets ?? [])
-    .map((item) => item.properties)
-    .filter((properties) => /^\d{4}-\d{2}-\d{2}(?:_conflict\d+)?$/.test(properties.title))
-    .filter((properties) => properties.title.slice(0, 10) !== getBangkokParts().date);
+  const dateSheets = getDailySheetPropertiesForMarketplaceBackfill(
+    (spreadsheet.sheets ?? []).map((item) => item.properties),
+  );
   let colored = 0;
   for (const sheet of dateSheets) {
     if ((sheet.gridProperties?.columnCount ?? 0) < TOTAL_COLUMNS) {

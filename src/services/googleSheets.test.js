@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
   buildMarketplaceFormattingRequests,
   findCancellationRow,
+  getDailySheetPropertiesForMarketplaceBackfill,
   parseAppendUpdatedRange,
 } from './googleSheets.js';
 
@@ -58,4 +59,18 @@ test('buildMarketplaceFormattingRequests colors platform cells with readable bra
   assert.deepEqual(rules[1].booleanRule.format.backgroundColor, { red: 0.102, green: 0.451, blue: 0.910 });
   assert.match(rules[2].booleanRule.condition.values[0].userEnteredValue, /tiktok/);
   assert.deepEqual(rules[2].booleanRule.format.backgroundColor, { red: 0, green: 0, blue: 0 });
+});
+
+test('getDailySheetPropertiesForMarketplaceBackfill includes today and conflict tabs', () => {
+  const sheets = [
+    { title: '2026-07-26', sheetId: 1 },
+    { title: '2026-07-25', sheetId: 2 },
+    { title: '2026-07-26_conflict1', sheetId: 3 },
+    { title: 'Late Orders', sheetId: 4 },
+  ];
+
+  assert.deepEqual(
+    getDailySheetPropertiesForMarketplaceBackfill(sheets).map((sheet) => sheet.title),
+    ['2026-07-26', '2026-07-25', '2026-07-26_conflict1'],
+  );
 });
