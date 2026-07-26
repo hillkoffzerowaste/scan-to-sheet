@@ -2362,6 +2362,8 @@ export async function batchAppendScanGoogle({ token, config, orders }) {
   }
 
   const results = [];
+  const spreadsheet = await getSpreadsheet(token, sheet.id);
+  const availableSheetTitles = new Set((spreadsheet.sheets ?? []).map((item) => item.properties.title));
 
   // 2. Process each date sheet
   for (const [date, dateOrders] of byDate) {
@@ -2373,6 +2375,15 @@ export async function batchAppendScanGoogle({ token, config, orders }) {
       const existingRows = await readDailyRows({ token, spreadsheetId: sheet.id, date });
       const existingParsed = existingRows.map((row, idx) => rowFromSheet(row, idx));
       const workingParsed = existingParsed.slice();
+      const historicalParsed = [];
+      for (const historicalDate of getLookbackDates(date).slice(1)) {
+        if (!availableSheetTitles.has(historicalDate)) continue;
+        const historicalRows = await readDailyRows({ token, spreadsheetId: sheet.id, date: historicalDate });
+        historicalParsed.push(
+          ...historicalRows.map((row, idx) => ({ ...rowFromSheet(row, idx), _sheetDate: historicalDate })),
+        );
+      }
+      const reconciliationRows = [...workingParsed, ...historicalParsed];
 
       // c) Build placeholder rows and batch-append all at once (1 write)
       const placeholders = [];
@@ -2380,7 +2391,7 @@ export async function batchAppendScanGoogle({ token, config, orders }) {
       const directUpdates = [];
       for (const order of dateOrders) {
         const { normalizedCode, courier, email, packer, note, isPacker, adminDate, adminTime, adminCode } = order;
-        const reconciliation = findScanReconciliation(workingParsed, { courier, code: normalizedCode, isPacker });
+        const reconciliation = findScanReconciliation(reconciliationRows, { courier, code: normalizedCode, isPacker });
 
         if (reconciliation.action === 'skip') {
           results.push({
@@ -2421,8 +2432,8 @@ export async function batchAppendScanGoogle({ token, config, orders }) {
             : withMarketplaceCells([
                 currentRow.no,
                 currentRow.courierNo,
-                date,
-                order.time,
+                currentRow.date,
+                currentRow.time,
                 currentRow.courier,
                 normalizedCode,
                 email,
@@ -2433,9 +2444,26 @@ export async function batchAppendScanGoogle({ token, config, orders }) {
                 currentRow.adminTime || adminTime || '',
                 currentRow.adminCode || adminCode || '',
               ], order.marketplaceOrder ?? marketplaceOrderFromRow(currentRow));
-          directUpdates.push({ rowNumber: currentRow.sheetRowNumber, row: mergedRow });
-          const workingIndex = workingParsed.findIndex((row) => row.sheetRowNumber === currentRow.sheetRowNumber);
-          if (workingIndex !== -1) workingParsed[workingIndex] = rowFromSheet(mergedRow, workingIndex);
+          if (currentRow._sheetDate && currentRow._sheetDate !== date) {
+            await updateDailyRow({
+              token,
+              spreadsheetId: sheet.id,
+              date: currentRow._sheetDate,
+              rowNumber: currentRow.sheetRowNumber,
+              row: mergedRow,
+            });
+          } else {
+            directUpdates.push({ rowNumber: currentRow.sheetRowNumber, row: mergedRow });
+          }
+          const reconciliationIndex = reconciliationRows.findIndex(
+            (row) => row.sheetRowNumber === currentRow.sheetRowNumber && row._sheetDate === currentRow._sheetDate,
+          );
+          if (reconciliationIndex !== -1) {
+            reconciliationRows[reconciliationIndex] = {
+              ...rowFromSheet(mergedRow, currentRow.sheetRowNumber - 2),
+              _sheetDate: currentRow._sheetDate || date,
+            };
+          }
           results.push({
             order,
             result: {
@@ -2467,7 +2495,10 @@ export async function batchAppendScanGoogle({ token, config, orders }) {
         ], order.marketplaceOrder ?? null);
         placeholders.push(placeholderRow);
         placeholderMeta.push({ order, placeholder, isPacker });
-        workingParsed.push(rowFromSheet(placeholderRow, workingParsed.length));
+        reconciliationRows.push({
+          ...rowFromSheet(placeholderRow, existingParsed.length + placeholders.length - 1),
+          _sheetDate: date,
+        });
       }
 
       // c.2) Compute next row from column A and write via PUT only for new rows.
