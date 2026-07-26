@@ -724,6 +724,12 @@ select:hover {
 .marketplace-upload-result.error { background: var(--danger-bg); color: var(--danger); }
 .marketplace-upload-result.warning { background: var(--warning-bg); color: var(--warning); }
 
+.sheet-recovery-controls {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0;
+}
+
 .visually-hidden {
   position: absolute;
   width: 1px;

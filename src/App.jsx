@@ -98,6 +98,7 @@ import { parseXlsxArrayBuffer } from './services/xlsxImport.js';
 import { loadHtml5Qrcode } from './services/cameraLoader.js';
 import { commitFallbackScan } from './services/scanCommit.js';
 import { shouldPollMissingOrders } from './services/missingCheckPolicy.js';
+import { getSheetRecoveryDates } from './services/sheetRecoveryDates.js';
 import {
   getAdminScanTiming,
   getPackerDuplicateMessage,
@@ -297,6 +298,8 @@ function App() {
   const [driveTotalCount, setDriveTotalCount] = useState(0);
   const [driveSyncBusy, setDriveSyncBusy] = useState(false);
   const [sheetRecoveryBusy, setSheetRecoveryBusy] = useState(false);
+  const [sheetRecoveryStartDate, setSheetRecoveryStartDate] = useState(() => getBangkokParts().date);
+  const [sheetRecoveryEndDate, setSheetRecoveryEndDate] = useState(() => getBangkokParts().date);
   const [missingResults, setMissingResults] = useState(null);
   const [missingBusy, setMissingBusy] = useState(false);
   const [missingAlertBadge, setMissingAlertBadge] = useState(0);
@@ -1268,6 +1271,28 @@ function App() {
       setSheetRecoveryBusy(false);
       if (showStatus) setDriveSyncBusy(false);
     }
+  }
+
+  async function recoverSelectedSheetRange() {
+    const dates = getSheetRecoveryDates({
+      startDate: sheetRecoveryStartDate,
+      endDate: sheetRecoveryEndDate,
+    });
+    if (dates.length === 0) {
+      setStatus({
+        type: 'warning',
+        title: 'Invalid recovery date range',
+        message: 'Choose a valid start and end date before recovering Sheet data.',
+      });
+      return;
+    }
+
+    await recoverPendingSheetSyncs({
+      showStatus: true,
+      includeSynced: true,
+      role: activeTab === 'packer' ? 'packer' : 'admin',
+      dates,
+    });
   }
 
   async function handleAddCourier() {
@@ -2921,6 +2946,26 @@ function App() {
           </div>
 
           <section className="sheet-recovery-panel" aria-label="Recovery Firestore to Sheet">
+            <div className="sheet-recovery-controls">
+              <div className="range-fields">
+                <label className="field-control">
+                  <span>Recovery from</span>
+                  <input
+                    type="date"
+                    value={sheetRecoveryStartDate}
+                    onChange={(event) => setSheetRecoveryStartDate(event.target.value)}
+                  />
+                </label>
+                <label className="field-control">
+                  <span>Recovery to</span>
+                  <input
+                    type="date"
+                    value={sheetRecoveryEndDate}
+                    onChange={(event) => setSheetRecoveryEndDate(event.target.value)}
+                  />
+                </label>
+              </div>
+            </div>
             <div>
               <p className="eyebrow">Recovery</p>
               <h3>{activeTab === 'packer' ? 'ตรวจและกู้ Packer เข้า Sheet' : 'ตรวจและกู้ Admin เข้า Sheet'}</h3>
@@ -2930,16 +2975,9 @@ function App() {
               className="secondary-button"
               type="button"
               data-testid={`sheet-recovery-${activeTab}`}
-              onClick={() => {
-                void recoverPendingSheetSyncs({
-                  showStatus: true,
-                  includeSynced: true,
-                  role: activeTab === 'packer' ? 'packer' : 'admin',
-                  dates: [today.date],
-                });
-              }}
+              onClick={() => { void recoverSelectedSheetRange(); }}
               disabled={sheetRecoveryBusy || !firebaseUser || !token || !config?.master?.id}
-              title="ตรวจข้อมูล Firestore ของวันนี้และเขียนเฉพาะส่วนที่ขาดลง Google Sheet"
+              title="ตรวจข้อมูล Firestore ของช่วงวันที่เลือกและเขียนเฉพาะส่วนที่ขาดลง Google Sheet"
             >
               {sheetRecoveryBusy ? <RefreshCw size={16} className="spin" /> : <RefreshCw size={16} />}
               <span>{sheetRecoveryBusy ? 'กำลัง Recovery...' : 'Recovery Firestore → Sheet'}</span>
