@@ -296,6 +296,7 @@ function App() {
   const [driveRecentRows, setDriveRecentRows] = useState([]);
   const [driveTotalCount, setDriveTotalCount] = useState(0);
   const [driveSyncBusy, setDriveSyncBusy] = useState(false);
+  const [sheetRecoveryBusy, setSheetRecoveryBusy] = useState(false);
   const [missingResults, setMissingResults] = useState(null);
   const [missingBusy, setMissingBusy] = useState(false);
   const [missingAlertBadge, setMissingAlertBadge] = useState(0);
@@ -1147,6 +1148,7 @@ function App() {
       return { busy: false, claimed: 0, synced: 0, failed: 0 };
     }
     sheetRecoveryRunningRef.current = true;
+    setSheetRecoveryBusy(true);
     if (showStatus) setDriveSyncBusy(true);
     let synced = 0;
     let failed = 0;
@@ -1261,6 +1263,7 @@ function App() {
       };
     } finally {
       sheetRecoveryRunningRef.current = false;
+      setSheetRecoveryBusy(false);
       if (showStatus) setDriveSyncBusy(false);
     }
   }
@@ -2933,11 +2936,11 @@ function App() {
                   dates: [today.date],
                 });
               }}
-              disabled={driveSyncBusy || !firebaseUser || !token || !config?.master?.id}
+              disabled={sheetRecoveryBusy || !firebaseUser || !token || !config?.master?.id}
               title="ตรวจข้อมูล Firestore ของวันนี้และเขียนเฉพาะส่วนที่ขาดลง Google Sheet"
             >
-              {driveSyncBusy ? <RefreshCw size={16} className="spin" /> : <RefreshCw size={16} />}
-              <span>{driveSyncBusy ? 'กำลัง Recovery...' : 'Recovery Firestore → Sheet'}</span>
+              {sheetRecoveryBusy ? <RefreshCw size={16} className="spin" /> : <RefreshCw size={16} />}
+              <span>{sheetRecoveryBusy ? 'กำลัง Recovery...' : 'Recovery Firestore → Sheet'}</span>
             </button>
           </section>
 
@@ -3347,16 +3350,6 @@ function App() {
               <div className="recent-header">
                 <h3>รายการที่ลง Drive</h3>
                 <div className="recent-actions">
-                  <button
-                    className="secondary-button"
-                    type="button"
-                    onClick={() => { void recoverPendingSheetSyncs({ showStatus: true }); }}
-                    disabled={driveSyncBusy || !firebaseUser || !token || !config?.master?.id}
-                    title="ซิงก์รายการที่บันทึกใน Firestore แต่ยังค้าง Google Sheet"
-                  >
-                    {driveSyncBusy ? <RefreshCw size={14} className="spin" /> : <RefreshCw size={14} />}
-                    <span>{driveSyncBusy ? 'กำลังอัปเดต...' : 'อัปเดตออเดอร์ค้างใน Sheet'}</span>
-                  </button>
                   {sheetUrl && (
                     <a href={sheetUrl} target="_blank" rel="noreferrer">
                       เปิด Sheet <ExternalLink size={14} />
