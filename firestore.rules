@@ -63,7 +63,7 @@ service cloud.firestore {
       allow create: if isSignedIn()
         && request.resource.data.keys().hasOnly([
           'platform', 'orderId', 'trackingNo', 'normalizedTrackingNo',
-          'marketplaceSkus', 'items', 'sellerOrderStatus', 'expectedShipAt',
+          'marketplaceSkus', 'items', 'sourceRowCount', 'sellerOrderStatus', 'expectedShipAt',
           'importSource', 'importedAt', 'updatedAt'
         ])
         && request.resource.data.platform in ['shopee', 'lazada', 'tiktok']
@@ -74,6 +74,9 @@ service cloud.firestore {
         && request.resource.data.marketplaceSkus.size() <= 100
         && request.resource.data.items is list
         && request.resource.data.items.size() <= 100
+        && request.resource.data.sourceRowCount is int
+        && request.resource.data.sourceRowCount >= 0
+        && request.resource.data.sourceRowCount <= 10000
         && request.resource.data.sellerOrderStatus is string
         && request.resource.data.expectedShipAt is string
         && request.resource.data.importSource == 'web_upload'
@@ -83,7 +86,7 @@ service cloud.firestore {
       allow update: if isSignedIn()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'platform', 'orderId', 'trackingNo', 'normalizedTrackingNo',
-          'marketplaceSkus', 'items', 'sellerOrderStatus', 'expectedShipAt',
+          'marketplaceSkus', 'items', 'sourceRowCount', 'sellerOrderStatus', 'expectedShipAt',
           'importSource', 'importedAt', 'updatedAt'
         ])
         && request.resource.data.platform in ['shopee', 'lazada', 'tiktok']
@@ -94,6 +97,9 @@ service cloud.firestore {
         && request.resource.data.marketplaceSkus.size() <= 100
         && request.resource.data.items is list
         && request.resource.data.items.size() <= 100
+        && request.resource.data.sourceRowCount is int
+        && request.resource.data.sourceRowCount >= 0
+        && request.resource.data.sourceRowCount <= 10000
         && request.resource.data.sellerOrderStatus is string
         && request.resource.data.expectedShipAt is string
         && request.resource.data.importSource == 'web_upload'
