@@ -24,6 +24,11 @@ import {
 } from './sheetSync.js';
 import { collectFirestorePages } from './firestorePagination.js';
 import { buildRecoveredOrderFields, mergeExistingOrderWithCandidate, mergeScanEventIntoOrder } from './orderRecovery.js';
+import {
+  getMissingOrderQueryFilters,
+  getMissingOrderQueryWindow,
+  uniqueQueryDates,
+} from './firestoreQueryPlanning.js';
 
 function canWriteFirestore() {
   return Boolean(isFirebaseConfigured && firestoreDb);
@@ -206,6 +211,59 @@ async function getOrdersByDate(date) {
 
   const snap = await getDocs(query(collection(firestoreDb, 'orders'), where('date', '==', date)));
   return snap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+}
+
+async function getOrdersByDates(dates = []) {
+  const queryDates = uniqueQueryDates(dates);
+  return (await Promise.all(queryDates.map((date) => getOrdersByDate(date)))).flat();
+}
+
+async function getOrdersByAdminScanWindow({ now = new Date(), hoursLookback = 48, pageSize = 500 } = {}) {
+  if (!canWriteFirestore()) {
+    return [];
+  }
+
+  const { start, end } = getMissingOrderQueryWindow({ now, hoursLookback });
+  return collectFirestorePages(async (cursor, size) => {
+    const constraints = [
+      collection(firestoreDb, 'orders'),
+      where('admin.scannedAt', '>=', start),
+      where('admin.scannedAt', '<', end),
+      orderBy('admin.scannedAt', 'asc'),
+      limit(size),
+    ];
+    if (cursor) {
+      constraints.push(startAfter(cursor));
+    }
+    const snap = await getDocs(query(...constraints));
+    return {
+      items: snap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() })),
+      nextCursor: snap.docs.at(-1) ?? null,
+    };
+  }, { pageSize });
+}
+
+async function getPendingOrdersForMissingCheck(pageSize = 500) {
+  if (!canWriteFirestore()) {
+    return [];
+  }
+
+  const filter = getMissingOrderQueryFilters({ summaryOnly: true });
+  return collectFirestorePages(async (cursor, size) => {
+    const constraints = [
+      collection(firestoreDb, 'orders'),
+      where(filter.field, filter.operator, filter.value),
+      limit(size),
+    ];
+    if (cursor) {
+      constraints.push(startAfter(cursor));
+    }
+    const snap = await getDocs(query(...constraints));
+    return {
+      items: snap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() })),
+      nextCursor: snap.docs.at(-1) ?? null,
+    };
+  }, { pageSize });
 }
 
 async function getPackerOrdersByScanDate(date) {
@@ -1066,7 +1124,7 @@ export async function getDriveRowsFirestore({ date }) {
 export async function searchScansFirestore({ query: searchQuery, couriers = [], dates = null, limit: maxRows = 50 }) {
   const term = normalizeCode(searchQuery);
   const sourceOrders = dates?.length
-    ? (await Promise.all(dates.map((date) => getOrdersByDate(date)))).flat()
+    ? await getOrdersByDates(dates)
     : await getAllOrders();
 
   return sourceOrders
@@ -1082,7 +1140,7 @@ export async function searchScansFirestore({ query: searchQuery, couriers = [], 
 
 export async function getScanReportFirestore({ couriers = [], dates }) {
   const uniqueDates = [...new Set(dates)].filter(Boolean).sort();
-  const orders = (await getAllOrders()).filter((order) => {
+  const orders = (await getOrdersByDates(uniqueDates)).filter((order) => {
     const eventDate = order.packerScan?.scannedAt?.split('T')[0]
       || order.admin?.scannedAt?.split('T')[0]
       || order.date;
@@ -1140,9 +1198,18 @@ export async function getScanReportFirestore({ couriers = [], dates }) {
   };
 }
 
-export async function checkMissingOrdersFirestore({ courier = null, hoursLookback = 48, thresholdMinutes = 30 }) {
-  const orders = await getAllOrders();
+export async function checkMissingOrdersFirestore({
+  courier = null,
+  hoursLookback = 48,
+  thresholdMinutes = 30,
+  summaryOnly = false,
+}) {
   const now = Date.now();
+  // The periodic Drive badge only needs pending orders. Manual checks keep the
+  // complete result set so the report can still show every category.
+  const orders = summaryOnly
+    ? await getPendingOrdersForMissingCheck()
+    : await getOrdersByAdminScanWindow({ now: new Date(now), hoursLookback });
   const lookbackMs = hoursLookback * 60 * 60 * 1000;
   const thresholdMs = thresholdMinutes * 60 * 1000;
   const matched = [];

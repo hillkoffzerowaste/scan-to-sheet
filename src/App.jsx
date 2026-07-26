@@ -97,6 +97,7 @@ import { groupMarketplaceRows, parseCsvText, parseMarketplaceRows } from './serv
 import { parseXlsxArrayBuffer } from './services/xlsxImport.js';
 import { loadHtml5Qrcode } from './services/cameraLoader.js';
 import { commitFallbackScan } from './services/scanCommit.js';
+import { shouldPollMissingOrders } from './services/missingCheckPolicy.js';
 import {
   getAdminScanTiming,
   getPackerDuplicateMessage,
@@ -577,15 +578,12 @@ function App() {
 
   // Auto-check for missing orders
   useEffect(() => {
-    if (!isSignedIn) {
+    if (!shouldPollMissingOrders({ isSignedIn, activeTab })) {
       setMissingAlertBadge(0);
       return;
     }
 
-    // Run immediate check on mount when in drive tab
-    if (activeTab === 'drive') {
-      runAutoCheck();
-    }
+    runAutoCheck();
 
     autoCheckTimerRef.current = setInterval(() => {
       runAutoCheck(false);
@@ -597,13 +595,6 @@ function App() {
       }
     };
   }, [isSignedIn, activeTab]);
-
-  // Run auto-check when tab switches to drive
-  useEffect(() => {
-    if (isSignedIn && activeTab === 'drive') {
-      runAutoCheck();
-    }
-  }, [activeTab]);
 
   async function runAutoCheck(showStatus = false) {
     if (!isSignedIn) return;
@@ -625,10 +616,11 @@ function App() {
     try {
       const results = canUseFirestorePrimary()
         ? await checkMissingOrdersFirestore({
-            courier: null,
-            hoursLookback: DEFAULT_LOOKBACK_HOURS,
-            thresholdMinutes,
-          })
+          courier: null,
+          hoursLookback: DEFAULT_LOOKBACK_HOURS,
+          thresholdMinutes,
+          summaryOnly: true,
+        })
         : await runWithGoogleRetry((accessToken, googleConfig) =>
             checkMissingOrders({
               token: accessToken,
