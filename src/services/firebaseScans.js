@@ -20,6 +20,7 @@ import { nextCalendarDate } from './calendarDate.js';
 import {
   isSheetSyncClaimable,
   prioritizeSheetSyncCandidates,
+  shouldIncludeInManualSheetRecovery,
   shouldReconcileSheetOnRescan,
 } from './sheetSync.js';
 import { collectFirestorePages } from './firestorePagination.js';
@@ -884,27 +885,55 @@ export async function markSheetSyncResult({ orderId: id, attemptId = '', ok, res
   });
 }
 
-export async function claimRecoverableSheetSyncs({ maxRows = 20 } = {}) {
+export async function claimRecoverableSheetSyncs({
+  maxRows = 20,
+  includeSynced = false,
+  role = 'both',
+  dates = [],
+} = {}) {
   if (!canWriteFirestore()) return [];
-  const statuses = ['failed', 'pending'];
-  const snapshots = await Promise.all(statuses.map((status) => getDocs(query(
-    collection(firestoreDb, 'orders'), where('sheetSyncStatus', '==', status), limit(maxRows),
-  ))));
-  const candidates = prioritizeSheetSyncCandidates({
-    failed: snapshots[0]?.docs,
-    pending: snapshots[1]?.docs,
-    maxRows,
-  });
+  let candidates;
+  if (includeSynced) {
+    const recoveryDates = [...new Set(dates.filter(Boolean))];
+    const dateOrders = await getOrdersByDates(recoveryDates);
+    const scanDateOrders = role === 'admin'
+      ? []
+      : (await Promise.all(recoveryDates.map((date) => getPackerOrdersByScanDate(date)))).flat();
+    const adminScanOrders = role === 'packer'
+      ? []
+      : await getOrdersByAdminScanWindow({ hoursLookback: 48, pageSize: Math.min(100, maxRows * 5) }).catch(() => []);
+    const byId = new Map([...dateOrders, ...scanDateOrders, ...adminScanOrders].map((order) => [order.id, order]));
+    const eligible = [...byId.values()].filter((order) => shouldIncludeInManualSheetRecovery(order, role));
+    const failed = eligible.filter((order) => order.sheetSyncStatus === 'failed');
+    const pending = eligible.filter((order) => order.sheetSyncStatus === 'pending');
+    const synced = eligible.filter((order) => order.sheetSyncStatus === 'synced');
+    candidates = [...prioritizeSheetSyncCandidates({ failed, pending, maxRows }), ...synced]
+      .filter((order, index, list) => list.findIndex((item) => item.id === order.id) === index)
+      .slice(0, Math.max(0, maxRows));
+  } else {
+    const statuses = ['failed', 'pending'];
+    const snapshots = await Promise.all(statuses.map((status) => getDocs(query(
+      collection(firestoreDb, 'orders'), where('sheetSyncStatus', '==', status), limit(maxRows),
+    ))));
+    candidates = prioritizeSheetSyncCandidates({
+      failed: snapshots[0]?.docs,
+      pending: snapshots[1]?.docs,
+      maxRows,
+    });
+  }
   const claimed = [];
 
   for (const candidate of candidates) {
-    const ref = candidate.ref;
+    const ref = candidate.ref ?? doc(firestoreDb, 'orders', candidate.id);
     const attemptId = newSheetSyncAttemptId();
     const order = await runTransaction(firestoreDb, async (transaction) => {
       const snap = await transaction.get(ref);
       if (!snap.exists()) return null;
       const current = snap.data();
-      if (!isSheetSyncClaimable(current)) return null;
+      const manualSyncedClaim = includeSynced
+        && current.sheetSyncStatus === 'synced'
+        && shouldIncludeInManualSheetRecovery({ id: ref.id, ...current }, role);
+      if (manualSyncedClaim ? false : !isSheetSyncClaimable(current)) return null;
       transaction.update(ref, {
         ...pendingSheetSyncFields(attemptId),
         updatedAt: serverTimestamp(),

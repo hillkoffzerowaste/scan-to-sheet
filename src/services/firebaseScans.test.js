@@ -6,6 +6,7 @@ import {
   SHEET_SYNC_STALE_MS,
   isSheetSyncClaimable,
   prioritizeSheetSyncCandidates,
+  shouldIncludeInManualSheetRecovery,
   shouldReconcileSheetOnRescan,
 } from './sheetSync.js';
 
@@ -39,4 +40,22 @@ test('failed Sheet syncs are recovered before pending syncs', () => {
     prioritizeSheetSyncCandidates({ failed, pending, maxRows: 3 }).map((item) => item.id),
     ['failed-1', 'failed-2', 'pending-1'],
   );
+});
+
+test('manual Sheet recovery includes synced orders when the selected scan exists', () => {
+  assert.equal(shouldIncludeInManualSheetRecovery({
+    code: 'TH123',
+    sheetSyncStatus: 'synced',
+    packerScan: { scannedAt: '2026-07-25T10:00:00' },
+  }, 'packer'), true);
+  assert.equal(shouldIncludeInManualSheetRecovery({
+    code: 'TH123',
+    sheetSyncStatus: 'synced',
+    admin: { scannedAt: '2026-07-25T10:00:00' },
+  }, 'packer'), false);
+  assert.equal(shouldIncludeInManualSheetRecovery({
+    code: 'TH123',
+    sheetSyncStatus: 'synced',
+    admin: { scannedAt: '2026-07-25T10:00:00' },
+  }, 'admin'), true);
 });

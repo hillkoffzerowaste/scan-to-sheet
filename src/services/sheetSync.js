@@ -17,3 +17,12 @@ export function shouldReconcileSheetOnRescan(order, scanType) {
 export function prioritizeSheetSyncCandidates({ failed = [], pending = [], maxRows = 20 }) {
   return [...failed, ...pending].slice(0, Math.max(0, maxRows));
 }
+
+export function shouldIncludeInManualSheetRecovery(order, role = 'both') {
+  if (!order || !(order.code || order.normalizedCode)) return false;
+  const hasPacker = Boolean(order.packerScan?.scannedAt);
+  const hasAdmin = Boolean(order.admin?.scannedAt);
+  if (role === 'packer') return hasPacker;
+  if (role === 'admin') return hasAdmin;
+  return hasPacker || hasAdmin;
+}

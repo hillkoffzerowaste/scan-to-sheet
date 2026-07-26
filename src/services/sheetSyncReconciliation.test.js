@@ -54,6 +54,14 @@ test('skips an Admin retry when the Sheet already has Admin data', () => {
   });
 });
 
+test('repairs a Packer row when the tracking exists but the Packer field is empty', () => {
+  const row = { courier: 'Kerry', code: 'TH123', packer: '', adminCode: '' };
+  assert.deepEqual(findScanReconciliation([row], { courier: 'Kerry', code: 'TH123', isPacker: true }), {
+    action: 'merge-packer',
+    row,
+  });
+});
+
 test('merges Admin data into an existing Packer row', () => {
   const row = { courier: 'Kerry', code: 'TH123', adminCode: '' };
   assert.deepEqual(findScanReconciliation([row], { courier: 'Kerry', code: 'TH123', isPacker: false }), {

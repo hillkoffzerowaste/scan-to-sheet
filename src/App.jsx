@@ -1119,7 +1119,12 @@ function App() {
     }
   }
 
-  async function recoverPendingSheetSyncs({ showStatus = false } = {}) {
+  async function recoverPendingSheetSyncs({
+    showStatus = false,
+    includeSynced = false,
+    role = 'both',
+    dates = [],
+  } = {}) {
     if (sheetRecoveryRunningRef.current) {
       if (showStatus) {
         setStatus({ type: 'warning', title: 'กำลังอัปเดตอยู่', message: 'ระบบกำลังซิงก์ออเดอร์ค้างชุดก่อนหน้า' });
@@ -1147,7 +1152,12 @@ function App() {
     let failed = 0;
     let claimedCount = 0;
     try {
-      const orders = await claimRecoverableSheetSyncs({ maxRows: SHEET_RECOVERY_BATCH_SIZE });
+      const orders = await claimRecoverableSheetSyncs({
+        maxRows: SHEET_RECOVERY_BATCH_SIZE,
+        includeSynced,
+        role,
+        dates,
+      });
       claimedCount = orders.length;
       if (orders.length) {
         sheetRecoveryNextAllowedAtRef.current = Date.now() + SHEET_RECOVERY_COOLDOWN_MS;
@@ -1223,7 +1233,11 @@ function App() {
 
       scheduleCountRefresh();
       if (showStatus) {
-        await refreshDriveRows().catch(() => {});
+        if (role === 'packer') {
+          await refreshSelectedCourierRows().catch(() => {});
+        } else {
+          await refreshDriveRows().catch(() => {});
+        }
         setStatus(
           failed > 0
             ? { type: 'warning', title: 'อัปเดต Sheet ยังไม่ครบ', message: `ซิงก์สำเร็จ ${synced} รายการ, ยังไม่สำเร็จ ${failed} รายการ` }
@@ -2900,6 +2914,32 @@ function App() {
             <span>{activeTab === 'drive' ? 'กำลังรับเข้า Drive' : 'กำลังสแกนแพ็ก'}</span>
             <strong>{selectedCourier}</strong>
           </div>
+
+          <section className="sheet-recovery-panel" aria-label="Recovery Firestore to Sheet">
+            <div>
+              <p className="eyebrow">Recovery</p>
+              <h3>{activeTab === 'packer' ? 'ตรวจและกู้ Packer เข้า Sheet' : 'ตรวจและกู้ Admin เข้า Sheet'}</h3>
+              <p>อ่านข้อมูลจาก Firestore แล้วตรวจซ้ำกับ Sheet ก่อนยืนยันสถานะ ไม่สร้างแถวซ้ำถ้ามีข้อมูลครบแล้ว</p>
+            </div>
+            <button
+              className="secondary-button"
+              type="button"
+              data-testid={`sheet-recovery-${activeTab}`}
+              onClick={() => {
+                void recoverPendingSheetSyncs({
+                  showStatus: true,
+                  includeSynced: true,
+                  role: activeTab === 'packer' ? 'packer' : 'admin',
+                  dates: [today.date],
+                });
+              }}
+              disabled={driveSyncBusy || !firebaseUser || !token || !config?.master?.id}
+              title="ตรวจข้อมูล Firestore ของวันนี้และเขียนเฉพาะส่วนที่ขาดลง Google Sheet"
+            >
+              {driveSyncBusy ? <RefreshCw size={16} className="spin" /> : <RefreshCw size={16} />}
+              <span>{driveSyncBusy ? 'กำลัง Recovery...' : 'Recovery Firestore → Sheet'}</span>
+            </button>
+          </section>
 
           {scanMethod === 'camera' ? (
             <div className={`camera-panel workflow-${activeTab}`}>

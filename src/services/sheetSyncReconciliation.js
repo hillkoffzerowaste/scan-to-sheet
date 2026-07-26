@@ -44,7 +44,11 @@ export function findScanReconciliation(rows, { courier, code, isPacker }) {
   const packerRow = courierRows.find((row) => normalizeCode(row.code) === normalizedCode);
 
   if (isPacker) {
-    if (packerRow) return { action: 'skip', row: packerRow };
+    if (packerRow) {
+      return String(packerRow.packer ?? '').trim()
+        ? { action: 'skip', row: packerRow }
+        : { action: 'merge-packer', row: packerRow };
+    }
     if (adminRow) return { action: 'merge-packer', row: adminRow };
   } else {
     if (adminRow) return { action: 'skip', row: adminRow };
