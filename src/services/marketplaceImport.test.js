@@ -43,6 +43,28 @@ test('parses and groups Lazada rows', () => {
   assert.deepEqual(groupMarketplaceRows(parseMarketplaceRows(rows))[0].marketplaceSkus, ['SKU-A', 'SKU-B']);
 });
 
+test('reads Lazada itemName and uses source rows for item quantity', () => {
+  const rows = [
+    ['orderNumber', 'sellerSku', 'trackingCode', 'itemName'],
+    ['L1', 'SKU-A', 'LEX123', 'Coffee Drip Bag'],
+    ['L1', 'SKU-A', 'LEX123', 'Coffee Drip Bag'],
+  ];
+  const group = groupMarketplaceRows(parseMarketplaceRows(rows))[0];
+
+  assert.equal(parseMarketplaceRows(rows)[0].itemName, 'Coffee Drip Bag');
+  assert.equal(group.sourceRowCount, 2);
+  assert.deepEqual(group.items, [{ name: 'Coffee Drip Bag', sku: 'SKU-A', quantity: '' }]);
+
+  const sheetRows = [Array(23).fill('')];
+  sheetRows[0][12] = 'LEX123';
+  sheetRows[0][13] = 'lazada';
+  const result = buildSheetBackfillUpdates('2026-07-16', sheetRows, [group]);
+  assert.deepEqual(result.data.at(-1), {
+    range: "'2026-07-16'!S2",
+    values: [[2]],
+  });
+});
+
 test('parses Shopee headers', () => {
   const rows = [[
     'หมายเลขคำสั่งซื้อ', 'เลขอ้างอิง SKU (SKU Reference No.)', '*หมายเลขติดตามพัสดุ',

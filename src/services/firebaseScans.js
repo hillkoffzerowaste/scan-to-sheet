@@ -447,6 +447,7 @@ export async function importMarketplaceOrders(groups, { knownExistingOrderIds = 
         normalizedTrackingNo: group.normalizedTrackingNo,
         marketplaceSkus: group.marketplaceSkus,
         items: Array.isArray(group.items) ? group.items : [],
+        sourceRowCount: Number(group.sourceRowCount) || 0,
         sellerOrderStatus: group.sellerOrderStatus ?? '',
         expectedShipAt: group.expectedShipAt ?? '',
         importSource: 'web_upload',
@@ -473,6 +474,7 @@ export async function importMarketplaceOrders(groups, { knownExistingOrderIds = 
         normalizedTrackingNo: group.normalizedTrackingNo,
         marketplaceSkus: group.marketplaceSkus,
         items: Array.isArray(group.items) ? group.items : [],
+        sourceRowCount: Number(group.sourceRowCount) || 0,
         sellerOrderStatus: group.sellerOrderStatus ?? '',
         expectedShipAt: group.expectedShipAt ?? '',
         importSource: 'web_upload',
@@ -536,6 +538,7 @@ export async function getUploadedMarketplaceOrders() {
       normalizedTrackingNo: data.normalizedTrackingNo ?? '',
       marketplaceSkus: Array.isArray(data.marketplaceSkus) ? data.marketplaceSkus : [],
       items: Array.isArray(data.items) ? data.items : [],
+      sourceRowCount: Number(data.sourceRowCount) || 0,
       sellerOrderStatus: data.sellerOrderStatus ?? '',
       expectedShipAt: data.expectedShipAt ?? '',
     };
