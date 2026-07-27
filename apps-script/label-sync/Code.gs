@@ -32,7 +32,7 @@ function runLabelSync() {
       var lastRow = sheet.getLastRow();
       return {
         sheetName: sheet.getName(),
-        values: lastRow < 2 ? [] : sheet.getRange(2, 14, lastRow - 1, 3).getDisplayValues(),
+        values: lastRow < 2 ? [] : sheet.getRange(2, 1, lastRow - 1, 14).getValues(),
       };
     });
     var logRows = [];
@@ -164,10 +164,13 @@ function applyLabelUpdates_(spreadsheet, updates) {
     (bySheetAndValue[groupKey] = bySheetAndValue[groupKey] || []).push(update.rowNumber);
   });
   Object.keys(bySheetAndValue).forEach(function (groupKey) {
-    var updatesInGroup = bySheetAndValue[groupKey];
-    var sheet = spreadsheet.getSheetByName(updatesInGroup[0].sheetName);
-    var value = updatesInGroup[0].value;
-    sheet.getRangeList(updatesInGroup.map(function (update) { return 'P' + update.rowNumber; })).setValue(value);
+    var parts = groupKey.split('\u0000');
+    var sheetName = parts[0];
+    var value = parts.slice(1).join('\u0000');
+    var rowNumbers = bySheetAndValue[groupKey];
+    var sheet = spreadsheet.getSheetByName(sheetName);
+    if (!sheet) return;
+    sheet.getRangeList(rowNumbers.map(function (rn) { return 'P' + rn; })).setValue(value);
   });
   return updates.length;
 }
