@@ -32,7 +32,7 @@ function runLabelSync() {
       var lastRow = sheet.getLastRow();
       return {
         sheetName: sheet.getName(),
-        values: lastRow < 2 ? [] : sheet.getRange(2, 13, lastRow - 1, 4).getValues(),
+        values: lastRow < 2 ? [] : sheet.getRange(2, 13, lastRow - 1, 4).getDisplayValues(),
       };
     });
     var logRows = [];
