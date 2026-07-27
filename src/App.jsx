@@ -387,12 +387,16 @@ function App() {
       ));
       const limitedNewGroups = sortedNewByLatest.slice(0, MARKETPLACE_IMPORT_MAX_ORDERS);
       const limitedGroups = [...limitedNewGroups, ...existingGroups];
+      const missingOrderDateCount = newGroups.filter((group) => !group.orderedAt).length;
       const result = await importMarketplaceOrders(limitedGroups);
       const untrackedNote = untrackedCount > 0
         ? ` (ข้าม ${untrackedCount} ออเดอร์ที่ยังไม่มีเลขพัสดุ)`
         : '';
       const skippedNote = skippedCount > 0
         ? ` (นำเข้าเฉพาะ ${MARKETPLACE_IMPORT_MAX_ORDERS} ออเดอร์ล่าสุดตามวันที่/เวลาในไฟล์ ข้าม ${skippedCount} ออเดอร์ที่เก่ากว่า กรุณานำเข้าไฟล์นี้ซ้ำเพื่อทำรอบถัดไป)`
+        : '';
+      const missingDateNote = missingOrderDateCount > 0
+        ? ` (พบ ${missingOrderDateCount} ออเดอร์ที่ไม่พบวันที่สั่งซื้อในไฟล์ อาจเรียงลำดับผิดพลาด กรุณาตรวจสอบภาษา/รูปแบบไฟล์ export)`
         : '';
       try {
         const sheetResult = await runWithGoogleRetry((accessToken, googleConfig) => (
@@ -402,13 +406,13 @@ function App() {
           syncLateOrdersGoogle({ token: accessToken, config: googleConfig, orders: result.orderStates })
         ));
         setMarketplaceUploadResult({
-          type: (skippedCount > 0 || untrackedCount > 0) ? 'warning' : 'success',
-          message: `เพิ่มใหม่ ${result.imported} ออเดอร์ ข้ามรายการซ้ำ ${result.duplicates} ออเดอร์ อัปเดตกำหนดส่ง ${result.metadataUpdated} ออเดอร์ อัปเดต Firebase ${result.updatedScans} รายการ, Google Sheet ${sheetResult.matchedRows} แถว และ Late Orders ${lateResult.rows} ออเดอร์ (ล่าช้า ${lateResult.counts.overdue ?? 0})${skippedNote}${untrackedNote}`,
+          type: (skippedCount > 0 || untrackedCount > 0 || missingOrderDateCount > 0) ? 'warning' : 'success',
+          message: `เพิ่มใหม่ ${result.imported} ออเดอร์ ข้ามรายการซ้ำ ${result.duplicates} ออเดอร์ อัปเดตกำหนดส่ง ${result.metadataUpdated} ออเดอร์ อัปเดต Firebase ${result.updatedScans} รายการ, Google Sheet ${sheetResult.matchedRows} แถว และ Late Orders ${lateResult.rows} ออเดอร์ (ล่าช้า ${lateResult.counts.overdue ?? 0})${skippedNote}${untrackedNote}${missingDateNote}`,
         });
       } catch (sheetError) {
         setMarketplaceUploadResult({
           type: 'warning',
-          message: `Firebase เพิ่มใหม่ ${result.imported} ออเดอร์ ข้ามรายการซ้ำ ${result.duplicates} ออเดอร์ แต่ Google Sheet ยังไม่สำเร็จ: ${sheetError.message}${skippedNote}${untrackedNote}`,
+          message: `Firebase เพิ่มใหม่ ${result.imported} ออเดอร์ ข้ามรายการซ้ำ ${result.duplicates} ออเดอร์ แต่ Google Sheet ยังไม่สำเร็จ: ${sheetError.message}${skippedNote}${untrackedNote}${missingDateNote}`,
         });
       }
     } catch (error) {
