@@ -18,9 +18,9 @@ var LabelMatching = (function () {
     var trackingUnscoped = {};
     sheetRows.forEach(function (sheet) {
       (sheet.values || []).forEach(function (row, index) {
-        var platform = normalizePlatform(row[0]);
-        var orderId = normalizeOrderId(row[1]);
-        var trackingId = normalizeOrderId(row[12] || '');
+        var trackingId = normalizeOrderId(row[0] || '');
+        var platform = normalizePlatform(row[1]);
+        var orderId = normalizeOrderId(row[2]);
         if (!orderId && !trackingId) return;
         var candidate = { sheetName: sheet.sheetName, rowNumber: index + 2, platform: platform, orderId: orderId, trackingId: trackingId };
         if (orderId) {

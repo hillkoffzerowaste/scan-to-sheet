@@ -23,10 +23,11 @@ test('overwrites column P for every same-platform row with the matched order ID'
   const matching = loadMatching();
   assert.equal(typeof matching.matchLabels, 'function');
 
+  // Columns: M=tracking, N=platform, O=orderId, P=existing combined
   const result = plain(matching.matchLabels([
     { sheetName: '2026-07-27', values: [
-      ['shopee', 'SHP-001', 'old'],
-      ['shopee', 'SHP-001', 'older'],
+      ['', 'shopee', 'SHP-001', 'old'],
+      ['', 'shopee', 'SHP-001', 'older'],
     ] },
   ], [{
     platform: 'shopee', orderId: 'SHP001', trackingId: '', combined: 'สมชาย | 12/3 กรุงเทพฯ',
@@ -45,8 +46,8 @@ test('does not use an unscoped order ID when different platforms share it', () =
 
   const result = plain(matching.matchLabels([
     { sheetName: '2026-07-27', values: [
-      ['', 'DUP-1', ''],
-      ['', 'DUP-1', ''],
+      ['', '', 'DUP-1', ''],
+      ['', '', 'DUP-1', ''],
     ] },
   ], [{ platform: 'lazada', orderId: 'DUP1', trackingId: '', combined: 'A | B' }]));
 
@@ -59,7 +60,7 @@ test('does not write a duplicate label when its recipient data conflicts', () =>
   assert.equal(typeof matching.matchLabels, 'function');
 
   const result = plain(matching.matchLabels([
-    { sheetName: '2026-07-27', values: [['tiktok', '585225626528745423', '']] },
+    { sheetName: '2026-07-27', values: [['', 'tiktok', '585225626528745423', '']] },
   ], [
     { platform: 'tiktok', orderId: '585225626528745423', trackingId: '', combined: 'คนแรก | ที่อยู่ A' },
     { platform: 'tiktok', orderId: '585225626528745423', trackingId: '', combined: 'คนสอง | ที่อยู่ B' },
@@ -75,7 +76,7 @@ test('matches a Lazada label to a scoped sheet row', () => {
 
   const result = plain(matching.matchLabels([
     { sheetName: '2026-07-27', values: [
-      ['lazada', 'LZD-1117718175852180', ''],
+      ['', 'lazada', 'LZD-1117718175852180', ''],
     ] },
   ], [{
     platform: 'lazada',
@@ -96,7 +97,7 @@ test('matches a TikTok label to a scoped sheet row', () => {
 
   const result = plain(matching.matchLabels([
     { sheetName: '2026-07-27', values: [
-      ['tiktok', '585225626528745423', ''],
+      ['', 'tiktok', '585225626528745423', ''],
     ] },
   ], [{
     platform: 'tiktok',
@@ -117,7 +118,7 @@ test('reports unmatched when a Lazada label has no sheet row', () => {
 
   const result = plain(matching.matchLabels([
     { sheetName: '2026-07-27', values: [
-      ['shopee', 'SHP-001', ''],
+      ['', 'shopee', 'SHP-001', ''],
     ] },
   ], [{
     platform: 'lazada',
@@ -136,7 +137,7 @@ test('matches a TikTok label even when the sheet row omits the platform', () => 
 
   const result = plain(matching.matchLabels([
     { sheetName: '2026-07-27', values: [
-      ['', '585225626528745423', ''],
+      ['', '', '585225626528745423', ''],
     ] },
   ], [{
     platform: 'tiktok',
@@ -155,10 +156,10 @@ test('matches a Shopee label by tracking ID (tracking-first) even when order ID 
   const matching = loadMatching();
   assert.equal(typeof matching.matchLabels, 'function');
 
-  // Sheet has tracking in column M (index 12), order ID in sheet is DIFFERENT from label
+  // Sheet row: tracking='B899B00007L01', platform='shopee', orderId='wrong-order-id'
   const result = plain(matching.matchLabels([
     { sheetName: '2026-07-27', values: [
-      ['shopee', 'wrong-order-id', '', '', '', '', '', '', '', '', '', '', 'B899B00007L01', ''],  // col M=12
+      ['B899B00007L01', 'shopee', 'wrong-order-id', ''],
     ] },
   ], [{
     platform: 'shopee',
@@ -177,15 +178,14 @@ test('falls back to order ID matching when tracking ID does not match any row', 
   const matching = loadMatching();
   assert.equal(typeof matching.matchLabels, 'function');
 
-  // Sheet has correct order ID but no tracking in column M
   const result = plain(matching.matchLabels([
     { sheetName: '2026-07-27', values: [
-      ['shopee', '260726P6WBVFGG', ''],
+      ['', 'shopee', '260726P6WBVFGG', ''],
     ] },
   ], [{
     platform: 'shopee',
     orderId: '260726P6WBVFGG',
-    trackingId: 'B899_Z999_NO_MATCH',
+    trackingId: 'NO_MATCH_TRACKING',
     combined: 'ผู้รับ | ที่อยู่ order fallback',
   }]));
 
@@ -199,10 +199,10 @@ test('matches a TikTok label by tracking ID from unscoped row (no platform in sh
   const matching = loadMatching();
   assert.equal(typeof matching.matchLabels, 'function');
 
-  // Sheet has tracking in column M but no platform and no order ID
+  // Sheet row: tracking='JTTH201795097265', platform='', orderId=''
   const result = plain(matching.matchLabels([
     { sheetName: '2026-07-27', values: [
-      ['', '', '', '', '', '', '', '', '', '', '', '', 'JTTH201795097265', ''],
+      ['JTTH201795097265', '', '', ''],
     ] },
   ], [{
     platform: 'tiktok',
