@@ -28,6 +28,40 @@ export function normalizeMarketplaceTracking(value) {
   return cleanCell(value).toUpperCase().replace(/[^A-Z0-9]/g, '');
 }
 
+const MONTH_ABBR = {
+  jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06',
+  jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12',
+};
+
+// Converts the assorted per-platform order-date formats (TikTok "27/07/2026 20:33:12",
+// Lazada "27 Jul 2026 21:18", Shopee "2026-07-26 00:06") into a single "YYYY-MM-DD HH:mm:ss"
+// string so orders can be sorted latest-first regardless of source platform.
+export function normalizeMarketplaceOrderDate(value) {
+  const text = cleanCell(value);
+  if (!text) return '';
+
+  const isoMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?/);
+  if (isoMatch) {
+    const [, y, mo, d, h, mi, s] = isoMatch;
+    return `${y}-${mo}-${d} ${h}:${mi}:${s ?? '00'}`;
+  }
+
+  const slashMatch = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})[ ,]+(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+  if (slashMatch) {
+    const [, d, mo, y, h, mi, s] = slashMatch;
+    return `${y}-${mo.padStart(2, '0')}-${d.padStart(2, '0')} ${h.padStart(2, '0')}:${mi}:${s ?? '00'}`;
+  }
+
+  const monthNameMatch = text.match(/^(\d{1,2})\s+([A-Za-z]{3,})\s+(\d{4})[ ,]+(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+  if (monthNameMatch) {
+    const [, d, monthName, y, h, mi, s] = monthNameMatch;
+    const mo = MONTH_ABBR[monthName.slice(0, 3).toLowerCase()];
+    if (mo) return `${y}-${mo}-${d.padStart(2, '0')} ${h.padStart(2, '0')}:${mi}:${s ?? '00'}`;
+  }
+
+  return text;
+}
+
 export function parseCsvText(text) {
   const rows = [];
   let row = [];
@@ -72,6 +106,7 @@ export function parseMarketplaceRows(rows) {
   let trackingHeader = '';
   let statusHeader = '';
   let expectedShipHeader = '';
+  let orderDateHeader = '';
   const itemNameIndex = firstHeaderIndex(lowerHeaders, [
     'product name', 'item name', 'product title', 'item title', 'product description',
     'ชื่อสินค้า', 'ชื่อผลิตภัณฑ์', 'ชื่อรายการ',
@@ -83,6 +118,7 @@ export function parseMarketplaceRows(rows) {
     orderHeader = 'ordernumber';
     skuHeader = 'sellersku';
     trackingHeader = 'trackingcode';
+    orderDateHeader = 'createtime';
   } else if (headers.includes('หมายเลขคำสั่งซื้อ')) {
     platform = 'shopee';
     orderHeader = 'หมายเลขคำสั่งซื้อ';
@@ -90,11 +126,13 @@ export function parseMarketplaceRows(rows) {
     trackingHeader = '*หมายเลขติดตามพัสดุ';
     statusHeader = 'สถานะการสั่งซื้อ';
     expectedShipHeader = 'วันที่คาดว่าจะทำการจัดส่งสินค้า';
+    orderDateHeader = 'วันที่ทำการสั่งซื้อ';
   } else if (lowerHeaders.includes('order id')) {
     platform = 'tiktok';
     orderHeader = 'order id';
     skuHeader = 'seller sku';
     trackingHeader = 'tracking id';
+    orderDateHeader = 'created time';
   } else {
     throw new Error('ไม่พบรูปแบบไฟล์ Shopee, Lazada หรือ TikTok');
   }
@@ -104,6 +142,7 @@ export function parseMarketplaceRows(rows) {
   const trackingIndex = lowerHeaders.indexOf(trackingHeader);
   const statusIndex = statusHeader ? lowerHeaders.indexOf(statusHeader) : -1;
   const expectedShipIndex = expectedShipHeader ? lowerHeaders.indexOf(expectedShipHeader) : -1;
+  const orderDateIndex = orderDateHeader ? lowerHeaders.indexOf(orderDateHeader) : -1;
   if ([orderIndex, skuIndex, trackingIndex].some((index) => index < 0)) {
     throw new Error(`ไฟล์ ${platform} ขาดคอลัมน์เลขคำสั่งซื้อ, SKU หรือเลขพัสดุ`);
   }
@@ -123,6 +162,7 @@ export function parseMarketplaceRows(rows) {
     }),
     sellerOrderStatus: statusIndex >= 0 ? cleanCell(row[statusIndex]) : '',
     expectedShipAt: expectedShipIndex >= 0 ? cleanCell(row[expectedShipIndex]) : '',
+    orderedAt: orderDateIndex >= 0 ? normalizeMarketplaceOrderDate(row[orderDateIndex]) : '',
   })).filter((row) => (
     row.orderId
     && (row.trackingNo || row.sku)
@@ -146,10 +186,12 @@ export function groupMarketplaceRows(rows) {
       sourceRowCount: 0,
       sellerOrderStatus: cleanCell(row.sellerOrderStatus),
       expectedShipAt: cleanCell(row.expectedShipAt),
+      orderedAt: cleanCell(row.orderedAt),
     };
     current.sourceRowCount += 1;
     if (!current.sellerOrderStatus) current.sellerOrderStatus = cleanCell(row.sellerOrderStatus);
     if (!current.expectedShipAt) current.expectedShipAt = cleanCell(row.expectedShipAt);
+    if (!current.orderedAt) current.orderedAt = cleanCell(row.orderedAt);
     const sku = cleanCell(row.sku);
     if (sku && !current.marketplaceSkus.includes(sku)) current.marketplaceSkus.push(sku);
     const item = {

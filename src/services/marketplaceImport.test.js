@@ -92,7 +92,7 @@ test('parses TikTok BOM headers and trims tab suffixes', () => {
   const rows = [['\uFEFFOrder ID', 'Seller SKU', 'Tracking ID'], ['T1\t', 'SKU-T', 'JT123\t']];
   assert.deepEqual(parseMarketplaceRows(rows)[0], {
     platform: 'tiktok', orderId: 'T1', sku: 'SKU-T', itemName: '', quantity: '', trackingNo: 'JT123',
-    sellerOrderStatus: '', expectedShipAt: '',
+    sellerOrderStatus: '', expectedShipAt: '', orderedAt: '',
   });
 });
 
@@ -262,4 +262,34 @@ test('parses expected ship metadata from the real Shopee export', { skip: !exist
   const trackedGroups = groups.filter((group) => group.normalizedTrackingNo);
   assert.ok(trackedGroups.every((group) => group.expectedShipAt));
   assert.ok(trackedGroups.every((group) => group.sellerOrderStatus));
+});
+
+async function loadGroupsFromXlsx(filePath) {
+  const file = await readFile(filePath);
+  const buffer = file.buffer.slice(file.byteOffset, file.byteOffset + file.byteLength);
+  return groupMarketplaceRows(parseMarketplaceRows(await parseXlsxArrayBuffer(buffer)));
+}
+
+const tiktokOrderedAtPath = path.join(homedir(), 'Downloads', 'ทั้งหมด คำสั่งซื้อ-2026-07-27-22_10.xlsx');
+test('parses order-placed time from a real TikTok "Created Time" export', { skip: !existsSync(tiktokOrderedAtPath) }, async () => {
+  const groups = await loadGroupsFromXlsx(tiktokOrderedAtPath);
+  assert.ok(groups.length > 0);
+  const tracked = groups.filter((group) => group.normalizedTrackingNo);
+  assert.ok(tracked.every((group) => /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(group.orderedAt)));
+});
+
+const lazadaOrderedAtPath = path.join(homedir(), 'Downloads', '95866af2b2592ed17b00f15d106e4c8e.xlsx');
+test('parses order-placed time from a real Lazada "createTime" export', { skip: !existsSync(lazadaOrderedAtPath) }, async () => {
+  const groups = await loadGroupsFromXlsx(lazadaOrderedAtPath);
+  assert.ok(groups.length > 0);
+  const tracked = groups.filter((group) => group.normalizedTrackingNo);
+  assert.ok(tracked.every((group) => /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(group.orderedAt)));
+});
+
+const shopeeOrderedAtPath = path.join(homedir(), 'Downloads', 'Order.all.20260726_20260727.xlsx');
+test('parses order-placed time from a real Shopee "วันที่ทำการสั่งซื้อ" export', { skip: !existsSync(shopeeOrderedAtPath) }, async () => {
+  const groups = await loadGroupsFromXlsx(shopeeOrderedAtPath);
+  assert.ok(groups.length > 0);
+  const tracked = groups.filter((group) => group.normalizedTrackingNo);
+  assert.ok(tracked.every((group) => /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(group.orderedAt)));
 });
