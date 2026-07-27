@@ -133,6 +133,15 @@ test('parseLabels output always includes trackingId field (even empty)', () => {
   assert.deepEqual(plain(parser.parseLabels(fixture('tiktok.txt'), 'tiktok.pdf'))[0].trackingId, '');
 });
 
+test('extracts Thai Post tracking numbers from Shopee label text', () => {
+  const parser = loadParser();
+  assert.equal(typeof parser.extractTracking, 'function');
+
+  assert.equal(parser.extractTracking('TH266907863837P\nShopee Order No. 260726NQRXWHWB'), 'TH266907863837P');
+  assert.equal(parser.extractTracking('TH2673361907445\nShopee Order No. 260726P5K0P4C0'), 'TH2673361907445');
+  assert.equal(parser.extractTracking('TH261849751923T\nHOME\nShopee Order No. 260727R5SD910W'), 'TH261849751923T');
+});
+
 test('extractTracking returns empty for text without tracking numbers', () => {
   const parser = loadParser();
   assert.equal(parser.extractTracking(fixture('shopee.txt')), '');

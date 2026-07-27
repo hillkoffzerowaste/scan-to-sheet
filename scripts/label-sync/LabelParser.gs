@@ -50,10 +50,15 @@ var LabelParser = (function () {
   }
 
   function extractTracking(text) {
+    // JTTH (J&T Thailand TikTok) — e.g. JTTH201795097265
     var jtMatch = /JTTH\d+/i.exec(text);
     if (jtMatch) return jtMatch[0].toUpperCase();
+    // J&T Express legacy — e.g. B899B-00-007L01, L946-00-524P03
     var courierMatch = /([A-Z]{1,2}\d{2,4}[A-Z]?-\d{2}-\d{3,}[A-Z]?\d{1,3})/i.exec(text);
     if (courierMatch) return courierMatch[1].toUpperCase();
+    // Thai Post — e.g. TH266907863837P, TH2673361907445
+    var thMatch = /\b(TH\d{11,14}[A-Z]?)\b/i.exec(text);
+    if (thMatch) return thMatch[1].toUpperCase();
     return '';
   }
 
