@@ -89,6 +89,7 @@ import {
   searchScansFirestore,
   upsertFirebaseUser,
   importMarketplaceOrders,
+  findExistingMarketplaceOrderIds,
   addCourier,
   claimRecoverableSheetSyncs,
   subscribeCouriers,
@@ -370,13 +371,26 @@ function App() {
         ? allGroups
         : allGroups.filter((g) => g.platform.toLowerCase() === marketplaceFilterPlatform.toLowerCase());
       if (!groups.length) throw new Error(`ไม่พบออเดอร์จาก ${marketplaceFilterPlatform} ในไฟล์`);
-      const skippedCount = Math.max(0, groups.length - MARKETPLACE_IMPORT_MAX_ORDERS);
+      const trackableGroups = groups.filter((group) => group.normalizedTrackingNo);
+      const untrackedCount = groups.length - trackableGroups.length;
+      if (!trackableGroups.length) {
+        throw new Error(`ไฟล์นี้มี ${groups.length} ออเดอร์ แต่ยังไม่มีเลขพัสดุสักรายการ กรุณาดาวน์โหลดไฟล์ใหม่หลังออกเลขพัสดุแล้ว`);
+      }
+      const marketplaceGroupId = (group) => `${group.platform}__${group.orderId}`;
+      const existingOrderIds = await findExistingMarketplaceOrderIds(trackableGroups.map(marketplaceGroupId));
+      const newGroups = trackableGroups.filter((group) => !existingOrderIds.has(marketplaceGroupId(group)));
+      const existingGroups = trackableGroups.filter((group) => existingOrderIds.has(marketplaceGroupId(group)));
+      const skippedCount = Math.max(0, newGroups.length - MARKETPLACE_IMPORT_MAX_ORDERS);
       const orderSortKey = (group) => String(group.orderedAt || group.expectedShipAt || '');
-      const sortedByLatest = [...groups].sort((a, b) => (
+      const sortedNewByLatest = [...newGroups].sort((a, b) => (
         orderSortKey(b).localeCompare(orderSortKey(a))
       ));
-      const limitedGroups = sortedByLatest.slice(0, MARKETPLACE_IMPORT_MAX_ORDERS);
+      const limitedNewGroups = sortedNewByLatest.slice(0, MARKETPLACE_IMPORT_MAX_ORDERS);
+      const limitedGroups = [...limitedNewGroups, ...existingGroups];
       const result = await importMarketplaceOrders(limitedGroups);
+      const untrackedNote = untrackedCount > 0
+        ? ` (ข้าม ${untrackedCount} ออเดอร์ที่ยังไม่มีเลขพัสดุ)`
+        : '';
       const skippedNote = skippedCount > 0
         ? ` (นำเข้าเฉพาะ ${MARKETPLACE_IMPORT_MAX_ORDERS} ออเดอร์ล่าสุดตามวันที่/เวลาในไฟล์ ข้าม ${skippedCount} ออเดอร์ที่เก่ากว่า กรุณานำเข้าไฟล์นี้ซ้ำเพื่อทำรอบถัดไป)`
         : '';
@@ -388,13 +402,13 @@ function App() {
           syncLateOrdersGoogle({ token: accessToken, config: googleConfig, orders: result.orderStates })
         ));
         setMarketplaceUploadResult({
-          type: skippedCount > 0 ? 'warning' : 'success',
-          message: `เพิ่มใหม่ ${result.imported} ออเดอร์ ข้ามรายการซ้ำ ${result.duplicates} ออเดอร์ อัปเดตกำหนดส่ง ${result.metadataUpdated} ออเดอร์ อัปเดต Firebase ${result.updatedScans} รายการ, Google Sheet ${sheetResult.matchedRows} แถว และ Late Orders ${lateResult.rows} ออเดอร์ (ล่าช้า ${lateResult.counts.overdue ?? 0})${skippedNote}`,
+          type: (skippedCount > 0 || untrackedCount > 0) ? 'warning' : 'success',
+          message: `เพิ่มใหม่ ${result.imported} ออเดอร์ ข้ามรายการซ้ำ ${result.duplicates} ออเดอร์ อัปเดตกำหนดส่ง ${result.metadataUpdated} ออเดอร์ อัปเดต Firebase ${result.updatedScans} รายการ, Google Sheet ${sheetResult.matchedRows} แถว และ Late Orders ${lateResult.rows} ออเดอร์ (ล่าช้า ${lateResult.counts.overdue ?? 0})${skippedNote}${untrackedNote}`,
         });
       } catch (sheetError) {
         setMarketplaceUploadResult({
           type: 'warning',
-          message: `Firebase เพิ่มใหม่ ${result.imported} ออเดอร์ ข้ามรายการซ้ำ ${result.duplicates} ออเดอร์ แต่ Google Sheet ยังไม่สำเร็จ: ${sheetError.message}${skippedNote}`,
+          message: `Firebase เพิ่มใหม่ ${result.imported} ออเดอร์ ข้ามรายการซ้ำ ${result.duplicates} ออเดอร์ แต่ Google Sheet ยังไม่สำเร็จ: ${sheetError.message}${skippedNote}${untrackedNote}`,
         });
       }
     } catch (error) {

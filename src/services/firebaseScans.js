@@ -414,6 +414,21 @@ async function commitMarketplaceWrites(writes) {
   }
 }
 
+export async function findExistingMarketplaceOrderIds(orderIds) {
+  if (!canWriteFirestore()) throw new Error('Firebase ยังไม่พร้อมใช้งาน');
+  const marketplaceCollection = collection(firestoreDb, 'marketplaceOrders');
+  const uniqueIds = [...new Set(orderIds)];
+  const existing = new Set();
+  for (let index = 0; index < uniqueIds.length; index += 30) {
+    const snap = await getDocs(query(
+      marketplaceCollection,
+      where(documentId(), 'in', uniqueIds.slice(index, index + 30)),
+    ));
+    snap.docs.forEach((item) => existing.add(item.id));
+  }
+  return existing;
+}
+
 export async function importMarketplaceOrders(groups, { knownExistingOrderIds = null } = {}) {
   if (!canWriteFirestore()) throw new Error('Firebase ยังไม่พร้อมใช้งาน');
   const marketplaceCollection = collection(firestoreDb, 'marketplaceOrders');
