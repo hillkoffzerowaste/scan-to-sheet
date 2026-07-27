@@ -58,6 +58,10 @@ Remark / Issue
 
 ## Google Cloud setup
 
+## Label-address sync (Google Apps Script companion)
+
+The web app remains responsible for scanning. A separate Apps Script job can read label PDFs/images from Drive every 15 minutes, match Marketplace Platform and Order ID in columns N/O, then overwrite column P with `recipient name | recipient address`. Installation and authorization steps are in [apps-script/label-sync/README.md](apps-script/label-sync/README.md).
+
 สร้าง OAuth client ใน Google Cloud Console:
 
 ```text

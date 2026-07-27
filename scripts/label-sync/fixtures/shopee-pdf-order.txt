@@ -1,0 +1,23 @@
+Shopee Order No. SHP-260727-003
+PICKUP DATE: 27 Jul 2026
+ผู้รับ (TO)
+ผู้ส่ง (FROM)
+Sample Recipient
+99 Seller Street
+Thailand
+NOTE
+12/3 Example Road แขวงตัวอย่าง เขตกลาง กรุงเทพมหานคร 10100
+HILLKOFF
+SHP260727003Shopee Order No.
+GARBAGE-ORDER-ID
+
+Shopee Order No. SHP-260727-004
+PICKUP DATE: 27 Jul 2026
+ผู้รับ (TO)
+ผู้ส่ง (FROM)
+Second Recipient
+99 Seller Street
+Thailand
+NOTE
+88 Example Village เชียงใหม่ 50000
+HILLKOFF
