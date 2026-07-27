@@ -142,6 +142,32 @@ test('extracts Thai Post tracking numbers from Shopee label text', () => {
   assert.equal(parser.extractTracking('TH261849751923T\nHOME\nShopee Order No. 260727R5SD910W'), 'TH261849751923T');
 });
 
+test('parses Shopee Thai Post label with address at top of page', () => {
+  const parser = loadParser();
+  const text = 'HWPAO-AG - เวียงป่าเป้า\n' +
+    '516 หมู่1, ตำบลแม่เจดีย์, อำเภอเวียงป่าเป้า, จังหวัดเชียงราย 57260\n' +
+    'F-1\n-\nS\n516\nTH266907863837P\n' +
+    '------------------------------------------\n' +
+    'HOME\nไม่ต้องเก็บเงิน\n28-07-2026\n30-07-2026\n' +
+    'Shopee Order No. 260726NQRXWHWB\nSHIP BY DATE\nPICKUP DATE\n' +
+    'ผู้รับ (TO)\nผู้ส่ง (FROM)\n' +
+    'ร้านกาแฟ Nerd\n' +
+    'เลขที่ 66 ถนน ช้างเผือก ตำบลศรีภูมิ อำเภอเมืองเชียงใหม่ จังหวัดเชียงใหม่ 50200 ประเทศไทย\n' +
+    'NOTE\nHILLKOFF ฮิลล์คอฟฟ์\nMP\nS\nN_B_2S_J09_HWPAO-AG\n';
+
+  const labels = plain(parser.parseLabels(text, 'shopee.pdf'));
+  assert.equal(labels.length, 1);
+  assert.equal(labels[0].platform, 'shopee');
+  assert.equal(labels[0].orderId, '260726NQRXWHWB');
+  assert.equal(labels[0].recipientName, 'ร้านกาแฟ Nerd');
+  // Address extracted from top section (new Thai Post format)
+  assert.ok(labels[0].address.includes('516 หมู่1'));
+  assert.ok(labels[0].address.includes('จังหวัดเชียงราย'));
+  assert.ok(labels[0].address.includes('57260'));
+  assert.ok(labels[0].combined.includes('ร้านกาแฟ Nerd'));
+  assert.ok(labels[0].combined.includes('516 หมู่1'));
+});
+
 test('extractTracking returns empty for text without tracking numbers', () => {
   const parser = loadParser();
   assert.equal(parser.extractTracking(fixture('shopee.txt')), '');

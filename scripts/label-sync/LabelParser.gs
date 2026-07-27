@@ -62,6 +62,30 @@ var LabelParser = (function () {
     return '';
   }
 
+  function extractAddressFromTop(text) {
+    var lines = text.split('\n');
+    var foundCode = false;
+    var addressParts = [];
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i].trim();
+      if (!line) continue;
+      // Detect warehouse/route code: "HWPAO-AG - เวียงป่าเป้า", "AMSOD-A - แม่สอด"
+      if (!foundCode && /^[A-Z]+\d*-[A-Z]*\s*-\s*/.test(line)) {
+        foundCode = true;
+        continue;
+      }
+      if (!foundCode) continue;
+      // Stop at tracking number or dashed divider
+      if (/\bTH\d{10,}[A-Z]?\b/.test(line) || /^-{10,}/.test(line)) break;
+      // Skip metadata: F-1, ROS, MP, S, HOME, OFFICE, warehouse sub-codes, pure numbers
+      if (/^(?:F-?\d*|ROS|MP|HOME|OFFICE|S\b|\d+\/\d+|^\d+$|-+)$/.test(line)) continue;
+      if (/^[A-Z]\d+-/.test(line)) continue;
+      var cleaned = cleanValue(line);
+      if (cleaned) addressParts.push(cleaned);
+    }
+    return addressParts.join(' ');
+  }
+
   function makeLabel(platform, orderId, name, address, trackingId) {
     var normalizedOrderId = normalizeOrderId(platform, orderId);
     var recipientName = cleanValue(name);
@@ -113,8 +137,12 @@ var LabelParser = (function () {
               !/^(?:เลขที่|thailand|ประเทศไทย|hillkoff|home|pickup|ship by)/i.test(line);
           });
         var recipientAddress = recipientBlock.slice(noteIndex).replace(/^\s*NOTE\s*/i, '');
-        recipientAddress = recipientAddress.split(/\n(?:HILLKOFF|BULKY|TOTAL|จำนวนรวม|#)/i)[0];
-        var tracking = extractTracking(segment);
+        recipientAddress = recipientAddress.split(/(?:^|\n)(?:HILLKOFF|BULKY|TOTAL|จำนวนรวม|#)/i)[0];
+        // Fallback for new Thai Post format: address not in NOTE section, get from label top
+        if (!cleanValue(recipientAddress)) {
+          recipientAddress = extractAddressFromTop(previousSegment);
+        }
+        var tracking = extractTracking(previousSegment) || extractTracking(segment) || extractTracking(text);
         return makeLabel('shopee', order.orderId, recipientNameLines[0], recipientAddress, tracking);
       }
 
@@ -122,7 +150,8 @@ var LabelParser = (function () {
       if (!lines.length) return null;
       var name = lines[0];
       var address = lines.slice(1).join(' ');
-      var tracking = extractTracking(segment);
+      if (!address) address = extractAddressFromTop(previousSegment);
+      var tracking = extractTracking(previousSegment) || extractTracking(segment) || extractTracking(text);
       return makeLabel('shopee', order.orderId, name, address, tracking);
     }).filter(Boolean);
   }
