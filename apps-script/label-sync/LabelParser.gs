@@ -49,15 +49,25 @@ var LabelParser = (function () {
     return cleanName && cleanAddress ? cleanName + ' | ' + cleanAddress : '';
   }
 
-  function makeLabel(platform, orderId, name, address) {
+  function extractTracking(text) {
+    var jtMatch = /JTTH\d+/i.exec(text);
+    if (jtMatch) return jtMatch[0].toUpperCase();
+    var courierMatch = /([A-Z]{1,2}\d{2,4}[A-Z]?-\d{2}-\d{3,}[A-Z]?\d{1,3})/i.exec(text);
+    if (courierMatch) return courierMatch[1].toUpperCase();
+    return '';
+  }
+
+  function makeLabel(platform, orderId, name, address, trackingId) {
     var normalizedOrderId = normalizeOrderId(platform, orderId);
     var recipientName = cleanValue(name);
     var recipientAddress = cleanValue(address);
     var combined = formatRecipient(recipientName, recipientAddress);
+    var normalizedTrackingId = normalizeOrderId(trackingId || '');
     if (!normalizedOrderId || !recipientName || !recipientAddress || !combined) return null;
     return {
       platform: platform,
       orderId: normalizedOrderId,
+      trackingId: normalizedTrackingId,
       recipientName: recipientName,
       address: recipientAddress,
       combined: combined,
@@ -99,14 +109,16 @@ var LabelParser = (function () {
           });
         var recipientAddress = recipientBlock.slice(noteIndex).replace(/^\s*NOTE\s*/i, '');
         recipientAddress = recipientAddress.split(/\n(?:HILLKOFF|BULKY|TOTAL|จำนวนรวม|#)/i)[0];
-        return makeLabel('shopee', order.orderId, recipientNameLines[0], recipientAddress);
+        var tracking = extractTracking(segment);
+        return makeLabel('shopee', order.orderId, recipientNameLines[0], recipientAddress, tracking);
       }
 
       var lines = recipientBlock.split('\n').map(cleanValue).filter(Boolean);
       if (!lines.length) return null;
       var name = lines[0];
       var address = lines.slice(1).join(' ');
-      return makeLabel('shopee', order.orderId, name, address);
+      var tracking = extractTracking(segment);
+      return makeLabel('shopee', order.orderId, name, address, tracking);
     }).filter(Boolean);
   }
 
@@ -127,7 +139,8 @@ var LabelParser = (function () {
       return !/\(?\+?66\)?\s*\d[\d* -]{6,}/.test(line);
     });
     if (meaningfulLines.length < 2) return [];
-    var label = makeLabel('tiktok', orderMatch && orderMatch[1], meaningfulLines[0], meaningfulLines.slice(1).join(' '));
+    var tracking = extractTracking(text);
+    var label = makeLabel('tiktok', orderMatch && orderMatch[1], meaningfulLines[0], meaningfulLines.slice(1).join(' '), tracking);
     return label ? [label] : [];
   }
 
@@ -147,6 +160,7 @@ var LabelParser = (function () {
   return {
     cleanValue: cleanValue,
     formatRecipient: formatRecipient,
+    extractTracking: extractTracking,
     normalizeLabelText: normalizeLabelText,
     normalizeOrderId: normalizeOrderId,
     normalizePlatform: normalizePlatform,

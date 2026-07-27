@@ -14,21 +14,57 @@ var LabelMatching = (function () {
   function buildOrderIndex(sheetRows) {
     var scoped = {};
     var unscoped = {};
+    var trackingScoped = {};
+    var trackingUnscoped = {};
     sheetRows.forEach(function (sheet) {
       (sheet.values || []).forEach(function (row, index) {
         var platform = normalizePlatform(row[0]);
         var orderId = normalizeOrderId(row[1]);
-        if (!orderId) return;
-        var candidate = { sheetName: sheet.sheetName, rowNumber: index + 2, platform: platform, orderId: orderId };
-        var orderKey = '|' + orderId;
-        (unscoped[orderKey] = unscoped[orderKey] || []).push(candidate);
-        if (platform) {
-          var scopedKey = key(platform, orderId);
-          (scoped[scopedKey] = scoped[scopedKey] || []).push(candidate);
+        var trackingId = normalizeOrderId(row[12] || '');
+        if (!orderId && !trackingId) return;
+        var candidate = { sheetName: sheet.sheetName, rowNumber: index + 2, platform: platform, orderId: orderId, trackingId: trackingId };
+        if (orderId) {
+          var orderKey = '|' + orderId;
+          (unscoped[orderKey] = unscoped[orderKey] || []).push(candidate);
+          if (platform) {
+            var scopedKey = key(platform, orderId);
+            (scoped[scopedKey] = scoped[scopedKey] || []).push(candidate);
+          }
+        }
+        if (trackingId) {
+          var tOrderKey = '|' + trackingId;
+          (trackingUnscoped[tOrderKey] = trackingUnscoped[tOrderKey] || []).push(candidate);
+          if (platform) {
+            var tScopedKey = key(platform, trackingId);
+            (trackingScoped[tScopedKey] = trackingScoped[tScopedKey] || []).push(candidate);
+          }
         }
       });
     });
-    return { scoped: scoped, unscoped: unscoped };
+    return { scoped: scoped, unscoped: unscoped, trackingScoped: trackingScoped, trackingUnscoped: trackingUnscoped };
+  }
+
+  function findCandidatesByTracking(index, label) {
+    if (!label.trackingId) return [];
+    var labelKey = key(label.platform, label.trackingId);
+    var candidates = index.trackingScoped[labelKey] || [];
+    if (!candidates.length) {
+      var fallback = index.trackingUnscoped['|' + label.trackingId] || [];
+      if (fallback.length === 1 && !fallback[0].platform) candidates = fallback;
+    }
+    return candidates;
+  }
+
+  function findCandidatesByOrderId(index, label) {
+    var labelKey = key(label.platform, label.orderId);
+    var candidates = index.scoped[labelKey] || [];
+    if (!candidates.length) {
+      var fallback = index.unscoped['|' + normalizeOrderId(label.orderId)] || [];
+      if (fallback.length === 1 && !fallback[0].platform) candidates = fallback;
+      else if (fallback.length > 1) return { candidates: fallback, status: 'ambiguous', errorCode: 'multiple_unscoped_rows' };
+    }
+    if (!candidates.length) return { candidates: [], status: 'unmatched', errorCode: 'order_not_found' };
+    return { candidates: candidates, status: 'ok' };
   }
 
   function uniqueLabels(labels) {
@@ -55,23 +91,30 @@ var LabelMatching = (function () {
         results.push({ status: 'ambiguous', matchedRows: 0, errorCode: 'conflicting_label_data' });
         return;
       }
-      var candidates = index.scoped[labelKey] || [];
-      if (!candidates.length) {
-        var fallback = index.unscoped['|' + normalizeOrderId(label.orderId)] || [];
-        if (fallback.length === 1 && !fallback[0].platform) candidates = fallback;
-        else if (fallback.length > 1) {
-          results.push({ status: 'ambiguous', matchedRows: 0, errorCode: 'multiple_unscoped_rows' });
-          return;
-        }
-      }
-      if (!candidates.length) {
-        results.push({ status: 'unmatched', matchedRows: 0, errorCode: 'order_not_found' });
+
+      // 1. Try tracking-first if tracking ID exists
+      var candidates = findCandidatesByTracking(index, label);
+      if (candidates.length) {
+        candidates.forEach(function (candidate) {
+          updates.push({ sheetName: candidate.sheetName, rowNumber: candidate.rowNumber, value: label.combined });
+        });
+        results.push({ status: 'updated', matchedRows: candidates.length, errorCode: '' });
         return;
       }
-      candidates.forEach(function (candidate) {
-        updates.push({ sheetName: candidate.sheetName, rowNumber: candidate.rowNumber, value: label.combined });
-      });
-      results.push({ status: 'updated', matchedRows: candidates.length, errorCode: '' });
+
+      // 2. Fallback to order ID matching
+      var orderResult = findCandidatesByOrderId(index, label);
+      if (orderResult.status === 'ok') {
+        orderResult.candidates.forEach(function (candidate) {
+          updates.push({ sheetName: candidate.sheetName, rowNumber: candidate.rowNumber, value: label.combined });
+        });
+        results.push({ status: 'updated', matchedRows: orderResult.candidates.length, errorCode: '' });
+        return;
+      }
+      if (orderResult.status === 'ambiguous' || orderResult.status === 'unmatched') {
+        results.push({ status: orderResult.status, matchedRows: 0, errorCode: orderResult.errorCode });
+        return;
+      }
     });
     return { updates: updates, results: results };
   }

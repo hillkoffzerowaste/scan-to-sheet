@@ -29,7 +29,7 @@ test('overwrites column P for every same-platform row with the matched order ID'
       ['shopee', 'SHP-001', 'older'],
     ] },
   ], [{
-    platform: 'shopee', orderId: 'SHP001', combined: 'สมชาย | 12/3 กรุงเทพฯ',
+    platform: 'shopee', orderId: 'SHP001', trackingId: '', combined: 'สมชาย | 12/3 กรุงเทพฯ',
   }]));
 
   assert.deepEqual(result.updates, [
@@ -48,7 +48,7 @@ test('does not use an unscoped order ID when different platforms share it', () =
       ['', 'DUP-1', ''],
       ['', 'DUP-1', ''],
     ] },
-  ], [{ platform: 'lazada', orderId: 'DUP1', combined: 'A | B' }]));
+  ], [{ platform: 'lazada', orderId: 'DUP1', trackingId: '', combined: 'A | B' }]));
 
   assert.deepEqual(result.updates, []);
   assert.deepEqual(result.results, [{ status: 'ambiguous', matchedRows: 0, errorCode: 'multiple_unscoped_rows' }]);
@@ -61,8 +61,8 @@ test('does not write a duplicate label when its recipient data conflicts', () =>
   const result = plain(matching.matchLabels([
     { sheetName: '2026-07-27', values: [['tiktok', '585225626528745423', '']] },
   ], [
-    { platform: 'tiktok', orderId: '585225626528745423', combined: 'คนแรก | ที่อยู่ A' },
-    { platform: 'tiktok', orderId: '585225626528745423', combined: 'คนสอง | ที่อยู่ B' },
+    { platform: 'tiktok', orderId: '585225626528745423', trackingId: '', combined: 'คนแรก | ที่อยู่ A' },
+    { platform: 'tiktok', orderId: '585225626528745423', trackingId: '', combined: 'คนสอง | ที่อยู่ B' },
   ]));
 
   assert.deepEqual(result.updates, []);
@@ -80,6 +80,7 @@ test('matches a Lazada label to a scoped sheet row', () => {
   ], [{
     platform: 'lazada',
     orderId: 'LZD1117718175852180',
+    trackingId: '',
     combined: 'นางทดสอบ ระบบงาน | 73/1 หมู่ 13 ตำบลตัวอย่าง บ้านโป่ง ราชบุรี 70110',
   }]));
 
@@ -100,6 +101,7 @@ test('matches a TikTok label to a scoped sheet row', () => {
   ], [{
     platform: 'tiktok',
     orderId: '585225626528745423',
+    trackingId: '',
     combined: 'คุณทดสอบ ติ๊กต็อก | 75/6 ถนนชุมแสง ตำบลบ้านพรุ หาดใหญ่ สงขลา 90250',
   }]));
 
@@ -120,6 +122,7 @@ test('reports unmatched when a Lazada label has no sheet row', () => {
   ], [{
     platform: 'lazada',
     orderId: 'LZD999',
+    trackingId: '',
     combined: 'ใครสักคน | ที่อยู่หนึ่ง',
   }]));
 
@@ -138,11 +141,78 @@ test('matches a TikTok label even when the sheet row omits the platform', () => 
   ], [{
     platform: 'tiktok',
     orderId: '585225626528745423',
+    trackingId: '',
     combined: 'คนเดียว | ที่อยู่เดียว',
   }]));
 
   assert.deepEqual(result.updates, [
     { sheetName: '2026-07-27', rowNumber: 2, value: 'คนเดียว | ที่อยู่เดียว' },
+  ]);
+  assert.deepEqual(result.results, [{ status: 'updated', matchedRows: 1, errorCode: '' }]);
+});
+
+test('matches a Shopee label by tracking ID (tracking-first) even when order ID differs', () => {
+  const matching = loadMatching();
+  assert.equal(typeof matching.matchLabels, 'function');
+
+  // Sheet has tracking in column M (index 12), order ID in sheet is DIFFERENT from label
+  const result = plain(matching.matchLabels([
+    { sheetName: '2026-07-27', values: [
+      ['shopee', 'wrong-order-id', '', '', '', '', '', '', '', '', '', '', 'B899B00007L01', ''],  // col M=12
+    ] },
+  ], [{
+    platform: 'shopee',
+    orderId: '260726P6WBVFGG',
+    trackingId: 'B899B00007L01',
+    combined: 'ผู้รับ | ที่อยู่ tracking match',
+  }]));
+
+  assert.deepEqual(result.updates, [
+    { sheetName: '2026-07-27', rowNumber: 2, value: 'ผู้รับ | ที่อยู่ tracking match' },
+  ]);
+  assert.deepEqual(result.results, [{ status: 'updated', matchedRows: 1, errorCode: '' }]);
+});
+
+test('falls back to order ID matching when tracking ID does not match any row', () => {
+  const matching = loadMatching();
+  assert.equal(typeof matching.matchLabels, 'function');
+
+  // Sheet has correct order ID but no tracking in column M
+  const result = plain(matching.matchLabels([
+    { sheetName: '2026-07-27', values: [
+      ['shopee', '260726P6WBVFGG', ''],
+    ] },
+  ], [{
+    platform: 'shopee',
+    orderId: '260726P6WBVFGG',
+    trackingId: 'B899_Z999_NO_MATCH',
+    combined: 'ผู้รับ | ที่อยู่ order fallback',
+  }]));
+
+  assert.deepEqual(result.updates, [
+    { sheetName: '2026-07-27', rowNumber: 2, value: 'ผู้รับ | ที่อยู่ order fallback' },
+  ]);
+  assert.deepEqual(result.results, [{ status: 'updated', matchedRows: 1, errorCode: '' }]);
+});
+
+test('matches a TikTok label by tracking ID from unscoped row (no platform in sheet)', () => {
+  const matching = loadMatching();
+  assert.equal(typeof matching.matchLabels, 'function');
+
+  // Sheet has tracking in column M but no platform and no order ID
+  const result = plain(matching.matchLabels([
+    { sheetName: '2026-07-27', values: [
+      ['', '', '', '', '', '', '', '', '', '', '', '', 'JTTH201795097265', ''],
+    ] },
+  ], [{
+    platform: 'tiktok',
+    orderId: '585225626528745423',
+    trackingId: 'JTTH201795097265',
+    combined: 'ผู้รับ TikTok | ที่อยู่ tracking unscoped',
+  }]));
+
+  assert.deepEqual(result.updates, [
+    { sheetName: '2026-07-27', rowNumber: 2, value: 'ผู้รับ TikTok | ที่อยู่ tracking unscoped' },
   ]);
   assert.deepEqual(result.results, [{ status: 'updated', matchedRows: 1, errorCode: '' }]);
 });

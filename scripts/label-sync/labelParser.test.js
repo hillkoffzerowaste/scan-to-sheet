@@ -33,6 +33,7 @@ test('parses every recipient from a multi-label Shopee file', () => {
     {
       platform: 'shopee',
       orderId: 'SHP260727001',
+      trackingId: '',
       recipientName: 'สมชาย ใจดี',
       address: '12/3 ถนนตัวอย่าง แขวงทดสอบ เขตกลาง กรุงเทพมหานคร 10100',
       combined: 'สมชาย ใจดี | 12/3 ถนนตัวอย่าง แขวงทดสอบ เขตกลาง กรุงเทพมหานคร 10100',
@@ -40,6 +41,7 @@ test('parses every recipient from a multi-label Shopee file', () => {
     {
       platform: 'shopee',
       orderId: 'SHP260727002',
+      trackingId: '',
       recipientName: 'สุดา ทดลอง',
       address: '88 หมู่ 5 ตำบลตัวอย่าง อำเภอเมือง เชียงใหม่ 50000',
       combined: 'สุดา ทดลอง | 88 หมู่ 5 ตำบลตัวอย่าง อำเภอเมือง เชียงใหม่ 50000',
@@ -54,6 +56,7 @@ test('parses Shopee PDF text when the TO and FROM headings precede the recipient
     {
       platform: 'shopee',
       orderId: 'SHP260727003',
+      trackingId: '',
       recipientName: 'Sample Recipient',
       address: '12/3 Example Road แขวงตัวอย่าง เขตกลาง กรุงเทพมหานคร 10100',
       combined: 'Sample Recipient | 12/3 Example Road แขวงตัวอย่าง เขตกลาง กรุงเทพมหานคร 10100',
@@ -61,6 +64,7 @@ test('parses Shopee PDF text when the TO and FROM headings precede the recipient
     {
       platform: 'shopee',
       orderId: 'SHP260727004',
+      trackingId: '',
       recipientName: 'Second Recipient',
       address: '88 Example Village เชียงใหม่ 50000',
       combined: 'Second Recipient | 88 Example Village เชียงใหม่ 50000',
@@ -75,6 +79,7 @@ test('parses the Lazada customer block without copying the phone number', () => 
   assert.deepEqual(plain(parser.parseLabels(fixture('lazada.txt'), 'lazada.pdf')), [{
     platform: 'lazada',
     orderId: 'LZD1117718175852180',
+    trackingId: '',
     recipientName: 'นางทดสอบ ระบบงาน',
     address: '73/1 หมู่ 13 ตำบลตัวอย่าง บ้านโป่ง ราชบุรี 70110',
     combined: 'นางทดสอบ ระบบงาน | 73/1 หมู่ 13 ตำบลตัวอย่าง บ้านโป่ง ราชบุรี 70110',
@@ -88,6 +93,7 @@ test('parses the TikTok recipient block and preserves a long order ID as text', 
   assert.deepEqual(plain(parser.parseLabels(fixture('tiktok.txt'), 'tiktok.pdf')), [{
     platform: 'tiktok',
     orderId: '585225626528745423',
+    trackingId: '',
     recipientName: 'คุณทดสอบ ติ๊กต็อก',
     address: '75/6 ถนนชุมแสง ตำบลบ้านพรุ หาดใหญ่ สงขลา 90250',
     combined: 'คุณทดสอบ ติ๊กต็อก | 75/6 ถนนชุมแสง ตำบลบ้านพรุ หาดใหญ่ สงขลา 90250',
@@ -100,4 +106,36 @@ test('normalizes PDF control characters and rejects incomplete labels', () => {
 
   assert.deepEqual(plain(parser.parseLabels('Order No.: A-1\u0000\nCustomer NAME: Only Name', 'bad.pdf')), []);
   assert.equal(parser.normalizeOrderId('shopee', ' shp- 1_2 '), 'SHP12');
+});
+
+test('extracts J&T tracking number from Shopee label text', () => {
+  const parser = loadParser();
+  assert.equal(typeof parser.extractTracking, 'function');
+
+  assert.equal(parser.extractTracking('B899B-00-007L01\nShopee Order No. 260726P6WBVFGG'), 'B899B-00-007L01');
+  assert.equal(parser.extractTracking('L946-00-524P03\nShopee Order No. 260727PSKK15RN'), 'L946-00-524P03');
+  assert.equal(parser.extractTracking('Shopee Order No. 260726P6WBVFGG\nHOME'), '');
+});
+
+test('extracts JTTH tracking number from TikTok label text', () => {
+  const parser = loadParser();
+  assert.equal(typeof parser.extractTracking, 'function');
+
+  assert.equal(parser.extractTracking('JTTH201795097265\nOrder ID: 585225626528745423'), 'JTTH201795097265');
+  assert.equal(parser.extractTracking('Order ID: 585225626528745423\nNO TRACKING'), '');
+});
+
+test('parseLabels output always includes trackingId field (even empty)', () => {
+  const parser = loadParser();
+  // All platforms should include trackingId in their output object
+  assert.deepEqual(plain(parser.parseLabels(fixture('shopee.txt'), 'shopee.pdf'))[0].trackingId, '');
+  assert.deepEqual(plain(parser.parseLabels(fixture('lazada.txt'), 'lazada.pdf'))[0].trackingId, '');
+  assert.deepEqual(plain(parser.parseLabels(fixture('tiktok.txt'), 'tiktok.pdf'))[0].trackingId, '');
+});
+
+test('extractTracking returns empty for text without tracking numbers', () => {
+  const parser = loadParser();
+  assert.equal(parser.extractTracking(fixture('shopee.txt')), '');
+  assert.equal(parser.extractTracking(fixture('lazada.txt')), '');
+  assert.equal(parser.extractTracking('No tracking here\nJust some random text'), '');
 });
