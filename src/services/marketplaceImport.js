@@ -14,6 +14,10 @@ function firstHeaderIndex(headers, candidates) {
 
 const SCIENTIFIC_NOTATION = /^[+-]?\d+(?:\.\d+)?e[+-]?\d+$/i;
 
+export function shouldRunMarketplaceBackfill({ trigger, sessionReady = false } = {}) {
+  return sessionReady === true && trigger === 'manual';
+}
+
 export function validateMarketplaceIdentifier(value, { platform, rowNumber, field }) {
   const text = cleanCell(value);
   const unsafeExcelNumber = typeof value === 'number'

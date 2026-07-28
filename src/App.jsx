@@ -94,7 +94,12 @@ import {
   claimRecoverableSheetSyncs,
   subscribeCouriers,
 } from './services/firebaseScans.js';
-import { groupMarketplaceRows, parseCsvText, parseMarketplaceRows } from './services/marketplaceImport.js';
+import {
+  groupMarketplaceRows,
+  parseCsvText,
+  parseMarketplaceRows,
+  shouldRunMarketplaceBackfill,
+} from './services/marketplaceImport.js';
 import { parseXlsxArrayBuffer } from './services/xlsxImport.js';
 import { loadHtml5Qrcode } from './services/cameraLoader.js';
 import { commitFallbackScan } from './services/scanCommit.js';
@@ -423,6 +428,10 @@ function App() {
   }
 
   useEffect(() => {
+    if (!shouldRunMarketplaceBackfill({
+      trigger: 'automatic',
+      sessionReady: Boolean(firebaseUser && token && config?.master?.id),
+    })) return;
     if (!firebaseUser || !token || !config?.master?.id || marketplaceBackfillStartedRef.current) return;
     const backfillKey = `scan-to-sheet:marketplace-backfill:${firebaseUser.uid}:${config.master.id}`;
     const lastSuccessfulBackfill = Number(localStorage.getItem(backfillKey) ?? 0);
