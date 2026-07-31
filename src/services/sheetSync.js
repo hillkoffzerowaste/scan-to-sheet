@@ -18,6 +18,15 @@ export function prioritizeSheetSyncCandidates({ failed = [], pending = [], maxRo
   return [...failed, ...pending].slice(0, Math.max(0, maxRows));
 }
 
+export function buildSheetSyncFailureUpdates(orders = [], error = null) {
+  const message = String(error?.message ?? error ?? 'Unknown sync error');
+  return orders.map((order) => ({
+    orderId: order.id,
+    attemptId: order.sheetSyncAttemptId ?? '',
+    error: new Error(message),
+  }));
+}
+
 export function shouldIncludeInManualSheetRecovery(order, role = 'both') {
   if (!order || !(order.code || order.normalizedCode)) return false;
   const hasPacker = Boolean(order.packerScan?.scannedAt);

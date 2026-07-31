@@ -4,6 +4,7 @@ import { findHistoricalIssueRow, findScanReconciliation, getScanIssueMeta } from
 const DRIVE_API = 'https://www.googleapis.com/drive/v3';
 const SHEETS_API = 'https://sheets.googleapis.com/v4/spreadsheets';
 const USERINFO_API = 'https://www.googleapis.com/oauth2/v3/userinfo';
+export const GOOGLE_API_TIMEOUT_MS = 25_000;
 const MIME_FOLDER = 'application/vnd.google-apps.folder';
 const MIME_SHEET = 'application/vnd.google-apps.spreadsheet';
 
@@ -208,43 +209,56 @@ export function validateScanCode(courier, value, { allowAnyFormat = false } = {}
   };
 }
 
-async function apiFetch(url, token, options = {}) {
+export async function apiFetch(url, token, options = {}) {
+  const { timeoutMs = GOOGLE_API_TIMEOUT_MS, ...requestOptions } = options;
   const maxRetries = 4;
   let lastError;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-        ...(options.headers ?? {}),
-      },
-    });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetch(url, {
+        ...requestOptions,
+        signal: controller.signal,
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          ...(requestOptions.headers ?? {}),
+        },
+      });
 
-    if (response.status === 429 && attempt < maxRetries) {
-      lastError = new Error(`Google API rate limited (429) after ${attempt + 1} attempts`);
-      const retryAfter = response.headers.get('Retry-After');
-      const retryAfterSeconds = Number(retryAfter);
-      const retryAfterMs = Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
-        ? retryAfterSeconds * 1000
-        : 0;
-      const exponentialMs = Math.min(2000 * (2 ** attempt), 30000);
-      const jitterMs = Math.floor(Math.random() * 500);
-      await new Promise((resolve) => setTimeout(resolve, Math.max(retryAfterMs, exponentialMs) + jitterMs));
-      continue;
+      if (response.status === 429 && attempt < maxRetries) {
+        lastError = new Error(`Google API rate limited (429) after ${attempt + 1} attempts`);
+        const retryAfter = response.headers.get('Retry-After');
+        const retryAfterSeconds = Number(retryAfter);
+        const retryAfterMs = Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
+          ? retryAfterSeconds * 1000
+          : 0;
+        const exponentialMs = Math.min(2000 * (2 ** attempt), 30000);
+        const jitterMs = Math.floor(Math.random() * 500);
+        await new Promise((resolve) => setTimeout(resolve, Math.max(retryAfterMs, exponentialMs) + jitterMs));
+        continue;
+      }
+
+      if (!response.ok) {
+        const detail = await response.text();
+        throw new Error(`Google API error ${response.status}: ${detail}`);
+      }
+
+      if (response.status === 204) {
+        return null;
+      }
+
+      return await response.json();
+    } catch (error) {
+      if (error?.name === 'AbortError') {
+        throw new Error(`Google API request timed out after ${timeoutMs}ms`);
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeout);
     }
-
-    if (!response.ok) {
-      const detail = await response.text();
-      throw new Error(`Google API error ${response.status}: ${detail}`);
-    }
-
-    if (response.status === 204) {
-      return null;
-    }
-
-    return response.json();
   }
 
   throw lastError ?? new Error('Google API max retries exceeded');

@@ -6,7 +6,25 @@ import {
   findCancellationRow,
   getDailySheetPropertiesForMarketplaceBackfill,
   parseAppendUpdatedRange,
+  apiFetch,
 } from './googleSheets.js';
+
+test('apiFetch aborts a Google request that never responds', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (_url, { signal }) => new Promise((_, reject) => {
+    signal.addEventListener('abort', () => {
+      reject(Object.assign(new Error('aborted'), { name: 'AbortError' }));
+    }, { once: true });
+  });
+  try {
+    await assert.rejects(
+      apiFetch('https://example.test', 'token', { timeoutMs: 10 }),
+      /timed out/i,
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
 
 test('parseAppendUpdatedRange accepts one A:W row on the expected sheet', () => {
   assert.equal(parseAppendUpdatedRange("'2026-07-18'!A43:W43", '2026-07-18'), 43);

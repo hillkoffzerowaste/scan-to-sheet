@@ -414,7 +414,7 @@ async function commitMarketplaceWrites(writes) {
   }
 }
 
-export async function findExistingMarketplaceOrderIds(orderIds) {
+export async function findExistingMarketplaceOrderIdsLegacy(orderIds) {
   if (!canWriteFirestore()) throw new Error('Firebase ยังไม่พร้อมใช้งาน');
   const marketplaceCollection = collection(firestoreDb, 'marketplaceOrders');
   const uniqueIds = [...new Set(orderIds)];

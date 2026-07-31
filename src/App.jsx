@@ -105,6 +105,7 @@ import { loadHtml5Qrcode } from './services/cameraLoader.js';
 import { commitFallbackScan } from './services/scanCommit.js';
 import { shouldPollMissingOrders } from './services/missingCheckPolicy.js';
 import { getSheetRecoveryDates } from './services/sheetRecoveryDates.js';
+import { buildSheetSyncFailureUpdates } from './services/sheetSync.js';
 import {
   getAdminScanTiming,
   getPackerDuplicateMessage,
@@ -1201,6 +1202,7 @@ function App() {
     let synced = 0;
     let failed = 0;
     let claimedCount = 0;
+    let claimedOrders = [];
     try {
       const orders = await claimRecoverableSheetSyncs({
         maxRows: SHEET_RECOVERY_BATCH_SIZE,
@@ -1208,6 +1210,7 @@ function App() {
         role,
         dates,
       });
+      claimedOrders = orders;
       claimedCount = orders.length;
       if (orders.length) {
         sheetRecoveryNextAllowedAtRef.current = Date.now() + SHEET_RECOVERY_COOLDOWN_MS;
@@ -1302,6 +1305,11 @@ function App() {
       }
       return { busy: false, claimed: orders.length, synced, failed };
     } catch (error) {
+      const failureUpdates = buildSheetSyncFailureUpdates(claimedOrders, error);
+      await Promise.all(failureUpdates.map(({ orderId, attemptId, error: syncError }) => (
+        markSheetSyncResult({ orderId, attemptId, ok: false, error: syncError }).catch(() => {})
+      )));
+      failed = Math.max(failed, failureUpdates.length);
       if (showStatus) {
         setStatus({ type: 'error', title: 'อัปเดต Sheet ไม่สำเร็จ', message: error.message });
       }
