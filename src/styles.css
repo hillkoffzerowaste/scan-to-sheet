@@ -2367,32 +2367,32 @@ tbody tr:nth-child(8){ animation-delay: 0.21s; }
    Presentation-only overrides. Scan handlers, services, data contracts and
    persistence flows intentionally remain outside this layer. */
 :root {
-  --page: #f4f6f8;
-  --page-soft: #e9eef3;
+  --page: #f5f7fa;
+  --page-soft: #eef2f6;
   --surface: #ffffff;
   --surface-soft: #f8fafc;
   --surface-raised: #ffffff;
-  --text: #17202b;
-  --muted: #64748b;
-  --line: #e2e8f0;
-  --line-strong: #cbd5e1;
-  --primary: #2563eb;
-  --primary-strong: #1d4ed8;
+  --text: #0f172a;
+  --muted: #475569;
+  --line: #d7dee8;
+  --line-strong: #b7c3d0;
+  --primary: #1d4ed8;
+  --primary-strong: #1e40af;
   --primary-soft: #eff6ff;
-  --warning: #b45309;
-  --warning-bg: #fff7ed;
-  --warning-line: #fed7aa;
+  --warning: #92400e;
+  --warning-bg: #fffbeb;
+  --warning-line: #f4d18a;
   --danger: #b91c1c;
-  --danger-bg: #fef2f2;
-  --danger-line: #fecaca;
-  --success: #15803d;
+  --danger-bg: #fff1f2;
+  --danger-line: #f3b4ba;
+  --success: #166534;
   --success-bg: #f0fdf4;
-  --success-line: #bbf7d0;
+  --success-line: #b7e1c2;
   --glass-bg: #ffffff;
   --glass-hover: #ffffff;
   --glass-alt: #f8fafc;
   --glass-alt-hover: #f1f5f9;
-  --glass-border: #e2e8f0;
+  --glass-border: #d7dee8;
   --glass-highlight: transparent;
   --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05);
   --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.07);
@@ -2406,30 +2406,30 @@ tbody tr:nth-child(8){ animation-delay: 0.21s; }
 :root[data-theme="dark"] {
   --page: #0b1220;
   --page-soft: #111827;
-  --surface: #111a2a;
+  --surface: #162033;
   --surface-soft: #0f172a;
-  --surface-raised: #172235;
-  --text: #e5edf7;
-  --muted: #94a3b8;
-  --line: #263449;
-  --line-strong: #3a4b63;
-  --primary: #60a5fa;
-  --primary-strong: #93c5fd;
+  --surface-raised: #1e293b;
+  --text: #f8fafc;
+  --muted: #a8b5c7;
+  --line: #334155;
+  --line-strong: #475569;
+  --primary: #1d4ed8;
+  --primary-strong: #bfdbfe;
   --primary-soft: #172b4d;
-  --warning: #f59e0b;
-  --warning-bg: #35220c;
-  --warning-line: #704d13;
-  --danger: #f87171;
+  --warning: #fbbf24;
+  --warning-bg: #3b2a0f;
+  --warning-line: #7c5a1d;
+  --danger: #fca5a5;
   --danger-bg: #3b161b;
   --danger-line: #713039;
-  --success: #4ade80;
+  --success: #86efac;
   --success-bg: #123322;
   --success-line: #245e3a;
-  --glass-bg: #111a2a;
-  --glass-hover: #172235;
+  --glass-bg: #162033;
+  --glass-hover: #1e293b;
   --glass-alt: #0f172a;
   --glass-alt-hover: #1e293b;
-  --glass-border: #263449;
+  --glass-border: #334155;
   --glass-highlight: transparent;
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.25);
   --shadow-md: 0 8px 18px rgba(0, 0, 0, 0.28);
@@ -3036,17 +3036,78 @@ body::before {
   }
 }
 
-/* Final accessibility pass: active and disabled states must remain readable. */
-:root[data-theme="dark"] {
-  --primary: #1d4ed8;
-  --primary-strong: #bfdbfe;
-  --primary-soft: #172b4d;
-}
+/* Final enterprise color contract: neutral surfaces, one action accent, and
+   semantic status colors that remain readable in both themes. */
 
 .enterprise-shell .tab-button.active {
   background: var(--primary) !important;
   color: #fff !important;
   border-color: var(--primary) !important;
+}
+
+.enterprise-shell .workflow-guide,
+.enterprise-shell .packer-workflow-guide,
+.enterprise-shell .drive-workflow-guide {
+  border-color: var(--line) !important;
+  background: var(--surface-soft) !important;
+  color: var(--text) !important;
+}
+
+.enterprise-shell .workflow-guide svg,
+.enterprise-shell .current-courier-badge svg {
+  color: var(--primary-strong) !important;
+}
+
+.enterprise-shell .drive-mode-label {
+  border: 1px solid var(--line) !important;
+  background: var(--primary-soft) !important;
+  color: var(--primary-strong) !important;
+}
+
+.enterprise-shell .current-courier-badge.workflow-packer,
+.enterprise-shell .current-courier-badge.workflow-drive {
+  border-color: var(--line) !important;
+  background: var(--surface-soft) !important;
+  color: var(--text) !important;
+}
+
+.enterprise-shell .scan-panel.workflow-packer,
+.enterprise-shell .scan-panel.workflow-drive {
+  border-color: var(--line) !important;
+  border-top-color: var(--primary) !important;
+  background: var(--surface) !important;
+}
+
+.enterprise-shell .workflow-packer.scan-form .scan-input-row,
+.enterprise-shell .workflow-drive.scan-form .scan-input-row {
+  border-color: var(--line-strong) !important;
+}
+
+.enterprise-shell .workflow-packer.scan-form .scan-input-row:focus-within,
+.enterprise-shell .workflow-drive.scan-form .scan-input-row:focus-within {
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.2) !important;
+}
+
+.enterprise-shell .workflow-packer.scan-form .scan-input-row button,
+.enterprise-shell .workflow-drive.scan-form .scan-input-row button {
+  background: var(--primary) !important;
+}
+
+.enterprise-shell .scan-popup-sheet.workflow-packer,
+.enterprise-shell .scan-popup-sheet.workflow-drive {
+  border-top-color: var(--primary) !important;
+  background: var(--surface) !important;
+}
+
+.enterprise-shell .status-badge.cross-day {
+  border: 1px solid var(--warning-line);
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
+.enterprise-shell tbody tr:nth-child(even) {
+  background: var(--surface-soft);
 }
 
 .enterprise-shell button:disabled,
