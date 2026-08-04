@@ -2704,6 +2704,7 @@ function App() {
           data-testid="packer-tab"
           className={`tab-button ${activeTab === 'packer' ? 'active' : ''}`}
           type="button"
+          aria-current={activeTab === 'packer' ? 'page' : undefined}
           onClick={() => { setActiveTab('packer'); setScanPopupOpen(false); void stopCamera(); }}
         >
           <PackageCheck size={18} />
@@ -2713,6 +2714,7 @@ function App() {
           data-testid="drive-tab"
           className={`tab-button ${activeTab === 'drive' ? 'active' : ''}`}
           type="button"
+          aria-current={activeTab === 'drive' ? 'page' : undefined}
           onClick={() => { setActiveTab('drive'); setScanPopupOpen(false); void stopCamera(); }}
         >
           <Upload size={18} />
@@ -2996,6 +2998,27 @@ function App() {
             <Truck size={18} />
             <span>{activeTab === 'drive' ? 'กำลังรับเข้า Drive' : 'กำลังสแกนแพ็ก'}</span>
             <strong>{selectedCourier}</strong>
+          </div>
+
+          <div className="operation-context" aria-label="บริบทการทำงานปัจจุบัน">
+            <div className="operation-context-item">
+              <span>Workflow</span>
+              <strong>{activeTab === 'drive' ? 'รับเข้า Drive' : 'แพ็กสินค้า'}</strong>
+            </div>
+            {activeTab === 'packer' && (
+              <div className="operation-context-item">
+                <span>Packer</span>
+                <strong>{selectedPacker}</strong>
+              </div>
+            )}
+            <div className="operation-context-item">
+              <span>โหมดสแกน</span>
+              <strong>{scanMode === 'continuous' ? 'ต่อเนื่อง' : 'ทีละรายการ'}</strong>
+            </div>
+            <div className="operation-context-item">
+              <span>ช่องทาง</span>
+              <strong>{scanMethod === 'camera' ? 'กล้อง' : 'เครื่องยิง / พิมพ์'}</strong>
+            </div>
           </div>
 
           <section className="sheet-recovery-panel" aria-label="Recovery Firestore to Sheet">
@@ -3843,7 +3866,7 @@ function App() {
 function StatusBanner({ status }) {
   const Icon = status.type === 'success' ? CheckCircle2 : status.type === 'duplicate' || status.type === 'warning' ? AlertTriangle : PackageCheck;
   return (
-    <div className={`status-banner ${status.type}`}>
+    <div className={`status-banner ${status.type}`} role="status" aria-live="polite" aria-atomic="true">
       <Icon size={22} />
       <div>
         <strong>{status.title}</strong>
