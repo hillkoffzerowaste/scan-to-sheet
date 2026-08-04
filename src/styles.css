@@ -3035,3 +3035,58 @@ body::before {
     font-size: 0.64rem;
   }
 }
+
+/* Final accessibility pass: active and disabled states must remain readable. */
+:root[data-theme="dark"] {
+  --primary: #1d4ed8;
+  --primary-strong: #bfdbfe;
+  --primary-soft: #172b4d;
+}
+
+.enterprise-shell .tab-button.active {
+  background: var(--primary) !important;
+  color: #fff !important;
+  border-color: var(--primary) !important;
+}
+
+.enterprise-shell button:disabled,
+.enterprise-shell input:disabled,
+.enterprise-shell select:disabled {
+  opacity: 1 !important;
+  color: var(--muted) !important;
+  border-color: var(--line) !important;
+  background: var(--surface-soft) !important;
+}
+
+.enterprise-shell .side-panel .courier-button.active:disabled {
+  color: #fff !important;
+  border-color: var(--primary) !important;
+  background: var(--primary) !important;
+}
+
+.enterprise-shell .issue-bar button:disabled,
+.enterprise-shell .table-action-button:disabled,
+.enterprise-shell .popup-cancel-btn:disabled {
+  color: var(--muted) !important;
+  border-color: var(--line) !important;
+  background: var(--surface-soft) !important;
+}
+
+@media (min-width: 1200px) {
+  .enterprise-shell > .tab-bar .tab-button + .tab-button {
+    border-top: 1px solid var(--line);
+  }
+}
+
+@media (max-width: 700px) {
+  .enterprise-shell .tab-bar {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .enterprise-shell .tab-button {
+    min-width: 0;
+    gap: 4px;
+    padding-inline: 6px;
+    font-size: 0.78rem;
+  }
+}

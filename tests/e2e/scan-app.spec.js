@@ -65,6 +65,7 @@ test.describe('Scan to Sheet — Packer Tab', () => {
   });
 
   test('report panel renders', async ({ page }) => {
+    await page.getByTestId('reports-tab').click();
     const reportPanel = page.locator('.report-panel');
     await expect(reportPanel).toBeVisible();
     await expect(reportPanel.locator('h2')).toContainText('รายงานสแกน');
@@ -81,6 +82,16 @@ test.describe('Scan to Sheet — Drive Tab', () => {
     await driveTab.click();
     await expect(driveTab).toHaveClass(/active/);
     await expect(page.locator('.drive-mode-label')).toBeVisible();
+  });
+
+  test('can switch to reports tab without showing scan workspace', async ({ page }) => {
+    const reportsTab = page.getByTestId('reports-tab');
+    await reportsTab.click();
+    await expect(reportsTab).toHaveClass(/active/);
+    await expect(reportsTab).toHaveAttribute('aria-current', 'page');
+    await expect(page.locator('.report-panel')).toBeVisible();
+    await expect(page.locator('.workspace-grid')).toHaveCount(0);
+    await expect(page.locator('.workflow-guide')).toHaveCount(0);
   });
 
   test('missing order check panel visible in drive tab', async ({ page }) => {
@@ -135,6 +146,52 @@ test.describe('Scan to Sheet — Theme & Layout', () => {
     expect(visualOverhead).toEqual({ animations: 0, transitions: 0, gradients: 0, blur: 0 });
   });
 
+  test('keeps active and disabled controls readable in dark theme', async ({ page }) => {
+    await page.locator('.theme-toggle button:has-text("Dark")').click();
+
+    const contrast = await page.locator('.enterprise-shell').evaluate((root) => {
+      const channel = (value) => {
+        const match = value.match(/rgba?\(([^)]+)\)/);
+        if (!match) return null;
+        return match[1].split(',').slice(0, 3).map((part) => Number.parseFloat(part.trim()));
+      };
+      const toRgb = (value) => {
+        const normalized = value.trim().toLowerCase();
+        if (normalized.startsWith('rgb')) return channel(normalized);
+        if (!normalized.startsWith('#')) return null;
+        const hex = normalized.slice(1);
+        const expanded = hex.length === 3 ? hex.split('').map((part) => `${part}${part}`).join('') : hex;
+        if (expanded.length !== 6) return null;
+        return [0, 2, 4].map((index) => Number.parseInt(expanded.slice(index, index + 2), 16));
+      };
+      const luminance = (value) => {
+        const rgb = toRgb(value);
+        if (!rgb) return null;
+        const linear = rgb.map((part) => {
+          const normalized = part / 255;
+          return normalized <= 0.03928 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
+        });
+        return (0.2126 * linear[0]) + (0.7152 * linear[1]) + (0.0722 * linear[2]);
+      };
+      const ratio = (element) => {
+        const style = getComputedStyle(element);
+        const foreground = luminance(style.color);
+        const background = luminance(style.backgroundColor);
+        if (foreground === null || background === null) return null;
+        return (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05);
+      };
+      return {
+        activeTab: ratio(root.querySelector('.tab-button.active')),
+        activeCourier: ratio(root.querySelector('.courier-button.active')),
+        disabledControl: ratio(root.querySelector('button:disabled')),
+      };
+    });
+
+    expect(contrast.activeTab).toBeGreaterThanOrEqual(4.5);
+    expect(contrast.activeCourier).toBeGreaterThanOrEqual(4.5);
+    expect(contrast.disabledControl).toBeGreaterThanOrEqual(4.5);
+  });
+
   test('search panel is visible in packer tab', async ({ page }) => {
     await expect(page.locator('.search-panel')).toBeVisible();
     await expect(page.locator('.search-panel h3')).toContainText('ค้นหาเลขพัสดุ');
@@ -169,6 +226,17 @@ test.describe('Scan to Sheet — Mobile Responsiveness', () => {
 
     await expect(page.locator('.app-shell')).toBeVisible();
     await expect(page.locator('h1')).toBeVisible();
+
+    const tabLayout = await page.locator('.tab-bar').evaluate((tabBar) => {
+      const buttons = Array.from(tabBar.querySelectorAll('.tab-button'));
+      const boxes = buttons.map((button) => button.getBoundingClientRect());
+      return {
+        count: buttons.length,
+        sameRow: boxes.every((box) => box.top === boxes[0]?.top),
+        overflow: tabBar.scrollWidth > tabBar.clientWidth,
+      };
+    });
+    expect(tabLayout).toEqual({ count: 3, sameRow: true, overflow: false });
 
     // Table should scroll horizontally
     const tableWrap = page.locator('.table-wrap').first();

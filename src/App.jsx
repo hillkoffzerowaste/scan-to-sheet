@@ -590,7 +590,7 @@ function App() {
 
     if (activeTab === 'packer') {
       refreshSelectedCourierRows();
-    } else {
+    } else if (activeTab === 'drive') {
       refreshDriveRows();
     }
   }, [selectedCourier, today.date, isSignedIn, activeTab]);
@@ -2723,17 +2723,29 @@ function App() {
             <span className="tab-badge">{missingAlertBadge}</span>
           )}
         </button>
+        <button
+          data-testid="reports-tab"
+          className={`tab-button ${activeTab === 'reports' ? 'active' : ''}`}
+          type="button"
+          aria-current={activeTab === 'reports' ? 'page' : undefined}
+          onClick={() => { setActiveTab('reports'); setScanPopupOpen(false); void stopCamera(); }}
+        >
+          <BarChart3 size={18} />
+          <span>รายงาน</span>
+        </button>
       </nav>
 
-      <section className={`workflow-guide ${activeTab === 'drive' ? 'drive-workflow-guide' : 'packer-workflow-guide'}`}>
-        {activeTab === 'drive' ? <Upload size={24} /> : <PackageCheck size={24} />}
-        <div>
-          <strong>{activeTab === 'drive' ? 'รับเข้า Drive' : 'แพ็กสินค้า'}</strong>
-          <p>{activeTab === 'drive' ? 'สแกนรับพัสดุเข้าระบบก่อนส่งให้ Packer แพ็กสินค้า' : 'สแกนพัสดุหลังแพ็กเสร็จ เพื่อบันทึกผู้แพ็กและสถานะ'}</p>
-        </div>
-      </section>
+      {activeTab !== 'reports' && (
+        <>
+          <section className={`workflow-guide ${activeTab === 'drive' ? 'drive-workflow-guide' : 'packer-workflow-guide'}`}>
+            {activeTab === 'drive' ? <Upload size={24} /> : <PackageCheck size={24} />}
+            <div>
+              <strong>{activeTab === 'drive' ? 'รับเข้า Drive' : 'แพ็กสินค้า'}</strong>
+              <p>{activeTab === 'drive' ? 'สแกนรับพัสดุเข้าระบบก่อนส่งให้ Packer แพ็กสินค้า' : 'สแกนพัสดุหลังแพ็กเสร็จ เพื่อบันทึกผู้แพ็กและสถานะ'}</p>
+            </div>
+          </section>
 
-      <details className="marketplace-upload-panel secondary-panel">
+          <details className="marketplace-upload-panel secondary-panel">
         <summary className="secondary-panel-summary">
           <div>
           <div className="panel-heading" id="marketplace-upload-title">
@@ -2784,9 +2796,9 @@ function App() {
             </div>
           )}
         </div>
-      </details>
+          </details>
 
-      <section className="workspace-grid">
+          <section className="workspace-grid">
         <aside className={`side-panel workflow-${activeTab}`}>
           <div className="panel-heading">
             <Truck size={18} />
@@ -3522,11 +3534,13 @@ function App() {
             </>
           )}
         </section>
-      </section>
+          </section>
+        </>
+      )}
 
-      {/* Reports — only in packer tab */}
-      {activeTab === 'packer' && (
-        <details className="report-panel secondary-panel">
+      {/* Reports — dedicated primary tab */}
+      {activeTab === 'reports' && (
+        <details className="report-panel secondary-panel" open={activeTab === 'reports'}>
           <summary className="report-header secondary-panel-summary">
             <div>
               <p className="eyebrow">Reports</p>
