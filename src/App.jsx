@@ -2639,7 +2639,8 @@ function App() {
         <div className="app-title">
           <span className="title-badge">
             <ScanLine size={22} />
-            Scan to Sheet
+            <span className="brand-wordmark">HILLKOFF</span>
+            <span className="title-product">Scan to Sheet</span>
           </span>
           <h1>สแกนใบปะหน้าเข้า Google Sheet</h1>
           <span className="title-accent" />
@@ -2796,6 +2797,37 @@ function App() {
             </div>
           )}
         </div>
+          </details>
+
+          <details className="standards-panel secondary-panel">
+            <summary className="secondary-panel-summary">
+              <div>
+                <div className="panel-heading">
+                  <CheckCircle2 size={18} />
+                  <span>มาตรฐานการปฏิบัติงาน</span>
+                </div>
+                <p>หลักควบคุมสำหรับความถูกต้อง ตรวจสอบย้อนกลับ และคุณภาพบริการ</p>
+              </div>
+              <span className="secondary-panel-label">Quality controls</span>
+            </summary>
+            <div className="standards-grid">
+              <div className="standards-item">
+                <strong>Traceability</strong>
+                <span>Tracking, เวลา ผู้ปฏิบัติงาน ขนส่ง และสถานะต้องตรวจสอบย้อนกลับได้</span>
+              </div>
+              <div className="standards-item">
+                <strong>Quality gate</strong>
+                <span>ป้องกันรายการซ้ำ แยกสถานะผิดปกติ และยืนยันผลก่อนบันทึก</span>
+              </div>
+              <div className="standards-item">
+                <strong>Role access</strong>
+                <span>แยกขั้นตอน Packer และ Admin พร้อมยืนยันตัวตนก่อนทำรายการ</span>
+              </div>
+              <div className="standards-item">
+                <strong>Audit & recovery</strong>
+                <span>รายงาน ประวัติ และ recovery รองรับการตรวจสอบและแก้ไขอย่างมีหลักฐาน</span>
+              </div>
+            </div>
           </details>
 
           <section className="workspace-grid">

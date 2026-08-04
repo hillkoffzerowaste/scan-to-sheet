@@ -2377,9 +2377,14 @@ tbody tr:nth-child(8){ animation-delay: 0.21s; }
   --muted: #475569;
   --line: #d7dee8;
   --line-strong: #b7c3d0;
-  --primary: #1d4ed8;
-  --primary-strong: #1e40af;
-  --primary-soft: #eff6ff;
+  --brand: #056b68;
+  --brand-deep: #04524f;
+  --brand-soft: #e7f5f4;
+  --brand-gold: #c89b3c;
+  --primary: #056b68;
+  --primary-strong: #04524f;
+  --primary-soft: #e7f5f4;
+  --focus-ring: rgba(5, 133, 129, 0.24);
   --warning: #92400e;
   --warning-bg: #fffbeb;
   --warning-line: #f4d18a;
@@ -2399,9 +2404,9 @@ tbody tr:nth-child(8){ animation-delay: 0.21s; }
   --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.07);
   --shadow-lg: 0 12px 28px rgba(15, 23, 42, 0.09);
   --shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 20px rgba(15, 23, 42, 0.06);
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
 }
 
 :root[data-theme="dark"] {
@@ -2415,9 +2420,14 @@ tbody tr:nth-child(8){ animation-delay: 0.21s; }
   --muted: #a8b5c7;
   --line: #334155;
   --line-strong: #475569;
-  --primary: #1d4ed8;
-  --primary-strong: #bfdbfe;
-  --primary-soft: #172b4d;
+  --brand: #075e5b;
+  --brand-deep: #054c4a;
+  --brand-soft: #123c3a;
+  --brand-gold: #e1ba63;
+  --primary: #056b68;
+  --primary-strong: #8bd5d1;
+  --primary-soft: #123c3a;
+  --focus-ring: rgba(139, 213, 209, 0.3);
   --warning: #fbbf24;
   --warning-bg: #3b2a0f;
   --warning-line: #7c5a1d;
@@ -2487,6 +2497,15 @@ body::before {
   box-shadow: none;
 }
 
+.enterprise-shell,
+.enterprise-shell button,
+.enterprise-shell input,
+.enterprise-shell select,
+.enterprise-shell textarea {
+  font-family: Kanit, "Noto Sans Thai", Tahoma, system-ui, sans-serif;
+  letter-spacing: normal;
+}
+
 .enterprise-shell .account-strip {
   display: flex;
   flex-wrap: wrap;
@@ -2545,7 +2564,8 @@ body::before {
 .enterprise-shell .report-panel,
 .enterprise-shell .sheet-recovery-panel,
 .enterprise-shell .search-panel,
-.enterprise-shell .missing-check-panel {
+.enterprise-shell .missing-check-panel,
+.enterprise-shell .standards-panel {
   border-color: var(--line);
   border-radius: var(--radius-lg);
   background: var(--surface);
@@ -2747,6 +2767,7 @@ body::before {
       "topbar topbar"
       "nav guide"
       "nav upload"
+      "nav standards"
       "nav workspace"
       "nav report";
     column-gap: 24px;
@@ -2757,6 +2778,7 @@ body::before {
   .enterprise-shell > .tab-bar { grid-area: nav; }
   .enterprise-shell > .workflow-guide { grid-area: guide; }
   .enterprise-shell > .marketplace-upload-panel { grid-area: upload; }
+  .enterprise-shell > .standards-panel { grid-area: standards; }
   .enterprise-shell > .workspace-grid { grid-area: workspace; }
   .enterprise-shell > .report-panel { grid-area: report; margin-top: 0; }
 
@@ -3003,6 +3025,50 @@ body::before {
   margin-bottom: 14px;
 }
 
+.enterprise-shell .standards-panel {
+  padding: 0;
+}
+
+.enterprise-shell .standards-panel > summary {
+  padding: 14px 16px;
+}
+
+.enterprise-shell .standards-panel > summary p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.enterprise-shell .standards-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  padding: 14px 16px 16px;
+}
+
+.enterprise-shell .standards-item {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface-soft);
+}
+
+.enterprise-shell .standards-item strong {
+  color: var(--primary-strong);
+  font-size: 0.78rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.enterprise-shell .standards-item span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
 .enterprise-shell .report-panel {
   padding: 0;
 }
@@ -3045,6 +3111,87 @@ body::before {
   background: var(--primary) !important;
   color: #fff !important;
   border-color: var(--primary) !important;
+}
+
+/* Hillkoff brand shell: teal header, white wordmark, and restrained controls. */
+.enterprise-shell .topbar {
+  margin-inline: -24px;
+  padding: 20px 24px;
+  border-bottom: 3px solid var(--brand-gold);
+  background: var(--brand) !important;
+  color: #fff;
+  box-shadow: none;
+}
+
+.enterprise-shell .topbar .app-title {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent !important;
+  color: #fff !important;
+  box-shadow: none !important;
+}
+
+.enterprise-shell .topbar h1 {
+  color: #fff !important;
+}
+
+.enterprise-shell .topbar .title-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0;
+  background: transparent !important;
+  color: #fff !important;
+}
+
+.enterprise-shell .topbar .title-badge svg {
+  color: #fff !important;
+}
+
+.enterprise-shell .brand-wordmark {
+  letter-spacing: 0.14em;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 0.9em;
+  font-weight: 700;
+}
+
+.enterprise-shell .title-product {
+  padding-left: 9px;
+  border-left: 1px solid rgba(255, 255, 255, 0.45);
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 600;
+}
+
+.enterprise-shell .topbar .title-accent {
+  background: var(--brand-gold);
+}
+
+.enterprise-shell .topbar .account-pill,
+.enterprise-shell .topbar .top-connect-box,
+.enterprise-shell .topbar .theme-toggle,
+.enterprise-shell .topbar .icon-button,
+.enterprise-shell .topbar .secondary-button,
+.enterprise-shell .topbar .ghost-button {
+  border-color: rgba(255, 255, 255, 0.34) !important;
+  background: rgba(0, 0, 0, 0.12) !important;
+  color: #fff !important;
+  box-shadow: none !important;
+}
+
+.enterprise-shell .topbar .theme-toggle button {
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.enterprise-shell .topbar .theme-toggle button.active {
+  background: #fff;
+  color: var(--brand-deep);
+}
+
+.enterprise-shell .topbar .secondary-button:not(:disabled):hover,
+.enterprise-shell .topbar .ghost-button:not(:disabled):hover,
+.enterprise-shell .topbar .icon-button:not(:disabled):hover {
+  background: rgba(255, 255, 255, 0.16) !important;
 }
 
 .enterprise-shell .workflow-guide,
@@ -3124,7 +3271,7 @@ body::before {
 .enterprise-shell .workflow-packer.scan-form .scan-input-row:focus-within,
 .enterprise-shell .workflow-drive.scan-form .scan-input-row:focus-within {
   border-color: var(--primary) !important;
-  box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.2) !important;
+  box-shadow: 0 0 0 3px var(--focus-ring) !important;
 }
 
 .enterprise-shell .workflow-packer.scan-form .scan-input-row button,
@@ -3183,6 +3330,15 @@ body::before {
 }
 
 @media (max-width: 700px) {
+  .enterprise-shell .topbar {
+    margin-inline: -10px;
+    padding: 16px 10px;
+  }
+
+  .enterprise-shell .standards-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .enterprise-shell .tab-bar {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }

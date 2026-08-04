@@ -11,6 +11,7 @@ test.describe('Scan to Sheet — Packer Tab', () => {
   test('renders app shell and title', async ({ page }) => {
     await expect(page.locator('.app-shell')).toBeVisible();
     await expect(page.locator('.title-badge')).toContainText('Scan to Sheet');
+    await expect(page.locator('.title-badge')).toContainText('HILLKOFF');
     await expect(page.locator('h1')).toBeVisible();
   });
 
@@ -217,11 +218,21 @@ test.describe('Scan to Sheet — Theme & Layout', () => {
         if (foreground === null || background === null) return null;
         return (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05);
       };
+      const ratioAgainst = (selector, backgroundSelector) => {
+        const element = root.querySelector(selector);
+        const backgroundElement = root.querySelector(backgroundSelector);
+        if (!element || !backgroundElement) return null;
+        const foreground = luminance(getComputedStyle(element).color);
+        const background = luminance(getComputedStyle(backgroundElement).backgroundColor);
+        if (foreground === null || background === null) return null;
+        return (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05);
+      };
       return {
         activeTab: ratio('.tab-button.active'),
         activeCourier: ratio('.courier-button.active'),
         driveLabel: ratio('.drive-mode-label'),
         statusBanner: ratio('.status-banner'),
+        topbarTitle: ratioAgainst('.topbar h1', '.topbar'),
       };
     });
 
@@ -237,6 +248,7 @@ test.describe('Scan to Sheet — Theme & Layout', () => {
       expect(themeContrast.activeCourier).toBeGreaterThanOrEqual(4.5);
       expect(themeContrast.driveLabel).toBeGreaterThanOrEqual(4.5);
       expect(themeContrast.statusBanner).toBeGreaterThanOrEqual(4.5);
+      expect(themeContrast.topbarTitle).toBeGreaterThanOrEqual(4.5);
     }
   });
 
@@ -328,5 +340,20 @@ test.describe('Scan to Sheet — Mobile Responsiveness', () => {
     const tableWrap = page.locator('.table-wrap').first();
     const overflowX = await tableWrap.evaluate((el) => window.getComputedStyle(el).overflowX);
     expect(overflowX).toBe('auto');
+  });
+});
+
+test.describe('Scan to Sheet — Brand standards', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto(BASE_URL);
+  });
+
+  test('exposes operational quality controls without adding scan actions', async ({ page }) => {
+    const standardsPanel = page.locator('.standards-panel');
+    await expect(standardsPanel).toBeVisible();
+    await expect(standardsPanel.locator('.secondary-panel-label')).toContainText('Quality controls');
+    await standardsPanel.locator('summary').click();
+    await expect(standardsPanel.locator('.standards-item')).toHaveCount(4);
+    await expect(standardsPanel.locator('.standards-item').first()).toContainText('Traceability');
   });
 });
