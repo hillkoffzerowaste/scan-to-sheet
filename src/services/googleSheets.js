@@ -1619,11 +1619,16 @@ export async function appendScanGoogle({
     if (crossDayMatch) {
       const currentRow = crossDayMatch.row;
       const mergedRow = withMarketplaceCells([
-        currentRow.no, currentRow.courierNo, currentRow.date, currentRow.time, currentRow.courier, normalizedCode, email, packer,
+        currentRow.no, currentRow.courierNo, date, time, currentRow.courier, normalizedCode, email, packer,
         'Success', note, currentRow.adminDate || effectiveAdminDate || crossDayMatch.date, currentRow.adminTime || effectiveAdminTime || '', currentRow.adminCode || effectiveAdminCode,
       ], marketplaceOrder ?? marketplaceOrderFromRow(currentRow));
       await updateDailyRow({ token, spreadsheetId: sheet.id, date: crossDayMatch.date, rowNumber: currentRow.sheetRowNumber, row: mergedRow });
-      return { status: 'success', courier: currentRow.courier, selectedCourier: courier, date, time, code: normalizedCode, rows: crossDayMatch.parsedRows.filter((row) => row.courier === currentRow.courier).reverse().slice(0, 20), sheetUrl: sheet.webViewLink, merged: true, wrongCourier: currentRow.courier !== courier, crossDay: true };
+      const resultRows = crossDayMatch.parsedRows
+        .map((row) => row.sheetRowNumber === currentRow.sheetRowNumber ? rowFromSheet(mergedRow) : row)
+        .filter((row) => row.courier === currentRow.courier)
+        .reverse()
+        .slice(0, 20);
+      return { status: 'success', courier: currentRow.courier, selectedCourier: courier, date, time, code: normalizedCode, rows: resultRows, sheetUrl: sheet.webViewLink, merged: true, wrongCourier: currentRow.courier !== courier, crossDay: true };
     }
   }
 
@@ -1643,9 +1648,14 @@ export async function appendScanGoogle({
         'Success', correctedNote, currentRow.adminDate || effectiveAdminDate || adminMatchAnyCourier.date, currentRow.adminTime || effectiveAdminTime || '', currentRow.adminCode || effectiveAdminCode,
       ], marketplaceOrder ?? marketplaceOrderFromRow(currentRow));
       await updateDailyRow({ token, spreadsheetId: sheet.id, date: adminMatchAnyCourier.date, rowNumber: currentRow.sheetRowNumber, row: mergedRow });
+      const resultRows = adminMatchAnyCourier.parsedRows
+        .map((row) => row.sheetRowNumber === currentRow.sheetRowNumber ? rowFromSheet(mergedRow) : row)
+        .filter((row) => row.courier === currentRow.courier)
+        .reverse()
+        .slice(0, 20);
       return {
         status: 'success', courier: currentRow.courier, selectedCourier: courier, date, time, code: normalizedCode,
-        rows: adminMatchAnyCourier.parsedRows.filter((row) => row.courier === currentRow.courier).reverse().slice(0, 20),
+        rows: resultRows,
         sheetUrl: sheet.webViewLink, merged: true, wrongCourier: true, crossDay: adminMatchAnyCourier.date !== date,
       };
     }
@@ -1879,7 +1889,7 @@ export async function appendScanGoogle({
   });
 
   const resultRows = updatedParsedRows
-    .filter((row) => row.courier === currentRow.courier)
+    .filter((row) => row.courier === courier)
     .map((row) => (String(row.no) === placeholder ? rowFromSheet(correctedRow) : row))
     .reverse()
     .slice(0, 20);
@@ -1890,9 +1900,7 @@ export async function appendScanGoogle({
     date,
     time,
     code: normalizedCode,
-    count: concurrentDuplicate
-      ? updatedCourierRows.length
-      : updatedCourierRows.filter((row) => normalizeScanCode(row.code) !== placeholder).length + 1,
+    count: updatedCourierRows.length,
     row: rowFromSheet(correctedRow),
     rows: resultRows,
     sheetUrl: sheet.webViewLink,
@@ -1993,6 +2001,7 @@ export async function appendAdminScanGoogle({
       });
 
       const resultRows = verifyParsed
+        .map((row) => row.sheetRowNumber === targetIdx + 2 ? rowFromSheet(mergedRow) : row)
         .filter((r) => r.courier === currentRow.courier)
         .reverse()
         .slice(0, 20);
@@ -2036,7 +2045,12 @@ export async function appendAdminScanGoogle({
       currentRow.email, currentRow.packer, currentRow.status || 'Success', currentRow.note || '', effectiveAdminDate, effectiveAdminTime, effectiveAdminCode,
     ], marketplaceOrder ?? marketplaceOrderFromRow(currentRow));
     await updateDailyRow({ token, spreadsheetId: sheet.id, date: crossDayMatch.date, rowNumber: currentRow.sheetRowNumber, row: mergedRow });
-    return { status: 'admin_matched', courier: currentRow.courier, date, time, code: normalizedCode, isPacker: false, row: rowFromSheet(mergedRow), rows: crossDayMatch.parsedRows.filter((row) => row.courier === currentRow.courier).reverse().slice(0, 20), sheetUrl: sheet.webViewLink, crossDay: true };
+    const resultRows = crossDayMatch.parsedRows
+      .map((row) => row.sheetRowNumber === currentRow.sheetRowNumber ? rowFromSheet(mergedRow) : row)
+      .filter((row) => row.courier === currentRow.courier)
+      .reverse()
+      .slice(0, 20);
+    return { status: 'admin_matched', courier: currentRow.courier, date, time, code: normalizedCode, isPacker: false, row: rowFromSheet(mergedRow), rows: resultRows, sheetUrl: sheet.webViewLink, crossDay: true };
   }
 
   // 3) New admin-only row — write with computed next row (avoid unreliable append API)
@@ -2494,8 +2508,8 @@ export async function batchAppendScanGoogle({ token, config, orders }) {
             : withMarketplaceCells([
                 currentRow.no,
                 currentRow.courierNo,
-                currentRow.date,
-                currentRow.time,
+                date,
+                order.time,
                 currentRow.courier,
                 normalizedCode,
                 email,
@@ -2637,9 +2651,7 @@ export async function batchAppendScanGoogle({ token, config, orders }) {
             date,
             time: order.time,
             code: normalizedCode,
-            count: concurrentDuplicate
-              ? courierRows.length
-              : courierRows.filter((r) => normalizeScanCode(r.code) !== placeholder).length + 1,
+            count: courierRows.length,
             row: rowFromSheet(correctedRow),
             rows: [],
             sheetUrl: sheet.webViewLink,

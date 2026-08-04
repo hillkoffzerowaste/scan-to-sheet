@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { nextCalendarDate } from './calendarDate.js';
+import { getScanEventDate } from './scanRow.js';
 import {
   SHEET_SYNC_STALE_MS,
   isSheetSyncClaimable,
@@ -23,6 +24,18 @@ test('only failed or stale per-order Sheet syncs can be claimed again', () => {
   assert.equal(isSheetSyncClaimable({ sheetSyncStatus: 'pending', sheetSyncStartedAtIso: new Date(now - 1_000).toISOString() }, now), false);
   assert.equal(isSheetSyncClaimable({ sheetSyncStatus: 'pending', sheetSyncStartedAtIso: new Date(now - SHEET_SYNC_STALE_MS).toISOString() }, now), true);
   assert.equal(isSheetSyncClaimable({ sheetSyncStatus: 'pending' }, now), true);
+});
+
+test('scan row date follows the primary scan event across days', () => {
+  assert.equal(getScanEventDate({
+    date: '2026-08-04',
+    admin: { scannedAt: '2026-08-04T23:50:00' },
+    packerScan: { scannedAt: '2026-08-05T00:10:00' },
+  }), '2026-08-05');
+  assert.equal(getScanEventDate({
+    date: '2026-08-04',
+    admin: { scannedAt: '2026-08-04T23:50:00' },
+  }), '2026-08-04');
 });
 
 test('a rescan retries only an unsynced scan and keeps a synced order duplicate', () => {

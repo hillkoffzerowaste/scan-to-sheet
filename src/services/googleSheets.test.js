@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   buildMarketplaceFormattingRequests,
+  appendScanGoogle,
   findCancellationRow,
   getDailySheetPropertiesForMarketplaceBackfill,
   parseAppendUpdatedRange,
@@ -91,4 +92,79 @@ test('getDailySheetPropertiesForMarketplaceBackfill includes today and conflict 
     getDailySheetPropertiesForMarketplaceBackfill(sheets).map((sheet) => sheet.title),
     ['2026-07-26', '2026-07-25', '2026-07-26_conflict1'],
   );
+});
+
+test('appendScanGoogle returns the newly written Packer row after placeholder replacement', async () => {
+  const originalFetch = globalThis.fetch;
+  const date = '2026-08-05';
+  const spreadsheetId = 'sheet-test';
+  const sheetProperties = {
+    sheets: [{
+      properties: {
+        sheetId: 123,
+        title: date,
+        gridProperties: { rowCount: 1000, columnCount: 23 },
+      },
+    }],
+  };
+  let storedRows = [];
+
+  const jsonResponse = (payload) => new Response(JSON.stringify(payload), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  });
+
+  globalThis.fetch = async (url, options = {}) => {
+    const decodedUrl = decodeURIComponent(String(url));
+    const method = options.method ?? 'GET';
+    const body = options.body ? JSON.parse(options.body) : null;
+
+    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A1:W1') && method === 'PUT') {
+      return jsonResponse({});
+    }
+    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A:A') && method === 'GET') {
+      return jsonResponse({ values: [['No.']] });
+    }
+    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A2:W') && method === 'GET') {
+      return jsonResponse({ values: storedRows });
+    }
+    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A2') && !decodedUrl.includes('!A2:W') && method === 'GET') {
+      return jsonResponse({ values: [[storedRows[0]?.[0] ?? '']] });
+    }
+    if (decodedUrl.includes('/values/') && method === 'PUT') {
+      storedRows = body?.values ?? storedRows;
+      return jsonResponse({});
+    }
+    if (decodedUrl.includes('/values:batchUpdate') || decodedUrl.includes(':batchUpdate')) {
+      return jsonResponse({});
+    }
+    if (decodedUrl.includes('/values/') && method === 'POST') {
+      return jsonResponse({});
+    }
+    if (decodedUrl.includes('/spreadsheets/')) {
+      return jsonResponse(sheetProperties);
+    }
+    throw new Error(`Unexpected mock request: ${method} ${decodedUrl}`);
+  };
+
+  try {
+    const result = await appendScanGoogle({
+      token: 'token',
+      config: { master: { id: spreadsheetId, webViewLink: 'https://example.test/sheet' } },
+      courier: 'Shopee',
+      code: 'TH1234567890',
+      email: 'packer@example.com',
+      packer: 'เบ้น',
+      scanDate: date,
+      scanTime: '10:20:30',
+    });
+
+    assert.equal(result.status, 'success');
+    assert.equal(result.count, 1);
+    assert.equal(result.rows.length, 1);
+    assert.equal(result.rows[0].courier, 'Shopee');
+    assert.equal(result.rows[0].code, 'TH1234567890');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });

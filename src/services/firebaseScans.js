@@ -25,6 +25,7 @@ import {
 } from './sheetSync.js';
 import { collectFirestorePages } from './firestorePagination.js';
 import { buildRecoveredOrderFields, chooseCanonicalOrder, mergeExistingOrderWithCandidate, mergeScanEventIntoOrder } from './orderRecovery.js';
+import { getScanEventDate } from './scanRow.js';
 import {
   getMissingOrderQueryFilters,
   getMissingOrderQueryWindow,
@@ -140,7 +141,7 @@ function orderToRow(order, id = '') {
     id,
     no: id,
     courierNo: '',
-    date: order.date,
+    date: getScanEventDate(order),
     time: packerTime || adminTime,
     courier: order.courier,
     code: hasPacker ? code : '',
@@ -290,6 +291,30 @@ async function getPackerOrdersByScanDate(date) {
     const orders = await getOrdersByDate(date);
     return orders.filter((order) => {
       const scannedAt = String(order.packerScan?.scannedAt ?? '');
+      return scannedAt >= start && scannedAt < end;
+    });
+  }
+}
+
+async function getAdminOrdersByScanDate(date) {
+  if (!canWriteFirestore()) {
+    return [];
+  }
+
+  const start = `${date}T00:00:00`;
+  const end = `${nextCalendarDate(date)}T00:00:00`;
+  try {
+    const snap = await getDocs(query(
+      collection(firestoreDb, 'orders'),
+      where('admin.scannedAt', '>=', start),
+      where('admin.scannedAt', '<', end),
+    ));
+    return snap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+  } catch (error) {
+    console.warn('Admin summary query failed; using daily-order fallback:', error);
+    const orders = await getOrdersByDate(date);
+    return orders.filter((order) => {
+      const scannedAt = String(order.admin?.scannedAt ?? '');
       return scannedAt >= start && scannedAt < end;
     });
   }
@@ -1172,7 +1197,7 @@ export async function fetchTodaySummaryFirestore({ couriers = [], date }) {
 }
 
 export async function getTodayRowsFirestore({ courier, date }) {
-  const orders = await getOrdersByDate(date);
+  const orders = await getPackerOrdersByScanDate(date);
   return orders
     .filter((order) => order.courier === courier && order.packerScan?.scannedAt)
     .sort((a, b) => String(b.packerScan?.scannedAt ?? '').localeCompare(String(a.packerScan?.scannedAt ?? '')))
@@ -1180,7 +1205,7 @@ export async function getTodayRowsFirestore({ courier, date }) {
 }
 
 export async function getDriveRowsFirestore({ date }) {
-  const orders = await getOrdersByDate(date);
+  const orders = await getAdminOrdersByScanDate(date);
   return orders
     .filter((order) => order.admin?.scannedAt)
     .sort((a, b) => String(b.admin?.scannedAt ?? '').localeCompare(String(a.admin?.scannedAt ?? '')))
