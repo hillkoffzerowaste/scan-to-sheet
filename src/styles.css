@@ -2362,3 +2362,451 @@ tbody tr:nth-child(8){ animation-delay: 0.21s; }
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
+
+/* ── Enterprise UI layer ──
+   Presentation-only overrides. Scan handlers, services, data contracts and
+   persistence flows intentionally remain outside this layer. */
+:root {
+  --page: #f4f6f8;
+  --page-soft: #e9eef3;
+  --surface: #ffffff;
+  --surface-soft: #f8fafc;
+  --surface-raised: #ffffff;
+  --text: #17202b;
+  --muted: #64748b;
+  --line: #e2e8f0;
+  --line-strong: #cbd5e1;
+  --primary: #2563eb;
+  --primary-strong: #1d4ed8;
+  --primary-soft: #eff6ff;
+  --warning: #b45309;
+  --warning-bg: #fff7ed;
+  --warning-line: #fed7aa;
+  --danger: #b91c1c;
+  --danger-bg: #fef2f2;
+  --danger-line: #fecaca;
+  --success: #15803d;
+  --success-bg: #f0fdf4;
+  --success-line: #bbf7d0;
+  --glass-bg: #ffffff;
+  --glass-hover: #ffffff;
+  --glass-alt: #f8fafc;
+  --glass-alt-hover: #f1f5f9;
+  --glass-border: #e2e8f0;
+  --glass-highlight: transparent;
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05);
+  --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.07);
+  --shadow-lg: 0 12px 28px rgba(15, 23, 42, 0.09);
+  --shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 20px rgba(15, 23, 42, 0.06);
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+}
+
+:root[data-theme="dark"] {
+  --page: #0b1220;
+  --page-soft: #111827;
+  --surface: #111a2a;
+  --surface-soft: #0f172a;
+  --surface-raised: #172235;
+  --text: #e5edf7;
+  --muted: #94a3b8;
+  --line: #263449;
+  --line-strong: #3a4b63;
+  --primary: #60a5fa;
+  --primary-strong: #93c5fd;
+  --primary-soft: #172b4d;
+  --warning: #f59e0b;
+  --warning-bg: #35220c;
+  --warning-line: #704d13;
+  --danger: #f87171;
+  --danger-bg: #3b161b;
+  --danger-line: #713039;
+  --success: #4ade80;
+  --success-bg: #123322;
+  --success-line: #245e3a;
+  --glass-bg: #111a2a;
+  --glass-hover: #172235;
+  --glass-alt: #0f172a;
+  --glass-alt-hover: #1e293b;
+  --glass-border: #263449;
+  --glass-highlight: transparent;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.25);
+  --shadow-md: 0 8px 18px rgba(0, 0, 0, 0.28);
+  --shadow-lg: 0 16px 34px rgba(0, 0, 0, 0.34);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.2), 0 10px 24px rgba(0, 0, 0, 0.24);
+}
+
+body::before {
+  display: none;
+}
+
+.enterprise-shell {
+  width: min(1560px, calc(100% - 48px));
+  padding: 24px 0 40px;
+}
+
+.enterprise-shell .topbar {
+  gap: 24px;
+  margin-bottom: 18px;
+}
+
+.enterprise-shell .app-title {
+  padding: 16px 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.enterprise-shell .app-title::before,
+.enterprise-shell .title-badge svg,
+.enterprise-shell .title-accent {
+  animation: none;
+}
+
+.enterprise-shell h1 {
+  font-size: clamp(1.55rem, 2.1vw, 2rem);
+  letter-spacing: -0.025em;
+}
+
+.enterprise-shell .title-badge {
+  padding: 4px 10px;
+  border: 0;
+  background: var(--primary-soft);
+  color: var(--primary-strong);
+}
+
+.enterprise-shell .title-accent {
+  width: 48px;
+  height: 2px;
+  margin-top: 8px;
+  background: var(--primary);
+  box-shadow: none;
+}
+
+.enterprise-shell .account-strip {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.enterprise-shell .account-pill,
+.enterprise-shell .top-connect-box,
+.enterprise-shell .theme-toggle,
+.enterprise-shell .icon-button,
+.enterprise-shell .secondary-button,
+.enterprise-shell .ghost-button {
+  border-color: var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.enterprise-shell .account-pill,
+.enterprise-shell .top-connect-box {
+  min-height: 38px;
+}
+
+.enterprise-shell .tab-bar {
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.enterprise-shell .tab-button {
+  min-height: 44px;
+  border: 0;
+  border-radius: 7px;
+  font-size: 0.88rem;
+}
+
+.enterprise-shell .tab-button:first-child.active,
+.enterprise-shell .tab-button:last-child.active {
+  background: var(--primary);
+  color: #fff;
+  box-shadow: none;
+}
+
+.enterprise-shell .tab-badge {
+  animation: none;
+}
+
+.enterprise-shell .workflow-guide,
+.enterprise-shell .marketplace-upload-panel,
+.enterprise-shell .side-panel,
+.enterprise-shell .scan-panel,
+.enterprise-shell .report-panel,
+.enterprise-shell .sheet-recovery-panel,
+.enterprise-shell .search-panel,
+.enterprise-shell .missing-check-panel {
+  border-color: var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.enterprise-shell .workflow-guide {
+  margin-bottom: 16px;
+  padding: 12px 16px;
+}
+
+.enterprise-shell .packer-workflow-guide {
+  border-color: var(--success-line);
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.enterprise-shell .drive-workflow-guide {
+  border-color: #bfdbfe;
+  background: var(--primary-soft);
+  color: var(--primary-strong);
+}
+
+.enterprise-shell .side-panel,
+.enterprise-shell .scan-panel,
+.enterprise-shell .report-panel {
+  padding: 20px;
+}
+
+.enterprise-shell .side-panel:hover,
+.enterprise-shell .scan-panel:hover,
+.enterprise-shell .report-panel:hover {
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  transform: none;
+}
+
+.enterprise-shell .scan-panel.workflow-packer,
+.enterprise-shell .scan-panel.workflow-drive {
+  border-width: 1px;
+  border-top-width: 3px;
+  box-shadow: var(--shadow-md);
+}
+
+.enterprise-shell .scan-panel.workflow-packer {
+  border-top-color: var(--success);
+  background: var(--surface);
+}
+
+.enterprise-shell .scan-panel.workflow-drive {
+  border-top-color: var(--primary);
+  background: var(--surface);
+}
+
+.enterprise-shell .current-courier-badge {
+  border-radius: var(--radius-md);
+  box-shadow: none;
+}
+
+.enterprise-shell .current-courier-badge:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+.enterprise-shell .metric-row > div,
+.enterprise-shell .drive-card,
+.enterprise-shell .packer-section,
+.enterprise-shell .report-card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface-soft);
+  box-shadow: none;
+}
+
+.enterprise-shell .metric-row > div:hover,
+.enterprise-shell .drive-card:hover,
+.enterprise-shell .report-card:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+.enterprise-shell .table-wrap {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: none;
+}
+
+.enterprise-shell th {
+  background: var(--surface-soft);
+  color: var(--muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.enterprise-shell tr:hover td {
+  background: var(--primary-soft);
+}
+
+.enterprise-shell .status-badge {
+  border-radius: 5px;
+  font-size: 0.72rem;
+}
+
+.enterprise-shell .segmented-control {
+  border-color: var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+
+.enterprise-shell .segmented-control button.active {
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--primary-strong);
+  box-shadow: var(--shadow-sm);
+}
+
+.enterprise-shell .scan-input-row {
+  border: 2px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: none;
+}
+
+.enterprise-shell .scan-input-row:focus-within {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16);
+  transform: none;
+}
+
+.enterprise-shell .scan-input-row button {
+  border-radius: 7px;
+  background: var(--primary);
+}
+
+.enterprise-shell .side-panel .courier-button.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  box-shadow: none;
+}
+
+.enterprise-shell .field-control input,
+.enterprise-shell .field-control select,
+.enterprise-shell input,
+.enterprise-shell select {
+  border-color: var(--line-strong);
+  border-radius: 7px;
+  background: var(--surface);
+}
+
+.enterprise-shell .field-control input:hover,
+.enterprise-shell .field-control select:hover,
+.enterprise-shell input:hover,
+.enterprise-shell select:hover {
+  box-shadow: none;
+}
+
+@media (min-width: 1200px) {
+  .enterprise-shell {
+    display: grid;
+    grid-template-columns: 232px minmax(0, 1fr);
+    grid-template-areas:
+      "topbar topbar"
+      "nav guide"
+      "nav upload"
+      "nav workspace"
+      "nav report";
+    column-gap: 24px;
+    align-items: start;
+  }
+
+  .enterprise-shell > .topbar { grid-area: topbar; }
+  .enterprise-shell > .tab-bar { grid-area: nav; }
+  .enterprise-shell > .workflow-guide { grid-area: guide; }
+  .enterprise-shell > .marketplace-upload-panel { grid-area: upload; }
+  .enterprise-shell > .workspace-grid { grid-area: workspace; }
+  .enterprise-shell > .report-panel { grid-area: report; margin-top: 0; }
+
+  .enterprise-shell > .tab-bar {
+    position: sticky;
+    top: 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    margin: 0;
+  }
+
+  .enterprise-shell > .tab-bar .tab-button {
+    justify-content: flex-start;
+    padding: 0 12px;
+    text-align: left;
+  }
+
+  .enterprise-shell > .tab-bar .tab-button:last-child {
+    border-top: 1px solid var(--line);
+  }
+
+  .enterprise-shell .workspace-grid {
+    grid-template-columns: 280px minmax(0, 1fr);
+    gap: 20px;
+  }
+
+  .enterprise-shell .search-panel,
+  .enterprise-shell .search-form {
+    min-width: 0;
+  }
+
+  .enterprise-shell .search-form {
+    grid-template-columns: minmax(160px, 1.2fr) minmax(110px, 0.7fr) minmax(130px, 0.9fr) auto;
+  }
+
+  .enterprise-shell .side-panel {
+    position: sticky;
+    top: 24px;
+  }
+}
+
+@media (max-width: 1199px) {
+  .enterprise-shell {
+    width: min(100% - 32px, 1120px);
+  }
+}
+
+@media (max-width: 700px) {
+  .enterprise-shell {
+    width: calc(100% - 20px);
+    padding-top: 10px;
+  }
+
+  .enterprise-shell .account-strip {
+    justify-content: stretch;
+  }
+
+  .enterprise-shell .account-strip > * {
+    flex: 1 1 100%;
+  }
+
+  .enterprise-shell .theme-toggle,
+  .enterprise-shell .icon-button {
+    flex: 1 1 auto;
+  }
+
+  .enterprise-shell .tab-button {
+    font-size: 0.82rem;
+  }
+
+  .enterprise-shell .side-panel,
+  .enterprise-shell .scan-panel,
+  .enterprise-shell .report-panel {
+    padding: 14px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .enterprise-shell *,
+  .enterprise-shell *::before,
+  .enterprise-shell *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}

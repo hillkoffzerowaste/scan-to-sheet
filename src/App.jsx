@@ -2634,7 +2634,7 @@ function App() {
   const dashboardSummary = missingResults ? buildDashboardSummary(missingResults) : null;
 
   return (
-    <main className="app-shell">
+    <main className="app-shell enterprise-shell">
       <section className="topbar">
         <div className="app-title">
           <span className="title-badge">
