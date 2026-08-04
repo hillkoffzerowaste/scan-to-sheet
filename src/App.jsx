@@ -2773,7 +2773,7 @@ function App() {
           </label>
           <input
             ref={marketplaceFileRef}
-            className="visually-hidden"
+            className="visually-hidden marketplace-file-input"
             type="file"
             accept=".xlsx,.csv"
             multiple

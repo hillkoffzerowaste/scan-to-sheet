@@ -240,6 +240,44 @@ test.describe('Scan to Sheet — Theme & Layout', () => {
     }
   });
 
+  test('keeps marketplace file controls readable in light mode', async ({ page }) => {
+    await page.locator('.theme-toggle button:has-text("Light")').click();
+    await page.locator('.marketplace-upload-panel summary').click();
+
+    const controls = await page.locator('.marketplace-upload-panel').evaluate((panel) => {
+      const parse = (value) => {
+        const match = value.match(/rgba?\(([^)]+)\)/);
+        if (!match) return null;
+        return match[1].split(',').slice(0, 3).map((part) => Number.parseFloat(part.trim()));
+      };
+      const luminance = (value) => {
+        const rgb = parse(value);
+        if (!rgb) return null;
+        const linear = rgb.map((part) => {
+          const normalized = part / 255;
+          return normalized <= 0.03928 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
+        });
+        return (0.2126 * linear[0]) + (0.7152 * linear[1]) + (0.0722 * linear[2]);
+      };
+      const ratio = (selector) => {
+        const element = panel.querySelector(selector);
+        if (!element) return null;
+        const style = getComputedStyle(element);
+        const foreground = luminance(style.color);
+        const background = luminance(style.backgroundColor);
+        if (foreground === null || background === null) return null;
+        return (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05);
+      };
+      return {
+        platformSelect: ratio('.marketplace-filter select'),
+        fileButton: ratio('.marketplace-upload-controls button'),
+      };
+    });
+
+    expect(controls.platformSelect).toBeGreaterThanOrEqual(4.5);
+    expect(controls.fileButton).toBeGreaterThanOrEqual(4.5);
+  });
+
   test('search panel is visible in packer tab', async ({ page }) => {
     await expect(page.locator('.search-panel')).toBeVisible();
     await expect(page.locator('.search-panel h3')).toContainText('ค้นหาเลขพัสดุ');

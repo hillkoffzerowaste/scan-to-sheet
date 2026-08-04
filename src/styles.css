@@ -2367,6 +2367,7 @@ tbody tr:nth-child(8){ animation-delay: 0.21s; }
    Presentation-only overrides. Scan handlers, services, data contracts and
    persistence flows intentionally remain outside this layer. */
 :root {
+  color-scheme: light;
   --page: #f5f7fa;
   --page-soft: #eef2f6;
   --surface: #ffffff;
@@ -2404,6 +2405,7 @@ tbody tr:nth-child(8){ animation-delay: 0.21s; }
 }
 
 :root[data-theme="dark"] {
+  color-scheme: dark;
   --page: #0b1220;
   --page-soft: #111827;
   --surface: #162033;
@@ -3064,6 +3066,42 @@ body::before {
   color: var(--primary-strong) !important;
 }
 
+.enterprise-shell input,
+.enterprise-shell select,
+.enterprise-shell textarea {
+  color: var(--text) !important;
+  background-color: var(--surface) !important;
+  caret-color: var(--primary);
+}
+
+.enterprise-shell input::placeholder,
+.enterprise-shell textarea::placeholder {
+  color: var(--muted) !important;
+  opacity: 1 !important;
+}
+
+.enterprise-shell select option {
+  color: var(--text) !important;
+  background-color: var(--surface) !important;
+}
+
+.enterprise-shell .marketplace-file-input {
+  border: 1px solid var(--line-strong) !important;
+  border-radius: var(--radius-sm);
+  color: var(--text) !important;
+  background: var(--surface-soft) !important;
+}
+
+.enterprise-shell .marketplace-file-input::file-selector-button {
+  margin-right: 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: #fff;
+  background: var(--primary);
+  font: inherit;
+  font-weight: 700;
+}
+
 .enterprise-shell .current-courier-badge.workflow-packer,
 .enterprise-shell .current-courier-badge.workflow-drive {
   border-color: var(--line) !important;
@@ -3117,6 +3155,11 @@ body::before {
   color: var(--muted) !important;
   border-color: var(--line) !important;
   background: var(--surface-soft) !important;
+}
+
+.enterprise-shell .marketplace-file-input:disabled::file-selector-button {
+  color: var(--muted);
+  background: var(--surface-soft);
 }
 
 .enterprise-shell .side-panel .courier-button.active:disabled {
