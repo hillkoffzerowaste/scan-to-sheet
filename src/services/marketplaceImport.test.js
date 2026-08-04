@@ -6,7 +6,8 @@ import path from 'node:path';
 import test from 'node:test';
 import {
   buildSheetBackfillUpdates, classifyLateOrder, groupMarketplaceRows, isCompleteScanOrder,
-  marketplaceMetadataChanged, parseMarketplaceRows, validateMarketplaceIdentifier,
+  marketplaceMetadataChanged, normalizeMarketplaceOrderDate, parseMarketplaceRows,
+  validateMarketplaceIdentifier,
 } from './marketplaceImport.js';
 import * as marketplaceImport from './marketplaceImport.js';
 import { parseXlsxArrayBuffer } from './xlsxImport.js';
@@ -274,6 +275,30 @@ test('parses expected ship metadata from the real Shopee export', { skip: !exist
   const trackedGroups = groups.filter((group) => group.normalizedTrackingNo);
   assert.ok(trackedGroups.every((group) => group.expectedShipAt));
   assert.ok(trackedGroups.every((group) => group.sellerOrderStatus));
+});
+
+test('normalizes each platform order-date format to one sortable timestamp', () => {
+  assert.equal(normalizeMarketplaceOrderDate('27/07/2026 20:33:12'), '2026-07-27 20:33:12');
+  assert.equal(normalizeMarketplaceOrderDate('27 Jul 2026 21:18'), '2026-07-27 21:18:00');
+  assert.equal(normalizeMarketplaceOrderDate('2026-07-26 00:06'), '2026-07-26 00:06:00');
+});
+
+test('reads a US-locale M/D/Y export instead of inventing month 27', () => {
+  // D/M/Y and M/D/Y are indistinguishable until one slot exceeds 12.
+  assert.equal(normalizeMarketplaceOrderDate('07/27/2026 20:33:12'), '2026-07-27 20:33:12');
+  assert.equal(normalizeMarketplaceOrderDate('27/07/2026 20:33:12'), '2026-07-27 20:33:12');
+  // Genuinely ambiguous dates keep the D/M/Y reading the Thai exports use.
+  assert.equal(normalizeMarketplaceOrderDate('05/07/2026 08:00:00'), '2026-07-05 08:00:00');
+});
+
+test('treats an unparseable or impossible order date as missing, never as newest', () => {
+  // Returning raw text would sort it above every ISO timestamp, letting one bad row
+  // monopolise the capped import window instead of being reported as missing.
+  for (const value of ['not a date', '31/31/2026 10:00', '2026-13-01 10:00', '2026-07-26 25:00']) {
+    assert.equal(normalizeMarketplaceOrderDate(value), '', `expected "" for ${value}`);
+  }
+  const sorted = ['', '2026-07-26 00:06:00'].sort((a, b) => (a === b ? 0 : (a < b ? 1 : -1)));
+  assert.equal(sorted[0], '2026-07-26 00:06:00');
 });
 
 async function loadGroupsFromXlsx(filePath) {

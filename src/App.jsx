@@ -89,7 +89,7 @@ import {
   searchScansFirestore,
   upsertFirebaseUser,
   importMarketplaceOrders,
-  findExistingMarketplaceOrderIds,
+  findExistingMarketplaceOrders,
   addCourier,
   claimRecoverableSheetSyncs,
   subscribeCouriers,
@@ -383,18 +383,29 @@ function App() {
         throw new Error(`ไฟล์นี้มี ${groups.length} ออเดอร์ แต่ยังไม่มีเลขพัสดุสักรายการ กรุณาดาวน์โหลดไฟล์ใหม่หลังออกเลขพัสดุแล้ว`);
       }
       const marketplaceGroupId = (group) => `${group.platform}__${group.orderId}`;
-      const existingOrderIds = await findExistingMarketplaceOrderIds(trackableGroups.map(marketplaceGroupId));
-      const newGroups = trackableGroups.filter((group) => !existingOrderIds.has(marketplaceGroupId(group)));
-      const existingGroups = trackableGroups.filter((group) => existingOrderIds.has(marketplaceGroupId(group)));
-      const skippedCount = Math.max(0, newGroups.length - MARKETPLACE_IMPORT_MAX_ORDERS);
       const orderSortKey = (group) => String(group.orderedAt || group.expectedShipAt || '');
-      const sortedNewByLatest = [...newGroups].sort((a, b) => (
-        orderSortKey(b).localeCompare(orderSortKey(a))
-      ));
-      const limitedNewGroups = sortedNewByLatest.slice(0, MARKETPLACE_IMPORT_MAX_ORDERS);
-      const limitedGroups = [...limitedNewGroups, ...existingGroups];
-      const missingOrderDateCount = newGroups.filter((group) => !group.orderedAt).length;
-      const result = await importMarketplaceOrders(limitedGroups);
+      const byLatestFirst = (a, b) => {
+        const left = orderSortKey(a);
+        const right = orderSortKey(b);
+        if (left === right) return 0;
+        return left < right ? 1 : -1;
+      };
+      // Probe existence once for the whole file and hand the documents to the import, so
+      // it never repeats the same reads. Scales with file size, unlike the writes and
+      // per-tracking `orders` queries that the cap below bounds.
+      const knownExistingOrders = await findExistingMarketplaceOrders(
+        trackableGroups.map(marketplaceGroupId),
+      );
+      // New orders claim the budget first: capping the combined set by date alone would
+      // hand every round to the same newest-100 (now already imported), so orders past
+      // the cap could never be reached no matter how many times the file is re-uploaded.
+      const isNewGroup = (group) => !knownExistingOrders.has(marketplaceGroupId(group));
+      const newGroups = trackableGroups.filter(isNewGroup).sort(byLatestFirst);
+      const existingGroups = trackableGroups.filter((group) => !isNewGroup(group)).sort(byLatestFirst);
+      const limitedGroups = [...newGroups, ...existingGroups].slice(0, MARKETPLACE_IMPORT_MAX_ORDERS);
+      const skippedCount = trackableGroups.length - limitedGroups.length;
+      const missingOrderDateCount = limitedGroups.filter((group) => !group.orderedAt).length;
+      const result = await importMarketplaceOrders(limitedGroups, { knownExistingOrders });
       const untrackedNote = untrackedCount > 0
         ? ` (ข้าม ${untrackedCount} ออเดอร์ที่ยังไม่มีเลขพัสดุ)`
         : '';
@@ -413,7 +424,7 @@ function App() {
         ));
         setMarketplaceUploadResult({
           type: (skippedCount > 0 || untrackedCount > 0 || missingOrderDateCount > 0) ? 'warning' : 'success',
-          message: `เพิ่มใหม่ ${result.imported} ออเดอร์ ข้ามรายการซ้ำ ${result.duplicates} ออเดอร์ อัปเดตกำหนดส่ง ${result.metadataUpdated} ออเดอร์ อัปเดต Firebase ${result.updatedScans} รายการ, Google Sheet ${sheetResult.matchedRows} แถว และ Late Orders ${lateResult.rows} ออเดอร์ (ล่าช้า ${lateResult.counts.overdue ?? 0})${skippedNote}${untrackedNote}${missingDateNote}`,
+          message: `เพิ่มใหม่ ${result.imported} ออเดอร์ ข้ามรายการซ้ำ ${result.duplicates} ออเดอร์ อัปเดตข้อมูลออเดอร์เดิม ${result.metadataUpdated} ออเดอร์ อัปเดต Firebase ${result.updatedScans} รายการ, Google Sheet ${sheetResult.matchedRows} แถว และ Late Orders ${lateResult.rows} ออเดอร์ (ล่าช้า ${lateResult.counts.overdue ?? 0})${skippedNote}${untrackedNote}${missingDateNote}`,
         });
       } catch (sheetError) {
         setMarketplaceUploadResult({

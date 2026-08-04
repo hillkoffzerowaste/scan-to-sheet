@@ -439,42 +439,43 @@ async function commitMarketplaceWrites(writes) {
   }
 }
 
-export async function findExistingMarketplaceOrderIdsLegacy(orderIds) {
+// Returns a Map of docId -> document data. The data is required (not just the ids) so
+// callers can hand it back via `knownExistingOrders` and skip a second existence read
+// without silently disabling metadata comparison.
+export async function findExistingMarketplaceOrders(orderIds) {
   if (!canWriteFirestore()) throw new Error('Firebase ยังไม่พร้อมใช้งาน');
   const marketplaceCollection = collection(firestoreDb, 'marketplaceOrders');
-  const uniqueIds = [...new Set(orderIds)];
-  const existing = new Set();
+  const uniqueIds = [...new Set(orderIds)].filter(Boolean);
+  const existing = new Map();
   for (let index = 0; index < uniqueIds.length; index += 30) {
     const snap = await getDocs(query(
       marketplaceCollection,
       where(documentId(), 'in', uniqueIds.slice(index, index + 30)),
     ));
-    snap.docs.forEach((item) => existing.add(item.id));
+    snap.docs.forEach((item) => existing.set(item.id, item.data()));
   }
   return existing;
 }
 
-export async function findExistingMarketplaceOrderIds(orderIds) {
+export async function importMarketplaceOrders(groups, {
+  knownExistingOrderIds = null,
+  knownExistingOrders = null,
+} = {}) {
   if (!canWriteFirestore()) throw new Error('Firebase ยังไม่พร้อมใช้งาน');
   const marketplaceCollection = collection(firestoreDb, 'marketplaceOrders');
-  const uniqueIds = [...new Set(orderIds)];
-  const existing = new Set();
-  for (let index = 0; index < uniqueIds.length; index += 30) {
-    const snap = await getDocs(query(
-      marketplaceCollection,
-      where(documentId(), 'in', uniqueIds.slice(index, index + 30)),
-    ));
-    snap.docs.forEach((item) => existing.add(item.id));
-  }
-  return existing;
-}
-
-export async function importMarketplaceOrders(groups, { knownExistingOrderIds = null } = {}) {
-  if (!canWriteFirestore()) throw new Error('Firebase ยังไม่พร้อมใช้งาน');
-  const marketplaceCollection = collection(firestoreDb, 'marketplaceOrders');
-  const existingOrderIds = new Set(knownExistingOrderIds ?? []);
-  const existingOrders = new Map();
-  const groupByTracking = new Map(groups.map((group) => [group.normalizedTrackingNo, group]));
+  // Seeded with document data, not just ids, so pre-fetched existence never disables
+  // the metadata comparison below (which needs `existing` to be present).
+  const existingOrders = new Map(knownExistingOrders ?? []);
+  const existingOrderIds = new Set([...existingOrders.keys(), ...(knownExistingOrderIds ?? [])]);
+  // Index scans under both normalization schemes: marketplace tracking strips every
+  // non-alphanumeric, while orders.normalizedCode only trims/uppercases. A scanned code
+  // like "TH-1234" is stored unstripped and would never match the stripped group key.
+  const groupByTracking = new Map();
+  groups.forEach((group) => {
+    [group.normalizedTrackingNo, normalizeCode(group.trackingNo)]
+      .filter(Boolean)
+      .forEach((key) => { if (!groupByTracking.has(key)) groupByTracking.set(key, group); });
+  });
   const groupIds = groups.map((group) => `${group.platform}__${group.orderId}`);
   const idsToCheck = [...new Set(groupIds.filter((id) => !existingOrderIds.has(id)))];
   let readQueries = 0;
@@ -493,8 +494,19 @@ export async function importMarketplaceOrders(groups, { knownExistingOrderIds = 
 
   const writes = [];
   let metadataUpdated = 0;
+  // Groups are keyed by platform+orderId+tracking but documents only by platform+orderId,
+  // so a split shipment yields two groups for one document. Without this guard both queue
+  // a write to the same ref in one batch: the second silently replaces the first (losing a
+  // tracking number) and `imported` counts two documents where one was created.
+  let collisions = 0;
+  const queuedIds = new Set();
   const imported = groups.filter((group, index) => {
     const id = groupIds[index];
+    if (queuedIds.has(id)) {
+      collisions += 1;
+      return false;
+    }
+    queuedIds.add(id);
     if (existingOrderIds.has(id)) {
       const existing = existingOrders.get(id);
       const canonicalMetadata = {
@@ -512,6 +524,10 @@ export async function importMarketplaceOrders(groups, { knownExistingOrderIds = 
           ref: doc(marketplaceCollection, id),
           data: {
             ...canonicalMetadata,
+            // Docs created by the Playwright sync worker (admin SDK, rules bypassed) have
+            // no importedAt, but the marketplaceOrders update rule requires it. Without
+            // this the merge is rejected and takes its whole 400-write batch down.
+            ...(existing.importedAt ? {} : { importedAt: serverTimestamp() }),
             updatedAt: serverTimestamp(),
           },
           options: { merge: true },
@@ -539,7 +555,7 @@ export async function importMarketplaceOrders(groups, { knownExistingOrderIds = 
     });
     return true;
   }).length;
-  const duplicates = groups.length - imported;
+  const duplicates = groups.length - imported - collisions;
   let matchedScans = 0;
   let updatedScans = 0;
   const scannedTrackingCodes = new Set();
@@ -578,14 +594,20 @@ export async function importMarketplaceOrders(groups, { knownExistingOrderIds = 
     scanned: scannedTrackingCodes.has(group.normalizedTrackingNo),
   }));
   return {
-    imported, duplicates, metadataUpdated, matchedScans, updatedScans,
+    imported, duplicates, collisions, metadataUpdated, matchedScans, updatedScans,
     readQueries, writes: writes.length, orderStates,
   };
 }
 
-export async function getUploadedMarketplaceOrders() {
+export async function getUploadedMarketplaceOrders({ max = 500 } = {}) {
   if (!canWriteFirestore()) return [];
-  const snap = await getDocs(query(collection(firestoreDb, 'marketplaceOrders'), where('importSource', '==', 'web_upload')));
+  // Bounded on purpose: this reads one document per uploaded order, so an unlimited query
+  // would grow without ceiling and is the single largest Firestore read cost in the app.
+  const snap = await getDocs(query(
+    collection(firestoreDb, 'marketplaceOrders'),
+    where('importSource', '==', 'web_upload'),
+    limit(max),
+  ));
   return snap.docs.map((item) => {
     const data = item.data();
     return {

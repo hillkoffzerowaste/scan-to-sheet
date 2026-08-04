@@ -2392,6 +2392,11 @@ export function findCancellationRow(rows, { courier, code }) {
   ) ?? null;
 }
 
+// Sheet date/time columns hold Bangkok wall clock (see getBangkokParts). Building the
+// instant with Date.UTC alone would place it 7h in the future, making every
+// `Date.now() - parseDateTime(...)` elapsed check 7h too small.
+const BANGKOK_UTC_OFFSET_MS = 7 * 60 * 60 * 1000;
+
 function parseDateTime(dateStr, timeStr) {
   const d = parseDateOnly(dateStr);
   if (!d) return null;
@@ -2404,7 +2409,7 @@ function parseDateTime(dateStr, timeStr) {
       d.setUTCHours(Number(simple[1]), Number(simple[2]), 0);
     }
   }
-  return d;
+  return new Date(d.getTime() - BANGKOK_UTC_OFFSET_MS);
 }
 
 /**

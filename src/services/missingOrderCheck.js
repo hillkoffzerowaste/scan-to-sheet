@@ -23,7 +23,7 @@ export function buildMissingAlertMessage(results) {
     `💥 สินค้าเสียหาย: ${results.damaged?.length ?? 0} รายการ`,
   ];
 
-  if (regularPending.length > 0) {
+  if ((results.pending?.length ?? 0) > 0) {
     lines.push('', '━━━ ⏳ ออเดอร์ตกหล่น (เกินเวลา) ━━━');
     for (const row of results.pending) {
       const code = row.adminCode || 'ไม่ระบุ';

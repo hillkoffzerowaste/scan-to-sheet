@@ -37,6 +37,26 @@ const MONTH_ABBR = {
   jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12',
 };
 
+// Rejects out-of-range components instead of emitting a string that still sorts.
+// A bogus value like month 27 would otherwise sort above every real date.
+function formatOrderTimestamp({ year, month, day, hour, minute, second }) {
+  const y = Number(year);
+  const mo = Number(month);
+  const d = Number(day);
+  const h = Number(hour);
+  const mi = Number(minute);
+  const s = Number(second ?? 0);
+  const inRange = Number.isInteger(y) && y >= 1970 && y <= 9999
+    && mo >= 1 && mo <= 12
+    && d >= 1 && d <= 31
+    && h >= 0 && h <= 23
+    && mi >= 0 && mi <= 59
+    && s >= 0 && s <= 59;
+  if (!inRange) return '';
+  const pad = (part) => String(part).padStart(2, '0');
+  return `${y}-${pad(mo)}-${pad(d)} ${pad(h)}:${pad(mi)}:${pad(s)}`;
+}
+
 // Converts the assorted per-platform order-date formats (TikTok "27/07/2026 20:33:12",
 // Lazada "27 Jul 2026 21:18", Shopee "2026-07-26 00:06") into a single "YYYY-MM-DD HH:mm:ss"
 // string so orders can be sorted latest-first regardless of source platform.
@@ -44,26 +64,40 @@ export function normalizeMarketplaceOrderDate(value) {
   const text = cleanCell(value);
   if (!text) return '';
 
-  const isoMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?/);
+  const isoMatch = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})[ T](\d{1,2}):(\d{2})(?::(\d{2}))?/);
   if (isoMatch) {
-    const [, y, mo, d, h, mi, s] = isoMatch;
-    return `${y}-${mo}-${d} ${h}:${mi}:${s ?? '00'}`;
+    return formatOrderTimestamp({
+      year: isoMatch[1], month: isoMatch[2], day: isoMatch[3],
+      hour: isoMatch[4], minute: isoMatch[5], second: isoMatch[6],
+    });
   }
 
   const slashMatch = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})[ ,]+(\d{1,2}):(\d{2})(?::(\d{2}))?/);
   if (slashMatch) {
-    const [, d, mo, y, h, mi, s] = slashMatch;
-    return `${y}-${mo.padStart(2, '0')}-${d.padStart(2, '0')} ${h.padStart(2, '0')}:${mi}:${s ?? '00'}`;
+    let day = Number(slashMatch[1]);
+    let month = Number(slashMatch[2]);
+    // Seller exports use D/M/Y in most locales but M/D/Y in US ones. When the second
+    // component cannot be a month the export must be M/D/Y, so swap the pair.
+    if (month > 12 && day <= 12) [day, month] = [month, day];
+    return formatOrderTimestamp({
+      year: slashMatch[3], month, day,
+      hour: slashMatch[4], minute: slashMatch[5], second: slashMatch[6],
+    });
   }
 
   const monthNameMatch = text.match(/^(\d{1,2})\s+([A-Za-z]{3,})\s+(\d{4})[ ,]+(\d{1,2}):(\d{2})(?::(\d{2}))?/);
   if (monthNameMatch) {
-    const [, d, monthName, y, h, mi, s] = monthNameMatch;
-    const mo = MONTH_ABBR[monthName.slice(0, 3).toLowerCase()];
-    if (mo) return `${y}-${mo}-${d.padStart(2, '0')} ${h.padStart(2, '0')}:${mi}:${s ?? '00'}`;
+    return formatOrderTimestamp({
+      year: monthNameMatch[3],
+      month: MONTH_ABBR[monthNameMatch[2].slice(0, 3).toLowerCase()],
+      day: monthNameMatch[1],
+      hour: monthNameMatch[4], minute: monthNameMatch[5], second: monthNameMatch[6],
+    });
   }
 
-  return text;
+  // Never return unrecognized text: it would sort above every ISO timestamp and let
+  // one unparseable row monopolize the import window instead of being flagged missing.
+  return '';
 }
 
 export function parseCsvText(text) {
