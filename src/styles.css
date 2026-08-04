@@ -2847,3 +2847,191 @@ body::before {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ── Enterprise focus pass: remove decorative motion and visual noise ── */
+.enterprise-shell *,
+.enterprise-shell *::before,
+.enterprise-shell *::after {
+  animation: none !important;
+  transition: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* Loading feedback is functional, so it remains the one permitted animation. */
+.enterprise-shell .spin {
+  animation: spin 0.8s linear infinite !important;
+}
+
+.enterprise-shell *:hover,
+.enterprise-shell *:active {
+  transform: none !important;
+  filter: none !important;
+}
+
+.enterprise-shell .app-title,
+.enterprise-shell .title-badge,
+.enterprise-shell .workflow-guide,
+.enterprise-shell .scan-panel.workflow-packer,
+.enterprise-shell .scan-panel.workflow-drive,
+.enterprise-shell .current-courier-badge,
+.enterprise-shell .tab-button:first-child.active,
+.enterprise-shell .tab-button:last-child.active {
+  background: var(--surface) !important;
+  color: var(--text);
+  border-color: var(--line) !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+
+.enterprise-shell .title-badge,
+.enterprise-shell .workflow-guide svg,
+.enterprise-shell .current-courier-badge svg {
+  color: var(--primary-strong);
+}
+
+.enterprise-shell .tab-button:first-child.active,
+.enterprise-shell .tab-button:last-child.active {
+  background: var(--primary) !important;
+  color: #fff !important;
+  border-color: var(--primary) !important;
+}
+
+.enterprise-shell .packer-workflow-guide,
+.enterprise-shell .drive-workflow-guide {
+  background: var(--surface-soft) !important;
+  color: var(--text);
+}
+
+.enterprise-shell .scan-panel.workflow-packer,
+.enterprise-shell .scan-panel.workflow-drive {
+  border-top-color: var(--primary) !important;
+}
+
+.enterprise-shell .side-panel .courier-button.active {
+  background: var(--primary) !important;
+  border-color: var(--primary) !important;
+  color: #fff !important;
+}
+
+.enterprise-shell .secondary-panel {
+  display: block;
+  overflow: hidden;
+}
+
+.enterprise-shell .secondary-panel > summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.enterprise-shell .secondary-panel > summary::-webkit-details-marker {
+  display: none;
+}
+
+.enterprise-shell .secondary-panel-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.enterprise-shell .secondary-panel-summary > div {
+  min-width: 0;
+}
+
+.enterprise-shell .secondary-panel-summary h2,
+.enterprise-shell .secondary-panel-summary h3 {
+  margin: 0;
+}
+
+.enterprise-shell .secondary-panel-label {
+  flex: 0 0 auto;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.enterprise-shell .secondary-panel[open] > summary {
+  border-bottom: 1px solid var(--line);
+}
+
+.enterprise-shell .marketplace-upload-panel {
+  padding: 0;
+}
+
+.enterprise-shell .marketplace-upload-panel > summary {
+  padding: 14px 16px;
+}
+
+.enterprise-shell .marketplace-upload-content,
+.enterprise-shell .sheet-recovery-content {
+  padding: 14px 16px 16px;
+}
+
+.enterprise-shell .sheet-recovery-panel {
+  padding: 0;
+}
+
+.enterprise-shell .sheet-recovery-panel > summary {
+  padding: 14px 16px;
+}
+
+.enterprise-shell .search-panel {
+  padding: 0;
+}
+
+.enterprise-shell .search-panel > summary {
+  padding: 14px;
+}
+
+.enterprise-shell .search-panel[open] > .search-form,
+.enterprise-shell .search-panel[open] > .search-results {
+  margin-left: 14px;
+  margin-right: 14px;
+}
+
+.enterprise-shell .search-panel[open] > .search-form {
+  margin-top: 0;
+}
+
+.enterprise-shell .search-panel[open] > .search-results {
+  margin-bottom: 14px;
+}
+
+.enterprise-shell .report-panel {
+  padding: 0;
+}
+
+.enterprise-shell .report-panel > summary {
+  padding: 18px 20px;
+}
+
+.enterprise-shell .report-panel[open] > .report-controls,
+.enterprise-shell .report-panel[open] > .report-summary,
+.enterprise-shell .report-panel[open] > .report-grid,
+.enterprise-shell .report-panel[open] > .recent-header,
+.enterprise-shell .report-panel[open] > .report-table {
+  margin-left: 20px;
+  margin-right: 20px;
+}
+
+.enterprise-shell .report-panel[open] > .report-controls {
+  margin-top: 18px;
+}
+
+.enterprise-shell .report-panel[open] > .report-table:last-child {
+  margin-bottom: 20px;
+}
+
+@media (max-width: 700px) {
+  .enterprise-shell .secondary-panel-summary {
+    align-items: flex-start;
+  }
+
+  .enterprise-shell .secondary-panel-label {
+    font-size: 0.64rem;
+  }
+}

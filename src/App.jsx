@@ -2733,15 +2733,19 @@ function App() {
         </div>
       </section>
 
-      <section className="marketplace-upload-panel" aria-labelledby="marketplace-upload-title">
-        <div>
+      <details className="marketplace-upload-panel secondary-panel">
+        <summary className="secondary-panel-summary">
+          <div>
           <div className="panel-heading" id="marketplace-upload-title">
             <FileSpreadsheet size={18} />
             <span>อัปโหลดออเดอร์ Seller Center</span>
           </div>
           <p>เลือกไฟล์ .xlsx หรือ .csv จาก Shopee, Lazada และ TikTok ได้หลายไฟล์พร้อมกัน</p>
-        </div>
-        <div className="marketplace-upload-controls">
+          </div>
+          <span className="secondary-panel-label">เครื่องมือรอง</span>
+        </summary>
+        <div className="marketplace-upload-content">
+          <div className="marketplace-upload-controls">
           <label className="field-control marketplace-filter">
             <span>กรองแพลตฟอร์ม</span>
             <select
@@ -2773,13 +2777,14 @@ function App() {
             {marketplaceUploadBusy ? <RefreshCw size={16} className="spin" /> : <Upload size={16} />}
             <span>{marketplaceUploadBusy ? 'กำลังอัปโหลด...' : 'เลือกไฟล์ออเดอร์'}</span>
           </button>
-        </div>
-        {marketplaceUploadResult && (
-          <div className={`marketplace-upload-result ${marketplaceUploadResult.type}`} role="status">
-            {marketplaceUploadResult.message}
           </div>
-        )}
-      </section>
+          {marketplaceUploadResult && (
+            <div className={`marketplace-upload-result ${marketplaceUploadResult.type}`} role="status">
+              {marketplaceUploadResult.message}
+            </div>
+          )}
+        </div>
+      </details>
 
       <section className="workspace-grid">
         <aside className={`side-panel workflow-${activeTab}`}>
@@ -3021,8 +3026,16 @@ function App() {
             </div>
           </div>
 
-          <section className="sheet-recovery-panel" aria-label="Recovery Firestore to Sheet">
-            <div className="sheet-recovery-controls">
+          <details className="sheet-recovery-panel secondary-panel">
+            <summary className="secondary-panel-summary">
+              <div>
+                <p className="eyebrow">Recovery</p>
+                <h3>{activeTab === 'packer' ? 'ตรวจและกู้ Packer เข้า Sheet' : 'ตรวจและกู้ Admin เข้า Sheet'}</h3>
+              </div>
+              <span className="secondary-panel-label">เครื่องมือรอง</span>
+            </summary>
+            <div className="sheet-recovery-content" aria-label="Recovery Firestore to Sheet">
+              <div className="sheet-recovery-controls">
               <div className="range-fields">
                 <label className="field-control">
                   <span>Recovery from</span>
@@ -3041,24 +3054,21 @@ function App() {
                   />
                 </label>
               </div>
-            </div>
-            <div>
-              <p className="eyebrow">Recovery</p>
-              <h3>{activeTab === 'packer' ? 'ตรวจและกู้ Packer เข้า Sheet' : 'ตรวจและกู้ Admin เข้า Sheet'}</h3>
+              </div>
               <p>อ่านข้อมูลจาก Firestore แล้วตรวจซ้ำกับ Sheet ก่อนยืนยันสถานะ ไม่สร้างแถวซ้ำถ้ามีข้อมูลครบแล้ว</p>
+              <button
+                className="secondary-button"
+                type="button"
+                data-testid={`sheet-recovery-${activeTab}`}
+                onClick={() => { void recoverSelectedSheetRange(); }}
+                disabled={sheetRecoveryBusy || !firebaseUser || !token || !config?.master?.id}
+                title="ตรวจข้อมูล Firestore ของช่วงวันที่เลือกและเขียนเฉพาะส่วนที่ขาดลง Google Sheet"
+              >
+                {sheetRecoveryBusy ? <RefreshCw size={16} className="spin" /> : <RefreshCw size={16} />}
+                <span>{sheetRecoveryBusy ? 'กำลัง Recovery...' : 'Recovery Firestore → Sheet'}</span>
+              </button>
             </div>
-            <button
-              className="secondary-button"
-              type="button"
-              data-testid={`sheet-recovery-${activeTab}`}
-              onClick={() => { void recoverSelectedSheetRange(); }}
-              disabled={sheetRecoveryBusy || !firebaseUser || !token || !config?.master?.id}
-              title="ตรวจข้อมูล Firestore ของช่วงวันที่เลือกและเขียนเฉพาะส่วนที่ขาดลง Google Sheet"
-            >
-              {sheetRecoveryBusy ? <RefreshCw size={16} className="spin" /> : <RefreshCw size={16} />}
-              <span>{sheetRecoveryBusy ? 'กำลัง Recovery...' : 'Recovery Firestore → Sheet'}</span>
-            </button>
-          </section>
+          </details>
 
           {scanMethod === 'camera' ? (
             <div className={`camera-panel workflow-${activeTab}`}>
@@ -3120,14 +3130,14 @@ function App() {
           {/* Packer-only: Search, Status, Metrics, Recent, Reports */}
           {activeTab === 'packer' && (
             <>
-              <section className="search-panel" aria-label="ค้นหาเลขพัสดุ">
-                <div className="search-heading">
+              <details className="search-panel secondary-panel">
+                <summary className="search-heading">
                   <div>
                     <p className="eyebrow">Lookup</p>
                     <h3>ค้นหาเลขพัสดุ</h3>
                   </div>
                   <span>{searchResults ? `${searchResults.length} รายการ` : 'ยังไม่ได้ค้นหา'}</span>
-                </div>
+                </summary>
 
                 <form className="search-form" onSubmit={handleSearchSubmit}>
                   <label className="field-control search-code-field">
@@ -3241,7 +3251,7 @@ function App() {
                     )}
                   </div>
                 )}
-              </section>
+              </details>
 
               <StatusBanner status={status} />
 
@@ -3516,8 +3526,8 @@ function App() {
 
       {/* Reports — only in packer tab */}
       {activeTab === 'packer' && (
-        <section className="report-panel">
-          <div className="report-header">
+        <details className="report-panel secondary-panel">
+          <summary className="report-header secondary-panel-summary">
             <div>
               <p className="eyebrow">Reports</p>
               <h2>รายงานสแกน</h2>
@@ -3526,7 +3536,7 @@ function App() {
               <BarChart3 size={18} />
               <span>{reportData ? `${reportData.total} รายการ` : 'รอสร้างรายงาน'}</span>
             </div>
-          </div>
+          </summary>
 
           <div className="report-controls">
             <div className="segmented-control">
@@ -3738,7 +3748,7 @@ function App() {
               </tbody>
             </table>
           </div>
-        </section>
+        </details>
       )}
 
       {scanPopupOpen && (

@@ -20,7 +20,9 @@ test.describe('Scan to Sheet — Packer Tab', () => {
   });
 
   test('shows marketplace upload button and protects it until Firebase login', async ({ page }) => {
-    const uploadButton = page.locator('.marketplace-upload-panel .secondary-button');
+    const marketplacePanel = page.locator('.marketplace-upload-panel');
+    await marketplacePanel.locator('summary').click();
+    const uploadButton = marketplacePanel.locator('.secondary-button');
     await expect(uploadButton).toBeVisible();
     await expect(uploadButton).toContainText('เลือกไฟล์ออเดอร์');
     await expect(uploadButton).toBeDisabled();
@@ -117,6 +119,20 @@ test.describe('Scan to Sheet — Theme & Layout', () => {
     const lightBtn = page.locator('.theme-toggle button:has-text("Light")');
     await lightBtn.click();
     await expect(html).toHaveAttribute('data-theme', 'light');
+  });
+
+  test('keeps secondary tools collapsed and removes decorative motion', async ({ page }) => {
+    await expect(page.locator('details.secondary-panel[open]')).toHaveCount(0);
+    const visualOverhead = await page.locator('.enterprise-shell').evaluate((root) => {
+      const elements = Array.from(root.querySelectorAll('*'));
+      return {
+        animations: elements.filter((el) => getComputedStyle(el).animationName !== 'none' && getComputedStyle(el).animationName !== '' && !el.classList.contains('spin')).length,
+        transitions: elements.filter((el) => getComputedStyle(el).transitionDuration !== '0s').length,
+        gradients: elements.filter((el) => getComputedStyle(el).backgroundImage.includes('gradient')).length,
+        blur: elements.filter((el) => getComputedStyle(el).backdropFilter !== 'none').length,
+      };
+    });
+    expect(visualOverhead).toEqual({ animations: 0, transitions: 0, gradients: 0, blur: 0 });
   });
 
   test('search panel is visible in packer tab', async ({ page }) => {
