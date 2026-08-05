@@ -38,6 +38,12 @@ import {
 // the indexed lookup in searchScansFirestore even when it falls outside this window.
 const ALL_DAY_SEARCH_SCAN_LIMIT = 2000;
 
+// Upper bound on the documents the Drive badge's periodic check may read. An order stays in
+// `status: 'pending'` until a Packer scans it, so the set never shrinks on its own and the
+// sweep billed a read per stale order every interval, forever. Reading newest-first makes the
+// cap safe: the caller discards every order older than its lookback window anyway.
+const PENDING_BADGE_SCAN_LIMIT = 500;
+
 function canWriteFirestore() {
   return Boolean(isFirebaseConfigured && firestoreDb);
 }
@@ -257,10 +263,11 @@ async function getPendingOrdersForMissingCheck(pageSize = 500) {
   }
 
   const filter = getMissingOrderQueryFilters({ summaryOnly: true });
-  return collectFirestorePages(async (cursor, size) => {
+  const fetchPage = (newestFirst) => async (cursor, size) => {
     const constraints = [
       collection(firestoreDb, 'orders'),
       where(filter.field, filter.operator, filter.value),
+      ...(newestFirst ? [orderBy('admin.scannedAt', 'desc')] : []),
       limit(size),
     ];
     if (cursor) {
@@ -271,7 +278,22 @@ async function getPendingOrdersForMissingCheck(pageSize = 500) {
       items: snap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() })),
       nextCursor: snap.docs.at(-1) ?? null,
     };
-  }, { pageSize });
+  };
+
+  try {
+    return await collectFirestorePages(fetchPage(true), {
+      pageSize,
+      maxItems: PENDING_BADGE_SCAN_LIMIT,
+    });
+  } catch (error) {
+    // Newest-first needs the (status, admin.scannedAt) composite index. While that index is
+    // still building, sweep unordered instead of blanking the badge. The fallback stays
+    // uncapped on purpose: without an order, Firestore returns documents by id — that is
+    // `date__courier__code`, so a cap there would keep the oldest stale orders and drop
+    // exactly the recent ones the badge is meant to count.
+    console.warn('Pending badge query failed; using unordered fallback:', error);
+    return collectFirestorePages(fetchPage(false), { pageSize });
+  }
 }
 
 async function getPackerOrdersByScanDate(date) {
