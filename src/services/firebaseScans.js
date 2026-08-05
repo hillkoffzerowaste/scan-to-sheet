@@ -1178,8 +1178,13 @@ export async function backfillOrdersFromSheetRows({ rows, user }) {
     const hasPacker = Boolean(row.code);
     const hasAdmin = Boolean(row.adminCode);
     const note = row.note ?? '';
+    // 'Returned' is written to the Sheet by every issue scan carrying the 'สินค้าตีกลับ' note
+    // (see getScanIssueMeta). Without this branch a returned parcel came back from the Sheet
+    // as 'matched' — counted as shipped — and dropped out of the pending badge's status query.
     const status = row.status === 'Cancelled'
       ? 'cancelled'
+      : row.status === 'Returned'
+        ? 'returned'
       : row.status === 'Damaged'
         ? 'damaged'
         : hasPacker && hasAdmin
