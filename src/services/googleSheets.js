@@ -2334,10 +2334,13 @@ export async function checkMissingOrders({
   const pendingOverOneDay = [];
   const tooSoon = [];
   const cancelled = [];
+  const returned = [];
   const damaged = [];
 
+  const rowsBySheet = await batchReadDailyRows({ token, spreadsheetId: sheet.id, sheetNames: relevantDates });
+
   for (const date of relevantDates) {
-    const rows = (await readDailyRows({ token, spreadsheetId: sheet.id, date })).map(rowFromSheet);
+    const rows = (rowsBySheet.get(date) ?? []).map(rowFromSheet);
 
     for (const row of rows) {
       // Only consider rows that admin scanned
@@ -2351,10 +2354,16 @@ export async function checkMissingOrders({
       const adminDateTime = parseDateTime(adminDateStr, adminTimeStr);
 
       const isCancelled = row.status === 'Cancelled' || row.note === 'ลูกค้ายกเลิก';
+      const isReturned = row.status === 'Returned' || row.note === 'สินค้าตีกลับ';
       const isDamaged = row.status === 'Damaged' || row.note === 'สินค้าเสียหาย';
 
       if (isCancelled) {
         cancelled.push({ ...row, _sheetDate: date });
+      } else if (isReturned) {
+        // A returned parcel is a closed outcome, not an unpacked one. Without this branch it
+        // failed the `status === 'Success'` test below and landed in `pending`, so every
+        // return was reported as a missing order for ever (and as danger after 24h).
+        returned.push({ ...row, _sheetDate: date });
       } else if (isDamaged) {
         damaged.push({ ...row, _sheetDate: date });
       } else if (row.status === 'Success' && row.code && row.code.trim() !== '') {
@@ -2382,8 +2391,10 @@ export async function checkMissingOrders({
     pendingOverOneDay,
     tooSoon,
     cancelled,
+    returned,
     damaged,
-    totalAdminScans: matched.length + pending.length + tooSoon.length + cancelled.length + damaged.length,
+    totalAdminScans: matched.length + pending.length + tooSoon.length
+      + cancelled.length + returned.length + damaged.length,
     checkTime: new Date().toISOString(),
     thresholdMinutes,
     hoursLookback,

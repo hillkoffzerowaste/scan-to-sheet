@@ -1330,6 +1330,7 @@ export async function checkMissingOrdersFirestore({
   const pendingOverOneDay = [];
   const tooSoon = [];
   const cancelled = [];
+  const returned = [];
   const damaged = [];
 
   for (const order of orders) {
@@ -1341,6 +1342,12 @@ export async function checkMissingOrdersFirestore({
 
     if (isCancelledOrder(order)) {
       cancelled.push(row);
+    } else if (isReturnedOrder(order)) {
+      // A return is recorded as a Packer scan carrying the 'สินค้าตีกลับ' note, so without
+      // this branch it satisfied the `packerScan.scannedAt` test below and was counted as
+      // 'จับคู่แล้ว' — inflating the shipped figure. The Sheet backend mis-filed the same
+      // order as 'pending', so the two backends disagreed on the identical order.
+      returned.push(row);
     } else if (isDamagedOrder(order)) {
       damaged.push(row);
     } else if (order.packerScan?.scannedAt) {
@@ -1359,8 +1366,10 @@ export async function checkMissingOrdersFirestore({
     pendingOverOneDay,
     tooSoon,
     cancelled,
+    returned,
     damaged,
-    totalAdminScans: matched.length + pending.length + tooSoon.length + cancelled.length + damaged.length,
+    totalAdminScans: matched.length + pending.length + tooSoon.length
+      + cancelled.length + returned.length + damaged.length,
     checkTime: new Date().toISOString(),
     thresholdMinutes,
     hoursLookback,
