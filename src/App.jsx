@@ -1549,7 +1549,8 @@ function App() {
               }),
             { sheetWrite: true });
             if (!isSheetSyncResultConfirmed(sheetResult)) {
-              throw new Error('Google Sheet แจ้งว่าซ้ำ แต่ยืนยันแถว Admin ไม่ได้');
+              // This is the Packer commit path; the guard used to name the Admin row.
+              throw new Error('Google Sheet แจ้งว่าซ้ำ แต่ยืนยันแถว Packer ไม่ได้');
             }
             await markSheetSyncResult({ orderId: firestorePrimary.id, attemptId: firestorePrimary.sheetSyncAttemptId, ok: true, result: sheetResult }).catch(() => {});
             backgroundResult = { ...result, ...sheetResult, sheetSyncStatus: 'synced' };
@@ -1840,7 +1841,7 @@ function App() {
             // it synced unconditionally would drop the order from the recovery queue while
             // the row stayed broken, so require the same confirmation every other site does.
             if (!isSheetSyncResultConfirmed(sheetResult)) {
-              throw new Error('Google Sheets returned duplicate without confirming the Admin row');
+              throw new Error('Google Sheet แจ้งว่าซ้ำ แต่ยืนยันแถว Admin ไม่ได้');
             }
             await markSheetSyncResult({
               orderId: order.id,
@@ -1951,7 +1952,9 @@ function App() {
                   }),
             { sheetWrite: true });
             if (!isSheetSyncResultConfirmed(sheetResult)) {
-              throw new Error('Google Sheets returned duplicate without confirming the Packer row');
+              // Name the row that was actually attempted: this path writes the Packer row
+              // only when a Packer scan already exists, otherwise it writes the Admin row.
+              throw new Error(`Google Sheet แจ้งว่าซ้ำ แต่ยืนยันแถว ${hasPackerScan ? 'Packer' : 'Admin'} ไม่ได้`);
             }
             await markSheetSyncResult({ orderId: firestorePrimary.id, attemptId: firestorePrimary.sheetSyncAttemptId, ok: true, result: sheetResult }).catch(() => {});
             backgroundResult = { ...result, ...sheetResult, sheetSyncStatus: 'synced' };
@@ -2003,7 +2006,12 @@ function App() {
       }
       setToday({ date: result.date, time: result.time });
       setDriveRecentRows(result.rows ?? []);
-      setDriveTotalCount(result.rows?.length ?? 0);
+      // `result.rows` is a display window capped at 50, not the day's total. Adopting its
+      // length made the counter fall back to 50 on the 51st scan of the day. Count the new
+      // row instead; the fallback path below re-reads the authoritative total anyway.
+      if (result.status === 'admin_scan' || result.status === 'admin_matched') {
+        setDriveTotalCount((previous) => previous + 1);
+      }
 
       if (result.status === 'firestore_unconfirmed') {
         setStatus({
@@ -2367,7 +2375,8 @@ function App() {
 
     setSearchBusy(true);
     try {
-      const results = canUseFirestorePrimary()
+      const usesFirestore = canUseFirestorePrimary();
+      const results = usesFirestore
         ? await searchScansFirestore({
             query,
             couriers: searchScope === 'all' ? couriers : [selectedCourier],
@@ -2388,7 +2397,9 @@ function App() {
         title: results.length > 0 ? 'พบเลขพัสดุ' : 'ไม่พบเลขพัสดุ',
         message:
           results.length > 0
-            ? `พบ ${results.length} รายการจาก Google Sheet`
+            // Name the source that was actually read: this said Google Sheet even when the
+            // Firestore path served the search.
+            ? `พบ ${results.length} รายการจาก ${usesFirestore ? 'Firebase' : 'Google Sheet'}`
             : `${query} ยังไม่พบในเงื่อนไขที่เลือก`,
       });
     } catch (error) {
