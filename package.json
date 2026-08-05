@@ -32,6 +32,7 @@
     "@capacitor/share": "^8.0.1",
     "@capacitor/status-bar": "^8.0.2",
     "@e965/xlsx": "^0.20.3",
+    "@fontsource/kanit": "^5.3.0",
     "@vitejs/plugin-react": "^5.0.0",
     "firebase": "^12.16.0",
     "firebase-admin": "^12.7.0",

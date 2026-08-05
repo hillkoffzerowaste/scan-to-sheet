@@ -229,7 +229,7 @@ export async function apiFetch(url, token, options = {}) {
       });
 
       if (response.status === 429 && attempt < maxRetries) {
-        lastError = new Error(`Google API rate limited (429) after ${attempt + 1} attempts`);
+        lastError = new Error(`Google จำกัดการเรียกใช้ชั่วคราว (ลองแล้ว ${attempt + 1} ครั้ง) กรุณารอสักครู่แล้วลองใหม่`);
         const retryAfter = response.headers.get('Retry-After');
         const retryAfterSeconds = Number(retryAfter);
         const retryAfterMs = Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
@@ -242,8 +242,14 @@ export async function apiFetch(url, token, options = {}) {
       }
 
       if (!response.ok) {
+        // Every catch in App.jsx surfaces error.message straight into the status banner and
+        // the camera overlay, and stores it on the order as sheetSyncError. The raw body can
+        // carry spreadsheet ids and ranges, so keep it on the error for logs, not in the text.
         const detail = await response.text();
-        throw new Error(`Google API error ${response.status}: ${detail}`);
+        const error = new Error(`Google ปฏิเสธคำขอ (รหัส ${response.status}) กรุณาลองใหม่ หรือตรวจสอบสิทธิ์เข้าถึง Sheet`);
+        error.status = response.status;
+        error.detail = detail;
+        throw error;
       }
 
       if (response.status === 204) {
@@ -253,7 +259,12 @@ export async function apiFetch(url, token, options = {}) {
       return await response.json();
     } catch (error) {
       if (error?.name === 'AbortError') {
-        throw new Error(`Google API request timed out after ${timeoutMs}ms`);
+        // `code` is the stable handle for callers and tests; `message` is display text and
+        // is expected to change with translation.
+        throw Object.assign(
+          new Error('Google ตอบสนองช้าเกินกำหนด กรุณาลองอีกครั้ง'),
+          { code: 'GOOGLE_TIMEOUT', timeoutMs },
+        );
       }
       throw error;
     } finally {
@@ -261,7 +272,7 @@ export async function apiFetch(url, token, options = {}) {
     }
   }
 
-  throw lastError ?? new Error('Google API max retries exceeded');
+  throw lastError ?? new Error('ลองเชื่อมต่อ Google หลายครั้งแล้วไม่สำเร็จ กรุณาลองใหม่ภายหลัง');
 }
 
 async function clearSheetRange({ token, spreadsheetId, range }) {
@@ -1901,7 +1912,7 @@ export async function appendScanGoogle({
         range: `${escapeSheetName(date)}!A${appendedRowNumber}:${sheetEndColumn()}${appendedRowNumber}`,
       }).catch(() => {});
     }
-    throw new Error('Google Sheet write verification failed; please scan again');
+    throw new Error('ตรวจสอบข้อมูลที่เขียนลง Google Sheet ไม่สำเร็จ กรุณาสแกนอีกครั้ง');
   }
 
   const updatedRows = await readDailyRows({ token, spreadsheetId: sheet.id, date });
@@ -2168,7 +2179,7 @@ export async function appendAdminScanGoogle({
         range: `${escapeSheetName(date)}!A${appendedRowNumber}:${sheetEndColumn()}${appendedRowNumber}`,
       }).catch(() => {});
     }
-    throw new Error('Google Sheet append could not be verified; please scan again');
+    throw new Error('ยืนยันการเพิ่มแถวใน Google Sheet ไม่สำเร็จ กรุณาสแกนอีกครั้ง');
   }
 
   const updatedRows = await readDailyRows({ token, spreadsheetId: sheet.id, date });

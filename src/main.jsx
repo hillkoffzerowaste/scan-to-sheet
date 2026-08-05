@@ -1,5 +1,14 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
+// Bundled rather than loaded from a CDN: this is an offline-capable PWA used on the
+// warehouse floor, so the brand font has to survive having no network. Latin + Thai
+// subsets at the three weights the UI actually uses.
+import '@fontsource/kanit/400.css';
+import '@fontsource/kanit/500.css';
+import '@fontsource/kanit/600.css';
+import '@fontsource/kanit/thai-400.css';
+import '@fontsource/kanit/thai-500.css';
+import '@fontsource/kanit/thai-600.css';
 import App from './App.jsx';
 import './styles.css';
 

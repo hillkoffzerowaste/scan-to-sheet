@@ -207,7 +207,7 @@ async function acquireSheetWriteLock(resource) {
     };
     await new Promise((resolve) => setTimeout(resolve, result.retryAfterMs ?? 250));
   }
-  throw new Error('Google Sheet is busy; please retry');
+  throw new Error('Google Sheet กำลังถูกใช้งานอยู่ กรุณาลองอีกครั้ง');
 }
 
 async function loadServerGoogleConfig() {
@@ -415,6 +415,13 @@ function App() {
       const missingDateNote = missingOrderDateCount > 0
         ? ` (พบ ${missingOrderDateCount} ออเดอร์ที่ไม่พบวันที่สั่งซื้อในไฟล์ อาจเรียงลำดับผิดพลาด กรุณาตรวจสอบภาษา/รูปแบบไฟล์ export)`
         : '';
+      // `duplicates` already contains the metadata-refreshed rows, so reporting both raw
+      // double-counts them. `collisions` are orders dropped entirely (two tracking numbers
+      // sharing one order id) and were previously reported nowhere at all.
+      const unchangedCount = Math.max(0, result.duplicates - result.metadataUpdated);
+      const collisionNote = result.collisions > 0
+        ? ` (ข้าม ${result.collisions} ออเดอร์ที่มีเลขพัสดุซ้อนกันในเลขคำสั่งซื้อเดียว)`
+        : '';
       try {
         const sheetResult = await runWithGoogleRetry((accessToken, googleConfig) => (
           backfillMarketplaceOrdersGoogle({ token: accessToken, config: googleConfig, groups: limitedGroups })
@@ -423,13 +430,13 @@ function App() {
           syncLateOrdersGoogle({ token: accessToken, config: googleConfig, orders: result.orderStates })
         ));
         setMarketplaceUploadResult({
-          type: (skippedCount > 0 || untrackedCount > 0 || missingOrderDateCount > 0) ? 'warning' : 'success',
-          message: `เพิ่มใหม่ ${result.imported} ออเดอร์ ข้ามรายการซ้ำ ${result.duplicates} ออเดอร์ อัปเดตข้อมูลออเดอร์เดิม ${result.metadataUpdated} ออเดอร์ อัปเดต Firebase ${result.updatedScans} รายการ, Google Sheet ${sheetResult.matchedRows} แถว และ Late Orders ${lateResult.rows} ออเดอร์ (ล่าช้า ${lateResult.counts.overdue ?? 0})${skippedNote}${untrackedNote}${missingDateNote}`,
+          type: (skippedCount > 0 || untrackedCount > 0 || missingOrderDateCount > 0 || result.collisions > 0) ? 'warning' : 'success',
+          message: `เพิ่มใหม่ ${result.imported} ออเดอร์ ไม่มีการเปลี่ยนแปลง ${unchangedCount} ออเดอร์ อัปเดตข้อมูลออเดอร์เดิม ${result.metadataUpdated} ออเดอร์ อัปเดต Firebase ${result.updatedScans} รายการ, Google Sheet ${sheetResult.matchedRows} แถว และ Late Orders ${lateResult.rows} ออเดอร์ (ล่าช้า ${lateResult.counts.overdue ?? 0})${skippedNote}${untrackedNote}${missingDateNote}${collisionNote}`,
         });
       } catch (sheetError) {
         setMarketplaceUploadResult({
           type: 'warning',
-          message: `Firebase เพิ่มใหม่ ${result.imported} ออเดอร์ ข้ามรายการซ้ำ ${result.duplicates} ออเดอร์ แต่ Google Sheet ยังไม่สำเร็จ: ${sheetError.message}${skippedNote}${untrackedNote}${missingDateNote}`,
+          message: `Firebase เพิ่มใหม่ ${result.imported} ออเดอร์ อัปเดตออเดอร์เดิม ${result.metadataUpdated} ออเดอร์ แต่ Google Sheet ยังไม่สำเร็จ: ${sheetError.message}${skippedNote}${untrackedNote}${missingDateNote}${collisionNote}`,
         });
       }
     } catch (error) {
@@ -484,7 +491,7 @@ function App() {
 
     const themeColor = document.querySelector('meta[name="theme-color"]');
     if (themeColor) {
-      themeColor.setAttribute('content', theme === 'dark' ? '#000000' : '#f2f2f7');
+      themeColor.setAttribute('content', theme === 'dark' ? '#04120f' : '#eaf4f3');
     }
   }, [theme]);
 
@@ -693,7 +700,7 @@ function App() {
         setStatus({
           type: 'warning',
           title: 'พบออเดอร์ตกหล่น',
-          message: `มี ${pendingCount} รายการที่ยังไม่ได้แสกนส่ง`,
+          message: `มี ${pendingCount} รายการที่ยังไม่ได้สแกนส่ง`,
         });
       }
     } catch {
@@ -1228,7 +1235,7 @@ function App() {
       }
       if (orders.length === 0) {
         if (showStatus) {
-          setStatus({ type: 'success', title: 'อัปเดต Sheet แล้ว', message: 'ไม่พบออเดอร์ค้างที่ต้องอัปเดต' });
+          setStatus({ type: 'success', title: 'ไม่มีรายการค้าง', message: 'ข้อมูลใน Sheet ครบแล้ว ไม่มีออเดอร์ที่ต้องอัปเดต' });
         }
         return { busy: false, claimed: 0, synced: 0, failed: 0 };
       }
@@ -1291,7 +1298,9 @@ function App() {
             orderId: firestoreOrder.id,
             attemptId: firestoreOrder.sheetSyncAttemptId,
             ok: false,
-            error: error || new Error('Batch sync did not confirm the Packer row in Google Sheets'),
+            // Name the role from the order itself: `role` may be 'both' for a mixed batch,
+            // and result.isPacker reflects what was actually attempted for this row.
+            error: error || new Error(`ซิงก์เป็นชุดแล้วแต่ยืนยันแถว ${(result?.isPacker ?? batchOrder?.isPacker) ? 'Packer' : 'Admin'} ใน Google Sheet ไม่ได้`),
           }).catch(() => {}));
         }
       }
@@ -1345,8 +1354,8 @@ function App() {
     if (dates.length === 0) {
       setStatus({
         type: 'warning',
-        title: 'Invalid recovery date range',
-        message: 'Choose a valid start and end date before recovering Sheet data.',
+        title: 'ช่วงวันที่ไม่ถูกต้อง',
+        message: 'เลือกวันที่เริ่มต้นและสิ้นสุดให้ถูกต้องก่อนกู้ข้อมูลเข้า Sheet',
       });
       return;
     }
@@ -1540,7 +1549,7 @@ function App() {
               }),
             { sheetWrite: true });
             if (!isSheetSyncResultConfirmed(sheetResult)) {
-              throw new Error('Google Sheets returned duplicate without confirming the Packer row');
+              throw new Error('Google Sheet แจ้งว่าซ้ำ แต่ยืนยันแถว Admin ไม่ได้');
             }
             await markSheetSyncResult({ orderId: firestorePrimary.id, attemptId: firestorePrimary.sheetSyncAttemptId, ok: true, result: sheetResult }).catch(() => {});
             backgroundResult = { ...result, ...sheetResult, sheetSyncStatus: 'synced' };

@@ -18,9 +18,11 @@ test('apiFetch aborts a Google request that never responds', async () => {
     }, { once: true });
   });
   try {
+    // Assert the stable code, not the message: the message is user-facing Thai and is
+    // expected to change without the timeout behaviour changing.
     await assert.rejects(
       apiFetch('https://example.test', 'token', { timeoutMs: 10 }),
-      /timed out/i,
+      (error) => error.code === 'GOOGLE_TIMEOUT' && error.timeoutMs === 10,
     );
   } finally {
     globalThis.fetch = originalFetch;
