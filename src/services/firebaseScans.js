@@ -32,6 +32,12 @@ import {
   uniqueQueryDates,
 } from './firestoreQueryPlanning.js';
 
+// Upper bound on the documents a "ทุกวัน" search may read. The search itself keeps only 50
+// matches, so paging the whole `orders` collection billed a read per order ever scanned to
+// display a fixed handful. Orders are swept newest-first, so a full code still resolves via
+// the indexed lookup in searchScansFirestore even when it falls outside this window.
+const ALL_DAY_SEARCH_SCAN_LIMIT = 2000;
+
 function canWriteFirestore() {
   return Boolean(isFirebaseConfigured && firestoreDb);
 }
@@ -320,7 +326,7 @@ async function getAdminOrdersByScanDate(date) {
   }
 }
 
-async function getAllOrders(pageSize = 500) {
+async function getAllOrders(pageSize = 500, maxItems = ALL_DAY_SEARCH_SCAN_LIMIT) {
   if (!canWriteFirestore()) {
     return [];
   }
@@ -339,7 +345,19 @@ async function getAllOrders(pageSize = 500) {
       items: snap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() })),
       nextCursor: snap.docs.at(-1) ?? null,
     };
-  }, { pageSize });
+  }, { pageSize, maxItems });
+}
+
+/**
+ * Source orders for a "ทุกวัน" search, which has no date window to bound it.
+ *
+ * A full tracking number resolves through the `normalizedCode` index and so reaches any day
+ * at the cost of one indexed query. Only a partial code needs the sweep, and that one stops
+ * at ALL_DAY_SEARCH_SCAN_LIMIT instead of reading the entire collection.
+ */
+async function getOrdersForAllDaySearch(normalizedCode, maxRows) {
+  const exactMatches = await getRecentOrdersByCode(normalizedCode, maxRows);
+  return exactMatches.length ? exactMatches : getAllOrders();
 }
 
 async function getScanEventCandidates(normalizedCode, rawCode) {
@@ -1238,7 +1256,7 @@ export async function searchScansFirestore({ query: searchQuery, couriers = [], 
   const term = normalizeCode(searchQuery);
   const sourceOrders = dates?.length
     ? await getOrdersByDates(dates)
-    : await getAllOrders();
+    : await getOrdersForAllDaySearch(term, maxRows);
 
   return sourceOrders
     .filter((order) => {
