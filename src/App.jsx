@@ -1826,16 +1826,25 @@ function App() {
                 marketplaceOrder,
               }),
             { sheetWrite: true });
+            // This branch runs precisely because the Sheet row was incomplete, and
+            // appendAdminScanGoogle can return 'duplicate' without writing anything. Marking
+            // it synced unconditionally would drop the order from the recovery queue while
+            // the row stayed broken, so require the same confirmation every other site does.
+            if (!isSheetSyncResultConfirmed(sheetResult)) {
+              throw new Error('Google Sheets returned duplicate without confirming the Admin row');
+            }
             await markSheetSyncResult({
               orderId: order.id,
-              attemptId: order.sheetSyncAttemptId || `reclaim_${Date.now()}`,
+              // A fabricated attempt id can never equal the stored one, and
+              // markSheetSyncResult silently no-ops on a mismatch. Empty skips the check.
+              attemptId: order.sheetSyncAttemptId || '',
               ok: true,
               result: sheetResult,
             }).catch(() => {});
           } catch (sheetError) {
             await markSheetSyncResult({
               orderId: order.id,
-              attemptId: order.sheetSyncAttemptId || `reclaim_${Date.now()}`,
+              attemptId: order.sheetSyncAttemptId || '',
               ok: false,
               error: sheetError,
             }).catch(() => {});

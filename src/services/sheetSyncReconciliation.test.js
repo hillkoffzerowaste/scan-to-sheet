@@ -63,10 +63,28 @@ test('skips an Admin retry when the Sheet already has Admin data', () => {
 
 test('repairs a Packer row when the tracking exists but the Packer field is empty', () => {
   const row = { courier: 'Kerry', code: 'TH123', packer: '', adminCode: '' };
-  assert.deepEqual(findScanReconciliation([row], { courier: 'Kerry', code: 'TH123', isPacker: true }), {
+  assert.deepEqual(findScanReconciliation([row], {
+    courier: 'Kerry', code: 'TH123', isPacker: true, packerName: 'กิต',
+  }), {
     action: 'merge-packer',
     row,
   });
+});
+
+test('treats a rescan as duplicate when no Packer name is selected', () => {
+  // The packer picker defaults to unassigned, so packerName is ''. Repairing here would
+  // overwrite the original scan time and report a fresh success instead of a duplicate.
+  const row = { courier: 'Kerry', code: 'TH123', packer: '', adminCode: '' };
+  assert.deepEqual(findScanReconciliation([row], {
+    courier: 'Kerry', code: 'TH123', isPacker: true, packerName: '',
+  }), {
+    action: 'skip',
+    row,
+  });
+  // ...and that duplicate must confirm, or the order is retried forever.
+  assert.equal(isSheetSyncResultConfirmed({
+    status: 'duplicate', code: 'TH123', isPacker: true, row,
+  }), true);
 });
 
 test('merges Admin data into an existing Packer row', () => {

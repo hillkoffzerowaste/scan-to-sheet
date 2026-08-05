@@ -37,7 +37,7 @@ export function getPackerDuplicateMessage(code) {
   return `${normalizeCode(code)} Packer สแกนแล้ว กรุณาตรวจสอบ`;
 }
 
-export function findScanReconciliation(rows, { courier, code, isPacker }) {
+export function findScanReconciliation(rows, { courier, code, isPacker, packerName = '' }) {
   const normalizedCode = normalizeCode(code);
   const courierRows = rows.filter((row) => !courier || row.courier === courier);
   const adminRow = courierRows.find((row) => normalizeCode(row.adminCode) === normalizedCode)
@@ -47,9 +47,16 @@ export function findScanReconciliation(rows, { courier, code, isPacker }) {
 
   if (isPacker) {
     if (packerRow) {
-      return String(packerRow.packer ?? '').trim()
-        ? { action: 'skip', row: packerRow }
-        : { action: 'merge-packer', row: packerRow };
+      // A matching code in the packer column already proves a packer scanned this parcel;
+      // the packer *name* is optional (the picker defaults to unassigned). Only re-write
+      // the row when this scan supplies a name the row is missing, otherwise an unnamed
+      // packer rescanning would overwrite the original scan time and be reported as a
+      // fresh success instead of a duplicate.
+      const rowHasPacker = Boolean(String(packerRow.packer ?? '').trim());
+      const scanHasPacker = Boolean(String(packerName ?? '').trim());
+      return (!rowHasPacker && scanHasPacker)
+        ? { action: 'merge-packer', row: packerRow }
+        : { action: 'skip', row: packerRow };
     }
     if (adminRow) return { action: 'merge-packer', row: adminRow };
   } else {
@@ -86,6 +93,9 @@ export function isSheetSyncResultConfirmed(result) {
   const row = result.row;
   const rowCode = result.isPacker ? row?.code : (row?.adminCode || row?.code);
   if (!row || normalizeCode(rowCode) !== normalizeCode(result.code)) return false;
-  if (result.isPacker && !String(row.packer ?? '').trim()) return false;
+  // The packer-column code matching is the proof that a packer scan landed. Admin-only
+  // rows leave that column empty, so they already fail the check above. Requiring a packer
+  // *name* here too would leave every unnamed packer's duplicate permanently unconfirmed
+  // and retried forever, now that such rows correctly reconcile as duplicates.
   return true;
 }

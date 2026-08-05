@@ -356,6 +356,50 @@ function marketplaceCells(order) {
   ];
 }
 
+const PLACEHOLDER_PREFIX = '_TEMP_';
+
+function isPlaceholderNo(value) {
+  return String(value ?? '').startsWith(PLACEHOLDER_PREFIX);
+}
+
+// A scan writes its row in two steps: a placeholder row (No./Courier No. hold a _TEMP_
+// marker used to locate it) and then a corrective update carrying the real numbers. If the
+// second step fails the marker is stranded in the sheet forever — the row's data is valid,
+// so recovery matches it and certifies the order as synced, leaving nothing to fix it.
+// Repair any stranded markers opportunistically whenever a later scan reads the same day.
+async function repairPlaceholderRows({ token, spreadsheetId, date, parsedRows, skipPlaceholder = null }) {
+  const stranded = parsedRows.filter((row) => (
+    isPlaceholderNo(row.no) && String(row.no) !== skipPlaceholder && row.sheetRowNumber
+  ));
+  if (!stranded.length) return 0;
+
+  const escapedSheet = escapeSheetName(date);
+  const data = stranded.map((row) => {
+    const overallNo = row.sheetRowNumber - 1;
+    const courierRows = parsedRows.filter((candidate) => (
+      candidate.courier === row.courier
+      && (candidate.sheetRowNumber ?? Infinity) <= row.sheetRowNumber
+    ));
+    return {
+      range: `${escapedSheet}!A${row.sheetRowNumber}:B${row.sheetRowNumber}`,
+      values: [[overallNo, courierRows.length]],
+    };
+  });
+  await apiFetch(`${SHEETS_API}/${spreadsheetId}/values:batchUpdate`, token, {
+    method: 'POST',
+    body: JSON.stringify({ valueInputOption: 'USER_ENTERED', data }),
+  });
+  return stranded.length;
+}
+
+// A cross-day merge keeps the row on the admin's original sheet, so column C has to stay
+// that sheet's date. Record the day the packer actually scanned in the note instead, since
+// the row schema has no separate column for it.
+function crossDayNote(note, rowDate, scanDate) {
+  if (!scanDate || rowDate === scanDate) return note;
+  return [note, `แพ็คข้ามวัน (สแกน ${scanDate})`].filter(Boolean).join(' | ');
+}
+
 function marketplaceOrderFromRow(row) {
   return {
     platform: row.marketplacePlatform ?? '',
@@ -1482,6 +1526,7 @@ export async function appendScanGoogle({
     courier,
     code: normalizedCode,
     isPacker: true,
+    packerName: packer,
   });
   const duplicateRow = reconciliation.action === 'skip' ? reconciliation.row : null;
   const duplicate = Boolean(duplicateRow);
@@ -1618,9 +1663,13 @@ export async function appendScanGoogle({
     const crossDayMatch = await findRowsAcrossDays({ token, spreadsheetId: sheet.id, currentDate: date, code: normalizedCode, field: 'adminCode' });
     if (crossDayMatch) {
       const currentRow = crossDayMatch.row;
+      // Column C must name the sheet the row actually lives on: rowFromSheet reads
+      // row.date from it and updateScanIssueGoogle uses that to pick which sheet to
+      // search. Writing today's date onto a row kept on the admin's earlier sheet made
+      // every later issue update on it fail with "ไม่พบรายการใน Google Sheet".
       const mergedRow = withMarketplaceCells([
-        currentRow.no, currentRow.courierNo, date, time, currentRow.courier, normalizedCode, email, packer,
-        'Success', note, currentRow.adminDate || effectiveAdminDate || crossDayMatch.date, currentRow.adminTime || effectiveAdminTime || '', currentRow.adminCode || effectiveAdminCode,
+        currentRow.no, currentRow.courierNo, crossDayMatch.date, time, currentRow.courier, normalizedCode, email, packer,
+        'Success', crossDayNote(note, crossDayMatch.date, date), currentRow.adminDate || effectiveAdminDate || crossDayMatch.date, currentRow.adminTime || effectiveAdminTime || '', currentRow.adminCode || effectiveAdminCode,
       ], marketplaceOrder ?? marketplaceOrderFromRow(currentRow));
       await updateDailyRow({ token, spreadsheetId: sheet.id, date: crossDayMatch.date, rowNumber: currentRow.sheetRowNumber, row: mergedRow });
       const resultRows = crossDayMatch.parsedRows
@@ -1643,9 +1692,10 @@ export async function appendScanGoogle({
     if (adminMatchAnyCourier && adminMatchAnyCourier.row.courier !== courier) {
       const currentRow = adminMatchAnyCourier.row;
       const correctedNote = [currentRow.note, `แพ็คเกอร์เลือกขนส่งไม่ตรงกับแอดมิน (เลือก ${courier})`].filter(Boolean).join(' | ');
+      // Same invariant as the cross-day merge above: column C names the row's own sheet.
       const mergedRow = withMarketplaceCells([
-        currentRow.no, currentRow.courierNo, date, time, currentRow.courier, normalizedCode, email, packer,
-        'Success', correctedNote, currentRow.adminDate || effectiveAdminDate || adminMatchAnyCourier.date, currentRow.adminTime || effectiveAdminTime || '', currentRow.adminCode || effectiveAdminCode,
+        currentRow.no, currentRow.courierNo, adminMatchAnyCourier.date, time, currentRow.courier, normalizedCode, email, packer,
+        'Success', crossDayNote(correctedNote, adminMatchAnyCourier.date, date), currentRow.adminDate || effectiveAdminDate || adminMatchAnyCourier.date, currentRow.adminTime || effectiveAdminTime || '', currentRow.adminCode || effectiveAdminCode,
       ], marketplaceOrder ?? marketplaceOrderFromRow(currentRow));
       await updateDailyRow({ token, spreadsheetId: sheet.id, date: adminMatchAnyCourier.date, rowNumber: currentRow.sheetRowNumber, row: mergedRow });
       const resultRows = adminMatchAnyCourier.parsedRows
@@ -1841,10 +1891,16 @@ export async function appendScanGoogle({
   );
   const writtenCell = verifyData.values?.[0]?.[0];
   if (String(writtenCell) !== placeholder) {
-    await clearSheetRange({
-      token, spreadsheetId: sheet.id,
-      range: `${escapeSheetName(date)}!A${appendedRowNumber}:${sheetEndColumn()}${appendedRowNumber}`,
-    }).catch(() => {});
+    // Another writer claimed this row between our PUT and this read — the write lock can
+    // expire mid-scan, since one scan makes ~12 API calls and backs off on 429s. Only
+    // reclaim the row when it is empty (our own partial write): clearing a row that now
+    // holds another device's scan would destroy that scan outright.
+    if (!String(writtenCell ?? '').trim()) {
+      await clearSheetRange({
+        token, spreadsheetId: sheet.id,
+        range: `${escapeSheetName(date)}!A${appendedRowNumber}:${sheetEndColumn()}${appendedRowNumber}`,
+      }).catch(() => {});
+    }
     throw new Error('Google Sheet write verification failed; please scan again');
   }
 
@@ -1887,6 +1943,11 @@ export async function appendScanGoogle({
     rowNumber: targetRowNumber,
     row: correctedRow,
   });
+
+  // Best-effort: never fail an otherwise-good scan because an older row could not be tidied.
+  await repairPlaceholderRows({
+    token, spreadsheetId: sheet.id, date, parsedRows: updatedParsedRows, skipPlaceholder: placeholder,
+  }).catch(() => {});
 
   const resultRows = updatedParsedRows
     .filter((row) => row.courier === courier)
@@ -2100,21 +2161,32 @@ export async function appendAdminScanGoogle({
   );
   const writtenCell = verifyData.values?.[0]?.[0];
   if (String(writtenCell) !== placeholder) {
-    await clearSheetRange({
-      token, spreadsheetId: sheet.id,
-      range: `${escapeSheetName(date)}!A${appendedRowNumber}:${sheetEndColumn()}${appendedRowNumber}`,
-    }).catch(() => {});
+    // See the packer path: only reclaim an empty row, never one another writer now owns.
+    if (!String(writtenCell ?? '').trim()) {
+      await clearSheetRange({
+        token, spreadsheetId: sheet.id,
+        range: `${escapeSheetName(date)}!A${appendedRowNumber}:${sheetEndColumn()}${appendedRowNumber}`,
+      }).catch(() => {});
+    }
     throw new Error('Google Sheet append could not be verified; please scan again');
   }
 
   const updatedRows = await readDailyRows({ token, spreadsheetId: sheet.id, date });
   const updatedParsedRows = updatedRows.map((row, idx) => rowFromSheet(row, idx));
 
-  const correctNo = insertedIdx + 1;
-  const courierAdminCount = updatedParsedRows.filter(
+  // Locate the placeholder positionally, the same way the packer path does. The previous
+  // code counted matching rows and then added 1 unconditionally, but `updatedParsedRows`
+  // is read *after* the placeholder (which already carries effectiveAdminCode) was
+  // written, so the new row was counted twice and the first admin scan of a courier got 2.
+  const placeholderIdx = updatedParsedRows.findIndex((r) => String(r.no) === placeholder);
+  const correctNo = placeholderIdx >= 0 ? placeholderIdx + 1 : insertedIdx + 1;
+  const courierAdminRows = updatedParsedRows.filter(
     (r) => r.courier === courier && r.adminCode && r.adminCode.trim() !== '',
-  ).length + (insertedIdx >= 0 ? 1 : 0);
-  const correctCourierNo = courierAdminCount;
+  );
+  const placeholderCourierIdx = courierAdminRows.findIndex((r) => String(r.no) === placeholder);
+  const correctCourierNo = placeholderCourierIdx >= 0
+    ? placeholderCourierIdx + 1
+    : courierAdminRows.length;
 
   const correctedRow = withMarketplaceCells([
     correctNo,
@@ -2472,7 +2544,9 @@ export async function batchAppendScanGoogle({ token, config, orders }) {
       const directUpdates = [];
       for (const order of dateOrders) {
         const { normalizedCode, courier, email, packer, note, isPacker, adminDate, adminTime, adminCode } = order;
-        const reconciliation = findScanReconciliation(reconciliationRows, { courier, code: normalizedCode, isPacker });
+        const reconciliation = findScanReconciliation(reconciliationRows, {
+          courier, code: normalizedCode, isPacker, packerName: packer,
+        });
 
         if (reconciliation.action === 'skip') {
           results.push({

@@ -2,7 +2,10 @@ import crypto from 'node:crypto';
 
 import { getSession, redisCommand, sendJson } from './_auth.js';
 
-export const LOCK_TTL_SECONDS = 120;
+// One scan makes ~12 Google API round trips, each with a 25s timeout and up to ~30s of
+// cumulative 429 backoff, so 120s could expire mid-scan and let a second device compute
+// the same append row. Must stay above the worst-case duration of a single scan.
+export const LOCK_TTL_SECONDS = 300;
 const LOCK_PREFIX = 'scan-to-sheet:sheet-lock:';
 
 export function sheetLockKey(value) {
@@ -30,8 +33,11 @@ export default async function handler(req, res) {
 
     const key = sheetLockKey(resource);
     if (action === 'release') {
-      await redisCommand(['EVAL', 'if redis.call("GET", KEYS[1]) == ARGV[1] then return redis.call("DEL", KEYS[1]) else return 0 end', '1', key, lockId]);
-      sendJson(res, 200, { acquired: true });
+      const released = await redisCommand(['EVAL', 'if redis.call("GET", KEYS[1]) == ARGV[1] then return redis.call("DEL", KEYS[1]) else return 0 end', '1', key, lockId]);
+      // Report whether this caller actually still held the lock. Previously this always
+      // answered `true`, so a lock that expired mid-scan (and may have been taken by
+      // another device) was indistinguishable from a clean release.
+      sendJson(res, 200, { acquired: true, released: Number(released) === 1 });
       return;
     }
 
