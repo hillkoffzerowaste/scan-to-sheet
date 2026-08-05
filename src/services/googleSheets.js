@@ -1270,10 +1270,14 @@ export async function fetchTodaySummary({ token, config, couriers = COURIERS }) 
   const sheetDates = (spreadsheet.sheets ?? [])
     .map((item) => item.properties.title)
     .filter((title) => /^\d{4}-\d{2}-\d{2}$/.test(title));
-  const parsedRows = (await Promise.all(sheetDates.map(async (sheetDate) => {
-    const rows = await readDailyRows({ token, spreadsheetId: sheet.id, date: sheetDate });
-    return rows.map(rowFromSheet);
-  }))).flat();
+  // Every tab is read because a cross-day merge leaves a row whose event date differs from
+  // the tab holding it. Read them 50 tabs per request: the previous Promise.all fired one
+  // request per tab all at once, so a year of tabs meant ~365 concurrent calls and the
+  // Sheets per-minute quota answered with 429s on the Packer home screen.
+  const rowsBySheet = await batchReadDailyRows({ token, spreadsheetId: sheet.id, sheetNames: sheetDates });
+  const parsedRows = sheetDates.flatMap((sheetDate) => (
+    (rowsBySheet.get(sheetDate) ?? []).map(rowFromSheet)
+  ));
   const shippedRows = parsedRows.filter((row) => row.status === 'Success' && row.date === date);
 
   const courierCounts = couriers.map((courier) => ({
@@ -1437,16 +1441,16 @@ export async function getRowsForFirestoreBackfillGoogle({ token, config, dates }
 
   const spreadsheet = await getSpreadsheet(token, sheet.id);
   const sheetTitles = new Set(spreadsheet.sheets?.map((item) => item.properties.title) ?? []);
+  const backfillDates = [...new Set(dates)].filter(Boolean).sort()
+    .filter((date) => sheetTitles.has(date));
+  // 50 tabs per request instead of one awaited request per tab: a monthly backfill was 31
+  // serial round trips, each carrying its own 25s timeout before the next one could start.
+  const rowsBySheet = await batchReadDailyRows({ token, spreadsheetId: sheet.id, sheetNames: backfillDates });
   const rows = [];
 
-  for (const date of [...new Set(dates)].filter(Boolean).sort()) {
-    if (!sheetTitles.has(date)) {
-      continue;
-    }
-
-    const dailyRows = await readDailyRows({ token, spreadsheetId: sheet.id, date });
+  for (const date of backfillDates) {
     rows.push(
-      ...dailyRows
+      ...(rowsBySheet.get(date) ?? [])
         .map((row, index) => rowFromSheet(row, index))
         .filter((row) => row.code || row.adminCode)
         .map((row) => ({
