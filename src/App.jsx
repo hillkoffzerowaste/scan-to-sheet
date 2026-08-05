@@ -2588,6 +2588,7 @@ function App() {
       `ช่วงรายงาน: ${data.label}`,
       `ยอดส่งจริง: ${data.total} รายการ`,
       `ยกเลิก: ${data.cancelledTotal ?? 0} รายการ`,
+      `สินค้าตีกลับ: ${data.returnedTotal ?? 0} รายการ`,
       `สินค้าเสียหาย: ${data.damagedTotal ?? 0} รายการ`,
       '',
       'ยอดแยกตามขนส่ง',
@@ -2607,6 +2608,13 @@ function App() {
     if (data.cancelledRows?.length > 0) {
       lines.push('', 'รายการยกเลิก');
       data.cancelledRows.forEach((row) => {
+        lines.push(`${row.date} ${row.time} | ${row.courier} | ${row.code}`);
+      });
+    }
+
+    if (data.returnedRows?.length > 0) {
+      lines.push('', 'รายการสินค้าตีกลับ');
+      data.returnedRows.forEach((row) => {
         lines.push(`${row.date} ${row.time} | ${row.courier} | ${row.code}`);
       });
     }
@@ -3683,6 +3691,10 @@ function App() {
               <strong>{reportData?.cancelledTotal ?? 0}</strong>
             </div>
             <div>
+              <span>ตีกลับ</span>
+              <strong>{reportData?.returnedTotal ?? 0}</strong>
+            </div>
+            <div>
               <span>สินค้าเสียหาย</span>
               <strong>{reportData?.damagedTotal ?? 0}</strong>
             </div>
@@ -3714,6 +3726,7 @@ function App() {
                   <th>วันที่</th>
                   <th>ส่งจริง</th>
                   <th>ยกเลิก</th>
+                  <th>ตีกลับ</th>
                   <th>เสียหาย</th>
                   {couriers.map((courier) => (
                     <th key={courier}>{courier}</th>
@@ -3723,7 +3736,7 @@ function App() {
               <tbody>
                 {!reportData ? (
                   <tr>
-                    <td colSpan={couriers.length + 4} className="empty-cell">
+                    <td colSpan={couriers.length + 5} className="empty-cell">
                       เลือกรูปแบบรายงานแล้วกดสร้างรายงาน
                     </td>
                   </tr>
@@ -3733,12 +3746,53 @@ function App() {
                       <td>{day.date}</td>
                       <td>{day.total}</td>
                       <td>{day.cancelledTotal ?? 0}</td>
+                      <td>{day.returnedTotal ?? 0}</td>
                       <td>{day.damagedTotal ?? 0}</td>
                       {couriers.map((courier) => (
                         <td key={courier}>{day.couriers.find((item) => item.courier === courier)?.count ?? 0}</td>
                       ))}
                     </tr>
                   ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="recent-header">
+            <h3>รายการสินค้าตีกลับ</h3>
+          </div>
+          <div className="table-wrap report-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>วันที่</th>
+                  <th>เวลา</th>
+                  <th>ขนส่ง</th>
+                  <th>Tracking / Barcode</th>
+                </tr>
+              </thead>
+              <tbody>
+                {!reportData ? (
+                  <tr>
+                    <td colSpan={4} className="empty-cell">
+                      เลือกรูปแบบรายงานแล้วกดสร้างรายงาน
+                    </td>
+                  </tr>
+                ) : reportData.returnedRows?.length > 0 ? (
+                  reportData.returnedRows.map((row) => (
+                    <tr key={`${row.date}-${row.time}-${row.courier}-${row.code}`}>
+                      <td>{row.date}</td>
+                      <td>{row.time}</td>
+                      <td>{row.courier}</td>
+                      <td className="code-cell">{row.code}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={4} className="empty-cell">
+                      ไม่มีรายการสินค้าตีกลับในช่วงนี้
+                    </td>
+                  </tr>
                 )}
               </tbody>
             </table>
