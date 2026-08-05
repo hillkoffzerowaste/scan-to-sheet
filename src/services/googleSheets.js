@@ -1325,8 +1325,13 @@ export async function getScanReportGoogle({ token, config, dates, couriers = COU
     .map((item) => item.properties.title)
     .filter((title) => /^\d{4}-\d{2}-\d{2}$/.test(title));
 
+  // Every tab is scanned because a cross-day merge leaves a row whose event date differs
+  // from the tab holding it. Read them 50 tabs per request instead of one request per tab:
+  // a single-day report over a year of tabs was ~365 serial calls, each with a 25s timeout.
+  const rowsBySheet = await batchReadDailyRows({ token, spreadsheetId: sheet.id, sheetNames: sheetTitles });
+
   for (const sheetDate of sheetTitles) {
-    const rows = (await readDailyRows({ token, spreadsheetId: sheet.id, date: sheetDate })).map(rowFromSheet);
+    const rows = (rowsBySheet.get(sheetDate) ?? []).map(rowFromSheet);
     for (const row of rows) {
       const eventDate = row.status === 'Success' && row.code ? row.date : row.adminDate || row.date;
       const day = dayMap.get(eventDate);
