@@ -16,7 +16,6 @@ import {
   ClipboardCopy,
   Play,
   RefreshCw,
-  Repeat,
   ScanLine,
   Search,
   Square,
@@ -103,6 +102,7 @@ import {
 import { parseXlsxArrayBuffer } from './services/xlsxImport.js';
 import { loadHtml5Qrcode } from './services/cameraLoader.js';
 import { commitFallbackScan } from './services/scanCommit.js';
+import { createScanQueue } from './services/scanQueue.js';
 import { shouldPollMissingOrders } from './services/missingCheckPolicy.js';
 import { getSheetRecoveryDates } from './services/sheetRecoveryDates.js';
 import { buildSheetSyncFailureUpdates } from './services/sheetSync.js';
@@ -270,6 +270,14 @@ function App() {
       : 'เพิ่ม VITE_GOOGLE_CLIENT_ID ใน Vercel Environment Variables แล้ว deploy ใหม่',
   }));
   const [busy, setBusy] = useState(false);
+  const [scanQueueSnapshot, setScanQueueSnapshot] = useState({
+    pending: [],
+    processing: null,
+    completed: 0,
+    failed: 0,
+    lastResult: null,
+    results: [],
+  });
   const [today, setToday] = useState(() => getBangkokParts());
   const [summary, setSummary] = useState(() => COURIERS.map((courier) => ({ courier, count: 0 })));
   const [recentRows, setRecentRows] = useState([]);
@@ -283,7 +291,6 @@ function App() {
   const [theme, setTheme] = useState(() => localStorage.getItem(THEME_KEY) || 'light');
   const [scanMethod, setScanMethod] = useState('camera');
   const [allowAnyTrackingFormat, setAllowAnyTrackingFormat] = useState(false);
-  const [scanMode, setScanMode] = useState('single');
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraMessage, setCameraMessage] = useState('เปิดกล้อง แล้วเล็งบาร์โค้ดหลักให้อยู่ในกรอบ');
   const [cameraMessageType, setCameraMessageType] = useState('idle');
@@ -321,7 +328,8 @@ function App() {
   const inputRef = useRef(null);
   const audioContextRef = useRef(null);
   const cameraRef = useRef(null);
-  const scanModeRef = useRef(scanMode);
+  const scanProcessorRef = useRef(null);
+  const scanQueueRef = useRef(null);
   const lastCameraScanRef = useRef({ code: '', time: 0 });
   const cameraSavingRef = useRef(false);
   const refreshTimerRef = useRef(null);
@@ -353,6 +361,22 @@ function App() {
   const requiresPacker = !getScanIssueMeta(scanRemark).isIssue && activeTab === 'packer';
   const isPackerReady = !requiresPacker || selectedPacker !== PACKER_UNASSIGNED;
   const isDriveReady = isSignedIn && scanMethod === 'manual' ? true : isSignedIn;
+  const queuedScanCount = scanQueueSnapshot.pending.length;
+  const scanQueueStatusText = scanQueueSnapshot.processing
+    ? `กำลังบันทึก ${scanQueueSnapshot.processing.code}${queuedScanCount ? ` • รอคิว ${queuedScanCount} รายการ` : ''}`
+    : scanQueueSnapshot.lastResult?.status === 'error'
+      ? `${scanQueueSnapshot.lastResult.job.code} บันทึกไม่สำเร็จ — ยิงเลขเดิมอีกครั้งได้`
+      : 'พร้อมยิงบาร์โค้ดต่อเนื่อง — ระบบจะแยกและบันทึกทีละเลข';
+
+  scanProcessorRef.current = async (job) => {
+    const result = job.context.activeTab === 'drive'
+      ? await saveAdminScannedCode(job.code, 'queue', job.context)
+      : await saveScannedCode(job.code, 'queue', job.context);
+    if (result?.status === 'error') {
+      throw new Error(result.message || 'บันทึกรายการในคิวไม่สำเร็จ');
+    }
+    return result;
+  };
 
   async function uploadMarketplaceFiles(event) {
     const files = [...(event.target.files ?? [])];
@@ -578,10 +602,23 @@ function App() {
   }, [firebaseUser]);
 
   useEffect(() => {
-    if (isSignedIn) {
-      inputRef.current?.focus();
+    const queue = createScanQueue({
+      process: (job) => scanProcessorRef.current(job),
+      onStateChange: setScanQueueSnapshot,
+      maxSize: 100,
+    });
+    scanQueueRef.current = queue;
+    return () => {
+      queue.dispose();
+      scanQueueRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (isSignedIn && scanMethod === 'manual') {
+      window.setTimeout(() => focusScanInput({ force: true }), 0);
     }
-  }, [isSignedIn, selectedCourier, busy, activeTab]);
+  }, [isSignedIn, selectedCourier, activeTab, scanMethod, scanPopupOpen, selectedPacker]);
 
   useEffect(() => {
     if (!isSignedIn || scanMethod !== 'camera') {
@@ -590,8 +627,14 @@ function App() {
   }, [isSignedIn, scanMethod]);
 
   useEffect(() => {
-    scanModeRef.current = scanMode;
-  }, [scanMode]);
+    if (!scanQueueSnapshot.processing && scanQueueSnapshot.pending.length === 0) return () => {};
+    const warnBeforeLeaving = (event) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warnBeforeLeaving);
+    return () => window.removeEventListener('beforeunload', warnBeforeLeaving);
+  }, [scanQueueSnapshot.processing, scanQueueSnapshot.pending.length]);
 
   useEffect(() => {
     return () => {
@@ -1386,7 +1429,12 @@ function App() {
     }
   }
 
-  async function saveScannedCode(rawCode, source = 'manual') {
+  async function saveScannedCode(rawCode, source = 'manual', context = null) {
+    const scanCourier = context?.courier ?? selectedCourier;
+    const scanPacker = context?.packer ?? selectedPacker;
+    const scanNote = context?.remark ?? scanRemark;
+    const scanAllowsAnyFormat = context?.allowAnyTrackingFormat ?? allowAnyTrackingFormat;
+    const managesBusy = source !== 'queue';
     if (!isSignedIn) {
       setStatus({
         type: 'warning',
@@ -1397,7 +1445,7 @@ function App() {
       return { status: 'error' };
     }
 
-    if (!getScanIssueMeta(scanRemark).isIssue && selectedPacker === PACKER_UNASSIGNED) {
+    if (!getScanIssueMeta(scanNote).isIssue && scanPacker === PACKER_UNASSIGNED) {
       setStatus({
         type: 'warning',
         title: 'เลือก Packer ก่อนสแกน',
@@ -1408,8 +1456,8 @@ function App() {
       return { status: 'error' };
     }
 
-    const validation = validateScanCode(selectedCourier, rawCode, {
-      allowAnyFormat: source === 'manual' && allowAnyTrackingFormat,
+    const validation = validateScanCode(scanCourier, rawCode, {
+      allowAnyFormat: (source === 'manual' || source === 'queue') && scanAllowsAnyFormat,
     });
     if (!validation.ok) {
       const isEmpty = !validation.code;
@@ -1429,8 +1477,8 @@ function App() {
 
     // Prevent only a true duplicate Packer scan. An Admin-only row must still
     // reach the backend so the Packer fields can be merged into that row.
-    if (!getScanIssueMeta(scanRemark).isIssue) {
-      const alreadyInPacker = shouldBlockPackerScan(recentRows, validation.code, selectedCourier);
+    if (!getScanIssueMeta(scanNote).isIssue) {
+      const alreadyInPacker = shouldBlockPackerScan(recentRows, validation.code, scanCourier);
       if (alreadyInPacker) {
         setStatus({
           type: 'duplicate',
@@ -1443,18 +1491,18 @@ function App() {
       }
     }
 
-    setBusy(true);
+    if (managesBusy) setBusy(true);
     try {
       const nowParts = getBangkokParts();
       const firestorePrimary = canUseFirestorePrimary()
         ? await recordPackerScanPrimary({
             code: validation.code,
-            courier: selectedCourier,
+            courier: scanCourier,
             date: nowParts.date,
             time: nowParts.time,
             user: firebaseUser ?? user,
-            packer: selectedPacker === PACKER_UNASSIGNED ? '' : selectedPacker,
-            note: scanRemark,
+            packer: scanPacker === PACKER_UNASSIGNED ? '' : scanPacker,
+            note: scanNote,
           })
         : null;
 
@@ -1462,7 +1510,7 @@ function App() {
         const syncPending = firestorePrimary.sheetSyncStatus === 'pending';
         const duplicateResult = {
           status: 'duplicate',
-          courier: selectedCourier,
+          courier: scanCourier,
           date: nowParts.date,
           time: nowParts.time,
           code: validation.code,
@@ -1475,17 +1523,15 @@ function App() {
           title: syncPending ? 'กำลังซิงก์ Google Sheet' : 'เลขซ้ำ',
           message: syncPending
             ? `${validation.code} บันทึกใน Firebase แล้ว และกำลังซิงก์ Google Sheet อยู่`
-            : `${validation.code} มีอยู่แล้วใน Firebase สำหรับ ${selectedCourier}`,
+            : `${validation.code} มีอยู่แล้วใน Firebase สำหรับ ${scanCourier}`,
         });
         showCameraMessage(syncPending ? `${validation.code} กำลังซิงก์ Sheet` : `เลขซ้ำ: ${validation.code}`, 'duplicate');
         playTone('duplicate');
-        setScanRemark('');
+        if (source !== 'queue') setScanRemark('');
         return duplicateResult;
       }
 
-      const packerName = selectedPacker === PACKER_UNASSIGNED ? '' : selectedPacker;
-      const scanNote = scanRemark;
-      const scanCourier = selectedCourier;
+      const packerName = scanPacker === PACKER_UNASSIGNED ? '' : scanPacker;
       const scanUser = firebaseUser ?? user;
       const scanEmail = user.email;
       const marketplaceOrderPromise = findMarketplaceOrderByTracking({ trackingNo: validation.code }).catch(() => null);
@@ -1609,7 +1655,7 @@ function App() {
         }
       }
 
-      if (source !== 'manual') {
+      if (source === 'camera') {
         setScanValue(result.code);
       }
       setToday({ date: result.date, time: result.time });
@@ -1646,39 +1692,39 @@ function App() {
         setStatus({
           type: 'success',
           title: 'บันทึกยกเลิกแล้ว',
-          message: `${result.code} ถูกทำเครื่องหมาย ${ISSUE_CUSTOMER_CANCELLED} ใน ${selectedCourier}`,
+          message: `${result.code} ถูกทำเครื่องหมาย ${ISSUE_CUSTOMER_CANCELLED} ใน ${scanCourier}`,
         });
         showCameraMessage(`${result.code} ยกเลิกแล้ว`, 'success');
         playTone('success');
-        setScanRemark('');
+        if (source !== 'queue') setScanRemark('');
       } else if (result.status === 'returned') {
         setStatus({
           type: 'success',
           title: 'บันทึกสินค้าตีกลับแล้ว',
-          message: `${result.code} ถูกทำเครื่องหมาย ${ISSUE_RETURNED} ใน ${selectedCourier}`,
+          message: `${result.code} ถูกทำเครื่องหมาย ${ISSUE_RETURNED} ใน ${scanCourier}`,
         });
         showCameraMessage(`${result.code} ตีกลับแล้ว`, 'success');
         playTone('success');
-        setScanRemark('');
+        if (source !== 'queue') setScanRemark('');
       } else if (result.status === 'duplicate') {
         setStatus({
           type: 'duplicate',
           title: 'เลขซ้ำ',
-          message: `${result.code} มีอยู่แล้วใน ${selectedCourier} วันที่ ${result.date}`,
+          message: `${result.code} มีอยู่แล้วใน ${scanCourier} วันที่ ${result.date}`,
         });
         showCameraMessage(`เลขซ้ำ: ${result.code}`, 'duplicate');
         playTone('duplicate');
-        setScanRemark('');
+        if (source !== 'queue') setScanRemark('');
       } else {
         const mergedNote = result.merged ? ' (จับคู่กับ Admin ที่ลง Drive ไว้)' : '';
         setStatus({
           type: 'success',
           title: 'สแกนสำเร็จ' + mergedNote,
-          message: `${result.code} ถูกบันทึกเข้า ${selectedCourier} โดย ${selectedPacker} วันที่ ${result.date}${scanRemark ? ` (${scanRemark})` : ''}`,
+          message: `${result.code} ถูกบันทึกเข้า ${scanCourier} โดย ${scanPacker} วันที่ ${result.date}${scanNote ? ` (${scanNote})` : ''}`,
         });
         showCameraMessage(`${result.code} บันทึกสำเร็จ`, 'success');
         playTone('success');
-        setScanRemark('');
+        if (source !== 'queue') setScanRemark('');
       }
       if (!firestorePrimary?.id) {
         await refreshSelectedCourierRows().catch(() => {});
@@ -1694,13 +1740,16 @@ function App() {
       playTone('error');
       return { status: 'error', message: error.message };
     } finally {
-      setBusy(false);
-      cameraSavingRef.current = false;
-      window.setTimeout(() => inputRef.current?.focus(), 30);
+      if (managesBusy) setBusy(false);
+      if (source === 'camera') cameraSavingRef.current = false;
+      if (source !== 'queue') window.setTimeout(() => focusScanInput(), 30);
     }
   }
 
-  async function saveAdminScannedCode(rawCode, source = 'manual') {
+  async function saveAdminScannedCode(rawCode, source = 'manual', context = null) {
+    const scanCourier = context?.courier ?? selectedCourier;
+    const scanAllowsAnyFormat = context?.allowAnyTrackingFormat ?? allowAnyTrackingFormat;
+    const managesBusy = source !== 'queue';
     if (!isSignedIn) {
       setStatus({
         type: 'warning',
@@ -1711,8 +1760,8 @@ function App() {
       return { status: 'error' };
     }
 
-    const validation = validateScanCode(selectedCourier, rawCode, {
-      allowAnyFormat: source === 'manual' && allowAnyTrackingFormat,
+    const validation = validateScanCode(scanCourier, rawCode, {
+      allowAnyFormat: (source === 'manual' || source === 'queue') && scanAllowsAnyFormat,
     });
     if (!validation.ok) {
       const isEmpty = !validation.code;
@@ -1730,13 +1779,13 @@ function App() {
       setScanValue('');
     }
 
-    setBusy(true);
+    if (managesBusy) setBusy(true);
     try {
       const nowParts = getBangkokParts();
       const firestorePrimary = canUseFirestorePrimary()
         ? await recordAdminScanPrimary({
             code: validation.code,
-            courier: selectedCourier,
+            courier: scanCourier,
             date: nowParts.date,
             time: nowParts.time,
             user: firebaseUser ?? user,
@@ -1751,13 +1800,13 @@ function App() {
           setStatus({
             type: 'duplicate',
             title: 'เลขซ้ำใน Firebase',
-            message: `${validation.code} เคยลง Drive สำหรับ ${selectedCourier} แล้ว`,
+            message: `${validation.code} เคยลง Drive สำหรับ ${scanCourier} แล้ว`,
           });
           showCameraMessage(`ลงแล้ว: ${validation.code}`, 'duplicate');
           playTone('duplicate');
           return {
             status: 'duplicate',
-            courier: selectedCourier,
+            courier: scanCourier,
             date: nowParts.date,
             time: nowParts.time,
             code: validation.code,
@@ -1777,7 +1826,7 @@ function App() {
           playTone('duplicate');
           return {
             status: 'duplicate',
-            courier: selectedCourier,
+            courier: scanCourier,
             date: nowParts.date,
             time: nowParts.time,
             code: validation.code,
@@ -1798,7 +1847,7 @@ function App() {
           no: order.id,
           date: nowParts.date,
           time: nowParts.time,
-          courier: selectedCourier,
+          courier: scanCourier,
           code: '',
           adminCode: adminReclaim.adminCode,
           adminDate: adminReclaim.adminDate,
@@ -1820,7 +1869,7 @@ function App() {
         setDriveRecentRows([reclaimRow, ...driveRecentRows].slice(0, 50));
         setDriveTotalCount((prev) => prev + 1);
         setToday({ date: nowParts.date, time: nowParts.time });
-        if (source !== 'manual') setScanValue(validation.code);
+        if (source === 'camera') setScanValue(validation.code);
         
         // Background: re-sync to Sheet via appendAdminScanGoogle
         runAfterScanCommit(async () => {
@@ -1830,7 +1879,7 @@ function App() {
               appendAdminScanGoogle({
                 token: accessToken,
                 config: googleConfig,
-                courier: selectedCourier,
+                courier: scanCourier,
                 code: adminReclaim.adminCode,
                 email: user.email,
                 marketplaceOrder,
@@ -1870,7 +1919,7 @@ function App() {
         
         return {
           status: 'admin_scan',
-          courier: selectedCourier,
+          courier: scanCourier,
           date: nowParts.date,
           time: nowParts.time,
           code: validation.code,
@@ -1879,7 +1928,6 @@ function App() {
         };
       }
 
-      const scanCourier = selectedCourier;
       const scanUser = firebaseUser ?? user;
       const scanEmail = user.email;
       const marketplaceOrderPromise = findMarketplaceOrderByTracking({ trackingNo: validation.code }).catch(() => null);
@@ -2001,7 +2049,7 @@ function App() {
         }
       }
 
-      if (source !== 'manual') {
+      if (source === 'camera') {
         setScanValue(result.code);
       }
       setToday({ date: result.date, time: result.time });
@@ -2035,7 +2083,7 @@ function App() {
         setStatus({
           type: 'success',
           title: 'ลง Drive สำเร็จ',
-          message: `${result.code} ลง Drive ใน ${selectedCourier} วันที่ ${result.date} รอ Packer สแกนส่ง`,
+          message: `${result.code} ลง Drive ใน ${scanCourier} วันที่ ${result.date} รอ Packer สแกนส่ง`,
         });
         showCameraMessage(`${result.code} ลง Drive สำเร็จ`, 'success');
         playTone('success');
@@ -2053,7 +2101,7 @@ function App() {
         setStatus({
           type: 'duplicate',
           title: 'เลขซ้ำใน Drive',
-          message: `${result.code} เคยลง Drive สำหรับ ${selectedCourier} วันที่ ${result.date} แล้ว`,
+          message: `${result.code} เคยลง Drive สำหรับ ${scanCourier} วันที่ ${result.date} แล้ว`,
         });
         showCameraMessage(`ลงแล้ว: ${result.code}`, 'duplicate');
         playTone('duplicate');
@@ -2077,19 +2125,64 @@ function App() {
       playTone('error');
       return { status: 'error', message: error.message };
     } finally {
-      setBusy(false);
-      cameraSavingRef.current = false;
-      window.setTimeout(() => inputRef.current?.focus(), 30);
+      if (managesBusy) setBusy(false);
+      if (source === 'camera') cameraSavingRef.current = false;
+      if (source !== 'queue') window.setTimeout(() => focusScanInput(), 30);
     }
   }
 
-  async function handleScanSubmit(event) {
+  function focusScanInput({ force = false } = {}) {
+    const input = inputRef.current;
+    if (!input || input.disabled || scanMethod !== 'manual') return;
+    const activeElement = document.activeElement;
+    const canFocus = force
+      || !activeElement
+      || activeElement === document.body
+      || activeElement === input
+      || activeElement?.type === 'submit';
+    if (canFocus) input.focus({ preventScroll: true });
+  }
+
+  function handleScanSubmit(event) {
     event.preventDefault();
-    if (activeTab === 'drive') {
-      await saveAdminScannedCode(scanValue, 'manual');
-    } else {
-      await saveScannedCode(scanValue, 'manual');
+    const code = String(scanValue ?? '').trim();
+    if (inputRef.current) inputRef.current.value = '';
+    setScanValue('');
+    window.requestAnimationFrame(() => focusScanInput({ force: true }));
+
+    if (!code) {
+      setStatus({ type: 'warning', title: 'ยังไม่มีเลขสแกน', message: 'ยิงบาร์โค้ดแล้วกด Enter อีกครั้ง' });
+      playTone('error');
+      return;
     }
+
+    const context = {
+      activeTab,
+      courier: selectedCourier,
+      packer: selectedPacker,
+      remark: scanRemark,
+      allowAnyTrackingFormat,
+    };
+    const queued = scanQueueRef.current?.enqueue({
+      id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      code,
+      context,
+    });
+
+    if (!queued?.accepted) {
+      const isFull = queued?.reason === 'queue_full';
+      setStatus({
+        type: isFull ? 'warning' : 'duplicate',
+        title: isFull ? 'คิวสแกนเต็ม' : 'เลขนี้อยู่ในคิวแล้ว',
+        message: isFull
+          ? 'มีรายการรอบันทึกครบ 100 รายการ กรุณารอให้คิวลดลงก่อนยิงต่อ'
+          : `${code} กำลังรอบันทึกหรือกำลังบันทึกอยู่`,
+      });
+      playTone(isFull ? 'error' : 'duplicate');
+      return;
+    }
+
+    if (scanRemark) setScanRemark('');
   }
 
   async function stopCamera() {
@@ -2127,15 +2220,10 @@ function App() {
     cameraSavingRef.current = true;
     showCameraMessage(`อ่านได้: ${code}`, 'idle');
 
-    const result = activeTab === 'drive'
-      ? await saveAdminScannedCode(code, 'camera')
-      : await saveScannedCode(code, 'camera');
-
-    if (scanModeRef.current === 'single') {
-      await stopCamera();
-      if (result.status === 'success' || result.status === 'cancelled' || result.status === 'returned' || result.status === 'admin_scan' || result.status === 'admin_matched') {
-        showCameraMessage('หยุดแล้ว: สแกนทีละรายการเสร็จ', 'success');
-      }
+    if (activeTab === 'drive') {
+      await saveAdminScannedCode(code, 'camera');
+    } else {
+      await saveScannedCode(code, 'camera');
     }
   }
 
@@ -2998,29 +3086,7 @@ function App() {
 
           {/* Packer-only controls */}
           {activeTab === 'packer' && (
-            <>
-              <div className="scan-controls" aria-label="เลือกโหมดสแกน">
-                <div className="segmented-control">
-                  <button
-                    className={scanMode === 'single' ? 'active' : ''}
-                    type="button"
-                    onClick={() => setScanMode('single')}
-                  >
-                    <Square size={15} />
-                    <span>ทีละรายการ</span>
-                  </button>
-                  <button
-                    className={scanMode === 'continuous' ? 'active' : ''}
-                    type="button"
-                    onClick={() => setScanMode('continuous')}
-                  >
-                    <Repeat size={15} />
-                    <span>ต่อเนื่อง</span>
-                  </button>
-                </div>
-              </div>
-
-              <div className={`issue-bar ${scanRemark ? 'active' : ''}`}>
+            <div className={`issue-bar ${scanRemark ? 'active' : ''}`}>
                 <label className="packer-control">
                   <span>Packer</span>
                   <select value={selectedPacker} onChange={(event) => setSelectedPacker(event.target.value)} disabled={!isSignedIn || busy}>
@@ -3056,31 +3122,6 @@ function App() {
                       ? 'ต้องเลือก Packer ก่อนสแกน'
                       : `รายการถัดไปบันทึก Packer: ${selectedPacker}`}
                 </span>
-              </div>
-            </>
-          )}
-
-          {/* Drive-only controls */}
-          {activeTab === 'drive' && (
-            <div className="scan-controls" aria-label="เลือกโหมดสแกน">
-              <div className="segmented-control">
-                <button
-                  className={scanMode === 'single' ? 'active' : ''}
-                  type="button"
-                  onClick={() => setScanMode('single')}
-                >
-                  <Square size={15} />
-                  <span>ทีละรายการ</span>
-                </button>
-                <button
-                  className={scanMode === 'continuous' ? 'active' : ''}
-                  type="button"
-                  onClick={() => setScanMode('continuous')}
-                >
-                  <Repeat size={15} />
-                  <span>ต่อเนื่อง</span>
-                </button>
-              </div>
             </div>
           )}
 
@@ -3110,7 +3151,7 @@ function App() {
             )}
             <div className="operation-context-item">
               <span>โหมดสแกน</span>
-              <strong>{scanMode === 'continuous' ? 'ต่อเนื่อง' : 'ทีละรายการ'}</strong>
+              <strong>ต่อเนื่อง</strong>
             </div>
             <div className="operation-context-item">
               <span>ช่องทาง</span>
@@ -3209,13 +3250,16 @@ function App() {
                       : 'Login with Google ก่อนเริ่มสแกน'
                   }
                   autoComplete="off"
-                  disabled={busy || !isSignedIn || (activeTab === 'packer' && !isPackerReady)}
+                  disabled={!isSignedIn || (activeTab === 'packer' && !isPackerReady)}
                 />
-                <button type="submit" disabled={busy || !isSignedIn || (activeTab === 'packer' && !isPackerReady)}>
-                  {busy ? <RefreshCw size={18} className="spin" /> : <Play size={18} />}
+                <button type="submit" disabled={!isSignedIn || (activeTab === 'packer' && !isPackerReady)}>
+                  {scanQueueSnapshot.processing ? <RefreshCw size={18} className="spin" /> : <Play size={18} />}
                   <span>{activeTab === 'drive' ? 'รับเข้า Drive' : 'บันทึกแพ็ก'}</span>
                 </button>
               </div>
+              <p className="scan-queue-status" role="status" aria-live="polite">
+                {scanQueueStatusText}
+              </p>
             </form>
           )}
 
@@ -3934,16 +3978,6 @@ function App() {
                   <span>กล้อง</span>
                 </button>
               </div>
-              <div className="segmented-control">
-                <button className={scanMode === 'single' ? 'active' : ''} type="button" onClick={() => setScanMode('single')}>
-                  <Square size={14} />
-                  <span>ทีละชิ้น</span>
-                </button>
-                <button className={scanMode === 'continuous' ? 'active' : ''} type="button" onClick={() => setScanMode('continuous')}>
-                  <Repeat size={14} />
-                  <span>ต่อเนื่อง</span>
-                </button>
-              </div>
             </div>
 
             {activeTab === 'packer' && (
@@ -3993,13 +4027,16 @@ function App() {
                           : 'เลือก Packer ก่อน'
                     }
                     autoComplete="off"
-                    disabled={busy || !isSignedIn || (activeTab === 'packer' && !isPackerReady)}
+                    disabled={!isSignedIn || (activeTab === 'packer' && !isPackerReady)}
                   />
-                  <button type="submit" disabled={busy || !isSignedIn || (activeTab === 'packer' && !isPackerReady)}>
-                    {busy ? <RefreshCw size={18} className="spin" /> : <Play size={18} />}
+                  <button type="submit" disabled={!isSignedIn || (activeTab === 'packer' && !isPackerReady)}>
+                    {scanQueueSnapshot.processing ? <RefreshCw size={18} className="spin" /> : <Play size={18} />}
                     <span>{activeTab === 'drive' ? 'รับเข้า Drive' : 'บันทึกแพ็ก'}</span>
                   </button>
                 </div>
+                <p className="scan-queue-status" role="status" aria-live="polite">
+                  {scanQueueStatusText}
+                </p>
               </form>
             )}
 

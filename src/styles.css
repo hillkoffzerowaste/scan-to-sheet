@@ -1239,6 +1239,13 @@ select:hover {
   margin-top: 22px;
 }
 
+.scan-queue-status {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
 .scan-form label {
   display: block;
   margin-bottom: 8px;
