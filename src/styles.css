@@ -511,13 +511,15 @@ select:hover {
   box-shadow: 0 3px 12px rgba(0,0,0,0.06);
 }
 
-/* ── Scan popup (bottom sheet) ── */
+/* ── Scan popup ── */
 .scan-popup-overlay {
   position: fixed;
   inset: 0;
   z-index: 1000;
   display: flex;
-  align-items: flex-end;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
   background: rgba(0,0,0,0.35);
   backdrop-filter: blur(3px);
   -webkit-backdrop-filter: blur(3px);
@@ -526,30 +528,129 @@ select:hover {
 @keyframes overlay-in { from { opacity: 0; } to { opacity: 1; } }
 
 .scan-popup-sheet {
-  width: 100%;
-  max-height: 90vh;
+  width: min(720px, calc(100vw - 40px));
+  max-height: min(80dvh, 760px);
   overflow-y: auto;
-  padding: 12px 16px 24px;
-  border-radius: 22px 22px 0 0;
+  padding: 18px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
   background: var(--surface);
-  box-shadow: 0 -4px 24px rgba(0,0,0,0.15);
-  animation: sheet-up 0.35s cubic-bezier(0.25, 0.1, 0.25, 1);
+  box-shadow: var(--shadow-modal);
+  animation: overlay-in 0.15s ease;
 }
-@keyframes sheet-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
 
-.scan-popup-handle {
-  width: 36px;
-  height: 5px;
-  margin: 0 auto 14px;
-  border-radius: 3px;
-  background: var(--line-strong);
-  opacity: 0.5;
+.scan-popup-header {
+  position: sticky;
+  top: -18px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: -18px -18px 14px;
+  padding: 16px 18px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.scan-popup-header span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.scan-popup-header h2 {
+  margin: 2px 0 0;
+  color: var(--text);
+  font-size: 1.35rem;
+  line-height: 1.2;
+}
+
+.scan-popup-icon-close {
+  display: inline-grid;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface-soft);
+  color: var(--text);
+  font-size: 1.6rem;
+  line-height: 1;
+}
+
+.scan-popup-icon-close:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.scan-popup-feedback {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface-soft);
+  color: var(--text);
+}
+
+.scan-popup-feedback div {
+  min-width: 0;
+}
+
+.scan-popup-feedback strong,
+.scan-popup-feedback span {
+  display: block;
+}
+
+.scan-popup-feedback span {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.84rem;
+  overflow-wrap: anywhere;
+}
+
+.scan-popup-feedback.success {
+  border-color: var(--success-line);
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.scan-popup-feedback.duplicate,
+.scan-popup-feedback.warning {
+  border-color: var(--warning-line);
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
+.scan-popup-feedback.error {
+  border-color: var(--danger-line);
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.scan-popup-feedback.ignored {
+  border-color: var(--line-strong);
+  background: var(--primary-soft);
+  color: var(--primary-strong);
+}
+
+.scan-popup-issue-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
 }
 
 .popup-cancel-btn {
   width: 100%;
-  min-height: 40px;
-  margin: 8px 0 12px;
+  min-height: 44px;
+  margin: 0;
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
   background: var(--surface-soft);
@@ -582,6 +683,48 @@ select:hover {
   font-size: 1rem;
 }
 .scan-popup-close:hover { background: var(--line); color: var(--text); }
+
+.scan-popup-sheet .scan-controls,
+.scan-popup-sheet .scan-form,
+.scan-popup-sheet .camera-panel {
+  margin-top: 12px;
+}
+
+.scan-popup-sheet .camera-stage {
+  width: min(100%, 560px);
+  min-height: 0;
+  max-height: min(42dvh, 420px);
+  margin-inline: auto;
+  aspect-ratio: 4 / 3;
+}
+
+@media (max-width: 700px) {
+  .scan-popup-overlay {
+    align-items: flex-end;
+    padding: 12px;
+  }
+
+  .scan-popup-sheet {
+    width: 100%;
+    max-height: 82dvh;
+    padding: 14px;
+    border-radius: var(--radius-lg);
+  }
+
+  .scan-popup-header {
+    top: -14px;
+    margin: -14px -14px 12px;
+    padding: 13px 14px 10px;
+  }
+
+  .scan-popup-issue-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .scan-popup-sheet .camera-stage {
+    max-height: 38dvh;
+  }
+}
 
 
 

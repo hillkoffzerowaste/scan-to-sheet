@@ -103,6 +103,7 @@ import { parseXlsxArrayBuffer } from './services/xlsxImport.js';
 import { loadHtml5Qrcode } from './services/cameraLoader.js';
 import { commitFallbackScan } from './services/scanCommit.js';
 import { createScanQueue } from './services/scanQueue.js';
+import { getScanPopupStatusMeta } from './services/scanPopup.js';
 import { shouldPollMissingOrders } from './services/missingCheckPolicy.js';
 import { getSheetRecoveryDates } from './services/sheetRecoveryDates.js';
 import { buildSheetSyncFailureUpdates } from './services/sheetSync.js';
@@ -367,6 +368,12 @@ function App() {
     : scanQueueSnapshot.lastResult?.status === 'error'
       ? `${scanQueueSnapshot.lastResult.job.code} บันทึกไม่สำเร็จ — ยิงเลขเดิมอีกครั้งได้`
       : 'พร้อมยิงบาร์โค้ดต่อเนื่อง — ระบบจะแยกและบันทึกทีละเลข';
+  const scanPopupStatusMeta = getScanPopupStatusMeta(status.type);
+  const ScanPopupStatusIcon = scanPopupStatusMeta.icon === 'check'
+    ? CheckCircle2
+    : scanPopupStatusMeta.icon === 'alert'
+      ? AlertTriangle
+      : ScanLine;
 
   scanProcessorRef.current = async (job) => {
     const result = job.context.activeTab === 'drive'
@@ -625,6 +632,22 @@ function App() {
       void stopCamera();
     }
   }, [isSignedIn, scanMethod]);
+
+  useEffect(() => {
+    if (!scanPopupOpen) return () => {};
+    const previousOverflow = document.body.style.overflow;
+    const closeOnEscape = (event) => {
+      if (event.key !== 'Escape') return;
+      setScanPopupOpen(false);
+      void stopCamera();
+    };
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [scanPopupOpen]);
 
   useEffect(() => {
     if (!scanQueueSnapshot.processing && scanQueueSnapshot.pending.length === 0) return () => {};
@@ -3937,17 +3960,43 @@ function App() {
 
       {scanPopupOpen && (
         <div className="scan-popup-overlay" onClick={() => { setScanPopupOpen(false); void stopCamera(); }}>
-          <div className={`scan-popup-sheet workflow-${activeTab}`} onClick={(e) => e.stopPropagation()}>
-            <div className="scan-popup-handle" />
+          <div
+            className={`scan-popup-sheet workflow-${activeTab}`}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="scan-popup-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="scan-popup-header">
+              <div>
+                <span>{activeTab === 'drive' ? 'รับเข้า Drive' : 'สแกนแพ็กสินค้า'}</span>
+                <h2 id="scan-popup-title">{selectedCourier}</h2>
+              </div>
+              <button
+                className="scan-popup-icon-close"
+                type="button"
+                aria-label="ปิดหน้าต่างสแกน"
+                onClick={() => { setScanPopupOpen(false); void stopCamera(); }}
+              >
+                ×
+              </button>
+            </div>
 
-            <div className={`current-courier-badge workflow-${activeTab}`}>
-              <Truck size={18} />
-              <span>{activeTab === 'drive' ? 'กำลังรับเข้า Drive' : 'กำลังสแกนแพ็ก'}</span>
-              <strong>{selectedCourier}</strong>
+            <div
+              className={`scan-popup-feedback ${scanPopupStatusMeta.tone}`}
+              role="status"
+              aria-live="polite"
+              aria-atomic="true"
+            >
+              <ScanPopupStatusIcon size={20} aria-hidden="true" />
+              <div>
+                <strong>{status.title}</strong>
+                <span>{status.message}</span>
+              </div>
             </div>
 
             {activeTab === 'packer' && (
-              <>
+              <div className="scan-popup-issue-actions">
               <button
                 className={`popup-cancel-btn ${scanRemark === ISSUE_CUSTOMER_CANCELLED ? 'active' : ''}`}
                 type="button"
@@ -3964,7 +4013,7 @@ function App() {
               >
                 {scanRemark === ISSUE_RETURNED ? `✓ ${ISSUE_RETURNED}` : ISSUE_RETURNED}
               </button>
-              </>
+              </div>
             )}
 
             <div className="scan-controls">
