@@ -2853,6 +2853,12 @@ tbody tr:nth-child(8){ animation-delay: 0.21s; }
 .sales-drawer { width: min(520px, 100%); height: 100%; overflow: auto; padding: 22px; border-left: 1px solid var(--line); background: var(--surface); box-shadow: var(--shadow-modal); }
 .sales-close { float: right; min-height: 40px; color: var(--primary-strong); }
 .sales-drawer pre { overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text); }
+.sales-detail { clear: both; }
+.sales-detail dl { display: grid; gap: 0; border: 1px solid var(--line); border-radius: var(--radius-sm); }
+.sales-detail dl > div { display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 10px; padding: 9px 11px; border-bottom: 1px solid var(--line); }
+.sales-detail dl > div:last-child { border-bottom: 0; }
+.sales-detail dt { color: var(--muted); font-weight: 700; }
+.sales-detail dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
 .sales-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; clear: both; }
 .sales-form h3, .sales-form label:has(textarea), .sales-form > button { grid-column: 1 / -1; }
 .sales-form label { display: grid; gap: 5px; color: var(--muted); font-weight: 700; }

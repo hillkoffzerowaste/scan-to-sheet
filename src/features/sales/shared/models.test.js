@@ -1,10 +1,17 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { groupRounds, queueBlocker, rowsOf } from './models.js';
+import { canAssignChiangmaiRound, CHIANGMAI_ROUNDS, groupRounds, queueBlocker, rowsOf } from './models.js';
 
 test('normalizes common Hillkoff list envelopes', () => {
   assert.deepEqual(rowsOf({ orders: [{ id: '1' }] }), [{ id: '1' }]);
   assert.deepEqual(rowsOf({ items: [{ id: '2' }] }), [{ id: '2' }]);
+});
+
+test('uses the exact upstream Chiang Mai codes and hides ineligible orders', () => {
+  assert.deepEqual(CHIANGMAI_ROUNDS.map(([code]) => code), ['tuesday', 'wednesday', 'friday']);
+  assert.equal(canAssignChiangmaiRound({ deliveryMethod: 'company_driver', queueStatus: 'preparing' }), true);
+  assert.equal(canAssignChiangmaiRound({ deliveryMethod: 'outstation', queueStatus: 'preparing' }), false);
+  assert.equal(canAssignChiangmaiRound({ deliveryMethod: 'company_driver', queueStatus: 'queued' }), false);
 });
 
 test('explains every queue readiness blocker', () => {

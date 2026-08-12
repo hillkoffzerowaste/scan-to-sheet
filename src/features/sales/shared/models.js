@@ -9,3 +9,13 @@ export function queueBlocker(order = {}) {
 export function groupRounds(orders = []) {
   return orders.reduce((groups, order) => { const key = order.chiangmaiRoundCode || 'unassigned'; (groups[key] ||= []).push(order); return groups; }, {});
 }
+export const CHIANGMAI_ROUNDS = [
+  ['tuesday', 'วันอังคาร'],
+  ['wednesday', 'วันพุธ'],
+  ['friday', 'วันศุกร์'],
+];
+export function canAssignChiangmaiRound(order = {}) {
+  return order.deliveryMethod === 'company_driver'
+    && !order.driverId
+    && !['queued', 'completed', 'outstation_ready', 'grab_completed', 'grab_ready', 'grab_picked_up', 'pack_archived', 'driver_archived'].includes(String(order.queueStatus || ''));
+}
