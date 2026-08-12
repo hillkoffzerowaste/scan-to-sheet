@@ -640,6 +640,10 @@ select:hover {
   color: var(--primary-strong);
 }
 
+.popup-courier {
+  margin-bottom: 12px;
+}
+
 .scan-popup-issue-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

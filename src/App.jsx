@@ -103,7 +103,7 @@ import { parseXlsxArrayBuffer } from './services/xlsxImport.js';
 import { loadHtml5Qrcode } from './services/cameraLoader.js';
 import { commitFallbackScan } from './services/scanCommit.js';
 import { createScanQueue } from './services/scanQueue.js';
-import { getScanPopupStatusMeta } from './services/scanPopup.js';
+import { getScanPopupCourierOptions, getScanPopupStatusMeta } from './services/scanPopup.js';
 import { DEFAULT_SCAN_METHOD } from './services/scanPreferences.js';
 import { barcodeCharacterFromKeyEvent } from './services/barcodeKeyboard.js';
 import { shouldPollMissingOrders } from './services/missingCheckPolicy.js';
@@ -347,6 +347,10 @@ function App() {
   const selectedCount = useMemo(
     () => summary.find((item) => item.courier === selectedCourier)?.count ?? 0,
     [selectedCourier, summary],
+  );
+  const scanPopupCourierOptions = useMemo(
+    () => getScanPopupCourierOptions(couriers, selectedCourier),
+    [couriers, selectedCourier],
   );
   const displayedCourierCounts = useMemo(() => {
     if (activeTab !== 'drive') {
@@ -4007,6 +4011,19 @@ function App() {
                 <span>{status.message}</span>
               </div>
             </div>
+
+            <label className="packer-control popup-courier">
+              <span>ขนส่ง — เลือกก่อนสแกน</span>
+              <select
+                value={selectedCourier}
+                onChange={(event) => setSelectedCourier(event.target.value)}
+                disabled={!isSignedIn}
+              >
+                {scanPopupCourierOptions.map((courier) => (
+                  <option key={courier} value={courier}>{courier}</option>
+                ))}
+              </select>
+            </label>
 
             {activeTab === 'packer' && (
               <div className="scan-popup-issue-actions">
