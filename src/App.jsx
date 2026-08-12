@@ -105,6 +105,7 @@ import { commitFallbackScan } from './services/scanCommit.js';
 import { createScanQueue } from './services/scanQueue.js';
 import { getScanPopupStatusMeta } from './services/scanPopup.js';
 import { DEFAULT_SCAN_METHOD } from './services/scanPreferences.js';
+import { barcodeCharacterFromKeyEvent } from './services/barcodeKeyboard.js';
 import { shouldPollMissingOrders } from './services/missingCheckPolicy.js';
 import { getSheetRecoveryDates } from './services/sheetRecoveryDates.js';
 import { buildSheetSyncFailureUpdates } from './services/sheetSync.js';
@@ -2209,6 +2210,16 @@ function App() {
     if (scanRemark) setScanRemark('');
   }
 
+  function handleBarcodeKeyDown(event) {
+    const character = barcodeCharacterFromKeyEvent(event);
+    if (character === null) return;
+
+    // Keyboard-wedge scanners emit the active OS layout in `key` (Thai characters when
+    // Windows is set to Thai), while `code` keeps the physical US-key position.
+    event.preventDefault();
+    setScanValue((current) => `${current}${character}`);
+  }
+
   async function stopCamera() {
     const scanner = cameraRef.current;
     cameraRef.current = null;
@@ -3264,6 +3275,7 @@ function App() {
                   ref={inputRef}
                   value={scanValue}
                   onChange={(event) => setScanValue(event.target.value)}
+                  onKeyDown={handleBarcodeKeyDown}
                   placeholder={
                     isSignedIn
                       ? activeTab === 'drive'
@@ -4069,6 +4081,7 @@ function App() {
                     ref={inputRef}
                     value={scanValue}
                     onChange={(e) => setScanValue(e.target.value)}
+                    onKeyDown={handleBarcodeKeyDown}
                     placeholder={
                       activeTab === 'drive'
                         ? 'ยิงบาร์โค้ด แล้วกด Enter เพื่อรับเข้า Drive'
