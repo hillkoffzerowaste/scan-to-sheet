@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { fetchHillkoffProfile } from './hillkoff-me.js';
+import { fetchHillkoffProfile } from '../../api/hillkoff-me.js';
 
 test('forwards the server API key without exposing it in the result', async () => {
   const calls = [];
