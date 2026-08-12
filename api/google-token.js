@@ -1,15 +1,24 @@
-import { fetchProfile, getSession, getStoredSheetConfig, refreshAccessToken, sendJson, setSession } from './_auth.js';
+import {
+  API_ERRORS,
+  fetchProfile,
+  getSession,
+  getStoredSheetConfig,
+  refreshAccessToken,
+  sendError,
+  sendJson,
+  setSession,
+} from './_auth.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
-    sendJson(res, 405, { error: 'Method not allowed' });
+    sendError(res, API_ERRORS.methodNotAllowed);
     return;
   }
 
   try {
     const { sessionId, session } = await getSession(req);
     if (!session?.refreshToken) {
-      sendJson(res, 401, { error: 'No active Google session' });
+      sendError(res, API_ERRORS.noSession);
       return;
     }
 
@@ -32,6 +41,11 @@ export default async function handler(req, res) {
       config: sheetConfig,
     });
   } catch (error) {
-    sendJson(res, 500, { error: error.message });
+    sendError(res, {
+      status: 500,
+      code: 'GOOGLE_TOKEN_REFRESH_FAILED',
+      message: 'ต่ออายุการเข้าสู่ระบบ Google ไม่สำเร็จ กรุณาเข้าสู่ระบบใหม่',
+      error,
+    });
   }
 }

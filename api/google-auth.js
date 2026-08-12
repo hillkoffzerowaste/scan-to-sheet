@@ -1,8 +1,11 @@
 import {
+  API_ERRORS,
   createSessionId,
   exchangeCode,
   fetchProfile,
   getStoredSheetConfig,
+  redactSecrets,
+  sendError,
   sendJson,
   setSession,
   setSessionCookie,
@@ -14,14 +17,18 @@ export function canPersistGoogleSession(tokenData) {
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
-    sendJson(res, 405, { error: 'Method not allowed' });
+    sendError(res, API_ERRORS.methodNotAllowed);
     return;
   }
 
   try {
     const { code, redirectUri, clientId } = req.body ?? {};
     if (!code || !redirectUri || !clientId) {
-      sendJson(res, 400, { error: 'Missing code, redirectUri, or clientId' });
+      sendError(res, {
+        status: 400,
+        code: 'AUTH_REQUEST_INVALID',
+        message: 'คำขอเข้าสู่ระบบไม่ครบถ้วน กรุณาลองเข้าสู่ระบบใหม่',
+      });
       return;
     }
 
@@ -31,10 +38,13 @@ export default async function handler(req, res) {
       tokenData = await exchangeCode({ code, redirectUri, clientId });
       profile = await fetchProfile(tokenData.access_token);
     } catch (error) {
-      sendJson(res, 500, {
-        error: 'Google OAuth failed',
-        step: 'google_oauth',
-        detail: error.message,
+      // `detail` used to carry error.message here. It never reached the banner, but it did
+      // reach anyone calling the endpoint, and it can hold Google's raw token-error body.
+      sendError(res, {
+        status: 500,
+        code: 'GOOGLE_OAUTH_FAILED',
+        message: 'เข้าสู่ระบบ Google ไม่สำเร็จ กรุณาลองอีกครั้ง',
+        error,
       });
       return;
     }
@@ -60,7 +70,7 @@ export default async function handler(req, res) {
       setSessionCookie(res, sessionId);
       serverSession = true;
     } catch (error) {
-      console.warn('Google login continuing without KV session:', error.message);
+      console.warn('Google login continuing without KV session:', redactSecrets(error.message));
     }
 
     sendJson(res, 200, {
@@ -73,10 +83,11 @@ export default async function handler(req, res) {
       warning: serverSession ? null : 'เข้าสู่ระบบสำเร็จ แต่ระบบยังจำการเข้าสู่ระบบระยะยาวไม่ได้',
     });
   } catch (error) {
-    sendJson(res, 500, {
-      error: 'Google auth failed',
-      step: 'unexpected',
-      detail: error.message,
+    sendError(res, {
+      status: 500,
+      code: 'GOOGLE_AUTH_FAILED',
+      message: 'เข้าสู่ระบบไม่สำเร็จ กรุณาลองอีกครั้ง',
+      error,
     });
   }
 }

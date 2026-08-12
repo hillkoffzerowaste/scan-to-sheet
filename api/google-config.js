@@ -1,10 +1,18 @@
-import { getSession, getStoredSheetConfig, sendJson, setSession, setStoredSheetConfig } from './_auth.js';
+import {
+  API_ERRORS,
+  getSession,
+  getStoredSheetConfig,
+  sendError,
+  sendJson,
+  setSession,
+  setStoredSheetConfig,
+} from './_auth.js';
 
 export default async function handler(req, res) {
   try {
     const { sessionId, session } = await getSession(req);
     if (!session?.email) {
-      sendJson(res, 401, { error: 'No active Google session' });
+      sendError(res, API_ERRORS.noSession);
       return;
     }
 
@@ -17,7 +25,11 @@ export default async function handler(req, res) {
     if (req.method === 'POST') {
       const { config } = req.body ?? {};
       if (!config?.master?.id) {
-        sendJson(res, 400, { error: 'Missing Google Sheet config' });
+        sendError(res, {
+          status: 400,
+          code: 'SHEET_CONFIG_INVALID',
+          message: 'ไม่พบข้อมูล Google Sheet Master ในคำขอ',
+        });
         return;
       }
 
@@ -31,8 +43,13 @@ export default async function handler(req, res) {
       return;
     }
 
-    sendJson(res, 405, { error: 'Method not allowed' });
+    sendError(res, API_ERRORS.methodNotAllowed);
   } catch (error) {
-    sendJson(res, 500, { error: error.message });
+    sendError(res, {
+      status: 500,
+      code: 'SHEET_CONFIG_FAILED',
+      message: 'อ่านหรือบันทึกการตั้งค่า Google Sheet ไม่สำเร็จ กรุณาลองอีกครั้ง',
+      error,
+    });
   }
 }

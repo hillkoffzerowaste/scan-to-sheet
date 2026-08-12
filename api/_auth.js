@@ -158,6 +158,43 @@ export function sendJson(res, status, payload) {
   res.end(JSON.stringify(payload));
 }
 
+const SECRET_PATTERNS = [
+  /("?(?:access_token|refresh_token|id_token|client_secret|token)"?\s*[:=]\s*"?)[^",\s}]+/gi,
+  /(Bearer\s+)[\w.\-]+/gi,
+];
+
+/**
+ * Strip credential-looking values before anything reaches a log line. Google's token
+ * endpoint and the KV REST API both echo request context back in their error bodies.
+ */
+export function redactSecrets(value) {
+  return SECRET_PATTERNS.reduce(
+    (text, pattern) => text.replace(pattern, '$1[redacted]'),
+    String(value ?? ''),
+  );
+}
+
+/**
+ * The single way a handler reports failure.
+ *
+ * App.jsx `apiJson` throws `new Error(data.error)` and that string lands directly in the
+ * status banner, so `message` must be Thai and must never carry internals — a raw
+ * `error.message` here leaks KV/Google response bodies and env-var names to anyone who
+ * calls the endpoint. `code` is the stable handle for tests and client branching;
+ * `message` is display text and is expected to change with translation.
+ */
+export function sendError(res, { status = 500, code, message, error = null }) {
+  if (error) {
+    console.error(`[${code}] ${redactSecrets(error?.message ?? error)}`);
+  }
+  sendJson(res, status, { error: message, code });
+}
+
+export const API_ERRORS = {
+  methodNotAllowed: { status: 405, code: 'METHOD_NOT_ALLOWED', message: 'คำขอนี้ไม่รองรับวิธีที่เรียกมา' },
+  noSession: { status: 401, code: 'NO_GOOGLE_SESSION', message: 'เซสชัน Google หมดอายุ กรุณาเข้าสู่ระบบใหม่' },
+};
+
 function sessionKey(sessionId) {
   return `scan-to-sheet:session:${sessionId}`;
 }

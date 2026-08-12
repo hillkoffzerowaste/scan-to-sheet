@@ -1,8 +1,8 @@
-import { clearSessionCookie, deleteSession, getSession, sendJson } from './_auth.js';
+import { API_ERRORS, clearSessionCookie, deleteSession, getSession, sendError, sendJson } from './_auth.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
-    sendJson(res, 405, { error: 'Method not allowed' });
+    sendError(res, API_ERRORS.methodNotAllowed);
     return;
   }
 

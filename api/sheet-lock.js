@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 
-import { getSession, redisCommand, sendJson } from './_auth.js';
+import { API_ERRORS, getSession, redisCommand, sendError, sendJson } from './_auth.js';
 
 // One scan makes ~12 Google API round trips, each with a 25s timeout and up to ~30s of
 // cumulative 429 backoff, so 120s could expire mid-scan and let a second device compute
@@ -14,20 +14,24 @@ export function sheetLockKey(value) {
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
-    sendJson(res, 405, { error: 'Method not allowed' });
+    sendError(res, API_ERRORS.methodNotAllowed);
     return;
   }
 
   try {
     const { session } = await getSession(req);
     if (!session?.email) {
-      sendJson(res, 401, { error: 'No active Google session' });
+      sendError(res, API_ERRORS.noSession);
       return;
     }
 
     const { action = 'acquire', resource, lockId } = req.body ?? {};
     if (!resource || !lockId) {
-      sendJson(res, 400, { error: 'Missing lock resource or lock id' });
+      sendError(res, {
+        status: 400,
+        code: 'LOCK_REQUEST_INVALID',
+        message: 'คำขอจองสิทธิ์เขียน Google Sheet ไม่ครบถ้วน',
+      });
       return;
     }
 
@@ -44,6 +48,11 @@ export default async function handler(req, res) {
     const result = await redisCommand(['SET', key, lockId, 'NX', 'EX', LOCK_TTL_SECONDS]);
     sendJson(res, 200, { acquired: result === 'OK', retryAfterMs: 250 });
   } catch (error) {
-    sendJson(res, 500, { error: error.message });
+    sendError(res, {
+      status: 500,
+      code: 'SHEET_LOCK_FAILED',
+      message: 'จองสิทธิ์เขียน Google Sheet ไม่สำเร็จ กรุณาลองอีกครั้ง',
+      error,
+    });
   }
 }
