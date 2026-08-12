@@ -5,6 +5,31 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { marketplaceMetadata, orderDocumentId } from './normalize.js';
 
 const MAX_BATCH_WRITES = 400;
+// Firestore caps an `in` filter at 30 values.
+const TRACKING_QUERY_CHUNK = 30;
+// Orders one chunk of tracking numbers may match. A tracking number appears once per day it
+// was scanned, so ten rows per number is far above the real ratio and still bounds the read.
+const RECONCILE_MATCH_LIMIT = TRACKING_QUERY_CHUNK * 10;
+
+export function chunkTrackingNumbers(orders, chunkSize = TRACKING_QUERY_CHUNK) {
+  // One tracking number can arrive on several orders (split shipments, re-imports). Querying
+  // per order billed a read for each repeat; dedupe first, then ask in chunks.
+  const byTracking = new Map();
+  for (const order of orders ?? []) {
+    const metadata = marketplaceMetadata(order);
+    if (!metadata || !order.normalizedTrackingNo) continue;
+    if (!byTracking.has(order.normalizedTrackingNo)) {
+      byTracking.set(order.normalizedTrackingNo, metadata);
+    }
+  }
+
+  const trackingNumbers = [...byTracking.keys()];
+  const chunks = [];
+  for (let index = 0; index < trackingNumbers.length; index += chunkSize) {
+    chunks.push(trackingNumbers.slice(index, index + chunkSize));
+  }
+  return { byTracking, chunks };
+}
 
 async function reconcileScannedOrders({ db, orders }) {
   let batch = db.batch();
@@ -18,15 +43,23 @@ async function reconcileScannedOrders({ db, orders }) {
     batchSize = 0;
   }
 
-  for (const order of orders) {
-    const metadata = marketplaceMetadata(order);
-    if (!metadata || !order.normalizedTrackingNo) continue;
+  const { byTracking, chunks } = chunkTrackingNumbers(orders);
 
+  for (const chunk of chunks) {
     const matches = await db.collection('orders')
-      .where('normalizedCode', '==', order.normalizedTrackingNo)
+      .where('normalizedCode', 'in', chunk)
+      .limit(RECONCILE_MATCH_LIMIT)
       .get();
 
+    if (matches.size >= RECONCILE_MATCH_LIMIT) {
+      console.warn(`reconcileScannedOrders: hit the ${RECONCILE_MATCH_LIMIT}-document ceiling; results may be incomplete.`);
+    }
+
     for (const match of matches.docs) {
+      // The chunk asked for many tracking numbers at once, so each match must be paired
+      // back to the metadata of its own order rather than the loop's current one.
+      const metadata = byTracking.get(match.get('normalizedCode'));
+      if (!metadata) continue;
       batch.set(match.ref, metadata, { merge: true });
       batchSize += 1;
       reconciled += 1;

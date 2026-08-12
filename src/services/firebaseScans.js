@@ -44,6 +44,36 @@ const ALL_DAY_SEARCH_SCAN_LIMIT = 2000;
 // cap safe: the caller discards every order older than its lookback window anyway.
 const PENDING_BADGE_SCAN_LIMIT = 500;
 
+// Upper bound on one day's orders. A day is already a narrow window, but "narrow" is not
+// "bounded": a bad import or a runaway retry can leave far more documents on a date than a
+// warehouse ships, and the daily reads run on a timer. Paging to a declared ceiling keeps
+// the cost knowable, and hitting it is logged rather than silently truncated.
+const DAILY_ORDER_SCAN_LIMIT = 3000;
+
+// A tracking number identifies one parcel, so a marketplace lookup should find one document.
+// The cap is above one on purpose: split shipments and re-imports can legitimately leave a
+// couple, and reading a few is how we notice. Anything beyond that is a data problem.
+const MARKETPLACE_TRACKING_MATCH_LIMIT = 10;
+
+// Orders matching one 30-code `in` chunk during a marketplace import. Ten rows per code is
+// far above the real ratio (a code appears once per day it was scanned) and still bounds the
+// read if a code has been re-scanned for months.
+const MARKETPLACE_MATCH_SCAN_LIMIT = 300;
+
+// Custom couriers are added by hand from the UI; a few dozen is the realistic ceiling.
+const COURIER_SCAN_LIMIT = 200;
+
+/**
+ * Report a query that came back exactly at its ceiling. Silent truncation is the failure
+ * mode these caps introduce — a report that quietly drops rows looks like missing data.
+ */
+function warnIfCapped(label, count, cap) {
+  if (count >= cap) {
+    console.warn(`${label}: hit the ${cap}-document ceiling; results may be incomplete.`);
+  }
+  return count;
+}
+
 function canWriteFirestore() {
   return Boolean(isFirebaseConfigured && firestoreDb);
 }
@@ -223,8 +253,27 @@ async function getOrdersByDate(date) {
     return [];
   }
 
-  const snap = await getDocs(query(collection(firestoreDb, 'orders'), where('date', '==', date)));
-  return snap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+  const orders = await collectFirestorePages(async (cursor, size) => {
+    const constraints = [
+      collection(firestoreDb, 'orders'),
+      where('date', '==', date),
+      // Order by id: the equality filter plus __name__ needs no composite index, and a
+      // stable order is what makes startAfter paging correct.
+      orderBy(documentId()),
+      limit(size),
+    ];
+    if (cursor) {
+      constraints.push(startAfter(cursor));
+    }
+    const snap = await getDocs(query(...constraints));
+    return {
+      items: snap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() })),
+      nextCursor: snap.docs.at(-1) ?? null,
+    };
+  }, { maxItems: DAILY_ORDER_SCAN_LIMIT });
+
+  warnIfCapped(`orders for ${date}`, orders.length, DAILY_ORDER_SCAN_LIMIT);
+  return orders;
 }
 
 async function getOrdersByDates(dates = []) {
@@ -304,12 +353,26 @@ async function getPackerOrdersByScanDate(date) {
   const start = `${date}T00:00:00`;
   const end = `${nextCalendarDate(date)}T00:00:00`;
   try {
-    const snap = await getDocs(query(
-      collection(firestoreDb, 'orders'),
-      where('packerScan.scannedAt', '>=', start),
-      where('packerScan.scannedAt', '<', end),
-    ));
-    return snap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+    const orders = await collectFirestorePages(async (cursor, size) => {
+      const constraints = [
+        collection(firestoreDb, 'orders'),
+        where('packerScan.scannedAt', '>=', start),
+        where('packerScan.scannedAt', '<', end),
+        orderBy('packerScan.scannedAt'),
+        limit(size),
+      ];
+      if (cursor) {
+        constraints.push(startAfter(cursor));
+      }
+      const snap = await getDocs(query(...constraints));
+      return {
+        items: snap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() })),
+        nextCursor: snap.docs.at(-1) ?? null,
+      };
+    }, { maxItems: DAILY_ORDER_SCAN_LIMIT });
+
+    warnIfCapped(`packer scans for ${date}`, orders.length, DAILY_ORDER_SCAN_LIMIT);
+    return orders;
   } catch (error) {
     // Keep the Packer screen usable when the nested-field query is temporarily
     // unavailable (for example during an index/rules rollout). The daily
@@ -332,12 +395,26 @@ async function getAdminOrdersByScanDate(date) {
   const start = `${date}T00:00:00`;
   const end = `${nextCalendarDate(date)}T00:00:00`;
   try {
-    const snap = await getDocs(query(
-      collection(firestoreDb, 'orders'),
-      where('admin.scannedAt', '>=', start),
-      where('admin.scannedAt', '<', end),
-    ));
-    return snap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+    const orders = await collectFirestorePages(async (cursor, size) => {
+      const constraints = [
+        collection(firestoreDb, 'orders'),
+        where('admin.scannedAt', '>=', start),
+        where('admin.scannedAt', '<', end),
+        orderBy('admin.scannedAt'),
+        limit(size),
+      ];
+      if (cursor) {
+        constraints.push(startAfter(cursor));
+      }
+      const snap = await getDocs(query(...constraints));
+      return {
+        items: snap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() })),
+        nextCursor: snap.docs.at(-1) ?? null,
+      };
+    }, { maxItems: DAILY_ORDER_SCAN_LIMIT });
+
+    warnIfCapped(`admin scans for ${date}`, orders.length, DAILY_ORDER_SCAN_LIMIT);
+    return orders;
   } catch (error) {
     console.warn('Admin summary query failed; using daily-order fallback:', error);
     const orders = await getOrdersByDate(date);
@@ -438,7 +515,13 @@ export async function findMarketplaceOrderByTracking({ trackingNo }) {
   const normalizedSnap = await getDocs(query(
     ordersRef,
     where('normalizedTrackingNo', '==', normalizedTrackingNo),
+    limit(MARKETPLACE_TRACKING_MATCH_LIMIT),
   ));
+  if (normalizedSnap.size > 1) {
+    // Two marketplace orders claiming one tracking number means the import produced a
+    // duplicate; the sort below still picks the richest, but the data needs fixing.
+    console.warn(`Tracking ${normalizedTrackingNo} matches ${normalizedSnap.size} marketplace orders.`);
+  }
   const normalizedDoc = [...normalizedSnap.docs].sort((left, right) => {
     const score = (item) => {
       const data = item.data();
@@ -453,6 +536,7 @@ export async function findMarketplaceOrderByTracking({ trackingNo }) {
   const exactSnap = await getDocs(query(
     ordersRef,
     where('trackingNo', '==', String(trackingNo).trim()),
+    limit(MARKETPLACE_TRACKING_MATCH_LIMIT),
   ));
   const exactDoc = [...exactSnap.docs].sort((left, right) => {
     const score = (item) => {
@@ -604,8 +688,10 @@ export async function importMarketplaceOrders(groups, {
     const matches = await getDocs(query(
       collection(firestoreDb, 'orders'),
       where('normalizedCode', 'in', trackingCodes.slice(index, index + 30)),
+      limit(MARKETPLACE_MATCH_SCAN_LIMIT),
     ));
     readQueries += 1;
+    warnIfCapped('marketplace import scan match', matches.size, MARKETPLACE_MATCH_SCAN_LIMIT);
     for (const match of matches.docs) {
       matchedScans += 1;
       const current = match.data();
@@ -1120,8 +1206,12 @@ export function subscribeCouriers({ defaultCouriers = [], onChange, onError }) {
     }
 
     try {
-      const snapshot = await getDocs(collection(firestoreDb, 'couriers'));
+      const snapshot = await getDocs(query(
+        collection(firestoreDb, 'couriers'),
+        limit(COURIER_SCAN_LIMIT),
+      ));
       if (cancelled) return;
+      warnIfCapped('courier list', snapshot.size, COURIER_SCAN_LIMIT);
       const customCouriers = snapshot.docs.map((item) => item.data().name);
       saveCachedCouriers(customCouriers);
       onChange?.(mergeCouriers(defaultCouriers, customCouriers));
