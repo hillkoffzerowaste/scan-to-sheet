@@ -3,6 +3,120 @@ import { test, expect } from '@playwright/test';
 
 const BASE_URL = 'http://localhost:5173';
 
+/**
+ * Contrast maths, shared by every readability test in this file.
+ *
+ * Playwright serialises each `evaluate` callback and runs it in the browser, so a helper
+ * declared here in Node scope is NOT visible inside those callbacks. The maths therefore
+ * lives in this source string and is handed to each callback as an argument.
+ *
+ * Why it exists at all: the previous per-test copies did `split(',').slice(0, 3)`, which
+ * throws the alpha channel away and treats a translucent background as if it were opaque.
+ * `.drive-mode-label` is painted with `--primary-soft` (rgba(5,133,129,0.1) in light) over
+ * the surface behind it, so that shortcut reported 1.518:1 for a label that renders at
+ * 5.992:1 in light and 7.976:1 in dark — a failure that was entirely the test's own.
+ */
+const CONTRAST_HELPERS = `
+  function parseColor(value) {
+    const text = String(value == null ? '' : value).trim().toLowerCase();
+    if (text === 'transparent') return { rgb: [0, 0, 0], alpha: 0 };
+
+    const functional = text.match(/^rgba?\\(([^)]+)\\)$/);
+    if (functional) {
+      const parts = functional[1]
+        .split(/[\\s,\\/]+/)
+        .filter(Boolean)
+        .map(function (part) { return Number.parseFloat(part); });
+      if (parts.length < 3) return null;
+      if (parts.slice(0, 3).some(function (part) { return !Number.isFinite(part); })) return null;
+      const alpha = parts.length > 3 && Number.isFinite(parts[3]) ? parts[3] : 1;
+      return { rgb: parts.slice(0, 3), alpha: alpha };
+    }
+
+    if (text.charAt(0) === '#') {
+      const hex = text.slice(1);
+      const expanded = (hex.length === 3 || hex.length === 4)
+        ? hex.split('').map(function (part) { return part + part; }).join('')
+        : hex;
+      if (expanded.length !== 6 && expanded.length !== 8) return null;
+      const channels = [0, 2, 4].map(function (index) {
+        return Number.parseInt(expanded.slice(index, index + 2), 16);
+      });
+      if (channels.some(function (part) { return Number.isNaN(part); })) return null;
+      const alpha = expanded.length === 8 ? Number.parseInt(expanded.slice(6, 8), 16) / 255 : 1;
+      return { rgb: channels, alpha: alpha };
+    }
+
+    return null;
+  }
+
+  function over(top, bottom) {
+    return top.rgb.map(function (part, index) {
+      return (part * top.alpha) + (bottom[index] * (1 - top.alpha));
+    });
+  }
+
+  /**
+   * Flatten every translucent background between the element and the first opaque layer
+   * above it. Ends at the browser canvas (white) when nothing opaque is found, which is
+   * what the browser itself paints — not at a value picked to make the assertion pass.
+   */
+  function backgroundBehind(element) {
+    const layers = [];
+    let node = element;
+    while (node) {
+      const parsed = parseColor(getComputedStyle(node).backgroundColor);
+      if (parsed === null) return null;
+      if (parsed.alpha > 0) layers.push(parsed);
+      if (parsed.alpha === 1) break;
+      node = node.parentElement;
+    }
+    let base = [255, 255, 255];
+    for (let index = layers.length - 1; index >= 0; index -= 1) {
+      base = over(layers[index], base);
+    }
+    return base;
+  }
+
+  function luminance(rgb) {
+    const linear = rgb.map(function (part) {
+      const normalized = part / 255;
+      return normalized <= 0.03928 ? normalized / 12.92 : Math.pow((normalized + 0.055) / 1.055, 2.4);
+    });
+    return (0.2126 * linear[0]) + (0.7152 * linear[1]) + (0.0722 * linear[2]);
+  }
+
+  /**
+   * Returns null whenever a colour cannot be resolved. Never returns a high number on
+   * failure: a fallback like 21 would silently swallow a real contrast regression.
+   */
+  function contrastRatio(element, backgroundElement) {
+    if (!element) return null;
+    const background = backgroundBehind(backgroundElement || element);
+    if (background === null) return null;
+    const foreground = parseColor(getComputedStyle(element).color);
+    if (foreground === null) return null;
+    const text = foreground.alpha === 1 ? foreground.rgb : over(foreground, background);
+    const textLuminance = luminance(text);
+    const backgroundLuminance = luminance(background);
+    return (Math.max(textLuminance, backgroundLuminance) + 0.05)
+      / (Math.min(textLuminance, backgroundLuminance) + 0.05);
+  }
+
+  /**
+   * ratioFor(root, selector) measures the element against whatever is painted behind it.
+   * Passing backgroundSelector measures the text against that other element's background
+   * instead, for text that sits on an ancestor's fill.
+   */
+  function ratioFor(root, selector, backgroundSelector) {
+    const element = selector ? root.querySelector(selector) : root;
+    const backgroundElement = backgroundSelector ? root.querySelector(backgroundSelector) : null;
+    return contrastRatio(element, backgroundElement);
+  }
+
+  return { ratioFor: ratioFor };
+`;
+
 test.describe('Scan to Sheet — Packer Tab', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto(BASE_URL);
@@ -159,43 +273,14 @@ test.describe('Scan to Sheet — Theme & Layout', () => {
   test('keeps active and disabled controls readable in dark theme', async ({ page }) => {
     await page.locator('.theme-toggle button:has-text("Dark")').click();
 
-    const contrast = await page.locator('.enterprise-shell').evaluate((root) => {
-      const channel = (value) => {
-        const match = value.match(/rgba?\(([^)]+)\)/);
-        if (!match) return null;
-        return match[1].split(',').slice(0, 3).map((part) => Number.parseFloat(part.trim()));
-      };
-      const toRgb = (value) => {
-        const normalized = value.trim().toLowerCase();
-        if (normalized.startsWith('rgb')) return channel(normalized);
-        if (!normalized.startsWith('#')) return null;
-        const hex = normalized.slice(1);
-        const expanded = hex.length === 3 ? hex.split('').map((part) => `${part}${part}`).join('') : hex;
-        if (expanded.length !== 6) return null;
-        return [0, 2, 4].map((index) => Number.parseInt(expanded.slice(index, index + 2), 16));
-      };
-      const luminance = (value) => {
-        const rgb = toRgb(value);
-        if (!rgb) return null;
-        const linear = rgb.map((part) => {
-          const normalized = part / 255;
-          return normalized <= 0.03928 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
-        });
-        return (0.2126 * linear[0]) + (0.7152 * linear[1]) + (0.0722 * linear[2]);
-      };
-      const ratio = (element) => {
-        const style = getComputedStyle(element);
-        const foreground = luminance(style.color);
-        const background = luminance(style.backgroundColor);
-        if (foreground === null || background === null) return null;
-        return (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05);
-      };
+    const contrast = await page.locator('.enterprise-shell').evaluate((root, helpers) => {
+      const { ratioFor } = new Function(helpers)();
       return {
-        activeTab: ratio(root.querySelector('.tab-button.active')),
-        activeCourier: ratio(root.querySelector('.courier-button.active')),
-        disabledControl: ratio(root.querySelector('button:disabled')),
+        activeTab: ratioFor(root, '.tab-button.active'),
+        activeCourier: ratioFor(root, '.courier-button.active'),
+        disabledControl: ratioFor(root, 'button:disabled'),
       };
-    });
+    }, CONTRAST_HELPERS);
 
     expect(contrast.activeTab).toBeGreaterThanOrEqual(4.5);
     expect(contrast.activeCourier).toBeGreaterThanOrEqual(4.5);
@@ -203,47 +288,16 @@ test.describe('Scan to Sheet — Theme & Layout', () => {
   });
 
   test('keeps semantic labels readable in both themes', async ({ page }) => {
-    const inspect = async () => page.locator('.enterprise-shell').evaluate((root) => {
-      const parse = (value) => {
-        const match = value.match(/rgba?\(([^)]+)\)/);
-        if (!match) return null;
-        return match[1].split(',').slice(0, 3).map((part) => Number.parseFloat(part.trim()));
-      };
-      const luminance = (value) => {
-        const rgb = parse(value);
-        if (!rgb) return null;
-        const linear = rgb.map((part) => {
-          const normalized = part / 255;
-          return normalized <= 0.03928 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
-        });
-        return (0.2126 * linear[0]) + (0.7152 * linear[1]) + (0.0722 * linear[2]);
-      };
-      const ratio = (selector) => {
-        const element = root.querySelector(selector);
-        if (!element) return null;
-        const style = getComputedStyle(element);
-        const foreground = luminance(style.color);
-        const background = luminance(style.backgroundColor);
-        if (foreground === null || background === null) return null;
-        return (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05);
-      };
-      const ratioAgainst = (selector, backgroundSelector) => {
-        const element = root.querySelector(selector);
-        const backgroundElement = root.querySelector(backgroundSelector);
-        if (!element || !backgroundElement) return null;
-        const foreground = luminance(getComputedStyle(element).color);
-        const background = luminance(getComputedStyle(backgroundElement).backgroundColor);
-        if (foreground === null || background === null) return null;
-        return (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05);
-      };
+    const inspect = async () => page.locator('.enterprise-shell').evaluate((root, helpers) => {
+      const { ratioFor } = new Function(helpers)();
       return {
-        activeTab: ratio('.tab-button.active'),
-        activeCourier: ratio('.courier-button.active'),
-        driveLabel: ratio('.drive-mode-label'),
-        statusBanner: ratio('.status-banner'),
-        topbarTitle: ratioAgainst('.topbar h1', '.topbar'),
+        activeTab: ratioFor(root, '.tab-button.active'),
+        activeCourier: ratioFor(root, '.courier-button.active'),
+        driveLabel: ratioFor(root, '.drive-mode-label'),
+        statusBanner: ratioFor(root, '.status-banner'),
+        topbarTitle: ratioFor(root, '.topbar h1', '.topbar'),
       };
-    });
+    }, CONTRAST_HELPERS);
 
     await page.locator('.theme-toggle button:has-text("Light")').click();
     await page.getByTestId('drive-tab').click();
@@ -265,35 +319,13 @@ test.describe('Scan to Sheet — Theme & Layout', () => {
     await page.locator('.theme-toggle button:has-text("Light")').click();
     await page.locator('.marketplace-upload-panel summary').click();
 
-    const controls = await page.locator('.marketplace-upload-panel').evaluate((panel) => {
-      const parse = (value) => {
-        const match = value.match(/rgba?\(([^)]+)\)/);
-        if (!match) return null;
-        return match[1].split(',').slice(0, 3).map((part) => Number.parseFloat(part.trim()));
-      };
-      const luminance = (value) => {
-        const rgb = parse(value);
-        if (!rgb) return null;
-        const linear = rgb.map((part) => {
-          const normalized = part / 255;
-          return normalized <= 0.03928 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
-        });
-        return (0.2126 * linear[0]) + (0.7152 * linear[1]) + (0.0722 * linear[2]);
-      };
-      const ratio = (selector) => {
-        const element = panel.querySelector(selector);
-        if (!element) return null;
-        const style = getComputedStyle(element);
-        const foreground = luminance(style.color);
-        const background = luminance(style.backgroundColor);
-        if (foreground === null || background === null) return null;
-        return (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05);
-      };
+    const controls = await page.locator('.marketplace-upload-panel').evaluate((panel, helpers) => {
+      const { ratioFor } = new Function(helpers)();
       return {
-        platformSelect: ratio('.marketplace-filter select'),
-        fileButton: ratio('.marketplace-upload-controls button'),
+        platformSelect: ratioFor(panel, '.marketplace-filter select'),
+        fileButton: ratioFor(panel, '.marketplace-upload-controls button'),
       };
-    });
+    }, CONTRAST_HELPERS);
 
     expect(controls.platformSelect).toBeGreaterThanOrEqual(4.5);
     expect(controls.fileButton).toBeGreaterThanOrEqual(4.5);
