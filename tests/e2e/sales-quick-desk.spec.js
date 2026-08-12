@@ -68,4 +68,23 @@ test.describe('Sales Quick Desk shell', () => {
     await expect(page.getByText('จัดรอบ CM-1 แล้ว')).toBeVisible(); expect(roundPayload.roundCode).toBe('wednesday');
     await page.getByText('เชียงใหม่', { exact: true }).click(); await expect(page.getByRole('dialog')).toBeVisible(); await page.keyboard.press('Escape'); await expect(page.getByRole('dialog')).toHaveCount(0);
   });
+
+  test('operates store and pack through the original workflow action names', async ({ page }) => {
+    const actions = []; let current = { id: 'OPS-1', customerName: 'งานครบวงจร', deliveryMethod: 'company_driver', workflowType: 'store_route', storeStatus: 'pending', packStatus: 'blocked', queueStatus: 'preparing' };
+    await page.route('**/api/hillkoff?op=orders&*', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: route.request().url().includes('id=') ? current : [current] }) }));
+    await page.route('**/api/hillkoff?op=workflow', async (route) => { const body = route.request().postDataJSON(); actions.push(body); if (body.action === 'store_update') current = { ...current, storeStatus: body.storeStatus, packStatus: 'pending' }; if (body.action === 'pack_update') current = { ...current, packStatus: body.packStatus, queueStatus: 'ready' }; await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: { ok: true } }) }); });
+    await page.goto('/'); await page.getByTestId('sales-tab').click(); await page.getByRole('button', { name: 'ออเดอร์', exact: true }).click(); await page.getByLabel('คำค้นหา').fill('OPS-1'); await page.getByRole('button', { name: 'ค้นหา' }).click(); await page.getByText('งานครบวงจร').click();
+    const storeSection = page.locator('.sales-operations section').filter({ hasText: 'สโตร์' }); await storeSection.getByLabel('สถานะ').selectOption('checked'); await storeSection.getByLabel('ผู้ตรวจ').fill('Store Checker'); await storeSection.getByRole('button', { name: /store_update/ }).click();
+    const packSection = page.locator('.sales-operations section').filter({ hasText: 'ห้องแพ็ค' }); await packSection.getByLabel('สถานะ').selectOption('checked'); await packSection.getByLabel('ผู้ตรวจ').fill('Pack Checker'); await packSection.getByRole('button', { name: /pack_update/ }).click();
+    expect(actions.map((item) => item.action)).toEqual(['store_update', 'pack_update']); expect(actions[0].storeCheckerName).toBe('Store Checker'); expect(actions[1].packCheckerName).toBe('Pack Checker');
+  });
+
+  test('edits an existing customer and loads authoritative order history', async ({ page }) => {
+    let saved;
+    await page.route('**/api/hillkoff?op=customers&*', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [{ id: 'C-9', name: 'ลูกค้าเดิม', phone: '0811111111' }] }) }));
+    await page.route('**/api/hillkoff?op=customer-history&*', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: { customer: { id: 'C-9' }, orders: [{ id: 'OLD-1', status: 'ส่งสำเร็จ' }] } }) }));
+    await page.route('**/api/hillkoff?op=customers', async (route) => { saved = route.request().postDataJSON(); await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: { id: 'C-9' } }) }); });
+    await page.goto('/'); await page.getByTestId('sales-tab').click(); await page.getByRole('button', { name: 'ลูกค้า', exact: true }).click(); await page.getByLabel('คำค้นหา').fill('ลูกค้าเดิม'); await page.getByRole('button', { name: 'ค้นหา' }).click(); await page.getByText('ลูกค้าเดิม').click();
+    await expect(page.getByText('OLD-1')).toBeVisible(); await page.getByLabel('โทรศัพท์').fill('0899999999'); await page.getByRole('button', { name: 'บันทึกข้อมูลลูกค้า' }).click(); expect(saved.customer.id).toBe('C-9'); expect(saved.customer.phone).toBe('0899999999');
+  });
 });

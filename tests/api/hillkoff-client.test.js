@@ -19,3 +19,9 @@ test('allowlists customer and order payloads', () => {
   assert.deepEqual(customerPayload({ id: ' C-1 ', name: ' A ', secret: 'x' }), { id: 'C-1', name: 'A', contact: '', phone: '', zone: '', address: '', mapUrl: '', note: '' });
   assert.deepEqual(allowedOrder({ id: 'O-1', customerId: 'C-1', secret: 'x' }), { id: 'O-1', customerId: 'C-1' });
 });
+
+test('forwards an explicitly selected operational role', async () => {
+  let headers;
+  await hillkoffRequest({ path: '/api/v1/orders/workflow', method: 'PATCH', role: 'store', body: { orderId: 'O-1', action: 'store_update' }, apiKey: 'secret', fetchImpl: async (_url, init) => { headers = init.headers; return { ok: true, status: 200, json: async () => ({ ok: true }) }; } });
+  assert.equal(headers['x-api-role'], 'store');
+});
