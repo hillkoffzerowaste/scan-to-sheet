@@ -15,6 +15,7 @@ import {
   PackageCheck,
   ClipboardCopy,
   Play,
+  Printer,
   RefreshCw,
   ScanLine,
   Search,
@@ -2927,6 +2928,15 @@ function App() {
           <BriefcaseBusiness size={18} />
           <span>Sales Quick Desk</span>
         </button>
+        <a
+          className="tab-button"
+          href="https://barcode-checker-ashy.vercel.app/"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <Printer size={18} />
+          <span>พิมพ์ใบเช็ค ใบปะหน้า</span>
+        </a>
       </nav>
 
       {['packer', 'drive'].includes(activeTab) && (

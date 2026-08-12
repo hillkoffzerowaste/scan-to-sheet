@@ -117,6 +117,28 @@ const CONTRAST_HELPERS = `
   return { ratioFor: ratioFor };
 `;
 
+test.describe('Scan to Sheet — External tools', () => {
+  test('opens the label checker from the sidebar in a new tab', async ({ page }) => {
+    for (const width of [375, 1000, 1400]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(BASE_URL);
+
+      const checkerLink = page.getByRole('link', { name: 'พิมพ์ใบเช็ค ใบปะหน้า' });
+      await expect(checkerLink).toBeVisible();
+      await expect(checkerLink).toHaveAttribute('href', 'https://barcode-checker-ashy.vercel.app/');
+      await expect(checkerLink).toHaveAttribute('target', '_blank');
+      await expect(checkerLink).toHaveAttribute('rel', /noopener/);
+      await expect(checkerLink).toHaveAttribute('rel', /noreferrer/);
+
+      const layout = await checkerLink.evaluate((link) => ({
+        pageOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        textClipped: link.scrollWidth > link.clientWidth || link.scrollHeight > link.clientHeight,
+      }));
+      expect(layout, `sidebar link layout at ${width}px`).toEqual({ pageOverflow: 0, textClipped: false });
+    }
+  });
+});
+
 test.describe('Scan to Sheet — Packer Tab', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto(BASE_URL);
