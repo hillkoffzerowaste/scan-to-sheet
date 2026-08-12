@@ -3,6 +3,13 @@ var LABEL_SYNC = {
   defaultLookbackDays: 7,
   defaultFileLookbackDays: 30,
   statePropertyKey: 'LABEL_SYNC_STATE_V1',
+  // A label often reaches Drive before the order row exists, and OCR sometimes returns
+  // nothing on the first pass. Both used to be recorded as "processed", so the file was
+  // never looked at again unless someone edited it. Retry those with a widening backoff
+  // and give up only after maxRetryAttempts, so OCR is not re-run forever either.
+  maxRetryAttempts: 6,
+  firstRetryMinutes: 15,
+  maxRetryMinutes: 24 * 60,
 };
 
 function setupLabelSync() {
@@ -20,7 +27,14 @@ function runLabelSync() {
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(30000)) return { skipped: true, reason: 'lock_unavailable' };
 
-  var summary = { filesScanned: 0, labelsFound: 0, rowsUpdated: 0, errors: 0 };
+  var summary = {
+    filesScanned: 0,
+    filesSkipped: 0,
+    filesRetryScheduled: 0,
+    labelsFound: 0,
+    rowsUpdated: 0,
+    errors: 0,
+  };
   try {
     var config = getLabelSyncConfig_();
     var spreadsheet = SpreadsheetApp.openById(config.spreadsheetId);
@@ -37,10 +51,16 @@ function runLabelSync() {
     });
     var logRows = [];
 
+    var nowMs = Date.now();
+
     files.forEach(function (file) {
       var fileId = file.getId();
       var modifiedAt = file.getLastUpdated().toISOString();
-      if (state.files[fileId] === modifiedAt) return;
+      var entry = fileStateEntry_(state.files[fileId]);
+      if (!shouldProcessFile_(entry, modifiedAt, nowMs)) {
+        summary.filesSkipped += 1;
+        return;
+      }
       summary.filesScanned += 1;
 
       try {
@@ -49,20 +69,37 @@ function runLabelSync() {
         summary.labelsFound += labels.length;
         if (!labels.length) {
           logRows.push(logRow_(file, '', '', 'ocr_empty', 0, 'no_complete_label'));
-          state.files[fileId] = modifiedAt;
+          state.files[fileId] = nextFileState_(entry, { modifiedAt: modifiedAt, outcome: 'retry', nowMs: nowMs });
+          summary.filesRetryScheduled += 1;
           return;
         }
 
         var result = LabelMatching.matchLabels(sheetRows, labels);
         summary.rowsUpdated += applyLabelUpdates_(spreadsheet, result.updates);
-        labels.forEach(function (label, index) {
-          var outcome = result.results[index] || { status: 'error', matchedRows: 0, errorCode: 'missing_match_result' };
-          logRows.push(logRow_(file, label.platform, label.orderId, outcome.status, outcome.matchedRows, outcome.errorCode));
+        // Pair outcomes back to labels by key. `matchLabels` dedupes and drops incomplete
+        // labels, so its results array does not line up with `labels` positionally.
+        var outcomes = LabelMatching.resultsByLabel(labels, result.results);
+        outcomes.forEach(function (outcome) {
+          logRows.push(logRow_(
+            file,
+            outcome.label.platform,
+            outcome.label.orderId,
+            outcome.status,
+            outcome.matchedRows,
+            outcome.errorCode,
+          ));
         });
-        state.files[fileId] = modifiedAt;
+
+        var fileOutcome = summarizeFileOutcome_(outcomes);
+        state.files[fileId] = nextFileState_(entry, { modifiedAt: modifiedAt, outcome: fileOutcome, nowMs: nowMs });
+        if (fileOutcome === 'retry') summary.filesRetryScheduled += 1;
       } catch (error) {
         summary.errors += 1;
         logRows.push(logRow_(file, '', '', 'error', 0, String(error && error.message || error).slice(0, 200)));
+        // A thrown error (OCR quota, Drive hiccup) is transient by nature — schedule it
+        // rather than leaving the file untracked and re-OCR'd on every single run.
+        state.files[fileId] = nextFileState_(entry, { modifiedAt: modifiedAt, outcome: 'retry', nowMs: nowMs });
+        summary.filesRetryScheduled += 1;
       }
     });
 
@@ -199,6 +236,69 @@ function appendLogRows_(sheet, rows) {
   sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, 8).setValues(rows);
 }
 
+/**
+ * Normalize one stored file entry. V1 stored a bare modifiedAt string, so anything left
+ * over from before the retry support is read as an already-finished file.
+ */
+function fileStateEntry_(value) {
+  if (!value) return null;
+  if (typeof value === 'string') {
+    return { modifiedAt: value, status: 'done', attempts: 0, nextRetryAt: 0 };
+  }
+  return {
+    modifiedAt: String(value.modifiedAt || ''),
+    status: value.status || 'done',
+    attempts: Number(value.attempts) || 0,
+    nextRetryAt: Number(value.nextRetryAt) || 0,
+  };
+}
+
+/**
+ * A file is worth (re)reading when it is new, when Drive says it changed since the last
+ * look, or when a scheduled retry has come due and the attempt budget is not spent.
+ */
+function shouldProcessFile_(entry, modifiedAt, nowMs) {
+  if (!entry) return true;
+  if (entry.modifiedAt !== modifiedAt) return true;
+  if (entry.status === 'done') return false;
+  if (entry.attempts >= LABEL_SYNC.maxRetryAttempts) return false;
+  return nowMs >= entry.nextRetryAt;
+}
+
+/**
+ * A file is finished only when every label it produced landed on a row. One unmatched or
+ * ambiguous label is enough to keep the whole file in the retry queue, because the order
+ * row it needs may simply not have been scanned yet.
+ */
+function summarizeFileOutcome_(outcomes) {
+  if (!outcomes || !outcomes.length) return 'retry';
+  for (var index = 0; index < outcomes.length; index += 1) {
+    if (outcomes[index].status !== 'updated') return 'retry';
+  }
+  return 'done';
+}
+
+function nextFileState_(entry, options) {
+  var previous = entry || { modifiedAt: '', status: 'done', attempts: 0, nextRetryAt: 0 };
+  // A modified file is a fresh case: give it the full attempt budget again.
+  var sameFile = previous.modifiedAt === options.modifiedAt;
+  if (options.outcome === 'done') {
+    return { modifiedAt: options.modifiedAt, status: 'done', attempts: 0, nextRetryAt: 0 };
+  }
+
+  var attempts = (sameFile ? previous.attempts : 0) + 1;
+  var backoffMinutes = Math.min(
+    LABEL_SYNC.firstRetryMinutes * Math.pow(2, attempts - 1),
+    LABEL_SYNC.maxRetryMinutes,
+  );
+  return {
+    modifiedAt: options.modifiedAt,
+    status: attempts >= LABEL_SYNC.maxRetryAttempts ? 'gave_up' : 'retry',
+    attempts: attempts,
+    nextRetryAt: options.nowMs + (backoffMinutes * 60 * 1000),
+  };
+}
+
 function readProcessedState_() {
   var raw = PropertiesService.getScriptProperties().getProperty(LABEL_SYNC.statePropertyKey);
   try {
@@ -211,7 +311,9 @@ function readProcessedState_() {
 
 function writeProcessedState_(state) {
   var entries = Object.entries(state.files || {}).sort(function (left, right) {
-    return String(right[1]).localeCompare(String(left[1]));
+    var leftEntry = fileStateEntry_(left[1]);
+    var rightEntry = fileStateEntry_(right[1]);
+    return String(rightEntry.modifiedAt).localeCompare(String(leftEntry.modifiedAt));
   }).slice(0, 500);
   var files = {};
   entries.forEach(function (entry) { files[entry[0]] = entry[1]; });

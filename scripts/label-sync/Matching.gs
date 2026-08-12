@@ -85,10 +85,23 @@ var LabelMatching = (function () {
     var updates = [];
     var results = [];
 
+    // Every result carries its own labelKey. `uniqueLabels` collapses duplicates and drops
+    // labels with neither platform nor order id, so results is shorter than the caller's
+    // label array — pairing them back up by array index silently attributes one label's
+    // outcome to a different label, and the tail logs 'missing_match_result'.
     normalized.labels.forEach(function (label) {
       var labelKey = key(label.platform, label.orderId);
+      function record(status, matchedRows, errorCode) {
+        results.push({
+          labelKey: labelKey,
+          status: status,
+          matchedRows: matchedRows,
+          errorCode: errorCode,
+        });
+      }
+
       if (normalized.conflicts[labelKey]) {
-        results.push({ status: 'ambiguous', matchedRows: 0, errorCode: 'conflicting_label_data' });
+        record('ambiguous', 0, 'conflicting_label_data');
         return;
       }
 
@@ -98,7 +111,7 @@ var LabelMatching = (function () {
         candidates.forEach(function (candidate) {
           updates.push({ sheetName: candidate.sheetName, rowNumber: candidate.rowNumber, value: label.combined });
         });
-        results.push({ status: 'updated', matchedRows: candidates.length, errorCode: '' });
+        record('updated', candidates.length, '');
         return;
       }
 
@@ -108,20 +121,44 @@ var LabelMatching = (function () {
         orderResult.candidates.forEach(function (candidate) {
           updates.push({ sheetName: candidate.sheetName, rowNumber: candidate.rowNumber, value: label.combined });
         });
-        results.push({ status: 'updated', matchedRows: orderResult.candidates.length, errorCode: '' });
+        record('updated', orderResult.candidates.length, '');
         return;
       }
-      if (orderResult.status === 'ambiguous' || orderResult.status === 'unmatched') {
-        results.push({ status: orderResult.status, matchedRows: 0, errorCode: orderResult.errorCode });
-        return;
-      }
+      // Anything that is not 'ok' still gets a result, so a label can never fall out of the
+      // set without an explanation attached to its key.
+      record(
+        orderResult.status === 'ambiguous' ? 'ambiguous' : 'unmatched',
+        0,
+        orderResult.errorCode || 'order_not_found',
+      );
     });
     return { updates: updates, results: results };
+  }
+
+  /**
+   * Pair a caller's original label list back to the outcomes above. Labels that
+   * `uniqueLabels` merged share one outcome; labels it dropped report why.
+   */
+  function resultsByLabel(labels, results) {
+    var byKey = {};
+    (results || []).forEach(function (result) { byKey[result.labelKey] = result; });
+    return (labels || []).map(function (label) {
+      var labelKey = key(label.platform, label.orderId);
+      if (!labelKey || labelKey === '|') {
+        return { label: label, status: 'skipped', matchedRows: 0, errorCode: 'incomplete_label' };
+      }
+      var result = byKey[labelKey];
+      if (!result) {
+        return { label: label, status: 'error', matchedRows: 0, errorCode: 'missing_match_result' };
+      }
+      return { label: label, status: result.status, matchedRows: result.matchedRows, errorCode: result.errorCode };
+    });
   }
 
   return {
     buildOrderIndex: buildOrderIndex,
     matchLabels: matchLabels,
+    resultsByLabel: resultsByLabel,
     normalizeOrderId: normalizeOrderId,
     normalizePlatform: normalizePlatform,
   };
