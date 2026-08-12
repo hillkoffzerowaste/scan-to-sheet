@@ -55,14 +55,23 @@ test.describe('Scan to Sheet — Packer Tab', () => {
   });
 
   test('scan method segmented control works', async ({ page }) => {
-    // Camera mode is default
-    const cameraBtn = page.locator('.scan-tool-panel button:has-text("กล้องมือถือ")');
-    await expect(cameraBtn).toHaveClass(/active/);
-
-    // Switch to manual
+    // Barcode gun mode is the default (DEFAULT_SCAN_METHOD === 'manual'), because the
+    // packers work with a gun and the camera is the exception. Assert both buttons, not
+    // just the active one: a control that marks *every* option active would otherwise pass.
     const manualBtn = page.locator('.scan-tool-panel button:has-text("เครื่องยิง/พิมพ์")');
+    const cameraBtn = page.locator('.scan-tool-panel button:has-text("กล้องมือถือ")');
+    await expect(manualBtn).toHaveClass(/active/);
+    await expect(cameraBtn).not.toHaveClass(/active/);
+
+    // Switching to camera must move the active state, not add a second active button.
+    await cameraBtn.click();
+    await expect(cameraBtn).toHaveClass(/active/);
+    await expect(manualBtn).not.toHaveClass(/active/);
+
+    // And switching back must work too, so the test still covers the control both ways.
     await manualBtn.click();
     await expect(manualBtn).toHaveClass(/active/);
+    await expect(cameraBtn).not.toHaveClass(/active/);
   });
 
   test('report panel renders', async ({ page }) => {
