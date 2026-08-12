@@ -1,8 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { hillkoffRequest } from '../../api/hillkoff/_client.js';
-import { customerPayload } from '../../api/hillkoff/customers.js';
-import { allowedOrder } from '../../api/hillkoff/orders.js';
+import { allowedOrder, customerPayload, hillkoffRequest } from '../../lib/hillkoffGateway.js';
 
 test('gateway rejects paths outside api v1', async () => {
   await assert.rejects(() => hillkoffRequest({ path: '/api/orders', apiKey: 'secret', fetchImpl: async () => null }), (error) => error.code === 'HILLKOFF_PATH_REJECTED');

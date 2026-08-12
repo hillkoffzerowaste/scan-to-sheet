@@ -6,13 +6,13 @@ async function request(path, options = {}) {
 }
 const query = (values) => new URLSearchParams(Object.entries(values).filter(([, value]) => value !== undefined && value !== '')).toString();
 export const salesApi = {
-  customers: (q) => request(`/api/hillkoff/customers?${query({ q })}`),
-  saveCustomer: (customer) => request('/api/hillkoff/customers', { method: 'POST', body: JSON.stringify({ customer }) }),
-  customerHistory: (customerId) => request(`/api/hillkoff/customer-history?${query({ customerId })}`),
-  orders: (q, scope) => request(`/api/hillkoff/orders?${query({ q, scope })}`),
-  order: (id) => request(`/api/hillkoff/orders?${query({ id })}`),
-  createOrder: (order) => request('/api/hillkoff/orders', { method: 'POST', body: JSON.stringify({ order }) }),
-  dashboard: (selectedDate) => request('/api/hillkoff/dispatch-dashboard', { method: 'POST', body: JSON.stringify({ selectedDate }) }),
-  queue: (orderId) => request('/api/hillkoff/workflow', { method: 'PATCH', body: JSON.stringify({ orderId, action: 'queue' }) }),
-  assignRound: (orderId, roundCode) => request('/api/hillkoff/chiangmai-rounds', { method: 'PATCH', body: JSON.stringify({ orderId, roundCode }) }),
+  customers: (q) => request(`/api/hillkoff?${query({ op: 'customers', q })}`),
+  saveCustomer: (customer) => request('/api/hillkoff?op=customers', { method: 'POST', body: JSON.stringify({ customer }) }),
+  customerHistory: (customerId) => request(`/api/hillkoff?${query({ op: 'customer-history', customerId })}`),
+  orders: (q, scope) => request(`/api/hillkoff?${query({ op: 'orders', q, scope })}`),
+  order: (id) => request(`/api/hillkoff?${query({ op: 'orders', id })}`),
+  createOrder: (order) => request('/api/hillkoff?op=orders', { method: 'POST', body: JSON.stringify({ order }) }),
+  dashboard: (selectedDate) => request('/api/hillkoff?op=dashboard', { method: 'POST', body: JSON.stringify({ selectedDate }) }),
+  queue: (orderId) => request('/api/hillkoff?op=queue', { method: 'PATCH', body: JSON.stringify({ orderId, action: 'queue' }) }),
+  assignRound: (orderId, roundCode) => request('/api/hillkoff?op=chiangmai-round', { method: 'PATCH', body: JSON.stringify({ orderId, roundCode }) }),
 };

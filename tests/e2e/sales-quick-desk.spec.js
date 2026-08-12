@@ -8,7 +8,7 @@ test.describe('Sales Quick Desk shell', () => {
       test(`${width}px ${theme} renders without horizontal overflow`, async ({ page }) => {
         const consoleErrors = [];
         page.on('console', (message) => { if (message.type() === 'error' && !message.text().includes('401')) consoleErrors.push(message.text()); });
-        await page.route('**/api/hillkoff/dispatch-dashboard', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: { orders: [] } }) }));
+        await page.route('**/api/hillkoff?op=dashboard', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: { orders: [] } }) }));
         await page.setViewportSize({ width, height: 900 });
         await page.goto('/');
         await page.getByTestId('sales-tab').click();
@@ -23,7 +23,7 @@ test.describe('Sales Quick Desk shell', () => {
   }
 
   test('module navigation updates the URL and customer search stays independent', async ({ page }) => {
-    await page.route('**/api/hillkoff/customers?*', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: { customers: [{ id: 'C-1', name: 'ลูกค้าทดสอบ', phone: '0800000000' }] } }) }));
+    await page.route('**/api/hillkoff?op=customers&*', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: { customers: [{ id: 'C-1', name: 'ลูกค้าทดสอบ', phone: '0800000000' }] } }) }));
     await page.goto('/'); await page.getByTestId('sales-tab').click();
     await page.getByRole('button', { name: 'ลูกค้า', exact: true }).click();
     await expect(page).toHaveURL(/sales=customers/);
