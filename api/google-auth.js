@@ -8,6 +8,10 @@ import {
   setSessionCookie,
 } from './_auth.js';
 
+export function canPersistGoogleSession(tokenData) {
+  return Boolean(tokenData?.refresh_token);
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     sendJson(res, 405, { error: 'Method not allowed' });
@@ -40,6 +44,11 @@ export default async function handler(req, res) {
     let serverSession = false;
 
     try {
+      if (!canPersistGoogleSession(tokenData)) {
+        const persistenceError = new Error('Google OAuth did not return a refresh token');
+        persistenceError.code = 'GOOGLE_REFRESH_TOKEN_MISSING';
+        throw persistenceError;
+      }
       sheetConfig = await getStoredSheetConfig(profile.email);
       await setSession(sessionId, {
         email: profile.email,
@@ -61,7 +70,7 @@ export default async function handler(req, res) {
       profile,
       config: sheetConfig,
       serverSession,
-      warning: serverSession ? null : 'Google login succeeded, but server session storage failed.',
+      warning: serverSession ? null : 'เข้าสู่ระบบสำเร็จ แต่ระบบยังจำการเข้าสู่ระบบระยะยาวไม่ได้',
     });
   } catch (error) {
     sendJson(res, 500, {

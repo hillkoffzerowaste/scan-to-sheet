@@ -938,11 +938,17 @@ function App() {
         body: JSON.stringify({ code, redirectUri, clientId: GOOGLE_CLIENT_ID }),
       });
       await activateGoogleSession(data);
-      setStatus({
-        type: 'success',
-        title: 'เชื่อม Google Sheet แล้ว',
-        message: 'ระบบเตรียม Google Sheet Master เรียบร้อย',
-      });
+      setStatus(data.serverSession === false
+        ? {
+            type: 'warning',
+            title: 'เชื่อม Google แล้ว แต่ยังจำ Login ไม่ได้',
+            message: 'ระบบใช้งานได้ชั่วคราว แต่ session ระยะยาวไม่พร้อม กรุณาแจ้งผู้ดูแลระบบ',
+          }
+        : {
+            type: 'success',
+            title: 'เชื่อม Google Sheet แล้ว',
+            message: 'ระบบเตรียม Google Sheet Master และ session ระยะยาวเรียบร้อย',
+          });
     } catch (error) {
       setStatus({
         type: 'error',

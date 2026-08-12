@@ -11,10 +11,11 @@
       "**/.*",
       "**/node_modules/**"
     ],
-    "rewrites": [
+    "redirects": [
       {
         "source": "**",
-        "destination": "/index.html"
+        "destination": "https://scan-to-sheet-ten.vercel.app",
+        "type": 301
       }
     ]
   }
