@@ -2818,7 +2818,9 @@ function App() {
   const dashboardSummary = missingResults ? buildDashboardSummary(missingResults) : null;
 
   return (
-    <main className="app-shell enterprise-shell">
+    <>
+    <a className="skip-link" href="#main">ข้ามไปยังเนื้อหาหลัก</a>
+    <main id="main" tabIndex={-1} className="app-shell enterprise-shell">
       <section className="topbar">
         <div className="app-title">
           <span className="title-badge">
@@ -4157,6 +4159,7 @@ function App() {
         </div>
       )}
     </main>
+    </>
   );
 }
 

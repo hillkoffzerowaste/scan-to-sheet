@@ -640,6 +640,21 @@ select:hover {
   color: var(--primary-strong);
 }
 
+.skip-link {
+  position: fixed;
+  z-index: 3000;
+  top: 8px;
+  left: 8px;
+  padding: 8px 12px;
+  border: 2px solid var(--primary);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  transform: translateY(-160%);
+}
+
+.skip-link:focus { transform: translateY(0); }
+
 .popup-courier {
   margin-bottom: 12px;
 }
@@ -3415,7 +3430,15 @@ tbody tr:nth-child(8){ animation-delay: 0.21s; }
   }
 
   .enterprise-shell .tab-bar {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+
+  .enterprise-shell .tab-button:nth-child(-n + 3) {
+    grid-column: span 2;
+  }
+
+  .enterprise-shell .tab-button:nth-child(n + 4) {
+    grid-column: span 3;
   }
 
   .enterprise-shell .tab-button {

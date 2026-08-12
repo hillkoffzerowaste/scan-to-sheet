@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { operationRole, sanitizeWorkflowPayload } from './workflowPayload.js';
+import { operationRole, sanitizeOrderIds, sanitizeWorkflowPayload } from './workflowPayload.js';
 
 test('maps every operational action to the same upstream role branch', () => {
   assert.equal(operationRole('store_update'), 'store');
@@ -20,4 +20,11 @@ test('allowlists workflow payload including bounded nested work details', () => 
 
 test('rejects unknown workflow actions', () => {
   assert.throws(() => sanitizeWorkflowPayload({ orderId: 'O-1', action: 'driver_complete' }), /Unsupported/);
+});
+
+test('deduplicates and bounds bulk order ids before forwarding them upstream', () => {
+  assert.deepEqual(sanitizeOrderIds([' O-1 ', 'O-1', 'O-2']), ['O-1', 'O-2']);
+  assert.throws(() => sanitizeOrderIds([]), /order id/i);
+  assert.throws(() => sanitizeOrderIds(['bad/id']), /order id/i);
+  assert.throws(() => sanitizeOrderIds(Array.from({ length: 201 }, (_, index) => `O-${index}`)), /order id/i);
 });

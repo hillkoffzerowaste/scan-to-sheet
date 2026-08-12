@@ -6,6 +6,15 @@ const FIELDS = ['orderId','action','note','reason','storeStatus','storePackerNam
 const WORK_FIELDS = ['detail','note','photoLocal','localPhotoCount','sharedToLine','checkResult','checklist'];
 
 export function operationRole(action) { return ROLES[action] || ''; }
+export function sanitizeOrderIds(input, max = 200) {
+  const ids = Array.isArray(input)
+    ? [...new Set(input.map((value) => String(value || '').trim()).filter(Boolean))]
+    : [];
+  if (!ids.length || ids.length > max || ids.some((id) => !/^[A-Za-z0-9._-]{1,120}$/.test(id))) {
+    throw new Error('Invalid order id selection');
+  }
+  return ids;
+}
 export function sanitizeWorkflowPayload(input = {}) {
   if (!operationRole(input.action)) throw new Error('Unsupported workflow action');
   const output = Object.fromEntries(FIELDS.filter((key) => input[key] !== undefined).map((key) => [key, input[key]]));

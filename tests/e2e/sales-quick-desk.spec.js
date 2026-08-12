@@ -13,8 +13,8 @@ test.describe('Sales Quick Desk shell', () => {
         await page.goto('/');
         await page.getByTestId('sales-tab').click();
         if (theme === 'dark') await page.getByTitle('Dark mode').click();
-        await expect(page.getByRole('heading', { name: 'Sales Quick Desk' })).toBeVisible();
-        await expect(page.getByRole('navigation', { name: 'เมนู Sales Quick Desk' })).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'ศูนย์งานฝ่ายขาย' })).toBeVisible();
+        await expect(page.getByRole('navigation', { name: 'เมนูศูนย์งานฝ่ายขาย' })).toBeVisible();
         expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBe(0);
         expect(await page.locator('.vite-error-overlay').count()).toBe(0);
         expect(consoleErrors).toEqual([]);
@@ -22,11 +22,11 @@ test.describe('Sales Quick Desk shell', () => {
     }
   }
 
-  test('module navigation updates the URL and customer search stays independent', async ({ page }) => {
+  test('module navigation keeps customer search independent', async ({ page }) => {
     await page.route('**/api/hillkoff?op=customers&*', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: { customers: [{ id: 'C-1', name: 'ลูกค้าทดสอบ', phone: '0800000000' }] } }) }));
     await page.goto('/'); await page.getByTestId('sales-tab').click();
     await page.getByRole('button', { name: 'ลูกค้า', exact: true }).click();
-    await expect(page).toHaveURL(/sales=customers/);
+    await expect(page.getByRole('button', { name: 'ลูกค้า', exact: true })).toHaveAttribute('aria-current', 'page');
     await page.getByLabel('คำค้นหา').fill('ลูกค้า'); await page.getByRole('button', { name: 'ค้นหา', exact: true }).click();
     await expect(page.getByText('ลูกค้าทดสอบ')).toBeVisible();
   });
@@ -51,11 +51,11 @@ test.describe('Sales Quick Desk shell', () => {
     let queueCalls = 0;
     const orders = [{ id: 'READY-1', customerName: 'พร้อมส่ง', deliveryMethod: 'company_driver', workflowType: 'direct_pack', storeStatus: 'skipped', packStatus: 'checked', queueStatus: 'ready' }, { id: 'BLOCK-1', customerName: 'ยังไม่พร้อม', deliveryMethod: 'company_driver', workflowType: 'store_route', storeStatus: 'pending', packStatus: 'blocked', queueStatus: 'preparing' }];
     await page.route('**/api/hillkoff?op=dashboard', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: { orders } }) }));
-    await page.route('**/api/hillkoff?op=queue', async (route) => { queueCalls += 1; await new Promise((resolve) => setTimeout(resolve, 150)); await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: { queued: true } }) }); });
+    await page.route('**/api/hillkoff?op=workflow', async (route) => { if (route.request().postDataJSON().action === 'queue') queueCalls += 1; await new Promise((resolve) => setTimeout(resolve, 150)); await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: { queued: true } }) }); });
     await page.goto('/'); await page.getByTestId('sales-tab').click(); await page.getByRole('button', { name: 'จัดคิว', exact: true }).click();
-    const ready = page.locator('.sales-row').filter({ hasText: 'READY-1' }).getByRole('button', { name: 'เข้าคิว' }); const blocked = page.locator('.sales-row').filter({ hasText: 'BLOCK-1' }).getByRole('button', { name: 'เข้าคิว' });
+    const ready = page.locator('.hsw-row').filter({ hasText: 'READY-1' }).getByRole('button', { name: 'เข้าคิว' }); const blocked = page.locator('.hsw-row').filter({ hasText: 'BLOCK-1' }).getByRole('button', { name: 'เข้าคิว' });
     await expect(ready).toBeEnabled(); await expect(blocked).toBeDisabled(); await ready.dblclick();
-    await expect(page.getByText('นำ READY-1 เข้าคิวแล้ว')).toBeVisible(); expect(queueCalls).toBe(1);
+    await expect(page.getByText('ส่ง READY-1 เข้าคิวแล้ว')).toBeVisible(); expect(queueCalls).toBe(1);
   });
 
   test('assigns only valid Chiang Mai rounds and supports Escape to close details', async ({ page }) => {
@@ -74,8 +74,8 @@ test.describe('Sales Quick Desk shell', () => {
     await page.route('**/api/hillkoff?op=orders&*', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: route.request().url().includes('id=') ? current : [current] }) }));
     await page.route('**/api/hillkoff?op=workflow', async (route) => { const body = route.request().postDataJSON(); actions.push(body); if (body.action === 'store_update') current = { ...current, storeStatus: body.storeStatus, packStatus: 'pending' }; if (body.action === 'pack_update') current = { ...current, packStatus: body.packStatus, queueStatus: 'ready' }; await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: { ok: true } }) }); });
     await page.goto('/'); await page.getByTestId('sales-tab').click(); await page.getByRole('button', { name: 'ออเดอร์', exact: true }).click(); await page.getByLabel('คำค้นหา').fill('OPS-1'); await page.getByRole('button', { name: 'ค้นหา' }).click(); await page.getByText('งานครบวงจร').click();
-    const storeSection = page.locator('.sales-operations section').filter({ hasText: 'สโตร์' }); await storeSection.getByLabel('สถานะ').selectOption('checked'); await storeSection.getByLabel('ผู้ตรวจ').fill('Store Checker'); await storeSection.getByRole('button', { name: /store_update/ }).click();
-    const packSection = page.locator('.sales-operations section').filter({ hasText: 'ห้องแพ็ค' }); await packSection.getByLabel('สถานะ').selectOption('checked'); await packSection.getByLabel('ผู้ตรวจ').fill('Pack Checker'); await packSection.getByRole('button', { name: /pack_update/ }).click();
+    const storeSection = page.locator('.hsw-operations > section').filter({ has: page.getByRole('heading', { name: 'สโตร์', exact: true }) }); await storeSection.getByLabel('สถานะ').selectOption('checked'); await storeSection.getByLabel('ผู้ตรวจ').fill('Store Checker'); await storeSection.getByRole('button', { name: 'บันทึกสถานะสโตร์' }).click();
+    const packSection = page.locator('.hsw-operations > section').filter({ has: page.getByRole('heading', { name: 'ห้องแพ็ค', exact: true }) }); await packSection.getByLabel('สถานะ').selectOption('checked'); await packSection.getByLabel('ผู้ตรวจ').fill('Pack Checker'); await packSection.getByRole('button', { name: 'บันทึกสถานะห้องแพ็ค' }).click();
     expect(actions.map((item) => item.action)).toEqual(['store_update', 'pack_update']); expect(actions[0].storeCheckerName).toBe('Store Checker'); expect(actions[1].packCheckerName).toBe('Pack Checker');
   });
 
@@ -85,6 +85,17 @@ test.describe('Sales Quick Desk shell', () => {
     await page.route('**/api/hillkoff?op=customer-history&*', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: { customer: { id: 'C-9' }, orders: [{ id: 'OLD-1', status: 'ส่งสำเร็จ' }] } }) }));
     await page.route('**/api/hillkoff?op=customers', async (route) => { saved = route.request().postDataJSON(); await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: { id: 'C-9' } }) }); });
     await page.goto('/'); await page.getByTestId('sales-tab').click(); await page.getByRole('button', { name: 'ลูกค้า', exact: true }).click(); await page.getByLabel('คำค้นหา').fill('ลูกค้าเดิม'); await page.getByRole('button', { name: 'ค้นหา' }).click(); await page.getByText('ลูกค้าเดิม').click();
-    await expect(page.getByText('OLD-1')).toBeVisible(); await page.getByLabel('โทรศัพท์').fill('0899999999'); await page.getByRole('button', { name: 'บันทึกข้อมูลลูกค้า' }).click(); expect(saved.customer.id).toBe('C-9'); expect(saved.customer.phone).toBe('0899999999');
+    await expect(page.getByText('OLD-1')).toBeVisible(); await page.getByLabel('โทรศัพท์').fill('0899999999'); await page.getByRole('button', { name: 'บันทึกลูกค้า' }).click(); expect(saved.customer.id).toBe('C-9'); expect(saved.customer.phone).toBe('0899999999');
+  });
+
+  test('completes only selected checked Chiang Mai work through the bulk command', async ({ page }) => {
+    let selectedIds;
+    const orders = [{ id: 'CM-DONE-1', customerName: 'พร้อมจบงาน', deliveryMethod: 'company_driver', workflowType: 'store_route', storeStatus: 'checked', packStatus: 'checked', queueStatus: 'ready', driverId: '' }];
+    await page.route('**/api/hillkoff?op=dashboard', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: { orders } }) }));
+    await page.route('**/api/hillkoff?op=chiangmai-complete', async (route) => { selectedIds = route.request().postDataJSON().selectedIds; orders.length = 0; await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: { count: 1, completedIds: selectedIds } }) }); });
+    page.on('dialog', (dialog) => dialog.accept());
+    await page.goto('/'); await page.getByTestId('sales-tab').click(); await page.getByRole('button', { name: 'รอบเชียงใหม่' }).click();
+    await page.getByRole('checkbox', { name: 'จบงาน' }).check(); await page.getByRole('button', { name: 'จบงานที่เลือก' }).click();
+    await expect(page.getByText('จบงานเชียงใหม่ 1 ออเดอร์แล้ว')).toBeVisible(); expect(selectedIds).toEqual(['CM-DONE-1']);
   });
 });

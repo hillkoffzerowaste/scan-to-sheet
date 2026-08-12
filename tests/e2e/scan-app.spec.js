@@ -391,13 +391,18 @@ test.describe('Scan to Sheet — Mobile Responsiveness', () => {
     const tabLayout = await page.locator('.tab-bar').evaluate((tabBar) => {
       const buttons = Array.from(tabBar.querySelectorAll('.tab-button'));
       const boxes = buttons.map((button) => button.getBoundingClientRect());
+      const tabBox = tabBar.getBoundingClientRect();
       return {
         count: buttons.length,
-        sameRow: boxes.every((box) => box.top === boxes[0]?.top),
+        rows: new Set(boxes.map((box) => Math.round(box.top))).size,
+        lastRowFillsWidth: Math.abs((boxes.at(-1)?.right ?? 0) - (tabBox.right - 4)) <= 1,
         overflow: tabBar.scrollWidth > tabBar.clientWidth,
       };
     });
-    expect(tabLayout).toEqual({ count: 3, sameRow: true, overflow: false });
+    expect(tabLayout).toEqual({ count: 5, rows: 2, lastRowFillsWidth: true, overflow: false });
+
+    const pageOverflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
+    expect(pageOverflow).toBe(false);
 
     // Table should scroll horizontally
     const tableWrap = page.locator('.table-wrap').first();

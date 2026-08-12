@@ -1,6 +1,6 @@
 import { sendError } from './_auth.js';
 import { allowedOrder, customerPayload, hillkoffRequest, recordSalesAudit, requireHillkoffSession, sendGatewayError, sendResult } from '../lib/hillkoffGateway.js';
-import { operationRole, sanitizeWorkflowPayload } from '../src/features/sales/shared/workflowPayload.js';
+import { operationRole, sanitizeOrderIds, sanitizeWorkflowPayload } from '../src/features/sales/shared/workflowPayload.js';
 
 const invalid = (res, code, message) => sendError(res, { status: 400, code, message });
 export default async function handler(req, res) {
@@ -18,6 +18,7 @@ export default async function handler(req, res) {
     else if (op === 'dashboard' && req.method === 'POST') { const selectedDate = String(req.body?.selectedDate || '').slice(0, 10); if (!/^\d{4}-\d{2}-\d{2}$/.test(selectedDate)) return invalid(res, 'DATE_INVALID', 'วันที่ไม่ถูกต้อง'); result = await hillkoffRequest({ path: '/api/v1/orders/dispatch-dashboard', method: 'POST', body: { selectedDate } }); }
     else if (op === 'queue' && req.method === 'PATCH') { const orderId = String(req.body?.orderId || ''); if (!/^[A-Za-z0-9._-]{1,120}$/.test(orderId) || req.body?.action !== 'queue') return invalid(res, 'WORKFLOW_INVALID', 'คำสั่งจัดคิวไม่ถูกต้อง'); result = await hillkoffRequest({ path: '/api/v1/orders/workflow', method: 'PATCH', body: { orderId, action: 'queue' } }); await recordSalesAudit({ session, action: 'order_queue', targetId: orderId, outcome: result.status < 300 ? 'success' : 'rejected', requestId: result.requestId }).catch(() => {}); }
     else if (op === 'chiangmai-round' && req.method === 'PATCH') { const orderId = String(req.body?.orderId || ''); const roundCode = String(req.body?.roundCode || '').slice(0, 40); if (!/^[A-Za-z0-9._-]{1,120}$/.test(orderId) || !['tuesday', 'wednesday', 'friday'].includes(roundCode)) return invalid(res, 'ROUND_INVALID', 'ข้อมูลรอบเชียงใหม่ไม่ถูกต้อง'); result = await hillkoffRequest({ path: '/api/v1/orders/chiangmai-rounds', method: 'PATCH', body: { orderId, roundCode } }); await recordSalesAudit({ session, action: 'chiangmai_round_assign', targetId: orderId, outcome: result.status < 300 ? 'success' : 'rejected', requestId: result.requestId }).catch(() => {}); }
+    else if (op === 'chiangmai-complete' && req.method === 'POST') { let selectedIds; try { selectedIds = sanitizeOrderIds(req.body?.selectedIds); } catch { return invalid(res, 'ORDER_SELECTION_INVALID', 'รายการออเดอร์ที่เลือกไม่ถูกต้อง'); } result = await hillkoffRequest({ path: '/api/v1/orders/chiangmai-complete', method: 'POST', role: 'sales', body: { selectedIds } }); await recordSalesAudit({ session, action: 'chiangmai_complete_bulk', targetId: `bulk:${selectedIds.length}`, outcome: result.status < 300 ? 'success' : 'rejected', requestId: result.requestId }).catch(() => {}); }
     else return sendError(res, { status: 405, code: 'OPERATION_NOT_ALLOWED', message: 'คำขอนี้ไม่ได้รับอนุญาต' });
     return sendResult(res, result);
   } catch (error) { return sendGatewayError(res, error); }
