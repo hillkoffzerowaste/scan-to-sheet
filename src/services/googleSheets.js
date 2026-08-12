@@ -56,23 +56,6 @@ export const ALL_HEADERS = [...SCAN_HEADERS, ...ADMIN_HEADERS, ...MARKETPLACE_HE
 
 export const TOTAL_COLUMNS = ALL_HEADERS.length; // 23
 
-export function parseAppendUpdatedRange(updatedRange, expectedSheetName) {
-  if (typeof updatedRange !== 'string' || !updatedRange.includes('!')) {
-    throw new Error('Google Sheet append did not return a valid updated range');
-  }
-  const separator = updatedRange.lastIndexOf('!');
-  const rawSheetName = updatedRange.slice(0, separator);
-  const cellRange = updatedRange.slice(separator + 1);
-  const sheetName = rawSheetName.startsWith("'") && rawSheetName.endsWith("'")
-    ? rawSheetName.slice(1, -1).replace(/''/g, "'")
-    : rawSheetName;
-  const match = /^\$?A\$?(\d+):\$?W\$?(\d+)$/.exec(cellRange);
-  if (sheetName !== expectedSheetName || !match || match[1] !== match[2]) {
-    throw new Error(`Google Sheet appended outside ${expectedSheetName}!A:W (${updatedRange})`);
-  }
-  return Number(match[1]);
-}
-
 export const COURIER_RULES = {
   Lazada: {
     label: 'เลข Lazada ต้องขึ้นต้นด้วย LEX',
@@ -280,18 +263,6 @@ async function clearSheetRange({ token, spreadsheetId, range }) {
     method: 'POST',
     body: '{}',
   });
-}
-
-async function getSafeAppendedRowNumber({ token, spreadsheetId, date, appendResult }) {
-  const updatedRange = appendResult?.updates?.updatedRange;
-  try {
-    return parseAppendUpdatedRange(updatedRange, date);
-  } catch (error) {
-    if (typeof updatedRange === 'string' && updatedRange.includes('!')) {
-      await clearSheetRange({ token, spreadsheetId, range: updatedRange }).catch(() => {});
-    }
-    throw error;
-  }
 }
 
 function escapeQuery(value) {
