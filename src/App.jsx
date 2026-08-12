@@ -27,7 +27,9 @@ import {
   ShieldAlert,
   ArrowRightLeft,
   Plus,
+  BriefcaseBusiness,
 } from 'lucide-react';
+import SalesWorkspace from './features/sales/SalesWorkspace.jsx';
 import {
   COURIERS,
   appendScanGoogle,
@@ -2915,9 +2917,19 @@ function App() {
           <BarChart3 size={18} />
           <span>รายงาน</span>
         </button>
+        <button
+          data-testid="sales-tab"
+          className={`tab-button ${activeTab === 'sales' ? 'active' : ''}`}
+          type="button"
+          aria-current={activeTab === 'sales' ? 'page' : undefined}
+          onClick={() => { setActiveTab('sales'); setScanPopupOpen(false); void stopCamera(); }}
+        >
+          <BriefcaseBusiness size={18} />
+          <span>Sales Quick Desk</span>
+        </button>
       </nav>
 
-      {activeTab !== 'reports' && (
+      {['packer', 'drive'].includes(activeTab) && (
         <>
           <section className={`workflow-guide ${activeTab === 'drive' ? 'drive-workflow-guide' : 'packer-workflow-guide'}`}>
             {activeTab === 'drive' ? <Upload size={24} /> : <PackageCheck size={24} />}
@@ -3980,6 +3992,8 @@ function App() {
           </div>
         </details>
       )}
+
+      {activeTab === 'sales' && <SalesWorkspace />}
 
       {scanPopupOpen && (
         <div className="scan-popup-overlay" onClick={() => { setScanPopupOpen(false); void stopCamera(); }}>
