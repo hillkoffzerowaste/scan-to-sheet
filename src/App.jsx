@@ -104,6 +104,7 @@ import { loadHtml5Qrcode } from './services/cameraLoader.js';
 import { commitFallbackScan } from './services/scanCommit.js';
 import { createScanQueue } from './services/scanQueue.js';
 import { getScanPopupStatusMeta } from './services/scanPopup.js';
+import { DEFAULT_SCAN_METHOD } from './services/scanPreferences.js';
 import { shouldPollMissingOrders } from './services/missingCheckPolicy.js';
 import { getSheetRecoveryDates } from './services/sheetRecoveryDates.js';
 import { buildSheetSyncFailureUpdates } from './services/sheetSync.js';
@@ -290,7 +291,7 @@ function App() {
   const [scanPopupOpen, setScanPopupOpen] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [theme, setTheme] = useState(() => localStorage.getItem(THEME_KEY) || 'light');
-  const [scanMethod, setScanMethod] = useState('camera');
+  const [scanMethod, setScanMethod] = useState(DEFAULT_SCAN_METHOD);
   const [allowAnyTrackingFormat, setAllowAnyTrackingFormat] = useState(false);
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraMessage, setCameraMessage] = useState('เปิดกล้อง แล้วเล็งบาร์โค้ดหลักให้อยู่ในกรอบ');
