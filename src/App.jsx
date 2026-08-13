@@ -6,6 +6,7 @@ import {
   CalendarDays,
   CheckCircle2,
   Clock3,
+  Coffee,
   ExternalLink,
   FileSpreadsheet,
   LogIn,
@@ -2938,6 +2939,16 @@ function App() {
         >
           <Printer size={18} />
           <span>พิมพ์ใบเช็ค ใบปะหน้า</span>
+        </a>
+        <a
+          data-testid="coffee-drum-tab"
+          className="tab-button"
+          href="https://script.google.com/a/macros/hillkoff.com/s/AKfycbxETrRx_gJBuVTdl2MUaumr5Pem4LzahebQ6HZzrknPOr-PPCPmJHQ0I9f-p-kYJB-J/exec"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <Coffee size={18} />
+          <span>เบิกออก/รับเข้ากาแฟถัง</span>
         </a>
       </nav>
 
