@@ -1,0 +1,22 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isStaffAdmin() {
+      return isSignedIn()
+        && firestore.exists(/databases/(default)/documents/adminUsers/$(request.auth.uid));
+    }
+
+    match /staff-photos/{staffId}/{fileName} {
+      allow read: if isSignedIn();
+      allow create, update: if isStaffAdmin()
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+      allow delete: if isStaffAdmin();
+    }
+  }
+}

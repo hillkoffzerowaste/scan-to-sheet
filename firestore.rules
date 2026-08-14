@@ -10,6 +10,48 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == uid;
     }
 
+    function isStaffAdmin() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/adminUsers/$(request.auth.uid));
+    }
+
+    match /adminUsers/{uid} {
+      allow read: if isOwner(uid);
+      allow write: if false;
+    }
+
+    match /staffMembers/{staffId} {
+      allow read: if isSignedIn();
+      allow create, update: if isStaffAdmin()
+        && request.resource.data.fullName is string
+        && request.resource.data.nickname is string
+        && request.resource.data.position in ['leader', 'checker', 'packer']
+        && request.resource.data.active is bool;
+      allow delete: if false;
+    }
+
+    match /staffPrivateNotes/{staffId} {
+      allow read, create, update: if isStaffAdmin();
+      allow delete: if false;
+    }
+
+    match /staffDutyTypes/{dutyTypeId} {
+      allow read: if isSignedIn();
+      allow create, update: if isStaffAdmin()
+        && request.resource.data.name is string
+        && request.resource.data.active is bool;
+      allow delete: if false;
+    }
+
+    match /staffDailyAssignments/{assignmentId} {
+      allow read: if isSignedIn();
+      allow create, update: if isStaffAdmin()
+        && request.resource.data.date is string
+        && request.resource.data.staffId is string
+        && request.resource.data.dutyTypeId is string;
+      allow delete: if isStaffAdmin();
+    }
+
     match /users/{uid} {
       allow read: if isOwner(uid);
       allow create, update: if isOwner(uid)

@@ -30,8 +30,12 @@ import {
   ArrowRightLeft,
   Plus,
   BriefcaseBusiness,
+  Users,
 } from 'lucide-react';
 import SalesWorkspace from './features/sales/SalesWorkspace.jsx';
+import StaffDirectory from './features/staff/StaffDirectory.jsx';
+import { buildPackerOptions } from './features/staff/staffDirectory.js';
+import { subscribeStaffMembers } from './features/staff/staffService.js';
 import {
   COURIERS,
   appendScanGoogle,
@@ -151,7 +155,7 @@ const ISSUE_CUSTOMER_CANCELLED = 'ลูกค้ายกเลิก';
 const ISSUE_RETURNED = 'สินค้าตีกลับ';
 const ISSUE_DAMAGED = 'สินค้าเสียหาย';
 const PACKER_UNASSIGNED = 'ยังไม่ระบุ';
-const PACKERS = [PACKER_UNASSIGNED, 'กิต', 'มาย', 'ยุทธ', 'หล้า', 'มุก', 'เบ้น', 'คะนิ้ง'];
+const DEFAULT_PACKERS = [PACKER_UNASSIGNED, 'กิต', 'มาย', 'ยุทธ', 'หล้า', 'มุก', 'เบ้น', 'คะนิ้ง'];
 const DEFAULT_THRESHOLD_MINUTES = 30;
 const DEFAULT_LOOKBACK_HOURS = 48;
 const AUTO_CHECK_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
@@ -268,6 +272,7 @@ function App() {
   const [courierSelectValue, setCourierSelectValue] = useState('');
   const [scanValue, setScanValue] = useState('');
   const [selectedPacker, setSelectedPacker] = useState(PACKER_UNASSIGNED);
+  const [packerOptions, setPackerOptions] = useState(DEFAULT_PACKERS);
   const [scanRemark, setScanRemark] = useState('');
   const [status, setStatus] = useState(() => ({
     type: GOOGLE_CLIENT_ID ? 'idle' : 'warning',
@@ -290,7 +295,7 @@ function App() {
   const [recentRows, setRecentRows] = useState([]);
   const [showAllRecentRows, setShowAllRecentRows] = useState(false);
   const [packerCounts, setPackerCounts] = useState(() =>
-    PACKERS.filter((p) => p !== PACKER_UNASSIGNED).map((p) => ({ packer: p, count: 0 })),
+    DEFAULT_PACKERS.filter((p) => p !== PACKER_UNASSIGNED).map((p) => ({ packer: p, count: 0 })),
   );
   const [scanFlash, setScanFlash] = useState(false);
   const [scanPopupOpen, setScanPopupOpen] = useState(false);
@@ -348,6 +353,24 @@ function App() {
   const isGoogleReady = isFirebaseConfigured || Boolean(GOOGLE_CLIENT_ID);
   const isSheetConnected = Boolean(token && config);
   const isSignedIn = Boolean(firebaseUser || isSheetConnected);
+  useEffect(() => {
+    if (!firebaseUser) return;
+    return subscribeStaffMembers({
+      onChange: (members) => {
+        if (members.length === 0) return;
+        try {
+          const next = [PACKER_UNASSIGNED, ...buildPackerOptions(members)];
+          setPackerOptions(next);
+          setSelectedPacker((current) => next.includes(current) ? current : PACKER_UNASSIGNED);
+        } catch {
+          // Invalid duplicate names must not replace the last valid scan options.
+        }
+      },
+      onError: () => {
+        // Keep the last known Packer list; the directory page shows the detailed load error.
+      },
+    });
+  }, [firebaseUser?.uid]);
   const selectedCount = useMemo(
     () => summary.find((item) => item.courier === selectedCourier)?.count ?? 0,
     [selectedCourier, summary],
@@ -1133,7 +1156,7 @@ function App() {
     setUser(EMPTY_USER);
     setFirebaseUser(null);
     setSummary(couriers.map((courier) => ({ courier, count: 0 })));
-    setPackerCounts(PACKERS.filter((p) => p !== PACKER_UNASSIGNED).map((p) => ({ packer: p, count: 0 })));
+    setPackerCounts(packerOptions.filter((p) => p !== PACKER_UNASSIGNED).map((p) => ({ packer: p, count: 0 })));
     setRecentRows([]);
     setDriveRecentRows([]);
     setReportData(null);
@@ -2931,6 +2954,16 @@ function App() {
           <BriefcaseBusiness size={18} />
           <span>Sales Quick Desk</span>
         </button>
+        <button
+          data-testid="staff-directory-tab"
+          className={`tab-button ${activeTab === 'staff' ? 'active' : ''}`}
+          type="button"
+          aria-current={activeTab === 'staff' ? 'page' : undefined}
+          onClick={() => { setActiveTab('staff'); setScanPopupOpen(false); void stopCamera(); }}
+        >
+          <Users size={18} />
+          <span>ทำเนียบพนักงานแพ็คสินค้า</span>
+        </button>
         <a
           className="tab-button"
           href="https://barcode-checker-ashy.vercel.app/"
@@ -3170,7 +3203,7 @@ function App() {
                 <label className="packer-control">
                   <span>Packer</span>
                   <select value={selectedPacker} onChange={(event) => setSelectedPacker(event.target.value)} disabled={!isSignedIn || busy}>
-                    {PACKERS.map((packer) => (
+                    {packerOptions.map((packer) => (
                       <option key={packer} value={packer}>
                         {packer}
                       </option>
@@ -4017,6 +4050,17 @@ function App() {
       )}
 
       {activeTab === 'sales' && <SalesWorkspace />}
+      {activeTab === 'staff' && isSignedIn && (
+        <StaffDirectory
+          firebaseUser={firebaseUser}
+          onPackerOptionsChange={(names, memberCount) => {
+            if (memberCount === 0) return;
+            const next = [PACKER_UNASSIGNED, ...names];
+            setPackerOptions(next);
+            setSelectedPacker((current) => next.includes(current) ? current : PACKER_UNASSIGNED);
+          }}
+        />
+      )}
 
       {scanPopupOpen && (
         <div className="scan-popup-overlay" onClick={() => { setScanPopupOpen(false); void stopCamera(); }}>
@@ -4106,7 +4150,7 @@ function App() {
               <label className="packer-control popup-packer">
                 <span>Packer — เลือกคนแพ็คก่อนสแกน</span>
                 <select value={selectedPacker} onChange={(e) => setSelectedPacker(e.target.value)} disabled={!isSignedIn || busy}>
-                  {PACKERS.map((p) => <option key={p} value={p}>{p}</option>)}
+                  {packerOptions.map((p) => <option key={p} value={p}>{p}</option>)}
                 </select>
               </label>
             )}
