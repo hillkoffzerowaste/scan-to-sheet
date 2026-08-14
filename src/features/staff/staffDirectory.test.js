@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   DEFAULT_PACKING_NOTICE,
+  buildPackingRoomTeam,
   buildDutyLabelsByStaff,
   buildPackerOptions,
   copyAssignments,
@@ -18,6 +19,18 @@ test("uses the default packing notice until an admin saves custom text", () => {
   assert.equal(
     resolvePackingNotice("  ตรวจพื้นที่ก่อนส่งมอบงาน  "),
     "ตรวจพื้นที่ก่อนส่งมอบงาน"
+  );
+});
+
+test("places checkers before packers in one packing-room team", () => {
+  const groups = {
+    checker: [{ id: "checker-1" }],
+    packer: [{ id: "packer-1" }, { id: "packer-2" }],
+  };
+
+  assert.deepEqual(
+    buildPackingRoomTeam(groups).map((person) => person.id),
+    ["checker-1", "packer-1", "packer-2"]
   );
 });
 

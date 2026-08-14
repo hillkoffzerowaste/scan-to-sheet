@@ -2962,7 +2962,7 @@ function App() {
           onClick={() => { setActiveTab('staff'); setScanPopupOpen(false); void stopCamera(); }}
         >
           <Users size={18} />
-          <span>ทำเนียบพนักงานแพ็คสินค้า</span>
+          <span>แผนผังพนักงานห้องแพ็ค</span>
         </button>
         <a
           className="tab-button"

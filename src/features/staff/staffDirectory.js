@@ -30,6 +30,10 @@ export function groupActiveStaff(staff) {
   return groups;
 }
 
+export function buildPackingRoomTeam(groups) {
+  return [...(groups.checker ?? []), ...(groups.packer ?? [])];
+}
+
 export function buildPackerOptions(staff) {
   const groups = groupActiveStaff(staff);
   const packers = STAFF_POSITIONS.flatMap((position) => groups[position])

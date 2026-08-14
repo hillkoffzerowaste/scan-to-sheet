@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import {
   buildDutyLabelsByStaff,
+  buildPackingRoomTeam,
   buildPackerOptions,
   groupActiveStaff,
   mergeAssignments,
@@ -181,6 +182,7 @@ export default function StaffDirectory({
       ? visibleStaff.map((person) => ({ ...person, active: true }))
       : visibleStaff
   );
+  const packingRoomTeam = buildPackingRoomTeam(groups);
   const staffById = useMemo(
     () => new Map(staff.map((person) => [person.id, person])),
     [staff]
@@ -403,7 +405,7 @@ export default function StaffDirectory({
       <header className="staff-page-header">
         <div>
           <p className="eyebrow">ฝ่ายแพ็คสินค้า</p>
-          <h2 id="staff-title">ทำเนียบพนักงานแพ็คสินค้า</h2>
+          <h2 id="staff-title">แผนผังพนักงานห้องแพ็ค</h2>
           <p>รายชื่อ ช่องทางติดต่อ และหน้าที่ประจำวันของเจ้าหน้าที่</p>
         </div>
         {isAdmin && section === "directory" && (
@@ -420,7 +422,7 @@ export default function StaffDirectory({
           className={section === "directory" ? "active" : ""}
           onClick={() => setSection("directory")}
         >
-          <Users size={17} /> ทำเนียบพนักงาน
+          <Users size={17} /> แผนผังพนักงาน
         </button>
         <button
           className={section === "schedule" ? "active" : ""}
@@ -460,7 +462,7 @@ export default function StaffDirectory({
               </label>
             )}
           </div>
-          <div className="staff-org-chart" aria-label="ผังทำเนียบพนักงาน">
+          <div className="staff-org-chart" aria-label="แผนผังพนักงานห้องแพ็ค">
             {groups.leader.length > 0 && (
               <div className="staff-leader-overview">
                 <section className="staff-org-level staff-org-leader">
@@ -498,23 +500,18 @@ export default function StaffDirectory({
                 </aside>
               </div>
             )}
-            {groups.checker.length > 0 && (
+            {packingRoomTeam.length > 0 && (
               <section className="staff-org-level staff-org-team">
                 <h3>
-                  Checker <span>{groups.checker.length} คน</span>
+                  Checker และ Packer <span>{packingRoomTeam.length} คน</span>
                 </h3>
                 <div className="staff-grid">
-                  {groups.checker.map((person) => staffCard(person, "Checker"))}
-                </div>
-              </section>
-            )}
-            {groups.packer.length > 0 && (
-              <section className="staff-org-level staff-org-team">
-                <h3>
-                  Packer <span>{groups.packer.length} คน</span>
-                </h3>
-                <div className="staff-grid">
-                  {groups.packer.map((person) => staffCard(person, "Packer"))}
+                  {packingRoomTeam.map((person) =>
+                    staffCard(
+                      person,
+                      person.position === "checker" ? "Checker" : "Packer"
+                    )
+                  )}
                 </div>
               </section>
             )}
