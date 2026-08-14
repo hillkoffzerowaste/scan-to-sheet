@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
+    "test:rules": "node --test tests/firestoreRules.test.js",
     "preview": "vite preview --host 127.0.0.1",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",

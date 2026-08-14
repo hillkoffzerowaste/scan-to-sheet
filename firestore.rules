@@ -46,7 +46,8 @@ service cloud.firestore {
     }
 
     match /staffPrivateContacts/{staffId} {
-      allow read, create, update: if isStaffAdmin()
+      allow read: if isStaffAdmin();
+      allow create, update: if isStaffAdmin()
         && request.resource.data.phone is string
         && request.resource.data.lineId is string
         && request.resource.data.email is string
