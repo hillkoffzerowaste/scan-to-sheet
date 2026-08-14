@@ -52,21 +52,24 @@ test("groups active staff by position and preserves configured order", () => {
   );
 });
 
-test("builds scan options from active packers only and rejects duplicate nicknames", () => {
+test("builds scan options from every active staff position in hierarchy order", () => {
   assert.deepEqual(
     buildPackerOptions([
       { nickname: "มาย", position: "packer", active: true, sortOrder: 2 },
       { nickname: "กิต", position: "packer", active: true, sortOrder: 1 },
       { nickname: "หัวหน้า", position: "leader", active: true, sortOrder: 1 },
+      { nickname: "เช็ค", position: "checker", active: true, sortOrder: 1 },
       { nickname: "เก่า", position: "packer", active: false, sortOrder: 0 },
     ]),
-    ["กิต", "มาย"]
+    ["หัวหน้า", "เช็ค", "กิต", "มาย"]
   );
+});
 
+test("rejects duplicate scan nicknames across staff positions", () => {
   assert.throws(
     () =>
       buildPackerOptions([
-        { nickname: "กิต", position: "packer", active: true },
+        { nickname: "กิต", position: "leader", active: true },
         { nickname: " กิต ", position: "packer", active: true },
       ]),
     (error) => error.code === "STAFF_DUPLICATE_PACKER_NICKNAME"

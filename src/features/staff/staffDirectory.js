@@ -21,14 +21,13 @@ export function groupActiveStaff(staff) {
 }
 
 export function buildPackerOptions(staff) {
-  const packers = staff
-    .filter((person) => person.active !== false && person.position === "packer")
-    .sort(byOrder)
+  const groups = groupActiveStaff(staff);
+  const packers = STAFF_POSITIONS.flatMap((position) => groups[position])
     .map((person) => String(person.nickname ?? "").trim())
     .filter(Boolean);
   const normalized = packers.map((name) => name.toLocaleLowerCase("th"));
   if (new Set(normalized).size !== normalized.length) {
-    const error = new Error("ชื่อเล่น Packer ซ้ำกัน");
+    const error = new Error("ชื่อเล่นผู้แพ็คซ้ำกัน");
     error.code = "STAFF_DUPLICATE_PACKER_NICKNAME";
     throw error;
   }
@@ -93,7 +92,7 @@ export function staffSaveErrorMessage(error) {
   if (code === "STAFF_EMPLOYEE_ID_TOO_LONG")
     return "รหัสพนักงานต้องยาวไม่เกิน 60 ตัวอักษร";
   if (code === "STAFF_DUPLICATE_PACKER_NICKNAME")
-    return "ชื่อเล่น Packer ซ้ำกัน";
+    return "ชื่อเล่นผู้แพ็คซ้ำกัน";
   if (code.includes("storage/unauthorized"))
     return "ไม่มีสิทธิ์อัปโหลดรูปพนักงาน กรุณาเข้าสู่ระบบใหม่";
   if (code.includes("permission-denied"))
