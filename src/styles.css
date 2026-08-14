@@ -670,7 +670,7 @@ select:hover {
 .staff-org-level h3 span { color: var(--muted); font-size: .82rem; font-weight: 500; }
 .staff-org-leader .staff-grid { width: min(360px, 100%); margin: 0 auto; grid-template-columns: minmax(0, 1fr); }
 .staff-org-leader .staff-card { border-color: var(--primary); }
-.staff-org-team .staff-grid { position: relative; grid-template-columns: repeat(4, minmax(0, 280px)); justify-content: center; padding-top: 16px; }
+.staff-org-team .staff-grid { position: relative; grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 280px)); justify-content: center; padding-top: 16px; }
 .staff-org-team .staff-grid::before { content: ""; position: absolute; top: 0; left: 12.5%; right: 12.5%; border-top: 1px solid var(--line-strong); }
 .staff-org-team .staff-grid:has(.staff-card:only-child)::before { display: none; }
 .staff-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
@@ -733,7 +733,6 @@ select:hover {
 
 @media (max-width: 1199px) {
   .staff-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .staff-org-team .staff-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .staff-org-team .staff-grid::before { left: 25%; right: 25%; }
 }
 @media (max-width: 700px) {
