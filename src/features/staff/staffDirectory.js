@@ -1,4 +1,14 @@
 export const STAFF_POSITIONS = ["leader", "checker", "packer"];
+export const DEFAULT_PACKING_NOTICE = `• รักษาความสะอาดและจัดอุปกรณ์เข้าที่หลังใช้งาน
+• ตรวจสินค้า จำนวน และใบปะหน้าก่อนปิดกล่องทุกครั้ง
+• ปฏิบัติงานตามโซนและหน้าที่ประจำวันที่ได้รับมอบหมาย
+• พบสินค้าหรือข้อมูลผิดปกติให้แจ้งหัวหน้าทันที
+• ห้ามวางสินค้าและอุปกรณ์กีดขวางทางเดิน
+• ก่อนเลิกงานให้ตรวจพื้นที่และส่งมอบงานที่ยังค้าง`;
+
+export function resolvePackingNotice(value) {
+  return String(value ?? "").trim() || DEFAULT_PACKING_NOTICE;
+}
 
 function byOrder(a, b) {
   return (

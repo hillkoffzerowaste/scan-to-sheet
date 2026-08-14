@@ -2,14 +2,24 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  DEFAULT_PACKING_NOTICE,
   buildDutyLabelsByStaff,
   buildPackerOptions,
   copyAssignments,
   groupActiveStaff,
   mergeAssignments,
+  resolvePackingNotice,
   staffSaveErrorMessage,
   validateStaffInput,
 } from "./staffDirectory.js";
+
+test("uses the default packing notice until an admin saves custom text", () => {
+  assert.equal(resolvePackingNotice("  "), DEFAULT_PACKING_NOTICE);
+  assert.equal(
+    resolvePackingNotice("  ตรวจพื้นที่ก่อนส่งมอบงาน  "),
+    "ตรวจพื้นที่ก่อนส่งมอบงาน"
+  );
+});
 
 test("groups today's duty labels by staff for directory cards", () => {
   const dutyById = new Map([

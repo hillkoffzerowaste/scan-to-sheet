@@ -46,6 +46,29 @@ export async function listStaffMembers() {
   return snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
 }
 
+export async function getPackingRoomNotice() {
+  requireFirebase();
+  const snapshot = await getDoc(
+    doc(firestoreDb, "staffSettings", "packingRoomNotice")
+  );
+  return snapshot.exists() ? String(snapshot.data().content ?? "") : "";
+}
+
+export async function savePackingRoomNotice(content, user) {
+  requireFirebase();
+  const normalized = String(content ?? "").trim();
+  if (!normalized || normalized.length > 5000) {
+    const error = new Error("ประกาศต้องมีความยาว 1–5,000 ตัวอักษร");
+    error.code = "STAFF_NOTICE_INVALID";
+    throw error;
+  }
+  await setDoc(doc(firestoreDb, "staffSettings", "packingRoomNotice"), {
+    content: normalized,
+    updatedAt: serverTimestamp(),
+    updatedByUid: user.uid,
+  });
+}
+
 export function subscribeStaffMembers({ onChange, onError }) {
   requireFirebase();
   return onSnapshot(

@@ -45,6 +45,18 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /staffSettings/packingRoomNotice {
+      allow read: if isSignedIn();
+      allow create, update: if isStaffAdmin()
+        && request.resource.data.keys().hasOnly(['content', 'updatedAt', 'updatedByUid'])
+        && request.resource.data.content is string
+        && request.resource.data.content.size() > 0
+        && request.resource.data.content.size() <= 5000
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.updatedByUid == request.auth.uid;
+      allow delete: if false;
+    }
+
     match /staffDutyTypes/{dutyTypeId} {
       allow read: if isSignedIn();
       allow create, update: if isStaffAdmin()

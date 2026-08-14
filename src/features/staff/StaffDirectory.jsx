@@ -3,6 +3,7 @@ import {
   CalendarDays,
   Copy,
   Mail,
+  Megaphone,
   Pencil,
   Phone,
   Plus,
@@ -16,6 +17,7 @@ import {
   buildPackerOptions,
   groupActiveStaff,
   mergeAssignments,
+  resolvePackingNotice,
   staffSaveErrorMessage,
   validateStaffInput,
 } from "./staffDirectory.js";
@@ -24,6 +26,7 @@ import {
   createStaffMemberId,
   deleteDailyAssignment,
   getStaffAdminStatus,
+  getPackingRoomNotice,
   listDailyAssignments,
   listDutyTypes,
   listStaffMembers,
@@ -31,6 +34,7 @@ import {
   removeStaffPhoto,
   saveDailyAssignment,
   saveDutyType,
+  savePackingRoomNotice,
   saveStaffMember,
   uploadStaffPhoto,
 } from "./staffService.js";
@@ -99,14 +103,20 @@ export default function StaffDirectory({
   const [editingMember, setEditingMember] = useState(null);
   const [editingAssignment, setEditingAssignment] = useState(null);
   const [dutyName, setDutyName] = useState("");
+  const [packingNotice, setPackingNotice] = useState(() =>
+    resolvePackingNotice("")
+  );
+  const [editingNotice, setEditingNotice] = useState(false);
+  const [noticeDraft, setNoticeDraft] = useState("");
   const [message, setMessage] = useState("");
   const [copying, setCopying] = useState(false);
 
   async function reloadBase(includePrivate = isAdmin) {
-    const [publicMembers, duties, privateNotes] = await Promise.all([
+    const [publicMembers, duties, privateNotes, notice] = await Promise.all([
       listStaffMembers(),
       listDutyTypes(),
       includePrivate ? listStaffPrivateNotes() : Promise.resolve(new Map()),
+      getPackingRoomNotice(),
     ]);
     const members = publicMembers.map((person) => ({
       ...person,
@@ -114,6 +124,7 @@ export default function StaffDirectory({
     }));
     setStaff(members);
     setDutyTypes(duties);
+    setPackingNotice(resolvePackingNotice(notice));
     try {
       onPackerOptionsChange?.(buildPackerOptions(members), members.length);
     } catch (error) {
@@ -451,14 +462,41 @@ export default function StaffDirectory({
           </div>
           <div className="staff-org-chart" aria-label="ผังทำเนียบพนักงาน">
             {groups.leader.length > 0 && (
-              <section className="staff-org-level staff-org-leader">
-                <h3>
-                  หัวหน้า <span>{groups.leader.length} คน</span>
-                </h3>
-                <div className="staff-grid">
-                  {groups.leader.map((person) => staffCard(person, "หัวหน้า"))}
-                </div>
-              </section>
+              <div className="staff-leader-overview">
+                <section className="staff-org-level staff-org-leader">
+                  <h3>
+                    หัวหน้า <span>{groups.leader.length} คน</span>
+                  </h3>
+                  <div className="staff-grid">
+                    {groups.leader.map((person) => staffCard(person, "หัวหน้า"))}
+                  </div>
+                </section>
+                <aside className="packing-notice" aria-labelledby="packing-notice-title">
+                  <header>
+                    <div>
+                      <span className="packing-notice-icon" aria-hidden="true">
+                        <Megaphone size={18} />
+                      </span>
+                      <div>
+                        <p>ประกาศประจำห้องแพ็ค</p>
+                        <h3 id="packing-notice-title">การจัดการ ระเบียบ และกฎข้อบังคับ</h3>
+                      </div>
+                    </div>
+                    {isAdmin && (
+                      <button
+                        className="staff-edit"
+                        onClick={() => {
+                          setNoticeDraft(packingNotice);
+                          setEditingNotice(true);
+                        }}
+                      >
+                        <Pencil size={14} /> แก้ไขประกาศ
+                      </button>
+                    )}
+                  </header>
+                  <p className="packing-notice-content">{packingNotice}</p>
+                </aside>
+              </div>
             )}
             {groups.checker.length > 0 && (
               <section className="staff-org-level staff-org-team">
@@ -640,6 +678,56 @@ export default function StaffDirectory({
             )}
           </div>
         </>
+      )}
+
+      {editingNotice && (
+        <div className="staff-modal-overlay" role="presentation">
+          <form
+            className="staff-modal compact packing-notice-modal"
+            onSubmit={async (event) => {
+              event.preventDefault();
+              try {
+                await savePackingRoomNotice(noticeDraft, firebaseUser);
+                setPackingNotice(resolvePackingNotice(noticeDraft));
+                setEditingNotice(false);
+                setMessage("บันทึกประกาศห้องแพ็คแล้ว");
+              } catch (error) {
+                setMessage(
+                  error.code === "STAFF_NOTICE_INVALID"
+                    ? error.message
+                    : "บันทึกประกาศไม่สำเร็จ กรุณาลองใหม่"
+                );
+              }
+            }}
+          >
+            <header>
+              <h3>แก้ไขประกาศห้องแพ็ค</h3>
+              <button
+                type="button"
+                aria-label="ปิด"
+                onClick={() => setEditingNotice(false)}
+              >
+                <X size={18} />
+              </button>
+            </header>
+            <label>
+              ข้อความประกาศและกฎระเบียบ
+              <textarea
+                value={noticeDraft}
+                maxLength="5000"
+                required
+                onChange={(event) => setNoticeDraft(event.target.value)}
+              />
+            </label>
+            <small>{noticeDraft.length.toLocaleString("th-TH")} / 5,000 ตัวอักษร</small>
+            <footer>
+              <button type="button" onClick={() => setEditingNotice(false)}>
+                ยกเลิก
+              </button>
+              <button className="primary-action">บันทึกประกาศ</button>
+            </footer>
+          </form>
+        </div>
       )}
 
       {editingMember && (
