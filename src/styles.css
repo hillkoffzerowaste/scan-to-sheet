@@ -662,6 +662,16 @@ select:hover {
 .staff-group { display: grid; gap: 10px; }
 .staff-group h3 { margin: 0; font-size: 1.08rem; }
 .staff-group h3 span { color: var(--muted); font-size: .85rem; font-weight: 500; }
+.staff-org-chart { display: grid; gap: 0; }
+.staff-org-level { position: relative; display: grid; gap: 12px; padding-top: 42px; }
+.staff-org-level:first-child { padding-top: 0; }
+.staff-org-level:not(:first-child)::before { content: ""; position: absolute; top: 0; left: 50%; width: 1px; height: 30px; background: var(--line-strong); }
+.staff-org-level h3 { position: relative; z-index: 1; width: fit-content; margin: 0 auto; padding: 6px 12px; border: 1px solid var(--line-strong); border-radius: var(--radius-full); background: var(--surface); color: var(--text); font-size: 1rem; text-align: center; }
+.staff-org-level h3 span { color: var(--muted); font-size: .82rem; font-weight: 500; }
+.staff-org-leader .staff-grid { width: min(360px, 100%); margin: 0 auto; grid-template-columns: minmax(0, 1fr); }
+.staff-org-leader .staff-card { border-color: var(--primary); }
+.staff-org-team .staff-grid { position: relative; padding-top: 16px; }
+.staff-org-team .staff-grid::before { content: ""; position: absolute; top: 0; left: 12.5%; right: 12.5%; border-top: 1px solid var(--line-strong); }
 .staff-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .staff-card { overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); box-shadow: var(--shadow-sm); }
 .staff-card.inactive { opacity: .68; }
@@ -672,6 +682,11 @@ select:hover {
 .staff-card-title strong { font-size: 1.18rem; }
 .staff-card-title p { margin: 2px 0 0; color: var(--muted); }
 .staff-position { padding: 3px 7px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); color: var(--primary-strong); font-size: .78rem; white-space: nowrap; }
+.staff-today-duty { display: grid; gap: 6px; padding: 9px 10px; border-inline-start: 3px solid var(--primary); border-radius: var(--radius-sm); background: var(--surface-soft); }
+.staff-today-duty > strong { display: inline-flex; align-items: center; gap: 6px; color: var(--primary-strong); font-size: .83rem; }
+.staff-today-duty ul { display: grid; gap: 3px; margin: 0; padding-inline-start: 18px; }
+.staff-today-duty li, .staff-today-duty p { margin: 0; color: var(--text); font-size: .82rem; overflow-wrap: anywhere; }
+.staff-today-duty p { color: var(--muted); }
 .staff-contact { display: grid; gap: 7px; }
 .staff-contact a, .staff-contact button { display: inline-flex; align-items: center; gap: 6px; width: fit-content; border: 0; padding: 0; background: transparent; color: var(--primary-strong); text-decoration: none; overflow-wrap: anywhere; }
 .staff-edit { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 7px 10px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--surface-soft); color: var(--text); }
@@ -715,13 +730,20 @@ select:hover {
 .staff-modal footer button { padding: 8px 13px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--surface-soft); color: var(--text); }
 .staff-modal footer .primary-action { background: var(--primary-fill); color: var(--on-primary); border-color: var(--primary-fill); }
 
-@media (max-width: 1199px) { .staff-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 1199px) {
+  .staff-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .staff-org-team .staff-grid::before { left: 25%; right: 25%; }
+}
 @media (max-width: 700px) {
   .staff-page { padding: 14px; }
   .staff-page-header { align-items: stretch; flex-direction: column; }
   .staff-section-tabs { width: 100%; }
   .staff-section-tabs button { flex: 1; justify-content: center; }
   .staff-grid, .staff-form-grid { grid-template-columns: minmax(0, 1fr); }
+  .staff-org-level { padding-top: 30px; }
+  .staff-org-level:not(:first-child)::before { height: 22px; }
+  .staff-org-team .staff-grid { padding-top: 0; }
+  .staff-org-team .staff-grid::before { display: none; }
   .staff-form-grid .full { grid-column: auto; }
   .schedule-toolbar { align-items: stretch; flex-direction: column; }
   .schedule-toolbar > div, .schedule-toolbar button { width: 100%; }

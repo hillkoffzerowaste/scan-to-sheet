@@ -12,6 +12,7 @@ import {
   X,
 } from "lucide-react";
 import {
+  buildDutyLabelsByStaff,
   buildPackerOptions,
   groupActiveStaff,
   mergeAssignments,
@@ -77,6 +78,12 @@ function updatedLabel(value) {
     : "";
 }
 
+function bangkokDateKey() {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" }).format(
+    new Date()
+  );
+}
+
 export default function StaffDirectory({
   firebaseUser,
   onPackerOptionsChange,
@@ -86,11 +93,7 @@ export default function StaffDirectory({
   const [assignments, setAssignments] = useState([]);
   const [isAdmin, setIsAdmin] = useState(false);
   const [section, setSection] = useState("directory");
-  const [date, setDate] = useState(() =>
-    new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" }).format(
-      new Date()
-    )
-  );
+  const [date, setDate] = useState(bangkokDateKey);
   const [queryText, setQueryText] = useState("");
   const [showInactive, setShowInactive] = useState(false);
   const [editingMember, setEditingMember] = useState(null);
@@ -132,9 +135,11 @@ export default function StaffDirectory({
       .catch(() => setMessage("โหลดข้อมูลทำเนียบไม่สำเร็จ"));
   }, [firebaseUser?.uid]);
 
+  const today = bangkokDateKey();
   useEffect(() => {
-    if (firebaseUser && section === "schedule") void reloadAssignments();
-  }, [date, section, firebaseUser?.uid]);
+    if (firebaseUser)
+      void reloadAssignments(section === "directory" ? today : date);
+  }, [date, section, firebaseUser?.uid, today]);
 
   const visibleStaff = useMemo(
     () =>
@@ -173,6 +178,80 @@ export default function StaffDirectory({
     () => new Map(dutyTypes.map((item) => [item.id, item])),
     [dutyTypes]
   );
+  const dutyLabelsByStaff = useMemo(
+    () => buildDutyLabelsByStaff(assignments, dutyById),
+    [assignments, dutyById]
+  );
+
+  function staffCard(person, label) {
+    const dutyLabels = dutyLabelsByStaff.get(person.id) ?? [];
+    return (
+      <article
+        className={`staff-card ${person.active === false ? "inactive" : ""}`}
+        key={person.id}
+      >
+        <div className="staff-photo">
+          {person.photoUrl ? (
+            <img src={person.photoUrl} alt={`รูปของ ${person.fullName}`} />
+          ) : (
+            <span>{initials(person)}</span>
+          )}
+        </div>
+        <div className="staff-card-body">
+          <div className="staff-card-title">
+            <div>
+              <strong>{person.nickname}</strong>
+              <p>{person.fullName}</p>
+              {person.employeeId && (
+                <small>รหัสพนักงาน: {person.employeeId}</small>
+              )}
+            </div>
+            <span className="staff-position">{label}</span>
+          </div>
+          <div className="staff-today-duty">
+            <strong>
+              <CalendarDays size={14} /> หน้าที่วันนี้
+            </strong>
+            {dutyLabels.length ? (
+              <ul>
+                {dutyLabels.map((dutyLabel, index) => (
+                  <li key={`${person.id}-duty-${index}`}>{dutyLabel}</li>
+                ))}
+              </ul>
+            ) : (
+              <p>ยังไม่ได้กำหนดหน้าที่</p>
+            )}
+          </div>
+          <div className="staff-contact">
+            {person.phone && (
+              <a href={`tel:${person.phone}`}>
+                <Phone size={15} />
+                {person.phone}
+              </a>
+            )}
+            {person.lineId && (
+              <button
+                onClick={() => navigator.clipboard?.writeText(person.lineId)}
+              >
+                LINE: {person.lineId}
+              </button>
+            )}
+            {person.email && (
+              <a href={`mailto:${person.email}`}>
+                <Mail size={15} />
+                {person.email}
+              </a>
+            )}
+          </div>
+          {isAdmin && (
+            <button className="staff-edit" onClick={() => setEditingMember(person)}>
+              <Pencil size={15} /> แก้ไข
+            </button>
+          )}
+        </div>
+      </article>
+    );
+  }
 
   async function submitMember(event) {
     event.preventDefault();
@@ -370,80 +449,38 @@ export default function StaffDirectory({
               </label>
             )}
           </div>
-          {Object.entries(POSITION_LABELS).map(
-            ([position, label]) =>
-              groups[position].length > 0 && (
-                <section className="staff-group" key={position}>
-                  <h3>
-                    {label} <span>{groups[position].length} คน</span>
-                  </h3>
-                  <div className="staff-grid">
-                    {groups[position].map((person) => (
-                      <article
-                        className={`staff-card ${
-                          person.active === false ? "inactive" : ""
-                        }`}
-                        key={person.id}
-                      >
-                        <div className="staff-photo">
-                          {person.photoUrl ? (
-                            <img
-                              src={person.photoUrl}
-                              alt={`รูปของ ${person.fullName}`}
-                            />
-                          ) : (
-                            <span>{initials(person)}</span>
-                          )}
-                        </div>
-                        <div className="staff-card-body">
-                          <div className="staff-card-title">
-                            <div>
-                              <strong>{person.nickname}</strong>
-                              <p>{person.fullName}</p>
-                              {person.employeeId && (
-                                <small>รหัสพนักงาน: {person.employeeId}</small>
-                              )}
-                            </div>
-                            <span className="staff-position">{label}</span>
-                          </div>
-                          <div className="staff-contact">
-                            {person.phone && (
-                              <a href={`tel:${person.phone}`}>
-                                <Phone size={15} />
-                                {person.phone}
-                              </a>
-                            )}
-                            {person.lineId && (
-                              <button
-                                onClick={() =>
-                                  navigator.clipboard?.writeText(person.lineId)
-                                }
-                              >
-                                LINE: {person.lineId}
-                              </button>
-                            )}
-                            {person.email && (
-                              <a href={`mailto:${person.email}`}>
-                                <Mail size={15} />
-                                {person.email}
-                              </a>
-                            )}
-                          </div>
-                          {isAdmin && (
-                            <button
-                              className="staff-edit"
-                              onClick={() => setEditingMember(person)}
-                            >
-                              <Pencil size={15} /> แก้ไข
-                            </button>
-                          )}
-                        </div>
-                      </article>
-                    ))}
-                  </div>
-                </section>
-              )
-          )}
+          <div className="staff-org-chart" aria-label="ผังทำเนียบพนักงาน">
+            {groups.leader.length > 0 && (
+              <section className="staff-org-level staff-org-leader">
+                <h3>
+                  หัวหน้า <span>{groups.leader.length} คน</span>
+                </h3>
+                <div className="staff-grid">
+                  {groups.leader.map((person) => staffCard(person, "หัวหน้า"))}
+                </div>
+              </section>
+            )}
+            {groups.checker.length > 0 && (
+              <section className="staff-org-level staff-org-team">
+                <h3>
+                  Checker <span>{groups.checker.length} คน</span>
+                </h3>
+                <div className="staff-grid">
+                  {groups.checker.map((person) => staffCard(person, "Checker"))}
+                </div>
+              </section>
+            )}
+            {groups.packer.length > 0 && (
+              <section className="staff-org-level staff-org-team">
+                <h3>
+                  Packer <span>{groups.packer.length} คน</span>
+                </h3>
+                <div className="staff-grid">
+                  {groups.packer.map((person) => staffCard(person, "Packer"))}
+                </div>
+              </section>
+            )}
+          </div>
           {!visibleStaff.length && (
             <div className="staff-empty">
               <UserRound size={32} />

@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  buildDutyLabelsByStaff,
   buildPackerOptions,
   copyAssignments,
   groupActiveStaff,
@@ -9,6 +10,28 @@ import {
   staffSaveErrorMessage,
   validateStaffInput,
 } from "./staffDirectory.js";
+
+test("groups today's duty labels by staff for directory cards", () => {
+  const dutyById = new Map([
+    ["packing", { name: "แพ็คสินค้าโซน A" }],
+    ["checking", { name: "ตรวจสอบสินค้า" }],
+  ]);
+
+  assert.deepEqual(
+    [...buildDutyLabelsByStaff(
+      [
+        { staffId: "u1", dutyTypeId: "packing", note: "โต๊ะ 1" },
+        { staffId: "u1", dutyTypeId: "checking", note: "" },
+        { staffId: "u2", dutyTypeId: "legacy", note: "ช่วยโหลดของ" },
+      ],
+      dutyById
+    )],
+    [
+      ["u1", ["แพ็คสินค้าโซน A — โต๊ะ 1", "ตรวจสอบสินค้า"]],
+      ["u2", ["ประเภทงานเดิม — ช่วยโหลดของ"]],
+    ]
+  );
+});
 
 test("groups active staff by position and preserves configured order", () => {
   const groups = groupActiveStaff([
