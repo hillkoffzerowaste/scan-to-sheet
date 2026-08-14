@@ -35,11 +35,25 @@ export function buildPackerOptions(staff) {
   return packers;
 }
 
-export function validateStaffInput(person) {
+export function validateStaffInput(person, existingStaff = []) {
   const errors = [];
   if (!String(person.fullName ?? "").trim()) errors.push("fullName");
   if (!String(person.nickname ?? "").trim()) errors.push("nickname");
   if (!STAFF_POSITIONS.includes(person.position)) errors.push("position");
+  const employeeId = String(person.employeeId ?? "")
+    .trim()
+    .toLocaleLowerCase("th");
+  if (
+    employeeId &&
+    existingStaff.some(
+      (item) =>
+        item.id !== person.id &&
+        String(item.employeeId ?? "")
+          .trim()
+          .toLocaleLowerCase("th") === employeeId
+    )
+  )
+    errors.push("employeeId");
   return errors;
 }
 
@@ -57,4 +71,21 @@ export function mergeAssignments(existing, copied) {
     keys.add(key);
     return true;
   });
+}
+
+export function staffSaveErrorMessage(error) {
+  const code = String(error?.code ?? "");
+  if (code === "STAFF_DUPLICATE_EMPLOYEE_ID")
+    return "รหัสพนักงานนี้ถูกใช้งานแล้ว";
+  if (code === "STAFF_EMPLOYEE_ID_TOO_LONG")
+    return "รหัสพนักงานต้องยาวไม่เกิน 60 ตัวอักษร";
+  if (code === "STAFF_DUPLICATE_PACKER_NICKNAME")
+    return "ชื่อเล่น Packer ซ้ำกัน";
+  if (code.includes("storage/unauthorized"))
+    return "ไม่มีสิทธิ์อัปโหลดรูปพนักงาน กรุณาเข้าสู่ระบบใหม่";
+  if (code.includes("permission-denied"))
+    return "ไม่มีสิทธิ์บันทึกข้อมูลพนักงาน กรุณาเข้าสู่ระบบใหม่";
+  if (code.includes("storage/quota-exceeded"))
+    return "พื้นที่จัดเก็บรูปไม่พร้อมใช้งาน กรุณาแจ้ง Admin";
+  return "บันทึกข้อมูลพนักงานไม่สำเร็จ กรุณาลองใหม่";
 }

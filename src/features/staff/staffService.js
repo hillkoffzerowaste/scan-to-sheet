@@ -8,6 +8,7 @@ import {
   limit,
   onSnapshot,
   query,
+  runTransaction,
   serverTimestamp,
   setDoc,
   where,
@@ -66,6 +67,7 @@ export async function saveStaffMember(member, user) {
     ? doc(firestoreDb, "staffMembers", member.id)
     : doc(collection(firestoreDb, "staffMembers"));
   const payload = {
+    employeeId: String(member.employeeId ?? "").trim(),
     fullName: String(member.fullName).trim(),
     nickname: String(member.nickname).trim(),
     position: member.position,
@@ -83,22 +85,65 @@ export async function saveStaffMember(member, user) {
       name: user.displayName ?? user.name ?? "",
     },
   };
-  const batch = writeBatch(firestoreDb);
-  batch.set(
-    target,
-    member.createdAt ? payload : { ...payload, createdAt: serverTimestamp() },
-    { merge: true }
+  if (payload.employeeId.length > 60) {
+    const error = new Error("รหัสพนักงานยาวเกิน 60 ตัวอักษร");
+    error.code = "STAFF_EMPLOYEE_ID_TOO_LONG";
+    throw error;
+  }
+  const codeKey = encodeURIComponent(
+    payload.employeeId.toLocaleLowerCase("th")
   );
-  batch.set(
-    doc(firestoreDb, "staffPrivateNotes", target.id),
-    {
-      note: String(member.internalNote ?? "").trim(),
-      updatedAt: serverTimestamp(),
-      updatedByUid: user.uid,
-    },
-    { merge: true }
+  const previousCodeKey = encodeURIComponent(
+    String(member.previousEmployeeId ?? payload.employeeId)
+      .trim()
+      .toLocaleLowerCase("th")
   );
-  await batch.commit();
+  await runTransaction(firestoreDb, async (transaction) => {
+    const codeRef = codeKey
+      ? doc(firestoreDb, "staffEmployeeCodes", codeKey)
+      : null;
+    const previousCodeRef =
+      previousCodeKey && previousCodeKey !== codeKey
+        ? doc(firestoreDb, "staffEmployeeCodes", previousCodeKey)
+        : null;
+    const codeSnapshot = codeRef ? await transaction.get(codeRef) : null;
+    const previousCodeSnapshot = previousCodeRef
+      ? await transaction.get(previousCodeRef)
+      : null;
+    if (codeSnapshot?.exists() && codeSnapshot.data().staffId !== target.id) {
+      const error = new Error("รหัสพนักงานนี้ถูกใช้งานแล้ว");
+      error.code = "STAFF_DUPLICATE_EMPLOYEE_ID";
+      throw error;
+    }
+    transaction.set(
+      target,
+      member.createdAt ? payload : { ...payload, createdAt: serverTimestamp() },
+      { merge: true }
+    );
+    transaction.set(
+      doc(firestoreDb, "staffPrivateNotes", target.id),
+      {
+        note: String(member.internalNote ?? "").trim(),
+        updatedAt: serverTimestamp(),
+        updatedByUid: user.uid,
+      },
+      { merge: true }
+    );
+    if (codeRef) {
+      transaction.set(codeRef, {
+        staffId: target.id,
+        employeeId: payload.employeeId,
+        updatedAt: serverTimestamp(),
+      });
+    }
+    if (
+      previousCodeRef &&
+      previousCodeSnapshot?.exists() &&
+      previousCodeSnapshot.data().staffId === target.id
+    ) {
+      transaction.delete(previousCodeRef);
+    }
+  });
   return target.id;
 }
 

@@ -6,6 +6,7 @@ import {
   copyAssignments,
   groupActiveStaff,
   mergeAssignments,
+  staffSaveErrorMessage,
   validateStaffInput,
 } from "./staffDirectory.js";
 
@@ -64,6 +65,36 @@ test("validates required staff fields independently from optional contacts", () 
   );
 });
 
+test("allows a blank employee id but rejects a duplicate entered id", () => {
+  const existing = [{ id: "staff-1", employeeId: "HK-001" }];
+  assert.deepEqual(
+    validateStaffInput(
+      {
+        id: "staff-2",
+        fullName: "สมหญิง ใจดี",
+        nickname: "หญิง",
+        position: "packer",
+        employeeId: "",
+      },
+      existing
+    ),
+    []
+  );
+  assert.deepEqual(
+    validateStaffInput(
+      {
+        id: "staff-2",
+        fullName: "สมหญิง ใจดี",
+        nickname: "หญิง",
+        position: "packer",
+        employeeId: " hk-001 ",
+      },
+      existing
+    ),
+    ["employeeId"]
+  );
+});
+
 test("copies assignments to a new date without mutating the source", () => {
   const source = [
     { staffId: "u1", dutyTypeId: "packing", note: "โซน A", date: "2026-08-13" },
@@ -89,4 +120,22 @@ test("merges copied assignments without duplicating the same person and duty", (
   assert.deepEqual(mergeAssignments(existing, copied), [
     { staffId: "u1", dutyTypeId: "checking" },
   ]);
+});
+
+test("maps staff save failures to actionable Thai messages without internal details", () => {
+  assert.equal(
+    staffSaveErrorMessage({ code: "permission-denied" }),
+    "ไม่มีสิทธิ์บันทึกข้อมูลพนักงาน กรุณาเข้าสู่ระบบใหม่"
+  );
+  assert.equal(
+    staffSaveErrorMessage({ code: "storage/unauthorized" }),
+    "ไม่มีสิทธิ์อัปโหลดรูปพนักงาน กรุณาเข้าสู่ระบบใหม่"
+  );
+  assert.equal(
+    staffSaveErrorMessage({
+      code: "STAFF_DUPLICATE_EMPLOYEE_ID",
+      message: "internal",
+    }),
+    "รหัสพนักงานนี้ถูกใช้งานแล้ว"
+  );
 });

@@ -15,6 +15,7 @@ import {
   buildPackerOptions,
   groupActiveStaff,
   mergeAssignments,
+  staffSaveErrorMessage,
   validateStaffInput,
 } from "./staffDirectory.js";
 import {
@@ -39,6 +40,7 @@ const POSITION_LABELS = {
   packer: "Packer",
 };
 const EMPTY_MEMBER = {
+  employeeId: "",
   fullName: "",
   nickname: "",
   position: "packer",
@@ -143,6 +145,7 @@ export default function StaffDirectory({
           !needle ||
           [
             person.fullName,
+            person.employeeId,
             person.nickname,
             person.phone,
             person.lineId,
@@ -177,6 +180,8 @@ export default function StaffDirectory({
       const form = new FormData(event.currentTarget);
       const member = {
         ...editingMember,
+        previousEmployeeId: editingMember.employeeId,
+        employeeId: String(form.get("employeeId") ?? "").trim(),
         fullName: form.get("fullName"),
         nickname: form.get("nickname"),
         position: form.get("position"),
@@ -187,7 +192,12 @@ export default function StaffDirectory({
         active: form.get("active") === "on",
         sortOrder: Number(form.get("sortOrder") || 0),
       };
-      if (validateStaffInput(member).length) {
+      const validationErrors = validateStaffInput(member, staff);
+      if (validationErrors.includes("employeeId")) {
+        setMessage("รหัสพนักงานนี้ถูกใช้งานแล้ว");
+        return;
+      }
+      if (validationErrors.length) {
         setMessage("กรุณากรอกชื่อจริง ชื่อเล่น และตำแหน่งให้ครบ");
         return;
       }
@@ -233,11 +243,7 @@ export default function StaffDirectory({
       );
       await reloadBase();
     } catch (error) {
-      setMessage(
-        error.code === "STAFF_DUPLICATE_PACKER_NICKNAME"
-          ? error.message
-          : "บันทึกข้อมูลพนักงานไม่สำเร็จ กรุณาลองใหม่"
-      );
+      setMessage(staffSaveErrorMessage(error));
     }
   }
 
@@ -394,6 +400,9 @@ export default function StaffDirectory({
                             <div>
                               <strong>{person.nickname}</strong>
                               <p>{person.fullName}</p>
+                              {person.employeeId && (
+                                <small>รหัสพนักงาน: {person.employeeId}</small>
+                              )}
                             </div>
                             <span className="staff-position">{label}</span>
                           </div>
@@ -622,6 +631,15 @@ export default function StaffDirectory({
               <label>
                 รูปประจำตัว
                 <input name="photo" type="file" accept="image/*" />
+              </label>
+              <label>
+                รหัสพนักงาน
+                <input
+                  name="employeeId"
+                  maxLength="60"
+                  defaultValue={editingMember.employeeId}
+                  placeholder="เช่น HK-001"
+                />
               </label>
               <label>
                 ชื่อจริง–นามสกุล *

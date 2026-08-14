@@ -24,10 +24,20 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow create, update: if isStaffAdmin()
         && request.resource.data.fullName is string
+        && request.resource.data.employeeId is string
+        && request.resource.data.employeeId.size() <= 60
         && request.resource.data.nickname is string
         && request.resource.data.position in ['leader', 'checker', 'packer']
         && request.resource.data.active is bool;
       allow delete: if false;
+    }
+
+    match /staffEmployeeCodes/{employeeCode} {
+      allow read: if isStaffAdmin();
+      allow create, update: if isStaffAdmin()
+        && request.resource.data.staffId is string
+        && request.resource.data.employeeId is string;
+      allow delete: if isStaffAdmin();
     }
 
     match /staffPrivateNotes/{staffId} {
