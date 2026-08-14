@@ -45,6 +45,15 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /staffPrivateContacts/{staffId} {
+      allow read, create, update: if isStaffAdmin()
+        && request.resource.data.phone is string
+        && request.resource.data.lineId is string
+        && request.resource.data.email is string
+        && request.resource.data.updatedByUid == request.auth.uid;
+      allow delete: if false;
+    }
+
     match /staffSettings/packingRoomNotice {
       allow read: if isSignedIn();
       allow create, update: if isStaffAdmin()
@@ -71,6 +80,36 @@ service cloud.firestore {
         && request.resource.data.date is string
         && request.resource.data.staffId is string
         && request.resource.data.dutyTypeId is string;
+      allow delete: if isStaffAdmin();
+    }
+
+    match /staffDailyStatuses/{statusId} {
+      allow read: if isSignedIn();
+      allow create, update: if isStaffAdmin()
+        && request.resource.data.keys().hasOnly([
+          'date', 'staffId', 'status', 'updatedAt', 'updatedByUid'
+        ])
+        && request.resource.data.date is string
+        && request.resource.data.date.size() == 10
+        && request.resource.data.staffId is string
+        && request.resource.data.status in ['leave', 'off', 'outside']
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.updatedByUid == request.auth.uid;
+      allow delete: if isStaffAdmin();
+    }
+
+    match /staffDailyLeads/{date} {
+      allow read: if isSignedIn();
+      allow create, update: if isStaffAdmin()
+        && request.resource.data.keys().hasOnly([
+          'date', 'staffId', 'updatedAt', 'updatedByUid'
+        ])
+        && request.resource.data.date == date
+        && request.resource.data.date.size() == 10
+        && request.resource.data.staffId is string
+        && get(/databases/$(database)/documents/staffMembers/$(request.resource.data.staffId)).data.position in ['checker', 'packer']
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.updatedByUid == request.auth.uid;
       allow delete: if isStaffAdmin();
     }
 

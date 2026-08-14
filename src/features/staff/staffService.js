@@ -21,10 +21,12 @@ import {
   uploadBytes,
 } from "firebase/storage";
 import { firebaseStorage, firestoreDb } from "../../services/firebase.js";
+import { maskStaffContact } from "./staffDirectory.js";
 
 const STAFF_LIMIT = 200;
 const DUTY_LIMIT = 100;
 const ASSIGNMENT_LIMIT = 200;
+const DAILY_STATUS_LIMIT = 200;
 
 function requireFirebase() {
   if (!firestoreDb)
@@ -94,9 +96,9 @@ export async function saveStaffMember(member, user) {
     fullName: String(member.fullName).trim(),
     nickname: String(member.nickname).trim(),
     position: member.position,
-    phone: String(member.phone ?? "").trim(),
-    lineId: String(member.lineId ?? "").trim(),
-    email: String(member.email ?? "").trim(),
+    phone: maskStaffContact(member.phone, "phone"),
+    lineId: maskStaffContact(member.lineId, "line"),
+    email: maskStaffContact(member.email, "email"),
     active: member.active !== false,
     sortOrder: Number(member.sortOrder ?? 0),
     photoUrl: String(member.photoUrl ?? ""),
@@ -152,6 +154,17 @@ export async function saveStaffMember(member, user) {
       },
       { merge: true }
     );
+    transaction.set(
+      doc(firestoreDb, "staffPrivateContacts", target.id),
+      {
+        phone: String(member.phone ?? "").trim(),
+        lineId: String(member.lineId ?? "").trim(),
+        email: String(member.email ?? "").trim(),
+        updatedAt: serverTimestamp(),
+        updatedByUid: user.uid,
+      },
+      { merge: true }
+    );
     if (codeRef) {
       transaction.set(codeRef, {
         staffId: target.id,
@@ -178,6 +191,38 @@ export async function listStaffPrivateNotes() {
   return new Map(
     snapshot.docs.map((item) => [item.id, String(item.data().note ?? "")])
   );
+}
+
+export async function listStaffPrivateContacts() {
+  requireFirebase();
+  const snapshot = await getDocs(
+    query(collection(firestoreDb, "staffPrivateContacts"), limit(STAFF_LIMIT))
+  );
+  return new Map(
+    snapshot.docs.map((item) => [item.id, item.data()])
+  );
+}
+
+export async function saveStaffOrder(items, user) {
+  requireFirebase();
+  if (items.length > STAFF_LIMIT) throw new Error("รายการพนักงานมากเกินกำหนด");
+  const batch = writeBatch(firestoreDb);
+  items.forEach((item, sortOrder) => {
+    batch.set(
+      doc(firestoreDb, "staffMembers", item.id),
+      {
+        sortOrder,
+        updatedAt: serverTimestamp(),
+        updatedBy: {
+          uid: user.uid,
+          email: user.email ?? "",
+          name: user.displayName ?? user.name ?? "",
+        },
+      },
+      { merge: true }
+    );
+  });
+  await batch.commit();
 }
 
 export async function uploadStaffPhoto(memberId, file) {
@@ -240,6 +285,57 @@ export async function listDailyAssignments(date) {
     )
   );
   return snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+}
+
+export async function listDailyStatuses(date) {
+  requireFirebase();
+  if (!date) return [];
+  const snapshot = await getDocs(
+    query(
+      collection(firestoreDb, "staffDailyStatuses"),
+      where("date", "==", date),
+      limit(DAILY_STATUS_LIMIT)
+    )
+  );
+  return snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+}
+
+export async function saveDailyStatus({ date, staffId, status }, user) {
+  requireFirebase();
+  const target = doc(firestoreDb, "staffDailyStatuses", `${date}__${staffId}`);
+  if (status === "working") {
+    await deleteDoc(target);
+    return;
+  }
+  await setDoc(target, {
+    date,
+    staffId,
+    status,
+    updatedAt: serverTimestamp(),
+    updatedByUid: user.uid,
+  });
+}
+
+export async function getDailyLead(date) {
+  requireFirebase();
+  if (!date) return null;
+  const snapshot = await getDoc(doc(firestoreDb, "staffDailyLeads", date));
+  return snapshot.exists() ? snapshot.data() : null;
+}
+
+export async function saveDailyLead(date, staffId, user) {
+  requireFirebase();
+  const target = doc(firestoreDb, "staffDailyLeads", date);
+  if (!staffId) {
+    await deleteDoc(target);
+    return;
+  }
+  await setDoc(target, {
+    date,
+    staffId,
+    updatedAt: serverTimestamp(),
+    updatedByUid: user.uid,
+  });
 }
 
 export async function saveDailyAssignment(item, user) {

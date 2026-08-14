@@ -4,11 +4,17 @@ import assert from "node:assert/strict";
 import {
   DEFAULT_PACKING_NOTICE,
   buildPackingRoomTeam,
+  buildWorkforceSummary,
+  filterDirectoryStaff,
   buildDutyLabelsByStaff,
   buildPackerOptions,
   copyAssignments,
   groupActiveStaff,
   mergeAssignments,
+  maskStaffContact,
+  reorderStaffWithinPosition,
+  resolveDailyStatus,
+  staffMissingFields,
   resolvePackingNotice,
   staffSaveErrorMessage,
   validateStaffInput,
@@ -32,6 +38,71 @@ test("places checkers before packers in one packing-room team", () => {
     buildPackingRoomTeam(groups).map((person) => person.id),
     ["checker-1", "packer-1", "packer-2"]
   );
+});
+
+test("defaults active staff to working and summarizes daily exceptions", () => {
+  const staff = [
+    { id: "1", active: true },
+    { id: "2", active: true },
+    { id: "3", active: false },
+  ];
+  const statuses = new Map([["2", "leave"]]);
+  assert.equal(resolveDailyStatus("1", statuses), "working");
+  assert.deepEqual(buildWorkforceSummary(staff, statuses, new Map()), {
+    total: 2,
+    working: 1,
+    leave: 1,
+    off: 0,
+    outside: 0,
+    unassigned: 2,
+  });
+});
+
+test("masks public contact details without hiding them from admins", () => {
+  assert.equal(maskStaffContact("0614749196", "phone"), "061-xxx-9196");
+  assert.equal(maskStaffContact("krittidet1989", "line"), "kr***89");
+  assert.equal(maskStaffContact("name@example.com", "email"), "na***@example.com");
+});
+
+test("filters staff by position, status, assignment and duty text", () => {
+  const staff = [
+    { id: "1", position: "checker", nickname: "มาย", active: true },
+    { id: "2", position: "packer", nickname: "มุก", active: true },
+  ];
+  const statuses = new Map([["2", "leave"]]);
+  const duties = new Map([["1", ["เช็คสินค้าโซน A"]]]);
+  assert.deepEqual(
+    filterDirectoryStaff(staff, {
+      query: "โซน a",
+      position: "checker",
+      status: "working",
+      duty: "assigned",
+      statuses,
+      duties,
+    }).map((item) => item.id),
+    ["1"]
+  );
+});
+
+test("reports missing profile fields and reorders only within one position", () => {
+  assert.deepEqual(
+    staffMissingFields(
+      { fullName: "ก", employeeId: "1", photoUrl: "", phone: "" },
+      []
+    ),
+    ["รูป", "ข้อมูลติดต่อ", "หน้าที่วันนี้"]
+  );
+  const reordered = reorderStaffWithinPosition(
+    [
+      { id: "c1", position: "checker" },
+      { id: "c2", position: "checker" },
+      { id: "p1", position: "packer" },
+    ],
+    "c2",
+    "c1"
+  );
+  assert.deepEqual(reordered.map((item) => item.id), ["c2", "c1", "p1"]);
+  assert.deepEqual(reordered.map((item) => item.sortOrder), [0, 1, undefined]);
 });
 
 test("groups today's duty labels by staff for directory cards", () => {

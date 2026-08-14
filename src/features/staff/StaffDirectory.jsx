@@ -1,13 +1,17 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
+  AlertTriangle,
+  BarChart3,
   CalendarDays,
   Copy,
+  GripVertical,
   Mail,
   Megaphone,
   Pencil,
   Phone,
   Plus,
   Search,
+  Star,
   UserRound,
   Users,
   X,
@@ -16,9 +20,14 @@ import {
   buildDutyLabelsByStaff,
   buildPackingRoomTeam,
   buildPackerOptions,
+  buildWorkforceSummary,
+  filterDirectoryStaff,
   groupActiveStaff,
   mergeAssignments,
+  reorderStaffWithinPosition,
   resolvePackingNotice,
+  resolveDailyStatus,
+  staffMissingFields,
   staffSaveErrorMessage,
   validateStaffInput,
 } from "./staffDirectory.js";
@@ -28,15 +37,21 @@ import {
   deleteDailyAssignment,
   getStaffAdminStatus,
   getPackingRoomNotice,
+  getDailyLead,
   listDailyAssignments,
+  listDailyStatuses,
   listDutyTypes,
   listStaffMembers,
   listStaffPrivateNotes,
+  listStaffPrivateContacts,
   removeStaffPhoto,
   saveDailyAssignment,
+  saveDailyLead,
+  saveDailyStatus,
   saveDutyType,
   savePackingRoomNotice,
   saveStaffMember,
+  saveStaffOrder,
   uploadStaffPhoto,
 } from "./staffService.js";
 
@@ -44,6 +59,12 @@ const POSITION_LABELS = {
   leader: "หัวหน้า",
   checker: "Checker",
   packer: "Packer",
+};
+const STATUS_LABELS = {
+  working: "ปฏิบัติงาน",
+  leave: "ลา",
+  off: "หยุด",
+  outside: "ออกนอกพื้นที่",
 };
 const EMPTY_MEMBER = {
   employeeId: "",
@@ -96,11 +117,16 @@ export default function StaffDirectory({
   const [staff, setStaff] = useState([]);
   const [dutyTypes, setDutyTypes] = useState([]);
   const [assignments, setAssignments] = useState([]);
+  const [dailyStatuses, setDailyStatuses] = useState(new Map());
+  const [dailyLeadId, setDailyLeadId] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
   const [section, setSection] = useState("directory");
   const [date, setDate] = useState(bangkokDateKey);
   const [queryText, setQueryText] = useState("");
   const [showInactive, setShowInactive] = useState(false);
+  const [positionFilter, setPositionFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [dutyFilter, setDutyFilter] = useState("all");
   const [editingMember, setEditingMember] = useState(null);
   const [editingAssignment, setEditingAssignment] = useState(null);
   const [dutyName, setDutyName] = useState("");
@@ -111,17 +137,27 @@ export default function StaffDirectory({
   const [noticeDraft, setNoticeDraft] = useState("");
   const [message, setMessage] = useState("");
   const [copying, setCopying] = useState(false);
+  const [draggedStaffId, setDraggedStaffId] = useState("");
+  const [savingOrder, setSavingOrder] = useState(false);
 
   async function reloadBase(includePrivate = isAdmin) {
-    const [publicMembers, duties, privateNotes, notice] = await Promise.all([
+    const [publicMembers, duties, privateNotes, privateContacts, notice] = await Promise.all([
       listStaffMembers(),
       listDutyTypes(),
       includePrivate ? listStaffPrivateNotes() : Promise.resolve(new Map()),
+      includePrivate ? listStaffPrivateContacts() : Promise.resolve(new Map()),
       getPackingRoomNotice(),
     ]);
     const members = publicMembers.map((person) => ({
       ...person,
       internalNote: privateNotes.get(person.id),
+      ...(privateContacts.has(person.id)
+        ? {
+            phone: privateContacts.get(person.id).phone ?? "",
+            lineId: privateContacts.get(person.id).lineId ?? "",
+            email: privateContacts.get(person.id).email ?? "",
+          }
+        : {}),
     }));
     setStaff(members);
     setDutyTypes(duties);
@@ -133,8 +169,17 @@ export default function StaffDirectory({
     }
   }
 
-  async function reloadAssignments(selectedDate = date) {
-    setAssignments(await listDailyAssignments(selectedDate));
+  async function reloadDaily(selectedDate = date) {
+    const [items, statuses, lead] = await Promise.all([
+      listDailyAssignments(selectedDate),
+      listDailyStatuses(selectedDate),
+      getDailyLead(selectedDate),
+    ]);
+    setAssignments(items);
+    setDailyStatuses(
+      new Map(statuses.map((item) => [item.staffId, item.status]))
+    );
+    setDailyLeadId(lead?.staffId ?? "");
   }
 
   useEffect(() => {
@@ -147,42 +192,10 @@ export default function StaffDirectory({
       .catch(() => setMessage("โหลดข้อมูลทำเนียบไม่สำเร็จ"));
   }, [firebaseUser?.uid]);
 
-  const today = bangkokDateKey();
   useEffect(() => {
-    if (firebaseUser)
-      void reloadAssignments(section === "directory" ? today : date);
-  }, [date, section, firebaseUser?.uid, today]);
+    if (firebaseUser) void reloadDaily(date);
+  }, [date, firebaseUser?.uid]);
 
-  const visibleStaff = useMemo(
-    () =>
-      staff.filter((person) => {
-        if (!showInactive && person.active === false) return false;
-        const needle = queryText.trim().toLocaleLowerCase("th");
-        return (
-          !needle ||
-          [
-            person.fullName,
-            person.employeeId,
-            person.nickname,
-            person.phone,
-            person.lineId,
-            person.email,
-            POSITION_LABELS[person.position],
-          ].some((value) =>
-            String(value ?? "")
-              .toLocaleLowerCase("th")
-              .includes(needle)
-          )
-        );
-      }),
-    [staff, queryText, showInactive]
-  );
-  const groups = groupActiveStaff(
-    showInactive
-      ? visibleStaff.map((person) => ({ ...person, active: true }))
-      : visibleStaff
-  );
-  const packingRoomTeam = buildPackingRoomTeam(groups);
   const staffById = useMemo(
     () => new Map(staff.map((person) => [person.id, person])),
     [staff]
@@ -195,14 +208,96 @@ export default function StaffDirectory({
     () => buildDutyLabelsByStaff(assignments, dutyById),
     [assignments, dutyById]
   );
+  const activeOrVisibleStaff = useMemo(
+    () => staff.filter((person) => showInactive || person.active !== false),
+    [staff, showInactive]
+  );
+  const visibleStaff = useMemo(
+    () =>
+      filterDirectoryStaff(activeOrVisibleStaff, {
+        query: queryText,
+        position: positionFilter,
+        status: statusFilter,
+        duty: dutyFilter,
+        statuses: dailyStatuses,
+        duties: dutyLabelsByStaff,
+      }),
+    [
+      activeOrVisibleStaff,
+      queryText,
+      positionFilter,
+      statusFilter,
+      dutyFilter,
+      dailyStatuses,
+      dutyLabelsByStaff,
+    ]
+  );
+  const groups = groupActiveStaff(
+    showInactive
+      ? visibleStaff.map((person) => ({ ...person, active: true }))
+      : visibleStaff
+  );
+  const packingRoomTeam = buildPackingRoomTeam(groups);
+  const workforceSummary = useMemo(
+    () => buildWorkforceSummary(staff, dailyStatuses, dutyLabelsByStaff),
+    [staff, dailyStatuses, dutyLabelsByStaff]
+  );
+
+  async function updateDailyStatus(person, status) {
+    try {
+      await saveDailyStatus({ date, staffId: person.id, status }, firebaseUser);
+      await reloadDaily();
+      setMessage(`บันทึกสถานะของ ${person.nickname} แล้ว`);
+    } catch {
+      setMessage("บันทึกสถานะประจำวันไม่สำเร็จ กรุณาลองใหม่");
+    }
+  }
+
+  async function reorderTeam(targetId) {
+    if (!draggedStaffId || draggedStaffId === targetId || savingOrder) return;
+    const dragged = staffById.get(draggedStaffId);
+    const target = staffById.get(targetId);
+    if (!dragged || !target || dragged.position !== target.position) {
+      setMessage("จัดลำดับได้เฉพาะพนักงานตำแหน่งเดียวกัน");
+      setDraggedStaffId("");
+      return;
+    }
+    setSavingOrder(true);
+    try {
+      const next = reorderStaffWithinPosition(staff, draggedStaffId, targetId);
+      const orderedPosition = next.filter(
+        (person) => person.position === dragged.position
+      );
+      await saveStaffOrder(orderedPosition, firebaseUser);
+      setStaff(next);
+      setMessage("บันทึกลำดับพนักงานแล้ว");
+    } catch {
+      setMessage("บันทึกลำดับพนักงานไม่สำเร็จ กรุณาลองใหม่");
+    } finally {
+      setSavingOrder(false);
+      setDraggedStaffId("");
+    }
+  }
 
   function staffCard(person, label) {
     const dutyLabels = dutyLabelsByStaff.get(person.id) ?? [];
+    const dailyStatus = resolveDailyStatus(person.id, dailyStatuses);
+    const missingFields = staffMissingFields(person, dutyLabels);
+    const canReorder = isAdmin && ["checker", "packer"].includes(person.position);
     return (
       <article
-        className={`staff-card ${person.active === false ? "inactive" : ""}`}
+        className={`staff-card status-${dailyStatus} ${person.active === false ? "inactive" : ""}`}
         key={person.id}
+        draggable={canReorder && !savingOrder}
+        onDragStart={() => setDraggedStaffId(person.id)}
+        onDragOver={(event) => canReorder && event.preventDefault()}
+        onDrop={() => void reorderTeam(person.id)}
       >
+        {canReorder && (
+          <span className="staff-drag-handle" title="ลากเพื่อจัดลำดับ">
+            <GripVertical size={15} />
+          </span>
+        )}
         <div className="staff-photo">
           {person.photoUrl ? (
             <img src={person.photoUrl} alt={`รูปของ ${person.fullName}`} />
@@ -221,6 +316,32 @@ export default function StaffDirectory({
             </div>
             <span className="staff-position">{label}</span>
           </div>
+          <div className="staff-card-badges">
+            <span className={`staff-status status-${dailyStatus}`}>
+              {STATUS_LABELS[dailyStatus]}
+            </span>
+            {dailyLeadId === person.id && (
+              <span className="staff-lead-badge"><Star size={13} /> ผู้ช่วยหัวหน้าวันนี้</span>
+            )}
+          </div>
+          {isAdmin && missingFields.length > 0 && (
+            <div className="staff-incomplete" title={missingFields.join(", ")}>
+              <AlertTriangle size={14} /> ข้อมูลไม่ครบ: {missingFields.join(", ")}
+            </div>
+          )}
+          {isAdmin && person.active !== false && (
+            <label className="staff-status-editor">
+              สถานะวันที่เลือก
+              <select
+                value={dailyStatus}
+                onChange={(event) => void updateDailyStatus(person, event.target.value)}
+              >
+                {Object.entries(STATUS_LABELS).map(([value, text]) => (
+                  <option key={value} value={value}>{text}</option>
+                ))}
+              </select>
+            </label>
+          )}
           <div className="staff-today-duty">
             <strong>
               <CalendarDays size={14} /> หน้าที่วันนี้
@@ -235,25 +356,25 @@ export default function StaffDirectory({
               <p>ยังไม่ได้กำหนดหน้าที่</p>
             )}
           </div>
-          <div className="staff-contact">
+          <div className={`staff-contact ${isAdmin ? "private-visible" : "masked"}`}>
             {person.phone && (
-              <a href={`tel:${person.phone}`}>
+              isAdmin ? <a href={`tel:${person.phone}`}>
                 <Phone size={15} />
                 {person.phone}
-              </a>
+              </a> : <span><Phone size={15} />{person.phone}</span>
             )}
             {person.lineId && (
-              <button
+              isAdmin ? <button
                 onClick={() => navigator.clipboard?.writeText(person.lineId)}
               >
                 LINE: {person.lineId}
-              </button>
+              </button> : <span>LINE: {person.lineId}</span>
             )}
             {person.email && (
-              <a href={`mailto:${person.email}`}>
+              isAdmin ? <a href={`mailto:${person.email}`}>
                 <Mail size={15} />
                 {person.email}
-              </a>
+              </a> : <span><Mail size={15} />{person.email}</span>
             )}
           </div>
           {isAdmin && (
@@ -354,7 +475,7 @@ export default function StaffDirectory({
         firebaseUser
       );
       setEditingAssignment(null);
-      await reloadAssignments();
+      await reloadDaily();
       setMessage("บันทึกหน้าที่ประจำวันแล้ว");
     } catch {
       setMessage("บันทึกหน้าที่ประจำวันไม่สำเร็จ กรุณาลองใหม่");
@@ -391,7 +512,7 @@ export default function StaffDirectory({
         replaceIds,
         user: firebaseUser,
       });
-      await reloadAssignments();
+      await reloadDaily();
       setMessage(`คัดลอกหน้าที่จาก ${sourceDate} แล้ว`);
     } catch {
       setMessage("คัดลอกหน้าที่ไม่สำเร็จ กรุณาลองใหม่");
@@ -442,15 +563,86 @@ export default function StaffDirectory({
 
       {section === "directory" ? (
         <>
+          <div className="staff-summary" aria-label="สรุปกำลังคนวันที่เลือก">
+            {[
+              ["ทั้งหมด", workforceSummary.total],
+              ["ปฏิบัติงาน", workforceSummary.working],
+              ["ลา", workforceSummary.leave],
+              ["หยุด", workforceSummary.off],
+              ["ออกนอกพื้นที่", workforceSummary.outside],
+              ["ยังไม่มีหน้าที่", workforceSummary.unassigned],
+            ].map(([label, value]) => (
+              <div key={label}><span>{label}</span><strong>{value}</strong></div>
+            ))}
+          </div>
           <div className="staff-toolbar">
             <label className="staff-search">
               <Search size={17} />
               <input
                 value={queryText}
                 onChange={(e) => setQueryText(e.target.value)}
-                placeholder="ค้นหาชื่อ ชื่อเล่น ตำแหน่ง หรือข้อมูลติดต่อ"
+                placeholder="ค้นหาชื่อ ตำแหน่ง หรือหน้าที่วันที่เลือก"
               />
             </label>
+            <label className="staff-filter-control">
+              วันที่
+              <input type="date" required value={date} onChange={(e) => e.target.value && setDate(e.target.value)} />
+            </label>
+            <label className="staff-filter-control">
+              ตำแหน่ง
+              <select value={positionFilter} onChange={(e) => setPositionFilter(e.target.value)}>
+                <option value="all">ทั้งหมด</option>
+                <option value="leader">หัวหน้า</option>
+                <option value="checker">Checker</option>
+                <option value="packer">Packer</option>
+              </select>
+            </label>
+            <label className="staff-filter-control">
+              สถานะ
+              <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+                <option value="all">ทั้งหมด</option>
+                {Object.entries(STATUS_LABELS).map(([value, text]) => (
+                  <option key={value} value={value}>{text}</option>
+                ))}
+              </select>
+            </label>
+            <label className="staff-filter-control">
+              หน้าที่
+              <select value={dutyFilter} onChange={(e) => setDutyFilter(e.target.value)}>
+                <option value="all">ทั้งหมด</option>
+                <option value="assigned">มีหน้าที่แล้ว</option>
+                <option value="unassigned">ยังไม่มีหน้าที่</option>
+              </select>
+            </label>
+            <button className="staff-report-button" onClick={() => window.print()}>
+              <BarChart3 size={16} /> รายงานประจำวัน
+            </button>
+            {isAdmin && (
+              <label className="staff-filter-control staff-lead-select">
+                ผู้ช่วยหัวหน้า
+                <select
+                  value={dailyLeadId}
+                  onChange={async (event) => {
+                    try {
+                      await saveDailyLead(date, event.target.value, firebaseUser);
+                      setDailyLeadId(event.target.value);
+                      setMessage("บันทึกผู้ช่วยหัวหน้าประจำวันแล้ว");
+                    } catch {
+                      setMessage("บันทึกผู้ช่วยหัวหน้าไม่สำเร็จ กรุณาลองใหม่");
+                    }
+                  }}
+                >
+                  <option value="">ยังไม่กำหนด</option>
+                  {staff
+                    .filter((person) => person.active !== false && ["checker", "packer"].includes(person.position))
+                    .map((person) => (
+                      <option key={person.id} value={person.id}>
+                        {person.nickname} — {POSITION_LABELS[person.position]}
+                      </option>
+                    ))}
+                </select>
+              </label>
+            )}
             {isAdmin && (
               <label className="staff-checkbox">
                 <input
@@ -532,7 +724,7 @@ export default function StaffDirectory({
                 type="date"
                 required
                 value={date}
-                onChange={(e) => setDate(e.target.value)}
+                onChange={(e) => e.target.value && setDate(e.target.value)}
               />
             </label>
             <strong>{thaiDate(date)}</strong>
@@ -656,7 +848,7 @@ export default function StaffDirectory({
                         onClick={async () => {
                           if (window.confirm("ลบหน้าที่รายการนี้หรือไม่?")) {
                             await deleteDailyAssignment(item.id);
-                            await reloadAssignments();
+                            await reloadDaily();
                           }
                         }}
                       >
@@ -676,6 +868,49 @@ export default function StaffDirectory({
           </div>
         </>
       )}
+
+      <section className="daily-report" aria-label="รายงานประจำวันห้องแพ็ค">
+        <header>
+          <div>
+            <p>HILLKOFF · ฝ่ายแพ็คสินค้า</p>
+            <h1>รายงานสรุปการทำงานประจำวัน</h1>
+          </div>
+          <strong>{thaiDate(date)}</strong>
+        </header>
+        <div className="daily-report-summary">
+          <span>ทั้งหมด <strong>{workforceSummary.total}</strong></span>
+          <span>ปฏิบัติงาน <strong>{workforceSummary.working}</strong></span>
+          <span>ลา <strong>{workforceSummary.leave}</strong></span>
+          <span>หยุด <strong>{workforceSummary.off}</strong></span>
+          <span>ออกนอกพื้นที่ <strong>{workforceSummary.outside}</strong></span>
+          <span>ยังไม่มีหน้าที่ <strong>{workforceSummary.unassigned}</strong></span>
+        </div>
+        <p className="daily-report-lead">
+          <strong>หัวหน้า:</strong>{" "}
+          {staff.find((person) => person.position === "leader" && person.active !== false)?.fullName || "ยังไม่กำหนด"}
+          {" · "}<strong>ผู้ช่วยหัวหน้า:</strong>{" "}
+          {staffById.get(dailyLeadId)?.fullName || "ยังไม่กำหนด"}
+        </p>
+        <table>
+          <thead>
+            <tr><th>พนักงาน</th><th>ตำแหน่ง</th><th>สถานะ</th><th>หน้าที่รับผิดชอบ</th></tr>
+          </thead>
+          <tbody>
+            {staff.filter((person) => person.active !== false).map((person) => (
+              <tr key={`report-${person.id}`}>
+                <td>{person.fullName} ({person.nickname})</td>
+                <td>{POSITION_LABELS[person.position]}</td>
+                <td>{STATUS_LABELS[resolveDailyStatus(person.id, dailyStatuses)]}</td>
+                <td>{(dutyLabelsByStaff.get(person.id) ?? []).join("; ") || "ยังไม่ได้กำหนดหน้าที่"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <section className="daily-report-notice">
+          <h2>ประกาศและกฎระเบียบห้องแพ็ค</h2>
+          <p>{packingNotice}</p>
+        </section>
+      </section>
 
       {editingNotice && (
         <div className="staff-modal-overlay" role="presentation">

@@ -34,6 +34,103 @@ export function buildPackingRoomTeam(groups) {
   return [...(groups.checker ?? []), ...(groups.packer ?? [])];
 }
 
+export function resolveDailyStatus(staffId, statuses) {
+  return statuses.get(staffId) || "working";
+}
+
+export function buildWorkforceSummary(staff, statuses, duties) {
+  const active = staff.filter((person) => person.active !== false);
+  const summary = {
+    total: active.length,
+    working: 0,
+    leave: 0,
+    off: 0,
+    outside: 0,
+    unassigned: 0,
+  };
+  active.forEach((person) => {
+    const status = resolveDailyStatus(person.id, statuses);
+    if (status in summary) summary[status] += 1;
+    if (!(duties.get(person.id) ?? []).length) summary.unassigned += 1;
+  });
+  return summary;
+}
+
+export function maskStaffContact(value, type) {
+  const text = String(value ?? "").trim();
+  if (!text) return "";
+  if (type === "phone") {
+    const digits = text.replace(/\D/g, "");
+    if (digits.length < 7) return `${digits.slice(0, 2)}***`;
+    return `${digits.slice(0, 3)}-xxx-${digits.slice(-4)}`;
+  }
+  if (type === "email") {
+    const [name, domain] = text.split("@");
+    if (!domain) return `${text.slice(0, 2)}***`;
+    return `${name.slice(0, 2)}***@${domain}`;
+  }
+  return text.length <= 4
+    ? `${text.slice(0, 1)}***`
+    : `${text.slice(0, 2)}***${text.slice(-2)}`;
+}
+
+export function filterDirectoryStaff(staff, options) {
+  const needle = String(options.query ?? "").trim().toLocaleLowerCase("th");
+  return staff.filter((person) => {
+    const status = resolveDailyStatus(person.id, options.statuses);
+    const dutyLabels = options.duties.get(person.id) ?? [];
+    if (options.position !== "all" && person.position !== options.position)
+      return false;
+    if (options.status !== "all" && status !== options.status) return false;
+    if (options.duty === "assigned" && !dutyLabels.length) return false;
+    if (options.duty === "unassigned" && dutyLabels.length) return false;
+    return (
+      !needle ||
+      [
+        person.fullName,
+        person.employeeId,
+        person.nickname,
+        person.phone,
+        person.lineId,
+        person.email,
+        person.position,
+        ...dutyLabels,
+      ].some((value) =>
+        String(value ?? "").toLocaleLowerCase("th").includes(needle)
+      )
+    );
+  });
+}
+
+export function staffMissingFields(person, dutyLabels) {
+  const missing = [];
+  if (!person.photoUrl) missing.push("รูป");
+  if (!person.fullName || !person.employeeId) missing.push("ข้อมูลประจำตัว");
+  if (!person.phone && !person.lineId && !person.email)
+    missing.push("ข้อมูลติดต่อ");
+  if (!dutyLabels.length) missing.push("หน้าที่วันนี้");
+  return missing;
+}
+
+export function reorderStaffWithinPosition(staff, draggedId, targetId) {
+  const dragged = staff.find((person) => person.id === draggedId);
+  const target = staff.find((person) => person.id === targetId);
+  if (!dragged || !target || dragged.position !== target.position) return staff;
+  const positionItems = staff.filter(
+    (person) => person.position === dragged.position
+  );
+  const fromIndex = positionItems.findIndex((person) => person.id === draggedId);
+  const toIndex = positionItems.findIndex((person) => person.id === targetId);
+  const reordered = [...positionItems];
+  reordered.splice(toIndex, 0, reordered.splice(fromIndex, 1)[0]);
+  let index = 0;
+  return staff.map((person) =>
+    person.position === dragged.position
+      ? { ...reordered[index], sortOrder: index++ }
+      : person
+  );
+}
+
 export function buildPackerOptions(staff) {
   const groups = groupActiveStaff(staff);
   const packers = STAFF_POSITIONS.flatMap((position) => groups[position])
