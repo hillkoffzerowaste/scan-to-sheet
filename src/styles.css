@@ -671,7 +671,7 @@ select:hover {
 .staff-org-level h3 span { color: var(--muted); font-size: .82rem; font-weight: 500; }
 .staff-org-leader .staff-grid { width: min(240px, 100%); margin: 0 auto; grid-template-columns: minmax(0, 1fr); }
 .staff-org-leader .staff-card { border-color: var(--primary); }
-.packing-notice { display: grid; gap: 8px; width: 100%; max-width: 340px; margin-top: 42px; padding: 11px 12px; border: 1px solid var(--line); border-inline-start: 4px solid var(--primary); border-radius: var(--radius-md); background: var(--surface); box-shadow: var(--shadow-sm); }
+.packing-notice { display: grid; gap: 8px; width: 100%; max-width: 340px; margin-top: 56px; padding: 11px 12px; border: 1px solid var(--line); border-inline-start: 4px solid var(--primary); border-radius: var(--radius-md); background: var(--surface); box-shadow: var(--shadow-sm); }
 .packing-notice header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .packing-notice header > div { display: flex; align-items: flex-start; gap: 9px; min-width: 0; }
 .packing-notice-icon { display: grid; place-items: center; width: 32px; height: 32px; flex: 0 0 auto; border-radius: var(--radius-sm); background: var(--primary-soft); color: var(--primary-strong); }
