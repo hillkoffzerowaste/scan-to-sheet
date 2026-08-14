@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
-  BarChart3,
   CalendarDays,
   Copy,
   GripVertical,
@@ -18,6 +17,7 @@ import {
 } from "lucide-react";
 import {
   buildDutyLabelsByStaff,
+  buildDailyReportText,
   buildPackingRoomTeam,
   buildPackerOptions,
   buildWorkforceSummary,
@@ -614,8 +614,32 @@ export default function StaffDirectory({
                 <option value="unassigned">ยังไม่มีหน้าที่</option>
               </select>
             </label>
-            <button className="staff-report-button" onClick={() => window.print()}>
-              <BarChart3 size={16} /> รายงานประจำวัน
+            <button
+              className="staff-report-button"
+              onClick={async () => {
+                const report = buildDailyReportText({
+                  dateLabel: thaiDate(date),
+                  summary: workforceSummary,
+                  leaderName: staff.find(
+                    (person) => person.position === "leader" && person.active !== false
+                  )?.fullName,
+                  assistantName: staffById.get(dailyLeadId)?.fullName,
+                  staff,
+                  statuses: dailyStatuses,
+                  dutyLabelsByStaff,
+                  positionLabels: POSITION_LABELS,
+                  statusLabels: STATUS_LABELS,
+                  notice: packingNotice,
+                });
+                try {
+                  await navigator.clipboard.writeText(report);
+                  setMessage("คัดลอกรายงานประจำวันแล้ว");
+                } catch {
+                  setMessage("คัดลอกรายงานไม่สำเร็จ กรุณาลองใหม่");
+                }
+              }}
+            >
+              <Copy size={16} /> คัดลอกสรุปรายงาน
             </button>
             {isAdmin && (
               <label className="staff-filter-control staff-lead-select">
@@ -868,49 +892,6 @@ export default function StaffDirectory({
           </div>
         </>
       )}
-
-      <section className="daily-report" aria-label="รายงานประจำวันห้องแพ็ค">
-        <header>
-          <div>
-            <p>HILLKOFF · ฝ่ายแพ็คสินค้า</p>
-            <h1>รายงานสรุปการทำงานประจำวัน</h1>
-          </div>
-          <strong>{thaiDate(date)}</strong>
-        </header>
-        <div className="daily-report-summary">
-          <span>ทั้งหมด <strong>{workforceSummary.total}</strong></span>
-          <span>ปฏิบัติงาน <strong>{workforceSummary.working}</strong></span>
-          <span>ลา <strong>{workforceSummary.leave}</strong></span>
-          <span>หยุด <strong>{workforceSummary.off}</strong></span>
-          <span>ออกนอกพื้นที่ <strong>{workforceSummary.outside}</strong></span>
-          <span>ยังไม่มีหน้าที่ <strong>{workforceSummary.unassigned}</strong></span>
-        </div>
-        <p className="daily-report-lead">
-          <strong>หัวหน้า:</strong>{" "}
-          {staff.find((person) => person.position === "leader" && person.active !== false)?.fullName || "ยังไม่กำหนด"}
-          {" · "}<strong>ผู้ช่วยหัวหน้า:</strong>{" "}
-          {staffById.get(dailyLeadId)?.fullName || "ยังไม่กำหนด"}
-        </p>
-        <table>
-          <thead>
-            <tr><th>พนักงาน</th><th>ตำแหน่ง</th><th>สถานะ</th><th>หน้าที่รับผิดชอบ</th></tr>
-          </thead>
-          <tbody>
-            {staff.filter((person) => person.active !== false).map((person) => (
-              <tr key={`report-${person.id}`}>
-                <td>{person.fullName} ({person.nickname})</td>
-                <td>{POSITION_LABELS[person.position]}</td>
-                <td>{STATUS_LABELS[resolveDailyStatus(person.id, dailyStatuses)]}</td>
-                <td>{(dutyLabelsByStaff.get(person.id) ?? []).join("; ") || "ยังไม่ได้กำหนดหน้าที่"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <section className="daily-report-notice">
-          <h2>ประกาศและกฎระเบียบห้องแพ็ค</h2>
-          <p>{packingNotice}</p>
-        </section>
-      </section>
 
       {editingNotice && (
         <div className="staff-modal-overlay" role="presentation">

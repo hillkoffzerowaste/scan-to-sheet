@@ -765,7 +765,6 @@ select:hover {
 .staff-modal footer { justify-content: flex-end; gap: 8px; margin-top: 18px; }
 .staff-modal footer button { padding: 8px 13px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--surface-soft); color: var(--text); }
 .staff-modal footer .primary-action { background: var(--primary-fill); color: var(--on-primary); border-color: var(--primary-fill); }
-.daily-report { display: none; }
 
 @media (max-width: 1199px) {
   .staff-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -799,25 +798,6 @@ select:hover {
   .schedule-toolbar > div, .schedule-toolbar button { width: 100%; }
   .assignment-list article { align-items: flex-start; flex-wrap: wrap; }
   .assignment-actions { width: 100%; justify-content: flex-end; }
-}
-
-@page { size: A4 portrait; margin: 12mm; }
-@media print {
-  body * { visibility: hidden !important; }
-  .daily-report, .daily-report * { visibility: visible !important; }
-  .daily-report { position: absolute; inset: 0; display: block; width: 100%; padding: 0; background: Canvas; color: CanvasText; font-size: 10pt; }
-  .daily-report > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding-bottom: 10px; border-bottom: 2px solid var(--primary); }
-  .daily-report h1 { margin: 2px 0 0; font-size: 18pt; }
-  .daily-report header p, .daily-report p { margin: 0; }
-  .daily-report-summary { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 1px; margin: 12px 0; border: 1px solid var(--line); background: var(--line); }
-  .daily-report-summary span { display: grid; gap: 3px; padding: 7px; background: Canvas; text-align: center; }
-  .daily-report-lead { padding: 8px; border: 1px solid var(--line); }
-  .daily-report table { width: 100%; margin-top: 12px; border-collapse: collapse; }
-  .daily-report th, .daily-report td { padding: 6px 7px; border: 1px solid var(--line); text-align: start; vertical-align: top; }
-  .daily-report th { background: Canvas; }
-  .daily-report-notice { margin-top: 12px; padding: 9px; border: 1px solid var(--line); }
-  .daily-report-notice h2 { margin: 0 0 5px; font-size: 12pt; }
-  .daily-report-notice p { white-space: pre-line; }
 }
 
 .skip-link {

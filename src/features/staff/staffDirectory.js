@@ -196,6 +196,46 @@ export function buildDutyLabelsByStaff(assignments, dutyById) {
   return labelsByStaff;
 }
 
+export function buildDailyReportText({
+  dateLabel,
+  summary,
+  leaderName,
+  assistantName,
+  staff,
+  statuses,
+  dutyLabelsByStaff,
+  positionLabels,
+  statusLabels,
+  notice,
+}) {
+  const staffLines = staff
+    .filter((person) => person.active !== false)
+    .map((person, index) => {
+      const status = resolveDailyStatus(person.id, statuses);
+      const duties = dutyLabelsByStaff.get(person.id) ?? [];
+      return `${index + 1}. ${person.fullName} (${person.nickname}) — ${
+        positionLabels[person.position] ?? person.position
+      } — ${statusLabels[status] ?? status} — ${
+        duties.join("; ") || "ยังไม่ได้กำหนดหน้าที่"
+      }`;
+    });
+
+  return [
+    "รายงานสรุปการทำงานประจำวัน ห้องแพ็คสินค้า",
+    `วันที่ ${dateLabel}`,
+    "",
+    `สรุป: ทั้งหมด ${summary.total} คน | ปฏิบัติงาน ${summary.working} | ลา ${summary.leave} | หยุด ${summary.off} | ออกนอกพื้นที่ ${summary.outside} | ยังไม่มีหน้าที่ ${summary.unassigned}`,
+    `หัวหน้า: ${leaderName || "ยังไม่กำหนด"}`,
+    `ผู้ช่วยหัวหน้า: ${assistantName || "ยังไม่กำหนด"}`,
+    "",
+    "รายชื่อและหน้าที่",
+    ...staffLines,
+    "",
+    "ประกาศและกฎระเบียบห้องแพ็ค",
+    String(notice ?? "").trim() || "ไม่มีประกาศ",
+  ].join("\n");
+}
+
 export function staffSaveErrorMessage(error) {
   const code = String(error?.code ?? "");
   if (code === "STAFF_DUPLICATE_EMPLOYEE_ID")

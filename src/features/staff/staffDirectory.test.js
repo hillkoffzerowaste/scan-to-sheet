@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   DEFAULT_PACKING_NOTICE,
   buildPackingRoomTeam,
+  buildDailyReportText,
   buildWorkforceSummary,
   filterDirectoryStaff,
   buildDutyLabelsByStaff,
@@ -19,6 +20,32 @@ import {
   staffSaveErrorMessage,
   validateStaffInput,
 } from "./staffDirectory.js";
+
+test("builds a shareable daily report without private contact details", () => {
+  const report = buildDailyReportText({
+    dateLabel: "14 สิงหาคม 2569",
+    summary: { total: 2, working: 1, leave: 1, off: 0, outside: 0, unassigned: 1 },
+    leaderName: "หัวหน้า ก",
+    assistantName: "ผู้ช่วย ข",
+    staff: [
+      { id: "1", fullName: "พนักงาน หนึ่ง", nickname: "หนึ่ง", position: "leader", phone: "0812345678" },
+      { id: "2", fullName: "พนักงาน สอง", nickname: "สอง", position: "packer", email: "two@example.com" },
+    ],
+    statuses: new Map([["2", "leave"]]),
+    dutyLabelsByStaff: new Map([["1", ["ตรวจพื้นที่"]]]),
+    positionLabels: { leader: "หัวหน้า", packer: "Packer" },
+    statusLabels: { working: "ปฏิบัติงาน", leave: "ลา" },
+    notice: "รักษาความสะอาด",
+  });
+
+  assert.match(report, /รายงานสรุปการทำงานประจำวัน/);
+  assert.match(report, /14 สิงหาคม 2569/);
+  assert.match(report, /หัวหน้า: หัวหน้า ก/);
+  assert.match(report, /พนักงาน หนึ่ง \(หนึ่ง\) — หัวหน้า — ปฏิบัติงาน — ตรวจพื้นที่/);
+  assert.match(report, /พนักงาน สอง \(สอง\) — Packer — ลา — ยังไม่ได้กำหนดหน้าที่/);
+  assert.match(report, /รักษาความสะอาด/);
+  assert.doesNotMatch(report, /0812345678|two@example\.com/);
+});
 
 test("uses the default packing notice until an admin saves custom text", () => {
   assert.equal(resolvePackingNotice("  "), DEFAULT_PACKING_NOTICE);
