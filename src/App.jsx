@@ -29,11 +29,9 @@ import {
   ShieldAlert,
   ArrowRightLeft,
   Plus,
-  BriefcaseBusiness,
   Users,
   Video,
 } from 'lucide-react';
-import SalesWorkspace from './features/sales/SalesWorkspace.jsx';
 import StaffDirectory from './features/staff/StaffDirectory.jsx';
 import PackingVideoWorkspace from './features/packingVideo/PackingVideoWorkspace.jsx';
 import { isPackingRecording } from './services/packingRecorder.js';
@@ -2959,16 +2957,16 @@ function App() {
           <BarChart3 size={18} />
           <span>รายงาน</span>
         </button>
-        <button
-          data-testid="sales-tab"
-          className={`tab-button ${activeTab === 'sales' ? 'active' : ''}`}
-          type="button"
-          aria-current={activeTab === 'sales' ? 'page' : undefined}
-          onClick={() => switchTab('sales')}
+        <a
+          data-testid="delivery-system-link"
+          className="tab-button"
+          href="https://repo-rho-livid.vercel.app/"
+          target="_blank"
+          rel="noopener noreferrer"
         >
-          <BriefcaseBusiness size={18} />
-          <span>Sales Quick Desk</span>
-        </button>
+          <Truck size={18} />
+          <span>ระบบส่งของ</span>
+        </a>
         <button
           data-testid="staff-directory-tab"
           className={`tab-button ${activeTab === 'staff' ? 'active' : ''}`}
@@ -4088,7 +4086,6 @@ function App() {
         />
       )}
 
-      {activeTab === 'sales' && <SalesWorkspace />}
       {activeTab === 'staff' && isSignedIn && (
         <StaffDirectory
           firebaseUser={firebaseUser}

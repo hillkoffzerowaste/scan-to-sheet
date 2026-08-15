@@ -2942,7 +2942,6 @@ tbody tr:nth-child(8){ animation-delay: 0.21s; }
   .enterprise-shell > .standards-panel { grid-area: standards; }
   .enterprise-shell > .workspace-grid { grid-area: workspace; }
   .enterprise-shell > .report-panel { grid-area: report; margin-top: 0; }
-  .enterprise-shell > .sales-workspace { grid-area: workspace; }
 
   .enterprise-shell > .tab-bar {
     position: sticky;
@@ -2981,92 +2980,6 @@ tbody tr:nth-child(8){ animation-delay: 0.21s; }
     position: sticky;
     top: 24px;
   }
-}
-
-/* Sales Quick Desk is isolated from Scan/Marketplace business state. */
-.sales-workspace { min-width: 0; color: var(--text); }
-.sales-header, .sales-toolbar, .sales-row, .sales-notice, .sales-error { display: flex; align-items: center; gap: 12px; }
-.sales-header { justify-content: space-between; padding: 18px 20px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); }
-.sales-header h2, .sales-header p { margin: 0; }
-.sales-header .eyebrow { color: var(--primary-strong); font-size: .72rem; font-weight: 800; letter-spacing: .08em; }
-.sales-header > div > p:last-child { color: var(--muted); }
-.sales-health { display: flex; align-items: center; gap: 6px; color: var(--success); font-weight: 700; white-space: nowrap; }
-.sales-layout { display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 16px; margin-top: 16px; }
-.sales-nav { display: flex; flex-direction: column; gap: 4px; align-self: start; padding: 6px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); }
-.sales-nav button { min-height: 42px; padding: 0 12px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--text); text-align: left; font: inherit; cursor: pointer; }
-.sales-nav button:hover, .sales-nav button.active { background: var(--primary-soft); color: var(--primary-strong); }
-.sales-content { min-width: 0; padding: 18px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); }
-.sales-toolbar { justify-content: space-between; flex-wrap: wrap; margin-bottom: 14px; }
-.sales-toolbar label { display: flex; align-items: center; gap: 8px; color: var(--muted); font-weight: 700; }
-.sales-toolbar input, .sales-form input, .sales-form select, .sales-form textarea, .sales-action select, .sales-row select { min-height: 42px; padding: 8px 10px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); font: inherit; }
-.sales-search { display: flex; align-items: center; flex: 1 1 420px; max-width: 720px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--surface); }
-.sales-search:focus-within { border-color: var(--primary); box-shadow: 0 0 0 3px var(--focus-ring); }
-.sales-search svg { margin-left: 10px; color: var(--muted); }
-.sales-search input { flex: 1; min-width: 0; min-height: 44px; border: 0; background: transparent; color: var(--text); font: inherit; }
-.sales-search button, .sales-form > button, .sales-action > button { min-height: 40px; border: 0; border-radius: var(--radius-sm); background: var(--primary-fill); color: white; padding: 0 14px; font: inherit; font-weight: 700; cursor: pointer; }
-.sales-search button:disabled, .sales-form > button:disabled, .sales-action > button:disabled { cursor: not-allowed; opacity: .55; }
-.sales-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 16px; }
-.sales-metrics > div { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; padding: 14px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface-soft); }
-.sales-metrics svg { grid-row: span 2; color: var(--primary); }
-.sales-metrics span { color: var(--muted); font-size: .78rem; }
-.sales-metrics strong { font-size: 1.4rem; }
-.sales-list { display: grid; gap: 6px; }
-.sales-row { justify-content: space-between; min-width: 0; padding: 8px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-soft); }
-.sales-row-main { display: grid; grid-template-columns: minmax(100px, 1fr) minmax(80px, auto); gap: 2px 12px; flex: 1; min-width: 0; border: 0; background: transparent; color: var(--text); text-align: left; font: inherit; cursor: pointer; }
-.sales-row-main strong, .sales-row-main small { overflow-wrap: anywhere; }
-.sales-row-main span, .sales-row-main small { color: var(--muted); }
-.sales-row-main small { grid-column: 1 / -1; }
-.sales-empty { padding: 32px; border: 1px dashed var(--line-strong); color: var(--muted); text-align: center; }
-.sales-action { display: grid; justify-items: end; gap: 2px; max-width: 190px; }
-.sales-action small { color: var(--warning); text-align: right; }
-.sales-notice, .sales-error { justify-content: space-between; margin-bottom: 12px; padding: 10px 12px; border: 1px solid var(--success-line); border-radius: var(--radius-sm); background: var(--success-bg); color: var(--success); }
-.sales-error { border-color: var(--danger-line); background: var(--danger-bg); color: var(--danger); }
-.sales-notice button, .sales-error button, .sales-close { border: 0; background: transparent; color: inherit; font: inherit; font-weight: 700; cursor: pointer; }
-.sales-rounds { display: grid; gap: 16px; }
-.sales-rounds section > h3 { display: flex; justify-content: space-between; padding-bottom: 7px; border-bottom: 1px solid var(--line); }
-.sales-drawer-backdrop { position: fixed; z-index: 1000; inset: 0; display: flex; justify-content: flex-end; background: var(--focus-ring); }
-.sales-drawer { width: min(520px, 100%); height: 100%; overflow: auto; padding: 22px; border-left: 1px solid var(--line); background: var(--surface); box-shadow: var(--shadow-modal); }
-.sales-close { float: right; min-height: 40px; color: var(--primary-strong); }
-.sales-drawer pre { overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text); }
-.sales-detail { clear: both; }
-.sales-detail dl { display: grid; gap: 0; border: 1px solid var(--line); border-radius: var(--radius-sm); }
-.sales-detail dl > div { display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 10px; padding: 9px 11px; border-bottom: 1px solid var(--line); }
-.sales-detail dl > div:last-child { border-bottom: 0; }
-.sales-detail dt { color: var(--muted); font-weight: 700; }
-.sales-detail dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
-.sales-operations, .sales-customer-operations { display: grid; gap: 14px; margin-top: 18px; }
-.sales-operations > section, .sales-customer-operations > section { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-soft); }
-.sales-operations h3, .sales-operations h4, .sales-customer-operations h3 { margin: 0; }
-.sales-operation-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
-.sales-operation-grid label, .sales-operations section > label { display: grid; gap: 4px; color: var(--muted); font-weight: 700; }
-.sales-operation-grid .wide { grid-column: 1 / -1; }
-.sales-operation-grid input, .sales-operation-grid select, .sales-operation-grid textarea, .sales-operations section > label textarea { width: 100%; min-height: 40px; padding: 7px 9px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); font: inherit; }
-.sales-operation-grid textarea, .sales-operations section > label textarea { min-height: 70px; resize: vertical; }
-.sales-operations section > button, .sales-operation-actions button, .sales-delete-button { min-height: 40px; padding: 0 12px; border: 0; border-radius: var(--radius-sm); background: var(--primary-fill); color: white; font: inherit; font-weight: 700; cursor: pointer; }
-.sales-operation-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.sales-blocker { margin: 0; color: var(--warning); }
-.sales-danger-zone { border-color: var(--danger-line) !important; background: var(--danger-bg) !important; }
-.sales-danger-zone button, .sales-delete-button { background: var(--danger); }
-.sales-operations button:disabled { cursor: not-allowed; opacity: .55; }
-.sales-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; clear: both; }
-.sales-form h3, .sales-form label:has(textarea), .sales-form > button { grid-column: 1 / -1; }
-.sales-form label { display: grid; gap: 5px; color: var(--muted); font-weight: 700; }
-.sales-form textarea { min-height: 88px; resize: vertical; }
-.sales-workspace button:focus-visible, .sales-workspace input:focus-visible, .sales-workspace select:focus-visible, .sales-workspace textarea:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
-
-@media (max-width: 760px) {
-  .sales-header { align-items: flex-start; flex-direction: column; }
-  .sales-layout { grid-template-columns: 1fr; }
-  .sales-nav { flex-direction: row; overflow-x: auto; }
-  .sales-nav button { flex: 0 0 auto; }
-  .sales-content { padding: 12px; }
-  .sales-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .sales-form { grid-template-columns: 1fr; }
-  .sales-form h3, .sales-form label:has(textarea), .sales-form > button { grid-column: auto; }
-  .sales-operation-grid { grid-template-columns: 1fr; }
-  .sales-operation-grid .wide { grid-column: auto; }
-  .sales-row { align-items: stretch; flex-direction: column; }
-  .sales-action { justify-items: stretch; max-width: none; }
 }
 
 @media (max-width: 1199px) {
@@ -3825,8 +3738,8 @@ tbody tr:nth-child(8){ animation-delay: 0.21s; }
   cursor: pointer;
 }
 
-/* The tab bar becomes a vertical sidebar at this width, so the workspace has to claim its
-   grid area the same way .sales-workspace does or it drops into an implicit track. */
+/* The tab bar becomes a vertical sidebar at this width, so the video workspace
+   claims the main grid area instead of falling into an implicit track. */
 @media (min-width: 1200px) {
   .enterprise-shell > .pv-page { grid-area: workspace; }
 }

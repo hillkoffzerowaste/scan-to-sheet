@@ -118,6 +118,18 @@ const CONTRAST_HELPERS = `
 `;
 
 test.describe('Scan to Sheet — External tools', () => {
+  test('opens the delivery system from the sidebar in a new tab', async ({ page }) => {
+    await page.goto(BASE_URL);
+
+    const deliveryLink = page.getByTestId('delivery-system-link');
+    await expect(deliveryLink).toHaveAccessibleName('ระบบส่งของ');
+    await expect(deliveryLink).toHaveAttribute('href', 'https://repo-rho-livid.vercel.app/');
+    await expect(deliveryLink).toHaveAttribute('target', '_blank');
+    await expect(deliveryLink).toHaveAttribute('rel', /noopener/);
+    await expect(deliveryLink).toHaveAttribute('rel', /noreferrer/);
+    await expect(page.getByText('Sales Quick Desk')).toHaveCount(0);
+  });
+
   test('opens the label checker from the sidebar in a new tab', async ({ page }) => {
     for (const width of [375, 1000, 1400]) {
       await page.setViewportSize({ width, height: 900 });
