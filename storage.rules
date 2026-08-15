@@ -11,6 +11,23 @@ service firebase.storage {
         && firestore.exists(/databases/(default)/documents/adminUsers/$(request.auth.uid));
     }
 
+    // Packing videos. Every upload writes a new object (the file name carries a retry counter),
+    // so updates can be denied outright and an interrupted upload can never half-overwrite a
+    // good recording. 500 MB covers the 15-minute auto-stop ceiling at 1.5 Mbps with room to
+    // spare; rejecting a legitimate clip here would lose it, so the limit is deliberately loose
+    // and oversized clips are flagged for review in the app instead.
+    //
+    // Business rules (who may record which parcel) live in Firestore and the audit log —
+    // firestore.exists() here would bill a read on every single upload.
+    match /packing-videos/{dateFolder}/{fileName} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn()
+        && request.resource.size < 500 * 1024 * 1024
+        && request.resource.contentType.matches('video/.*');
+      allow update: if false;
+      allow delete: if isStaffAdmin();
+    }
+
     match /staff-photos/{staffId}/{fileName} {
       allow read: if isSignedIn();
       allow create, update: if isStaffAdmin()
