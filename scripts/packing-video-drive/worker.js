@@ -2,7 +2,7 @@
 
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
@@ -35,6 +35,10 @@ const DEFAULT_CONFIG_PATH = path.join(BASE_DIR, 'config.json');
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive';
 const BATCH_SIZE = 25;
 const MAX_DRIVE_ATTEMPTS = 5;
+const DEFAULT_INTERVAL_SECONDS = 60;
+// Each pass costs a Firestore query even when nothing is waiting, so the floor keeps a typo
+// like `--interval 1` from turning an idle night into ~30k billed reads.
+const MIN_INTERVAL_SECONDS = 15;
 
 async function loadConfig() {
   try {
@@ -296,7 +300,28 @@ async function purgeMovedObjects({ bucket, db }) {
   return deleted;
 }
 
+export function parseArgs(argv, { defaultIntervalSeconds = DEFAULT_INTERVAL_SECONDS } = {}) {
+  const args = argv.slice(2);
+  const flag = args.indexOf('--interval');
+  const raw = flag >= 0 ? Number(args[flag + 1]) : defaultIntervalSeconds;
+
+  if (!Number.isFinite(raw) || raw < MIN_INTERVAL_SECONDS) {
+    throw new Error(`--interval must be a number of seconds >= ${MIN_INTERVAL_SECONDS}`);
+  }
+
+  return { watch: args.includes('--watch'), intervalSeconds: raw };
+}
+
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function runPass({ drive, bucket, db, config }) {
+  const moved = await movePending({ drive, bucket, db, config });
+  await purgeMovedObjects({ bucket, db });
+  return moved;
+}
+
 async function main() {
+  const { watch, intervalSeconds } = parseArgs(process.argv);
   const config = await loadConfig();
   if (!config.sharedDriveId) throw new Error('config.sharedDriveId is required');
 
@@ -308,12 +333,37 @@ async function main() {
   const { db, bucket } = initFirebase(config);
   const drive = await initDrive(config);
 
-  const moved = await movePending({ drive, bucket, db, config });
-  await purgeMovedObjects({ bucket, db });
-  console.log(`Done. Moved ${moved} video(s).`);
+  if (!watch) {
+    const moved = await runPass({ drive, bucket, db, config });
+    console.log(`Done. Moved ${moved} video(s).`);
+    return;
+  }
+
+  // Watch mode exists so a finished clip reaches the archive within about a minute instead of
+  // waiting for the next scheduled run. A pass that throws must not end the loop: a transient
+  // Drive 5xx or a dropped network link would otherwise stop archiving silently until somebody
+  // noticed, which is exactly the failure the retention rule cannot absorb.
+  console.log(`Watching for packing videos every ${intervalSeconds}s. Ctrl+C to stop.`);
+  let stopping = false;
+  process.on('SIGINT', () => { stopping = true; console.log('\nStopping after the current pass...'); });
+  process.on('SIGTERM', () => { stopping = true; });
+
+  while (!stopping) {
+    try {
+      const moved = await runPass({ drive, bucket, db, config });
+      if (moved) console.log(`Moved ${moved} video(s).`);
+    } catch (error) {
+      console.error('Pass failed, retrying next interval:', error.message);
+    }
+    if (stopping) break;
+    await delay(intervalSeconds * 1000);
+  }
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
-});
+// Only run when executed directly, so the tests can import parseArgs without starting a worker.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  });
+}
