@@ -1,9 +1,0 @@
-import React, { useEffect, useState } from 'react';
-import { salesApi } from '../api/salesApi.js';
-
-export default function CustomerOperations({ customer, busy, onSave, onDelete }) {
-  const [draft, setDraft] = useState(customer); const [history, setHistory] = useState([]); const [historyError, setHistoryError] = useState('');
-  useEffect(() => { let active = true; salesApi.customerHistory(customer.id).then((data) => { if (active) setHistory(data.orders || []); }).catch((error) => { if (active) setHistoryError(error.message); }); return () => { active = false; }; }, [customer.id]);
-  const field = (name, label, textarea = false) => <label>{label}{textarea ? <textarea value={draft[name] || ''} onChange={(e) => setDraft({ ...draft, [name]: e.target.value })} /> : <input value={draft[name] || ''} readOnly={name === 'id'} onChange={(e) => setDraft({ ...draft, [name]: e.target.value })} />}</label>;
-  return <div className="sales-customer-operations"><form className="sales-form" onSubmit={(e) => { e.preventDefault(); onSave(draft); }}><h3>แก้ไขข้อมูลลูกค้า</h3>{field('id','รหัสลูกค้า')}{field('name','ชื่อลูกค้า')}{field('contact','ผู้ติดต่อ')}{field('phone','โทรศัพท์')}{field('zone','พื้นที่')}{field('address','ที่อยู่',true)}{field('mapUrl','ลิงก์แผนที่')}{field('note','หมายเหตุ',true)}<button type="submit" disabled={busy}>บันทึกข้อมูลลูกค้า</button></form><section><h3>ประวัติออเดอร์</h3>{historyError && <p className="sales-blocker">{historyError}</p>}{!history.length ? <p className="sales-empty">ไม่พบประวัติออเดอร์</p> : <div className="sales-list">{history.map((order) => <div className="sales-row" key={order.id}><strong>{order.id}</strong><span>{order.status || order.queueStatus || '-'}</span></div>)}</div>}</section><button className="sales-delete-button" type="button" disabled={busy} onClick={() => { if (window.confirm(`ลบลูกค้า ${customer.name || customer.id}?`)) onDelete(customer.id); }}>ลบข้อมูลลูกค้า</button></div>;
-}

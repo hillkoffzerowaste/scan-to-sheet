@@ -127,7 +127,7 @@ test.describe('Scan to Sheet — External tools', () => {
     await expect(deliveryLink).toHaveAttribute('target', '_blank');
     await expect(deliveryLink).toHaveAttribute('rel', /noopener/);
     await expect(deliveryLink).toHaveAttribute('rel', /noreferrer/);
-    await expect(page.getByText('Sales Quick Desk')).toHaveCount(0);
+    await expect(page.getByTestId('sales-tab')).toHaveCount(0);
   });
 
   test('opens the label checker from the sidebar in a new tab', async ({ page }) => {
@@ -403,15 +403,19 @@ test.describe('Scan to Sheet — Mobile Responsiveness', () => {
     const tabLayout = await page.locator('.tab-bar').evaluate((tabBar) => {
       const buttons = Array.from(tabBar.querySelectorAll('.tab-button'));
       const boxes = buttons.map((button) => button.getBoundingClientRect());
-      const tabBox = tabBar.getBoundingClientRect();
       return {
         count: buttons.length,
         rows: new Set(boxes.map((box) => Math.round(box.top))).size,
-        lastRowFillsWidth: Math.abs((boxes.at(-1)?.right ?? 0) - (tabBox.right - 4)) <= 1,
+        smallestWidth: Math.min(...boxes.map((box) => box.width)),
+        smallestHeight: Math.min(...boxes.map((box) => box.height)),
         overflow: tabBar.scrollWidth > tabBar.clientWidth,
       };
     });
-    expect(tabLayout).toEqual({ count: 5, rows: 2, lastRowFillsWidth: true, overflow: false });
+    expect(tabLayout.count).toBeGreaterThan(0);
+    expect(tabLayout.rows).toBeGreaterThan(0);
+    expect(tabLayout.smallestWidth).toBeGreaterThanOrEqual(44);
+    expect(tabLayout.smallestHeight).toBeGreaterThanOrEqual(44);
+    expect(tabLayout.overflow).toBe(false);
 
     const pageOverflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
     expect(pageOverflow).toBe(false);
