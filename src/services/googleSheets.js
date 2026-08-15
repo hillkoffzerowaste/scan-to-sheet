@@ -2,11 +2,11 @@ import { buildSheetBackfillUpdates, classifyLateOrder } from './marketplaceImpor
 import { findHistoricalIssueRow, findScanReconciliation, getScanIssueMeta } from './sheetSyncReconciliation.js';
 
 const DRIVE_API = 'https://www.googleapis.com/drive/v3';
-const SHEETS_API = 'https://sheets.googleapis.com/v4/spreadsheets';
+export const SHEETS_API = 'https://sheets.googleapis.com/v4/spreadsheets';
 const USERINFO_API = 'https://www.googleapis.com/oauth2/v3/userinfo';
 export const GOOGLE_API_TIMEOUT_MS = 25_000;
 const MIME_FOLDER = 'application/vnd.google-apps.folder';
-const MIME_SHEET = 'application/vnd.google-apps.spreadsheet';
+export const MIME_SHEET = 'application/vnd.google-apps.spreadsheet';
 
 export const COURIERS = [
   'Shopee',
@@ -269,11 +269,11 @@ function escapeQuery(value) {
   return String(value).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 }
 
-function escapeSheetName(sheetName) {
+export function escapeSheetName(sheetName) {
   return `'${String(sheetName).replace(/'/g, "''")}'`;
 }
 
-function columnLetter(columnNumber) {
+export function columnLetter(columnNumber) {
   let number = columnNumber;
   let letters = '';
   while (number > 0) {
@@ -416,7 +416,9 @@ function withMarketplaceCells(row, marketplaceOrder = null) {
   return [...baseRow, ...marketplaceCells(source), orderStatus, crossDay, ''].slice(0, TOTAL_COLUMNS);
 }
 
-async function findDriveItem({ token, name, mimeType, parentId }) {
+// Exported for the packing-video sheet, which discovers its own spreadsheet the same way
+// prepareGoogleSheets discovers the master one.
+export async function findDriveItem({ token, name, mimeType, parentId }) {
   const items = await listDriveItems({ token, name, mimeType, parentId, pageSize: 1 });
   return items[0] ?? null;
 }
@@ -476,7 +478,7 @@ async function chooseBestMasterSheet({ token, candidates }) {
   return scoredCandidates[0]?.candidate ?? null;
 }
 
-async function createDriveItem({ token, name, mimeType, parentId }) {
+export async function createDriveItem({ token, name, mimeType, parentId }) {
   return apiFetch(`${DRIVE_API}/files?fields=id,name,webViewLink`, token, {
     method: 'POST',
     body: JSON.stringify({
@@ -541,7 +543,7 @@ export async function prepareGoogleSheets(token) {
   return config;
 }
 
-async function getSpreadsheet(token, spreadsheetId) {
+export async function getSpreadsheet(token, spreadsheetId) {
   return apiFetch(
     `${SHEETS_API}/${spreadsheetId}?fields=sheets(properties(sheetId,title,gridProperties(rowCount,columnCount)))`,
     token,
