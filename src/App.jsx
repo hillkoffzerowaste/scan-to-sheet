@@ -31,9 +31,12 @@ import {
   Plus,
   BriefcaseBusiness,
   Users,
+  Video,
 } from 'lucide-react';
 import SalesWorkspace from './features/sales/SalesWorkspace.jsx';
 import StaffDirectory from './features/staff/StaffDirectory.jsx';
+import PackingVideoWorkspace from './features/packingVideo/PackingVideoWorkspace.jsx';
+import { isPackingRecording } from './services/packingRecorder.js';
 import { buildPackerOptions } from './features/staff/staffDirectory.js';
 import { subscribeStaffMembers } from './features/staff/staffService.js';
 import {
@@ -2205,6 +2208,18 @@ function App() {
     if (canFocus) input.focus({ preventScroll: true });
   }
 
+  function switchTab(nextTab) {
+    // The packing recorder lives outside React, so leaving the tab does not stop the camera —
+    // but walking away from a running clip is almost always a mis-tap, so confirm it.
+    if (activeTab === 'packvideo' && nextTab !== 'packvideo' && isPackingRecording()
+      && !window.confirm('กำลังบันทึกวิดีโอแพ็คอยู่ ต้องการออกจากหน้านี้หรือไม่? (การบันทึกจะยังทำงานต่อ)')) {
+      return;
+    }
+    setActiveTab(nextTab);
+    setScanPopupOpen(false);
+    void stopCamera();
+  }
+
   function handleScanSubmit(event) {
     event.preventDefault();
     const code = String(scanValue ?? '').trim();
@@ -2916,7 +2931,7 @@ function App() {
           className={`tab-button ${activeTab === 'packer' ? 'active' : ''}`}
           type="button"
           aria-current={activeTab === 'packer' ? 'page' : undefined}
-          onClick={() => { setActiveTab('packer'); setScanPopupOpen(false); void stopCamera(); }}
+          onClick={() => switchTab('packer')}
         >
           <PackageCheck size={18} />
           <span>📦 แพ็กสินค้า (Packer)</span>
@@ -2926,7 +2941,7 @@ function App() {
           className={`tab-button ${activeTab === 'drive' ? 'active' : ''}`}
           type="button"
           aria-current={activeTab === 'drive' ? 'page' : undefined}
-          onClick={() => { setActiveTab('drive'); setScanPopupOpen(false); void stopCamera(); }}
+          onClick={() => switchTab('drive')}
         >
           <Upload size={18} />
           <span>📥 รับเข้า Drive (Admin)</span>
@@ -2939,7 +2954,7 @@ function App() {
           className={`tab-button ${activeTab === 'reports' ? 'active' : ''}`}
           type="button"
           aria-current={activeTab === 'reports' ? 'page' : undefined}
-          onClick={() => { setActiveTab('reports'); setScanPopupOpen(false); void stopCamera(); }}
+          onClick={() => switchTab('reports')}
         >
           <BarChart3 size={18} />
           <span>รายงาน</span>
@@ -2949,7 +2964,7 @@ function App() {
           className={`tab-button ${activeTab === 'sales' ? 'active' : ''}`}
           type="button"
           aria-current={activeTab === 'sales' ? 'page' : undefined}
-          onClick={() => { setActiveTab('sales'); setScanPopupOpen(false); void stopCamera(); }}
+          onClick={() => switchTab('sales')}
         >
           <BriefcaseBusiness size={18} />
           <span>Sales Quick Desk</span>
@@ -2959,10 +2974,20 @@ function App() {
           className={`tab-button ${activeTab === 'staff' ? 'active' : ''}`}
           type="button"
           aria-current={activeTab === 'staff' ? 'page' : undefined}
-          onClick={() => { setActiveTab('staff'); setScanPopupOpen(false); void stopCamera(); }}
+          onClick={() => switchTab('staff')}
         >
           <Users size={18} />
           <span>แผนผังพนักงานห้องแพ็ค</span>
+        </button>
+        <button
+          data-testid="packing-video-tab"
+          className={`tab-button ${activeTab === 'packvideo' ? 'active' : ''}`}
+          type="button"
+          aria-current={activeTab === 'packvideo' ? 'page' : undefined}
+          onClick={() => switchTab('packvideo')}
+        >
+          <Video size={18} />
+          <span>บันทึกวิดีโอแพ็ค</span>
         </button>
         <a
           className="tab-button"
@@ -4047,6 +4072,20 @@ function App() {
             </table>
           </div>
         </details>
+      )}
+
+      {activeTab === 'packvideo' && (
+        <PackingVideoWorkspace
+          isSignedIn={isSignedIn}
+          user={user}
+          firebaseUser={firebaseUser}
+          packerOptions={packerOptions.filter((name) => name !== PACKER_UNASSIGNED)}
+          getToken={async () => token}
+          refreshToken={async () => (await refreshGoogleSessionFromServer({ silent: true }))?.accessToken ?? null}
+          getConfig={() => config}
+          notify={setStatus}
+          playTone={playTone}
+        />
       )}
 
       {activeTab === 'sales' && <SalesWorkspace />}

@@ -3608,3 +3608,247 @@ tbody tr:nth-child(8){ animation-delay: 0.21s; }
     font-size: 0.78rem;
   }
 }
+
+/* ── Packing video module (.pv-*) ──────────────────────────────────────────
+   Colours come from the :root tokens at the top of this file. Do not add a
+   second :root here — this project has been bitten by duplicate token blocks
+   winning on source order. */
+
+.pv-page { display: grid; gap: 12px; padding: 16px; min-width: 0; color: var(--text); }
+
+.pv-page-header {
+  display: flex; flex-wrap: wrap; gap: 12px;
+  align-items: flex-start; justify-content: space-between;
+}
+.pv-page-header h2 { margin-bottom: 2px; font-size: 1.4rem; }
+.pv-page-header p { margin-bottom: 0; color: var(--muted); }
+
+.pv-section-nav { display: flex; gap: 6px; flex-wrap: wrap; }
+.pv-section-button {
+  padding: 8px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.pv-section-button.active {
+  background: var(--primary-fill);
+  border-color: var(--primary-fill);
+  color: var(--on-primary);
+}
+
+.pv-setup, .pv-record, .pv-dashboard {
+  display: grid; gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  min-width: 0;
+}
+
+.pv-panel-header h3 { margin-bottom: 2px; font-size: 1.1rem; }
+.pv-panel-header p { margin-bottom: 0; color: var(--muted); font-size: 0.9rem; }
+.pv-record-header { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
+
+.pv-field-grid, .pv-filter-grid {
+  display: grid; gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.pv-field { display: grid; gap: 4px; min-width: 0; }
+.pv-field > span { font-size: 0.85rem; color: var(--muted); }
+.pv-field input, .pv-field select {
+  width: 100%;
+  min-height: 40px;
+  padding: 6px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+.pv-field input:focus-visible, .pv-field select:focus-visible,
+.pv-page button:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.pv-status-list { display: grid; gap: 6px; margin: 0; }
+.pv-status-row {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  justify-content: space-between; align-items: center;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-soft);
+}
+.pv-status-row dt { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 0.9rem; }
+.pv-status-row dd { display: flex; align-items: center; gap: 6px; margin: 0; font-weight: 500; }
+.pv-ok { color: var(--success); }
+.pv-warn { color: var(--warning); }
+
+.pv-primary-button, .pv-secondary-button, .pv-danger-button, .pv-ghost-button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 44px;
+  padding: 8px 16px;
+  border-radius: var(--radius-md);
+  font: inherit;
+  cursor: pointer;
+}
+/* --primary-fill, not --primary: in dark mode --primary is lightened so it can be read as
+   text on a dark surface, which makes it too light to sit under white. */
+.pv-primary-button { border: 1px solid var(--primary-fill); background: var(--primary-fill); color: var(--on-primary); }
+.pv-secondary-button { border: 1px solid var(--line-strong); background: var(--surface); color: var(--text); }
+.pv-danger-button { border: 1px solid var(--danger-line); background: var(--surface); color: var(--danger); }
+.pv-ghost-button { border: 1px solid transparent; background: transparent; color: var(--muted); }
+.pv-page button:disabled { opacity: 0.55; cursor: not-allowed; }
+.pv-page button:not(:disabled):active { transform: scale(0.97); }
+
+.pv-hint { margin: 0; color: var(--muted); font-size: 0.85rem; }
+
+/* Text is --text, not --danger: measured on the real DOM, --danger over --danger-bg composited
+   on --surface is 4.443:1 in dark mode, just under the 4.5 floor. The red dot and border still
+   carry the meaning, and not relying on colour alone is the better call regardless. */
+.pv-recording-pill {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 6px 12px;
+  border: 1px solid var(--danger-line);
+  border-radius: var(--radius-full);
+  background: var(--danger-bg);
+  color: var(--text);
+  font-weight: 500;
+}
+/* A steady dot, not a blinking one. `.enterprise-shell *` kills animation with !important,
+   and the running timer beside it already proves the recording is live. */
+.pv-rec-dot { width: 10px; height: 10px; border-radius: var(--radius-full); background: var(--danger); }
+
+.pv-banner {
+  display: flex; align-items: flex-start; gap: 8px;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 0.9rem;
+}
+/* Same reason as .pv-recording-pill: the tinted background eats just enough contrast to fail
+   in dark mode, so the border carries the severity and the text stays --text. */
+.pv-banner-warn { border: 1px solid var(--warning-line); background: var(--warning-bg); color: var(--text); }
+.pv-banner-danger { border: 1px solid var(--danger-line); background: var(--danger-bg); color: var(--text); }
+.pv-banner svg { flex: none; }
+.pv-banner-warn svg { color: var(--warning); }
+.pv-banner-danger svg { color: var(--danger); }
+
+.pv-scan-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
+.pv-scan-form .pv-field { flex: 1 1 240px; }
+.pv-live-status { margin: 0; color: var(--muted); font-size: 0.9rem; }
+
+.pv-order-card {
+  display: grid; gap: 8px; margin: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-soft);
+}
+.pv-order-card > div { display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; }
+.pv-order-card dt { color: var(--muted); font-size: 0.9rem; }
+.pv-order-card dd { margin: 0; font-weight: 500; }
+.pv-order-items { flex-direction: column; align-items: flex-start; }
+.pv-order-items ul { margin: 0; padding-left: 18px; font-weight: 400; }
+
+.pv-preview {
+  position: relative;
+  display: grid; place-items: center;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  background: var(--page-soft);
+}
+.pv-preview-live { border: 2px solid var(--danger); }
+.pv-preview video { width: 100%; height: 100%; object-fit: contain; }
+/* Text never sits on the video itself: the picture changes constantly, so its contrast
+   cannot be measured or guaranteed. */
+.pv-preview-idle { position: absolute; margin: 0; color: var(--muted); font-size: 0.9rem; }
+
+.pv-timer-row { display: flex; flex-wrap: wrap; gap: 16px; margin: 0; }
+.pv-timer-row dt { color: var(--muted); font-size: 0.85rem; }
+.pv-timer-row dd { margin: 0; font-weight: 500; }
+.pv-timer { font-size: 1.4rem; font-variant-numeric: tabular-nums; }
+
+.pv-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.pv-modal-overlay {
+  position: fixed; inset: 0; z-index: 1001;
+  display: grid; place-items: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+}
+.pv-modal {
+  display: grid; gap: 12px;
+  width: min(520px, 100%);
+  max-height: 90dvh;
+  overflow: auto;
+  padding: 20px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-modal);
+}
+.pv-modal h3 { margin: 0; font-size: 1.1rem; }
+.pv-player { width: min(880px, 100%); }
+.pv-player video { width: 100%; border-radius: var(--radius-sm); background: var(--page-soft); }
+.pv-modal-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.pv-dup-detail { display: grid; gap: 6px; margin: 0; }
+.pv-dup-detail > div { display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; }
+.pv-dup-detail dt { color: var(--muted); font-size: 0.9rem; }
+.pv-dup-detail dd { margin: 0; font-weight: 500; }
+
+.pv-table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius-sm); }
+.pv-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+.pv-table th, .pv-table td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--line); }
+.pv-table th { background: var(--surface-soft); color: var(--muted); font-weight: 500; white-space: nowrap; }
+.pv-table tr:last-child td { border-bottom: 0; }
+.pv-empty { color: var(--muted); text-align: center; }
+.pv-link-button {
+  display: inline-flex; align-items: center; gap: 4px;
+  min-height: 32px;
+  padding: 2px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--primary);
+  font: inherit; font-size: 0.85rem;
+  cursor: pointer;
+}
+
+/* The tab bar becomes a vertical sidebar at this width, so the workspace has to claim its
+   grid area the same way .sales-workspace does or it drops into an implicit track. */
+@media (min-width: 1200px) {
+  .enterprise-shell > .pv-page { grid-area: workspace; }
+}
+
+/* 701–1199px has no breakpoint of its own elsewhere in this file, so it is easy to miss. */
+@media (min-width: 701px) and (max-width: 1199px) {
+  .pv-filter-grid { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+}
+
+@media (max-width: 700px) {
+  .pv-page { padding: 10px; }
+  .pv-page-header { flex-direction: column; align-items: stretch; }
+  .pv-setup, .pv-record, .pv-dashboard { padding: 12px; }
+  .pv-actions { flex-direction: column; }
+  .pv-actions button { width: 100%; }
+  .pv-scan-form .pv-field { flex: 1 1 100%; }
+  .pv-timer { font-size: 1.2rem; }
+
+  /* Stack each row into a labelled card so nothing has to scroll sideways. */
+  .pv-table thead { display: none; }
+  .pv-table, .pv-table tbody, .pv-table tr, .pv-table td { display: block; width: 100%; }
+  .pv-table tr { padding: 8px 0; border-bottom: 1px solid var(--line); }
+  .pv-table td { display: flex; gap: 8px; justify-content: space-between; border-bottom: 0; }
+  .pv-table td::before { content: attr(data-label); color: var(--muted); }
+}

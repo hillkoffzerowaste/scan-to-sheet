@@ -1,4 +1,6 @@
-const CACHE_NAME = 'scan-to-sheet-v1';
+// Bumped with the range-request bypass below: without a new name, clients keep the old
+// worker and never pick up the fix.
+const CACHE_NAME = 'scan-to-sheet-v2';
 const APP_SHELL = ['/', '/manifest.webmanifest', '/icons/icon.svg'];
 
 self.addEventListener('install', (event) => {
@@ -22,6 +24,13 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
 
   if (request.method !== 'GET' || url.origin !== self.location.origin) {
+    return;
+  }
+
+  // Never touch a ranged request. A video player asks for byte ranges, and the handler below
+  // would cache the 206 partial and later serve it as the answer to a request for the whole
+  // file — the clip then stalls or refuses to play, with nothing in the console to explain it.
+  if (request.headers.has('range')) {
     return;
   }
 

@@ -1,0 +1,251 @@
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { CircleAlert, Play, RefreshCw, Search } from 'lucide-react';
+
+import { getBangkokParts } from '../../services/googleSheets.js';
+import { formatBangkokStamp, formatDuration } from '../../services/packingVideoFormat.js';
+import {
+  PACKING_VIDEO_STATUS,
+  PACKING_VIDEO_STATUS_VALUES,
+  packingVideoStatusLabel,
+} from '../../services/packingVideoModel.js';
+import { logPackingVideoAudit, searchPackingVideos } from '../../services/packingVideos.js';
+import {
+  DASHBOARD_MAX_ITEMS,
+  applyResidualFilters,
+  buildRecordingQuery,
+  normalizePackingFilters,
+} from './logic/packingVideoFilters.js';
+import { PACKING_STATIONS, packingStationLabel } from './packingVideoStations.js';
+
+const EMPTY_FORM = {
+  trackingNo: '',
+  orderId: '',
+  startDate: '',
+  endDate: '',
+  platform: '',
+  packer: '',
+  stationId: '',
+  status: '',
+};
+
+const FILTER_ERRORS = {
+  PACKING_VIDEO_FILTER_TOO_BROAD: 'เลือกช่วงวันที่ได้ไม่เกิน 31 วัน',
+  PACKING_VIDEO_UNBOUNDED_QUERY: 'การค้นหาต้องมีเงื่อนไขอย่างน้อยหนึ่งอย่าง',
+};
+
+function toDate(value) {
+  if (!value) return null;
+  return typeof value?.toDate === 'function' ? value.toDate() : new Date(value);
+}
+
+export default function PackingVideoDashboard({ packerOptions, user, deviceId, queue, localVideoIds }) {
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [rows, setRows] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [player, setPlayer] = useState(null);
+  const videoRef = useRef(null);
+
+  const setField = (field) => (event) => setForm((current) => ({ ...current, [field]: event.target.value }));
+
+  /**
+   * Nothing loads until the packer asks. Auto-loading on mount would bill a Firestore read
+   * per row every time someone glances at this tab.
+   */
+  const runSearch = useCallback(async () => {
+    setBusy(true);
+    setError('');
+    try {
+      const filters = normalizePackingFilters(form, { today: getBangkokParts().date });
+      const descriptor = buildRecordingQuery(filters);
+      const found = await searchPackingVideos(descriptor, { maxItems: DASHBOARD_MAX_ITEMS });
+      setRows(applyResidualFilters(found, filters));
+    } catch (caught) {
+      setRows([]);
+      setError(FILTER_ERRORS[caught?.code] ?? caught?.message ?? 'ค้นหาไม่สำเร็จ');
+    } finally {
+      setBusy(false);
+    }
+  }, [form]);
+
+  async function openPlayer(row) {
+    if (!row.storageUrl && !row.driveUrl) return;
+    // Recorded before the URL is opened, so the log reflects viewing rather than clicking.
+    await logPackingVideoAudit({
+      videoId: row.videoId,
+      action: 'view',
+      actor: { uid: user?.uid, email: user?.email },
+      deviceId,
+    }).catch(() => setError('บันทึกประวัติการเปิดดูไม่สำเร็จ แต่ยังเปิดดูวิดีโอได้'));
+    setPlayer(row);
+  }
+
+  function closePlayer() {
+    const element = videoRef.current;
+    if (element) {
+      element.pause();
+      element.removeAttribute('src');
+      element.load();
+    }
+    setPlayer(null);
+  }
+
+  useEffect(() => () => closePlayer(), []);
+
+  async function retryUpload(row) {
+    setError('');
+    try {
+      await queue?.retry(row.videoId);
+      await runSearch();
+    } catch (caught) {
+      setError(caught?.message ?? 'สั่งอัปโหลดซ้ำไม่สำเร็จ');
+    }
+  }
+
+  return (
+    <section className="pv-dashboard" aria-labelledby="pv-dashboard-title">
+      <header className="pv-panel-header">
+        <h3 id="pv-dashboard-title">ค้นหาวิดีโอแพ็คพัสดุ</h3>
+        <p>ระบุเลขพัสดุ เลขออเดอร์ หรือช่วงวันที่ แล้วกดค้นหา — ถ้าไม่ระบุอะไรเลยระบบจะค้นเฉพาะวันนี้</p>
+      </header>
+
+      <div className="pv-filter-grid">
+        <label className="pv-field"><span>Tracking</span>
+          <input value={form.trackingNo} onChange={setField('trackingNo')} autoComplete="off" />
+        </label>
+        <label className="pv-field"><span>เลขออเดอร์</span>
+          <input value={form.orderId} onChange={setField('orderId')} autoComplete="off" />
+        </label>
+        <label className="pv-field"><span>วันที่เริ่ม</span>
+          <input type="date" value={form.startDate} onChange={setField('startDate')} />
+        </label>
+        <label className="pv-field"><span>ถึงวันที่</span>
+          <input type="date" value={form.endDate} onChange={setField('endDate')} />
+        </label>
+        <label className="pv-field"><span>แพลตฟอร์ม</span>
+          <select value={form.platform} onChange={setField('platform')}>
+            <option value="">ทั้งหมด</option>
+            <option value="shopee">Shopee</option>
+            <option value="lazada">Lazada</option>
+            <option value="tiktok">TikTok</option>
+          </select>
+        </label>
+        <label className="pv-field"><span>ผู้แพ็ค</span>
+          <select value={form.packer} onChange={setField('packer')}>
+            <option value="">ทั้งหมด</option>
+            {packerOptions.map((name) => <option key={name} value={name}>{name}</option>)}
+          </select>
+        </label>
+        <label className="pv-field"><span>จุดแพ็ค</span>
+          <select value={form.stationId} onChange={setField('stationId')}>
+            <option value="">ทั้งหมด</option>
+            {PACKING_STATIONS.map((item) => <option key={item.id} value={item.id}>{item.id}</option>)}
+          </select>
+        </label>
+        <label className="pv-field"><span>สถานะ</span>
+          <select value={form.status} onChange={setField('status')}>
+            <option value="">ทั้งหมด</option>
+            {PACKING_VIDEO_STATUS_VALUES.map((value) => (
+              <option key={value} value={value}>{packingVideoStatusLabel(value)}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <div className="pv-actions">
+        <button type="button" className="pv-primary-button" onClick={runSearch} disabled={busy}>
+          <Search size={18} aria-hidden="true" />
+          <span>{busy ? 'กำลังค้นหา…' : 'ค้นหา'}</span>
+        </button>
+        <button type="button" className="pv-ghost-button" onClick={() => { setForm(EMPTY_FORM); setRows(null); setError(''); }}>
+          ล้างเงื่อนไข
+        </button>
+      </div>
+
+      {error && (
+        <p className="pv-banner pv-banner-danger" role="alert">
+          <CircleAlert size={16} aria-hidden="true" />{error}
+        </p>
+      )}
+
+      {rows !== null && (
+        <div className="pv-table-wrap">
+          <table className="pv-table">
+            <thead>
+              <tr>
+                <th scope="col">วันที่</th>
+                <th scope="col">Tracking</th>
+                <th scope="col">แพลตฟอร์ม</th>
+                <th scope="col">ผู้แพ็ค</th>
+                <th scope="col">จุดแพ็ค</th>
+                <th scope="col">ความยาว</th>
+                <th scope="col">สถานะ</th>
+                <th scope="col">วิดีโอ</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.length === 0 && (
+                <tr><td colSpan={8} className="pv-empty">ไม่พบวิดีโอตามเงื่อนไขนี้</td></tr>
+              )}
+              {rows.map((row) => {
+                const playable = Boolean(row.storageUrl || row.driveUrl);
+                const needsRetry = [PACKING_VIDEO_STATUS.uploadFailed, PACKING_VIDEO_STATUS.pendingUpload]
+                  .includes(row.status);
+                // The blob only exists on the workstation that recorded it, so a retry from
+                // any other machine has nothing to upload.
+                const retryHere = localVideoIds?.has(row.videoId);
+                return (
+                  <tr key={row.videoId}>
+                    <td data-label="วันที่">{row.startedAt ? formatBangkokStamp(toDate(row.startedAt)) : row.bangkokDate}</td>
+                    <td data-label="Tracking">{row.trackingNo}</td>
+                    <td data-label="แพลตฟอร์ม">{String(row.platform ?? '').toUpperCase() || '—'}</td>
+                    <td data-label="ผู้แพ็ค">{row.packer || '—'}</td>
+                    <td data-label="จุดแพ็ค">{packingStationLabel(row.stationId)}</td>
+                    <td data-label="ความยาว">{formatDuration(row.durationMs)}</td>
+                    <td data-label="สถานะ">{packingVideoStatusLabel(row.status)}</td>
+                    <td data-label="วิดีโอ">
+                      {playable && (
+                        <button type="button" className="pv-link-button" onClick={() => openPlayer(row)}>
+                          <Play size={14} aria-hidden="true" /> เปิดดู
+                        </button>
+                      )}
+                      {needsRetry && (
+                        <button
+                          type="button"
+                          className="pv-link-button"
+                          disabled={!retryHere}
+                          title={retryHere ? undefined : `ต้องอัปโหลดซ้ำจากเครื่องที่บันทึก (${row.deviceId || 'ไม่ทราบเครื่อง'})`}
+                          onClick={() => retryUpload(row)}
+                        >
+                          <RefreshCw size={14} aria-hidden="true" /> อัปโหลดซ้ำ
+                        </button>
+                      )}
+                      {!playable && !needsRetry && '—'}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {player && (
+        <div className="pv-modal-overlay" role="presentation" onClick={closePlayer}>
+          <div
+            className="pv-modal pv-player"
+            role="dialog"
+            aria-modal="true"
+            aria-label={`วิดีโอของเลขพัสดุ ${player.trackingNo}`}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h3>{player.trackingNo}</h3>
+            {/* preload="metadata": a full preload would pull tens of megabytes for a click. */}
+            <video ref={videoRef} controls playsInline preload="metadata" src={player.driveUrl || player.storageUrl} />
+            <button type="button" className="pv-secondary-button" onClick={closePlayer}>ปิด</button>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
