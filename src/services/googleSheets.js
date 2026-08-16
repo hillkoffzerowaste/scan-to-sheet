@@ -1,5 +1,5 @@
 import { buildSheetBackfillUpdates, classifyLateOrder } from './marketplaceImport.js';
-import { findHistoricalIssueRow, findScanReconciliation, getScanIssueMeta } from './sheetSyncReconciliation.js';
+import { findHistoricalIssueRow, findScanReconciliation, getScanIssueMeta, resolveCrossDayPackerRow } from './sheetSyncReconciliation.js';
 
 const DRIVE_API = 'https://www.googleapis.com/drive/v3';
 export const SHEETS_API = 'https://sheets.googleapis.com/v4/spreadsheets';
@@ -1514,6 +1514,7 @@ export async function appendScanGoogle({
   await ensureDailyWorksheet({ token, spreadsheetId: sheet.id, date });
   const rows = await readDailyRows({ token, spreadsheetId: sheet.id, date });
   const parsedRows = rows.map(rowFromSheet);
+  const crossDayCache = createCrossDayCache();
   const courierRows = parsedRows.filter((row) => row.courier === courier);
   const reconciliation = findScanReconciliation(parsedRows, {
     courier,
@@ -1534,6 +1535,7 @@ export async function appendScanGoogle({
       courier,
       code: normalizedCode,
       matcher: (candidateRows) => findHistoricalIssueRow(candidateRows, { courier, code: normalizedCode }),
+      cache: crossDayCache,
     });
 
     if (crossDayMatch) {
@@ -1653,7 +1655,7 @@ export async function appendScanGoogle({
       }
     }
 
-    const crossDayMatch = await findRowsAcrossDays({ token, spreadsheetId: sheet.id, currentDate: date, code: normalizedCode, field: 'adminCode' });
+    const crossDayMatch = await findRowsAcrossDays({ token, spreadsheetId: sheet.id, currentDate: date, code: normalizedCode, field: 'adminCode', cache: crossDayCache });
     if (crossDayMatch) {
       const currentRow = crossDayMatch.row;
       // Column C must name the sheet the row actually lives on: rowFromSheet reads
@@ -1681,6 +1683,7 @@ export async function appendScanGoogle({
       currentDate: date,
       code: normalizedCode,
       field: 'adminCode',
+      cache: crossDayCache,
     });
     if (adminMatchAnyCourier && adminMatchAnyCourier.row.courier !== courier) {
       const currentRow = adminMatchAnyCourier.row;
@@ -1700,6 +1703,88 @@ export async function appendScanGoogle({
         status: 'success', courier: currentRow.courier, selectedCourier: courier, date, time, code: normalizedCode,
         rows: resultRows,
         sheetUrl: sheet.webViewLink, merged: true, wrongCourier: true, crossDay: adminMatchAnyCourier.date !== date,
+      };
+    }
+  }
+
+  // A Packer row from an earlier day. Every cross-day search above looks at the Admin column
+  // only, so a parcel whose original row was created by a Packer — no Admin scan on it — was
+  // invisible from today and got a second row appended here. Yesterday's row then stayed
+  // รอแพ็ค and its COUNTIF kept counting it, while Firestore had correctly updated the
+  // original order: the two sources disagreed about the same parcel.
+  if (!duplicate && !isIssueScan) {
+    const packerMatch = await findRowsAcrossDays({
+      token,
+      spreadsheetId: sheet.id,
+      currentDate: date,
+      code: normalizedCode,
+      field: 'code',
+      cache: crossDayCache,
+    });
+    const resolution = resolveCrossDayPackerRow(packerMatch?.row, { packerName: packer });
+
+    if (resolution.action === 'fill-packer') {
+      const currentRow = resolution.row;
+      // Column C keeps naming the sheet the row lives on: rowFromSheet reads row.date from it
+      // and updateScanIssueGoogle uses that to pick which sheet to search later.
+      const mergedRow = withMarketplaceCells([
+        currentRow.no, currentRow.courierNo, packerMatch.date, currentRow.time || time,
+        currentRow.courier, currentRow.code || normalizedCode, currentRow.email || email, packer,
+        'Success', crossDayNote(currentRow.note || note, packerMatch.date, date),
+        currentRow.adminDate || effectiveAdminDate || '', currentRow.adminTime || effectiveAdminTime || '',
+        currentRow.adminCode || effectiveAdminCode,
+      ], marketplaceOrder ?? marketplaceOrderFromRow(currentRow));
+
+      await updateDailyRow({
+        token,
+        spreadsheetId: sheet.id,
+        date: packerMatch.date,
+        rowNumber: currentRow.sheetRowNumber,
+        row: mergedRow,
+      });
+
+      const resultRows = packerMatch.parsedRows
+        .map((row) => row.sheetRowNumber === currentRow.sheetRowNumber ? rowFromSheet(mergedRow) : row)
+        .filter((row) => row.courier === currentRow.courier)
+        .reverse()
+        .slice(0, 20);
+
+      return {
+        status: 'success',
+        courier: currentRow.courier,
+        selectedCourier: courier,
+        date,
+        time,
+        code: normalizedCode,
+        rows: resultRows,
+        sheetUrl: sheet.webViewLink,
+        merged: true,
+        wrongCourier: currentRow.courier !== courier,
+        crossDay: true,
+        updatedDate: packerMatch.date,
+      };
+    }
+
+    if (resolution.action === 'duplicate') {
+      // Already scanned, just on an earlier sheet. Reporting it as a duplicate is the whole
+      // point: appending here is what produced the second row.
+      const currentRow = resolution.row;
+      return {
+        status: 'duplicate',
+        courier: currentRow.courier,
+        selectedCourier: courier,
+        date,
+        time,
+        code: normalizedCode,
+        isPacker: true,
+        row: currentRow,
+        rows: packerMatch.parsedRows
+          .filter((row) => row.courier === currentRow.courier)
+          .reverse()
+          .slice(0, 20),
+        sheetUrl: sheet.webViewLink,
+        crossDay: true,
+        updatedDate: packerMatch.date,
       };
     }
   }
@@ -1800,6 +1885,7 @@ export async function appendScanGoogle({
       currentDate: date,
       code: normalizedCode,
       field: 'code',
+      cache: crossDayCache,
     });
     if (packerMatchAnyCourier) {
       return {
@@ -2441,13 +2527,31 @@ function getLookbackDates(date, days = CROSS_DAY_LOOKBACK) {
   });
 }
 
-async function findRowsAcrossDays({ token, spreadsheetId, currentDate, courier = null, code, field, matcher = null }) {
+/**
+ * Per-scan memo for the cross-day searches.
+ *
+ * One scan runs several of them and they all walk the same handful of sheets. Without this each
+ * search re-fetched the spreadsheet listing and re-read every day again — a scan already costs
+ * about a dozen Google API calls, and the sheet lock it competes with has a limited TTL.
+ */
+function createCrossDayCache() {
+  return { titles: null, rows: new Map() };
+}
+
+async function findRowsAcrossDays({ token, spreadsheetId, currentDate, courier = null, code, field, matcher = null, cache = null }) {
   const normalizedCode = normalizeScanCode(code);
-  const spreadsheet = await getSpreadsheet(token, spreadsheetId);
-  const titles = new Set((spreadsheet.sheets ?? []).map((item) => item.properties.title));
+  const memo = cache ?? createCrossDayCache();
+  if (!memo.titles) {
+    const spreadsheet = await getSpreadsheet(token, spreadsheetId);
+    memo.titles = new Set((spreadsheet.sheets ?? []).map((item) => item.properties.title));
+  }
+  const titles = memo.titles;
   for (const date of getLookbackDates(currentDate)) {
     if (!titles.has(date)) continue;
-    const rows = await readDailyRows({ token, spreadsheetId, date });
+    if (!memo.rows.has(date)) {
+      memo.rows.set(date, await readDailyRows({ token, spreadsheetId, date }));
+    }
+    const rows = memo.rows.get(date);
     const parsedRows = rows.map((row, index) => rowFromSheet(row, index));
     const match = matcher
       ? matcher(parsedRows)

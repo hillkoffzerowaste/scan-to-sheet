@@ -8,6 +8,7 @@ import {
   isSheetSyncResultConfirmed,
   getPackerDuplicateMessage,
   getScanIssueMeta,
+  resolveCrossDayPackerRow,
   shouldBlockPackerScan,
 } from './sheetSyncReconciliation.js';
 
@@ -144,4 +145,43 @@ test('does not confirm a Packer duplicate without the Packer row', () => {
     isPacker: false,
     row: { code: '', adminCode: 'TH123' },
   }), true);
+});
+
+test('a Packer row from an earlier day is reported as a duplicate, not appended again', () => {
+  // The bug: cross-day searches only looked at the Admin column, so a row the Packer created
+  // yesterday was invisible today and a second row was appended on today's sheet.
+  const row = { courier: 'Flash', code: 'TH123', packer: 'มิว', date: '2026-08-14' };
+  assert.deepEqual(resolveCrossDayPackerRow(row, { packerName: 'มิว' }), {
+    action: 'duplicate',
+    row,
+  });
+});
+
+test('a row scanned yesterday without a name gets the name, on its own sheet', () => {
+  // The packer picker defaults to unassigned, so rows without a name are routine. The name
+  // belongs on the original row; appending a new one would leave yesterday's still รอแพ็ค.
+  const row = { courier: 'Flash', code: 'TH123', packer: '', date: '2026-08-14' };
+  assert.deepEqual(resolveCrossDayPackerRow(row, { packerName: 'มิว' }), {
+    action: 'fill-packer',
+    row,
+  });
+});
+
+test('an unnamed rescan of an unnamed row does not rewrite it', () => {
+  // Nothing new to record: treating it as a fresh success would overwrite the original
+  // scan time and report a success that did not happen.
+  const row = { courier: 'Flash', code: 'TH123', packer: '' };
+  assert.equal(resolveCrossDayPackerRow(row, { packerName: '' }).action, 'duplicate');
+  assert.equal(resolveCrossDayPackerRow(row, { packerName: '   ' }).action, 'duplicate');
+});
+
+test('no earlier row means the normal append path stays untouched', () => {
+  // Guards the same-day behaviour: this must not start hijacking ordinary scans.
+  assert.deepEqual(resolveCrossDayPackerRow(null, { packerName: 'มิว' }), { action: 'none' });
+  assert.deepEqual(resolveCrossDayPackerRow(undefined, {}), { action: 'none' });
+});
+
+test('a named row is a duplicate even when a different packer rescans it', () => {
+  const row = { courier: 'Flash', code: 'TH123', packer: 'มิว' };
+  assert.equal(resolveCrossDayPackerRow(row, { packerName: 'ก้อย' }).action, 'duplicate');
 });

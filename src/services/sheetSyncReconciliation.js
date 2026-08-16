@@ -26,6 +26,24 @@ export function findHistoricalIssueRow(rows, { courier, code }) {
     ?? null;
 }
 
+/**
+ * What to do with a Packer row found on an earlier day's sheet.
+ *
+ * The cross-day searches only ever looked at the Admin column, so a row the Packer created
+ * yesterday was invisible today and the scan appended a second row on today's sheet — leaving
+ * yesterday's row still counted as รอแพ็ค and the two sheets disagreeing about one parcel.
+ *
+ * `fill-packer` covers the row that was written without a name (the picker defaults to
+ * unassigned): the name belongs on the original row, not on a new one.
+ */
+export function resolveCrossDayPackerRow(row, { packerName = '' } = {}) {
+  if (!row) return { action: 'none' };
+  const rowHasPacker = Boolean(String(row.packer ?? '').trim());
+  const scanHasPacker = Boolean(String(packerName ?? '').trim());
+  if (!rowHasPacker && scanHasPacker) return { action: 'fill-packer', row };
+  return { action: 'duplicate', row };
+}
+
 export function shouldBlockPackerScan(rows, code, courier = null) {
   const normalizedCode = normalizeCode(code);
   return rows.some((row) => (
