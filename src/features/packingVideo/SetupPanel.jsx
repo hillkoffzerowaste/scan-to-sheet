@@ -1,15 +1,8 @@
 import React from 'react';
 import { Camera, CheckCircle2, CircleAlert, MonitorSmartphone, Play } from 'lucide-react';
 
+import { packingVideoErrorText } from './logic/packingVideoMessages.js';
 import { PACKING_STATIONS } from './packingVideoStations.js';
-
-const CAMERA_HINTS = {
-  PACKING_VIDEO_PERMISSION_DENIED: 'ยังไม่ได้อนุญาตให้ใช้กล้อง',
-  PACKING_VIDEO_NO_CAMERA: 'ไม่พบกล้องบนเครื่องนี้',
-  PACKING_VIDEO_CAMERA_BUSY: 'กล้องถูกโปรแกรมอื่นใช้อยู่',
-  PACKING_VIDEO_CAMERA_UNSUPPORTED: 'กล้องไม่รองรับความละเอียดที่ตั้งไว้',
-  PACKING_VIDEO_UNSUPPORTED_BROWSER: 'เบราว์เซอร์นี้บันทึกวิดีโอไม่ได้',
-};
 
 export default function SetupPanel({
   station,
@@ -27,7 +20,7 @@ export default function SetupPanel({
   const ready = Boolean(station && packer && isSignedIn);
   const cameraLabel = cameraInfo.ready
     ? `พร้อมใช้งาน${cameraInfo.resolution ? ` (${cameraInfo.resolution})` : ''}`
-    : CAMERA_HINTS[cameraInfo.errorCode] ?? 'ยังไม่ได้เปิดกล้อง';
+    : packingVideoErrorText(cameraInfo.errorCode) || 'ยังไม่ได้เปิดกล้อง';
 
   return (
     <section className="pv-setup" aria-labelledby="pv-setup-title">

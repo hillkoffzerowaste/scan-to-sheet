@@ -1,12 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { CircleAlert, PackageCheck, RotateCcw, X } from 'lucide-react';
 
-import { AUTH_SESSION_EXPIRED, AUTH_SESSION_EXPIRED_MESSAGE } from '../../services/authErrors.js';
 import { barcodeCharacterFromKeyEvent } from '../../services/barcodeKeyboard.js';
 import { getPackingStream } from '../../services/packingRecorder.js';
 import { formatBangkokStamp } from '../../services/packingVideoFormat.js';
 import { useRecordingClock } from './hooks/useRecordingClock.js';
 import { PACKING_STATE } from './logic/packingSessionMachine.js';
+import { packingVideoErrorText } from './logic/packingVideoMessages.js';
 import { packingStationLabel } from './packingVideoStations.js';
 
 const STATUS_TEXT = {
@@ -17,14 +17,6 @@ const STATUS_TEXT = {
   [PACKING_STATE.recording]: 'กำลังบันทึกวิดีโอ',
   [PACKING_STATE.finalizing]: 'กำลังปิดไฟล์วิดีโอ…',
   [PACKING_STATE.cameraError]: 'เปิดกล้องไม่สำเร็จ',
-};
-
-const ERROR_TEXT = {
-  [AUTH_SESSION_EXPIRED]: AUTH_SESSION_EXPIRED_MESSAGE,
-  PACKING_VIDEO_ORDER_NOT_FOUND: 'ไม่พบออเดอร์ของเลขพัสดุนี้ ระบบจะไม่เริ่มบันทึก',
-  PACKING_VIDEO_OFFLINE_LOOKUP: 'ตอนนี้ออฟไลน์ จึงค้นหาออเดอร์ไม่ได้ (ไม่ได้แปลว่าไม่มีออเดอร์นี้)',
-  PACKING_VIDEO_LOOKUP_FAILED: 'ค้นหาออเดอร์ไม่สำเร็จ กรุณาลองใหม่',
-  PACKING_VIDEO_FINALIZE_FAILED: 'ปิดไฟล์วิดีโอไม่สำเร็จ ระบบเก็บส่วนที่บันทึกไว้ให้กู้แล้ว',
 };
 
 export default function RecordPanel({
@@ -40,7 +32,7 @@ export default function RecordPanel({
   const videoRef = useRef(null);
   const { label: elapsedLabel } = useRecordingClock(state.status === PACKING_STATE.recording ? state.startedAt : null);
 
-  const errorText = state.errorCode ? ERROR_TEXT[state.errorCode] ?? '' : '';
+  const errorText = packingVideoErrorText(state.errorCode);
   const isRecording = state.status === PACKING_STATE.recording;
   const busy = [PACKING_STATE.searching, PACKING_STATE.starting, PACKING_STATE.finalizing].includes(state.status);
 
