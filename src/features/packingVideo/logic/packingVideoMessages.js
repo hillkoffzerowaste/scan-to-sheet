@@ -33,6 +33,7 @@ export const PACKING_VIDEO_MESSAGES = {
   PACKING_VIDEO_NOT_RECORDING: 'ตอนนี้ไม่ได้บันทึกอยู่',
   PACKING_VIDEO_RECORDER_ERROR: 'การบันทึกขัดข้อง ระบบเก็บส่วนที่บันทึกไว้แล้ว',
   PACKING_VIDEO_FINALIZE_FAILED: 'ปิดไฟล์วิดีโอไม่สำเร็จ ระบบเก็บส่วนที่บันทึกไว้ให้กู้แล้ว',
+  PACKING_VIDEO_EMPTY_RECORDING: 'ไม่มีข้อมูลวิดีโอที่บันทึกได้ กรุณาตรวจกล้องแล้วบันทึกใหม่',
 
   // Storage and queue
   PACKING_VIDEO_DISK_LOW: 'พื้นที่เก็บข้อมูลในเครื่องเหลือน้อย กรุณารอให้อัปโหลดคิวเดิมให้เสร็จก่อน',

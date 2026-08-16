@@ -6,6 +6,7 @@ import {
   RECORDER_TIMESLICE_MS,
   buildRecorderOptions,
   buildVideoConstraints,
+  chooseRecordedParts,
   pickMimeType,
   toCameraError,
 } from '../features/packingVideo/logic/recorderCapabilities.js';
@@ -149,7 +150,7 @@ export async function startPackingRecording({ videoId, onAutoStopWarning, onAuto
   }
 
   const startedAt = new Date();
-  active = { videoId, startedAt, seq: 0, buffered: [], flushed: 0 };
+  active = { videoId, startedAt, seq: 0, buffered: [], writes: [] };
 
   recorder = new MediaRecorder(stream, buildRecorderOptions(state.mimeType));
 
@@ -158,13 +159,16 @@ export async function startPackingRecording({ videoId, onAutoStopWarning, onAuto
     const seq = active.seq;
     active.seq += 1;
     active.buffered.push(event.data);
-    // Fire-and-forget: the recorder must not stall waiting on a disk write.
-    void appendChunk(videoId, seq, event.data).catch(() => {
+    // The write is not awaited here — the recorder must not stall on disk — but the promise is
+    // kept so stop() can wait for it. Without that, onstop reads IndexedDB back while the last
+    // few writes are still in flight and the assembled clip silently loses its final seconds:
+    // exactly the moment the box is closed, and the reason this feature exists.
+    active.writes.push(appendChunk(videoId, seq, event.data).catch((error) => {
       state.errorCode = 'PACKING_VIDEO_CHUNK_WRITE_FAILED';
       emit();
-    });
+      return { failedSeq: seq, error };
+    }));
     if (active.buffered.length >= MEMORY_CHUNK_LIMIT) {
-      active.flushed += active.buffered.length;
       active.buffered = [];
     }
   };
@@ -215,9 +219,25 @@ export function stopPackingRecording() {
     currentRecorder.onstop = async () => {
       try {
         const finishedAt = new Date();
+        // stop() delivers the final ondataavailable before onstop, so every write this clip will
+        // ever make has been queued by now; settling them makes the read below see all of them.
+        await Promise.allSettled(current.writes);
+
         const rows = await readChunks(current.videoId);
-        const parts = rows.length ? rows.map((row) => row.blob) : current.buffered;
+        const { parts, complete } = chooseRecordedParts({
+          storedChunks: rows,
+          bufferedChunks: current.buffered,
+          expectedCount: current.seq,
+        });
         const blob = new Blob(parts, { type: state.mimeType });
+
+        if (!blob.size) {
+          throw Object.assign(new Error('ไม่มีข้อมูลวิดีโอที่บันทึกได้'), {
+            code: 'PACKING_VIDEO_EMPTY_RECORDING',
+          });
+        }
+        // Surfaced rather than swallowed: a clip missing chunks must not be filed as a clean one.
+        if (!complete) state.errorCode = 'PACKING_VIDEO_CHUNK_WRITE_FAILED';
 
         recorder = null;
         active = null;

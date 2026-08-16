@@ -8,9 +8,12 @@ import {
   VIDEO_BITS_PER_SECOND,
   buildRecorderOptions,
   buildVideoConstraints,
+  chooseRecordedParts,
   pickMimeType,
   toCameraError,
 } from './recorderCapabilities.js';
+
+const chunk = (seq) => ({ seq, blob: `blob${seq}` });
 
 const supports = (...allowed) => (mimeType) => allowed.includes(mimeType);
 
@@ -67,4 +70,48 @@ test('camera failures map onto stable codes with Thai text', () => {
   assert.equal(toCameraError({ name: 'NotReadableError' }).code, 'PACKING_VIDEO_CAMERA_BUSY');
   assert.equal(toCameraError({ name: 'OverconstrainedError' }).code, 'PACKING_VIDEO_CAMERA_UNSUPPORTED');
   assert.equal(toCameraError({ name: 'SomethingNew' }).code, 'PACKING_VIDEO_CAMERA_UNAVAILABLE');
+});
+
+test('a complete disk read is assembled in sequence order', () => {
+  // getAll() does not promise order, and out-of-order parts make an unplayable file.
+  const result = chooseRecordedParts({
+    storedChunks: [chunk(2), chunk(0), chunk(1)],
+    bufferedChunks: [],
+    expectedCount: 3,
+  });
+  assert.deepEqual(result.parts, ['blob0', 'blob1', 'blob2']);
+  assert.equal(result.source, 'indexeddb');
+  assert.equal(result.complete, true);
+});
+
+test('a short disk read is reported rather than passed off as a whole clip', () => {
+  // The bug this guards: the last chunks are the moment the box is closed, and losing them
+  // silently produced a clip that looked fine and proved nothing.
+  const result = chooseRecordedParts({
+    storedChunks: [chunk(0), chunk(1)],
+    bufferedChunks: ['a', 'b', 'c', 'd'],
+    expectedCount: 4,
+  });
+  assert.equal(result.complete, false);
+  assert.equal(result.source, 'memory', 'memory held more of the clip than disk did');
+  assert.deepEqual(result.parts, ['a', 'b', 'c', 'd']);
+});
+
+test('disk wins when it holds at least as much as memory', () => {
+  // Memory only keeps the most recent chunks, so a longer disk read is the better copy even
+  // when it is not the whole clip.
+  const result = chooseRecordedParts({
+    storedChunks: [chunk(0), chunk(1), chunk(2)],
+    bufferedChunks: ['c'],
+    expectedCount: 5,
+  });
+  assert.equal(result.source, 'indexeddb');
+  assert.equal(result.complete, false);
+  assert.equal(result.parts.length, 3);
+});
+
+test('nothing recorded anywhere yields no parts, never a silent empty file', () => {
+  const result = chooseRecordedParts({ storedChunks: [], bufferedChunks: [], expectedCount: 2 });
+  assert.deepEqual(result.parts, []);
+  assert.equal(result.complete, false);
 });

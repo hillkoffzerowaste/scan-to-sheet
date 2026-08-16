@@ -28,6 +28,24 @@ export function listMimeCandidates() {
   return MIME_CANDIDATES.map((candidate) => ({ ...candidate }));
 }
 
+/**
+ * Decides which copy of the footage to assemble, given what came back from IndexedDB and what
+ * is still in memory.
+ *
+ * `expectedCount` is how many chunks the recorder handed over. A disk read shorter than that
+ * means a write failed rather than merely lagged, and the in-memory copy — which only holds the
+ * most recent chunks — may or may not be the better of two bad options. Reporting `complete`
+ * lets the caller flag the clip instead of filing a short recording as a clean one.
+ */
+export function chooseRecordedParts({ storedChunks = [], bufferedChunks = [], expectedCount = 0 }) {
+  const stored = [...storedChunks].sort((left, right) => left.seq - right.seq).map((row) => row.blob);
+  const complete = stored.length >= expectedCount;
+  if (complete || stored.length >= bufferedChunks.length) {
+    return { parts: stored, source: 'indexeddb', complete };
+  }
+  return { parts: [...bufferedChunks], source: 'memory', complete: false };
+}
+
 /** `isSupported` is injected so this stays testable without a MediaRecorder. */
 export function pickMimeType(isSupported) {
   if (typeof isSupported !== 'function') return null;
