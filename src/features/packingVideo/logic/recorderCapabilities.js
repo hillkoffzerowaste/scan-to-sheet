@@ -103,6 +103,21 @@ const CAMERA_ERROR_MESSAGES = {
   PACKING_VIDEO_CAMERA_UNAVAILABLE: 'เปิดกล้องไม่สำเร็จ กรุณาลองใหม่',
 };
 
+/**
+ * True when the failure is explained by a remembered `deviceId` that no longer exists, so
+ * retrying without one is worth doing. A permission refusal or a camera held by another app
+ * would fail the same way a second time, so those are left alone.
+ */
+export function isStaleCameraIdError(error, cameraDeviceId) {
+  if (!cameraDeviceId) return false;
+  return [
+    'OverconstrainedError',
+    'ConstraintNotSatisfiedError',
+    'NotFoundError',
+    'DevicesNotFoundError',
+  ].includes(error?.name);
+}
+
 /** Maps a getUserMedia DOMException onto a stable code plus Thai display text. */
 export function toCameraError(error) {
   const code = CAMERA_ERROR_CODES[error?.name] ?? 'PACKING_VIDEO_CAMERA_UNAVAILABLE';

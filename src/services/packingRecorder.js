@@ -7,6 +7,7 @@ import {
   buildRecorderOptions,
   buildVideoConstraints,
   chooseRecordedParts,
+  isStaleCameraIdError,
   pickMimeType,
   toCameraError,
 } from '../features/packingVideo/logic/recorderCapabilities.js';
@@ -103,8 +104,21 @@ export async function preparePackingCamera({ cameraDeviceId = '', onCameraLost }
   try {
     stream = await navigator.mediaDevices.getUserMedia(buildVideoConstraints({ cameraDeviceId }));
   } catch (error) {
-    releaseCamera(OWNER_ID);
-    throw toCameraError(error);
+    if (!isStaleCameraIdError(error, cameraDeviceId)) {
+      releaseCamera(OWNER_ID);
+      throw toCameraError(error);
+    }
+    // The remembered deviceId is pinned with `exact`, and on phones that id is not stable: it
+    // changes when camera permission is re-granted or site data is cleared. Retrying with "any
+    // camera" turns a dead end into a working session. Without it the packer is told the
+    // resolution is unsupported, which is not what went wrong and sends them fixing the
+    // wrong thing.
+    try {
+      stream = await navigator.mediaDevices.getUserMedia(buildVideoConstraints({}));
+    } catch (retryError) {
+      releaseCamera(OWNER_ID);
+      throw toCameraError(retryError);
+    }
   }
 
   state.mimeType = picked.mimeType;

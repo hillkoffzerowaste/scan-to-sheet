@@ -9,6 +9,7 @@ import {
   buildRecorderOptions,
   buildVideoConstraints,
   chooseRecordedParts,
+  isStaleCameraIdError,
   pickMimeType,
   toCameraError,
 } from './recorderCapabilities.js';
@@ -114,4 +115,18 @@ test('nothing recorded anywhere yields no parts, never a silent empty file', () 
   const result = chooseRecordedParts({ storedChunks: [], bufferedChunks: [], expectedCount: 2 });
   assert.deepEqual(result.parts, []);
   assert.equal(result.complete, false);
+});
+
+test('a remembered camera id that no longer exists is worth one retry', () => {
+  // Phone deviceIds change when camera permission is re-granted or site data is cleared.
+  assert.equal(isStaleCameraIdError({ name: 'OverconstrainedError' }, 'cam-1'), true);
+  assert.equal(isStaleCameraIdError({ name: 'NotFoundError' }, 'cam-1'), true);
+});
+
+test('failures that would repeat are not retried', () => {
+  // Retrying a refused permission or a camera another app holds just fails twice as slowly.
+  assert.equal(isStaleCameraIdError({ name: 'NotAllowedError' }, 'cam-1'), false);
+  assert.equal(isStaleCameraIdError({ name: 'NotReadableError' }, 'cam-1'), false);
+  // Nothing was pinned, so there is no narrower constraint left to drop.
+  assert.equal(isStaleCameraIdError({ name: 'OverconstrainedError' }, ''), false);
 });
