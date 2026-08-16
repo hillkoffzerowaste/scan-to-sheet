@@ -8,6 +8,8 @@ import {
   createScanGate,
   isBarcodeDetectorSupported,
   readBarcodeValue,
+  toDetections,
+  ZXING_FORMATS,
 } from './barcodeScanner.js';
 
 test('support is decided by the API being present, not by user agent sniffing', () => {
@@ -82,4 +84,29 @@ test('reset clears the mute so a new session starts clean', () => {
 
 test('the default window is long enough to move a parcel out of frame', () => {
   assert.ok(REPEAT_WINDOW_MS >= 3000);
+});
+
+test('both backends name the same set of formats', () => {
+  // The two lists spell the same formats differently. Letting them drift would mean a label
+  // that scans on one device and silently does not on another.
+  assert.equal(ZXING_FORMATS.length, PACKING_BARCODE_FORMATS.length);
+  assert.equal(ZXING_FORMATS[0], 'Code128', 'courier labels first, same as the native list');
+});
+
+test('ZXing results are reshaped into what the scan loop expects', () => {
+  assert.deepEqual(toDetections([{ text: 'TH123456789', format: 'Code128' }]), [
+    { rawValue: 'TH123456789' },
+  ]);
+});
+
+test('a read ZXing itself marks invalid is dropped', () => {
+  assert.deepEqual(toDetections([{ text: 'garbage', isValid: false }]), []);
+  assert.deepEqual(toDetections([]), []);
+  assert.deepEqual(toDetections(undefined), []);
+});
+
+test('a reshaped ZXing read flows through the same value rules as a native one', () => {
+  // One pipeline for both backends: the artwork-misread guard must apply either way.
+  assert.equal(readBarcodeValue(toDetections([{ text: '7' }])), '');
+  assert.equal(readBarcodeValue(toDetections([{ text: ' TH999999 ' }])), 'TH999999');
 });

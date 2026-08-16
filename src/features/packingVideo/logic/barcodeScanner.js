@@ -22,8 +22,32 @@ export const PACKING_BARCODE_FORMATS = [
   'codabar',
 ];
 
+/**
+ * The same formats named the way ZXing spells them, for the WASM fallback. Kept beside the list
+ * above so adding a format cannot be half-done.
+ */
+export const ZXING_FORMATS = [
+  'Code128',
+  'QRCode',
+  'Code39',
+  'EAN-13',
+  'ITF',
+  'Codabar',
+];
+
 export function isBarcodeDetectorSupported(scope = globalThis) {
   return typeof scope?.BarcodeDetector === 'function';
+}
+
+/**
+ * Normalises ZXing results onto the shape BarcodeDetector returns, so the scan loop never has
+ * to know which backend produced a read.
+ */
+export function toDetections(results) {
+  if (!Array.isArray(results)) return [];
+  return results
+    .filter((result) => result?.isValid !== false)
+    .map((result) => ({ rawValue: String(result?.text ?? '') }));
 }
 
 /**

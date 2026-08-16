@@ -20,6 +20,12 @@ const STATUS_TEXT = {
   [PACKING_STATE.cameraError]: 'เปิดกล้องไม่สำเร็จ',
 };
 
+const SCANNER_HINT = {
+  starting: 'กำลังเตรียมการสแกนด้วยกล้อง…',
+  scanning: 'ส่องบาร์โค้ดหรือ QR บนพัสดุให้อยู่ในกรอบกล้อง หรือใช้เครื่องยิงบาร์โค้ดก็ได้',
+  unsupported: 'เครื่องนี้สแกนด้วยกล้องไม่ได้ กรุณาใช้เครื่องยิงบาร์โค้ดหรือพิมพ์เลขพัสดุ',
+};
+
 export default function RecordPanel({
   session,
   station,
@@ -176,9 +182,7 @@ export default function RecordPanel({
 
       {cameraInfo.ready && scannerStatus !== 'idle' && (
         <p className="pv-hint" aria-live="polite">
-          {scannerStatus === 'scanning'
-            ? 'ส่องบาร์โค้ดบนพัสดุให้อยู่ในกรอบกล้อง หรือใช้เครื่องยิงบาร์โค้ดก็ได้'
-            : 'เครื่องนี้สแกนด้วยกล้องไม่ได้ กรุณาใช้เครื่องยิงบาร์โค้ดหรือพิมพ์เลขพัสดุ'}
+          {SCANNER_HINT[scannerStatus]}
         </p>
       )}
 

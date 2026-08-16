@@ -1,11 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
-import {
-  chooseDetectorFormats,
-  createScanGate,
-  isBarcodeDetectorSupported,
-  readBarcodeValue,
-} from '../logic/barcodeScanner.js';
+import { createBarcodeDecoder } from '../../../services/barcodeDecoders.js';
+import { createScanGate, readBarcodeValue } from '../logic/barcodeScanner.js';
 
 /**
  * Interval between frame reads. Detection on a cheap Android tablet costs real CPU, and that
@@ -18,11 +14,14 @@ const SCAN_INTERVAL_MS = 300;
 /**
  * Reads barcodes off the preview video without opening a second camera.
  *
+ * The decoder is chosen at runtime — the browser's own where it exists, a bundled WASM one
+ * where it does not — so this hook does not care which backend a device gives it.
+ *
  * `enabled` is the caller's decision about when a scan is welcome — the dialog states must not
  * be interrupted by the camera firing another lookup underneath them.
  */
 export function useBarcodeScanner({ videoRef, enabled, onDetect }) {
-  const [status, setStatus] = useState('idle'); // idle | scanning | unsupported
+  const [status, setStatus] = useState('idle'); // idle | starting | scanning | unsupported
   const onDetectRef = useRef(onDetect);
   onDetectRef.current = onDetect;
 
@@ -31,22 +30,11 @@ export function useBarcodeScanner({ videoRef, enabled, onDetect }) {
       setStatus('idle');
       return undefined;
     }
-    if (!isBarcodeDetectorSupported()) {
-      setStatus('unsupported');
-      return undefined;
-    }
 
     let stopped = false;
     let timer = null;
     let detector = null;
     const gate = createScanGate();
-
-    async function build() {
-      const supported = await globalThis.BarcodeDetector.getSupportedFormats?.() ?? [];
-      const formats = chooseDetectorFormats(supported);
-      if (!formats.length) return null;
-      return new globalThis.BarcodeDetector({ formats });
-    }
 
     async function tick() {
       if (stopped) return;
@@ -64,7 +52,8 @@ export function useBarcodeScanner({ videoRef, enabled, onDetect }) {
       if (!stopped) timer = setTimeout(tick, SCAN_INTERVAL_MS);
     }
 
-    build()
+    setStatus('starting');
+    createBarcodeDecoder()
       .then((built) => {
         if (stopped) return;
         if (!built) {
