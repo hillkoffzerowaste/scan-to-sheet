@@ -4,6 +4,7 @@ import { CircleAlert, PackageCheck, RotateCcw, X } from 'lucide-react';
 import { barcodeCharacterFromKeyEvent } from '../../services/barcodeKeyboard.js';
 import { getPackingStream } from '../../services/packingRecorder.js';
 import { formatBangkokStamp } from '../../services/packingVideoFormat.js';
+import { useBarcodeScanner } from './hooks/useBarcodeScanner.js';
 import { useRecordingClock } from './hooks/useRecordingClock.js';
 import { PACKING_STATE } from './logic/packingSessionMachine.js';
 import { packingVideoErrorText } from './logic/packingVideoMessages.js';
@@ -50,6 +51,17 @@ export default function RecordPanel({
     // Android WebView does not reliably honour autoPlay for a srcObject attached after mount.
     void element.play?.()?.catch(() => {});
   }, [state.status, cameraInfo.ready, cameraInfo.resolution]);
+
+  // Scanning is allowed exactly where a typed scan is: waiting for a parcel, after a miss, and
+  // mid-recording where a new number hands the current clip off. It is off during the duplicate
+  // dialog and the async states, so the camera cannot answer a question the packer is being
+  // asked, or fire a second lookup while one is running.
+  const scanReady = cameraInfo.ready && [
+    PACKING_STATE.idle,
+    PACKING_STATE.notFound,
+    PACKING_STATE.recording,
+  ].includes(state.status);
+  const scannerStatus = useBarcodeScanner({ videoRef, enabled: scanReady, onDetect: scan });
 
   function handleSubmit(event) {
     event.preventDefault();
@@ -105,7 +117,7 @@ export default function RecordPanel({
             ref={scanInputRef}
             value={scanValue}
             autoComplete="off"
-            placeholder="สแกนเลข Tracking"
+            placeholder="ส่องกล้อง ยิงบาร์โค้ด หรือพิมพ์เลข Tracking"
             disabled={busy || state.status === PACKING_STATE.duplicatePrompt}
             onChange={(event) => setScanValue(event.target.value)}
             onKeyDown={handleKeyDown}
@@ -161,6 +173,14 @@ export default function RecordPanel({
           </p>
         )}
       </div>
+
+      {cameraInfo.ready && scannerStatus !== 'idle' && (
+        <p className="pv-hint" aria-live="polite">
+          {scannerStatus === 'scanning'
+            ? 'ส่องบาร์โค้ดบนพัสดุให้อยู่ในกรอบกล้อง หรือใช้เครื่องยิงบาร์โค้ดก็ได้'
+            : 'เครื่องนี้สแกนด้วยกล้องไม่ได้ กรุณาใช้เครื่องยิงบาร์โค้ดหรือพิมพ์เลขพัสดุ'}
+        </p>
+      )}
 
       <dl className="pv-timer-row">
         <div>
