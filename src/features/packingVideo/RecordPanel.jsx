@@ -27,7 +27,7 @@ export default function RecordPanel({
   queueSummary,
   online,
 }) {
-  const { state, scan, packDone, cancel, restart, retryCamera, scanInputRef } = session;
+  const { state, cameraInfo, scan, packDone, cancel, restart, retryCamera, scanInputRef } = session;
   const [scanValue, setScanValue] = useState('');
   const videoRef = useRef(null);
   const { label: elapsedLabel } = useRecordingClock(state.status === PACKING_STATE.recording ? state.startedAt : null);
@@ -36,12 +36,20 @@ export default function RecordPanel({
   const isRecording = state.status === PACKING_STATE.recording;
   const busy = [PACKING_STATE.searching, PACKING_STATE.starting, PACKING_STATE.finalizing].includes(state.status);
 
+  // `cameraInfo.ready` is in the dependencies, not just the status: the camera opens
+  // asynchronously after this panel has already mounted, and on the first render
+  // getPackingStream() is still null. Keyed on status alone the effect never ran again, so the
+  // preview stayed blank until the first scan happened to change the status — with the status
+  // line cheerfully reporting the camera as ready the whole time.
   useEffect(() => {
     const element = videoRef.current;
     if (!element) return;
     const stream = getPackingStream();
-    if (stream && element.srcObject !== stream) element.srcObject = stream;
-  }, [state.status]);
+    if (!stream) return;
+    if (element.srcObject !== stream) element.srcObject = stream;
+    // Android WebView does not reliably honour autoPlay for a srcObject attached after mount.
+    void element.play?.()?.catch(() => {});
+  }, [state.status, cameraInfo.ready, cameraInfo.resolution]);
 
   function handleSubmit(event) {
     event.preventDefault();
@@ -143,7 +151,15 @@ export default function RecordPanel({
 
       <div className={`pv-preview ${isRecording ? 'pv-preview-live' : ''}`}>
         <video ref={videoRef} muted playsInline autoPlay aria-label="ภาพจากกล้อง" />
-        {!isRecording && <p className="pv-preview-idle">ภาพจากกล้องจะแสดงเมื่อเริ่มบันทึก</p>}
+        {/* The live picture is shown before recording starts too: without it there is no way to
+            aim the camera at the bench, and the packer would only find out what it was pointing
+            at after the parcel was already being filmed. The overlay explains the blank frame
+            only while there is genuinely nothing to show. */}
+        {!cameraInfo.ready && (
+          <p className="pv-preview-idle">
+            {cameraInfo.errorCode ? packingVideoErrorText(cameraInfo.errorCode) : 'กำลังเปิดกล้อง…'}
+          </p>
+        )}
       </div>
 
       <dl className="pv-timer-row">
