@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 
+import { AUTH_SESSION_EXPIRED, isAuthExpiredError } from '../../../services/authErrors.js';
 import { findMarketplaceOrderByTracking } from '../../../services/firebaseScans.js';
 import {
   discardRecordedChunks,
@@ -82,7 +83,12 @@ export function usePackingSession({ deviceId, user, queue, notify, playTone, ini
     } catch (error) {
       // Offline is a different problem from "this parcel does not exist", and telling the
       // packer the wrong one sends them looking for a missing order that is really just Wi-Fi.
-      const code = navigator.onLine === false ? 'PACKING_VIDEO_OFFLINE_LOOKUP' : (error?.code ?? 'PACKING_VIDEO_LOOKUP_FAILED');
+      // An expired sign-in is a third case again: the rules here are all gated on isSignedIn(),
+      // so a stale token arrives as permission-denied and would otherwise show nothing at all.
+      let code;
+      if (navigator.onLine === false) code = 'PACKING_VIDEO_OFFLINE_LOOKUP';
+      else if (isAuthExpiredError(error)) code = AUTH_SESSION_EXPIRED;
+      else code = error?.code ?? 'PACKING_VIDEO_LOOKUP_FAILED';
       dispatchRef.current({ type: 'LOOKUP_ERROR', code });
     }
   }, []);

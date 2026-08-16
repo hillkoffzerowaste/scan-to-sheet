@@ -115,6 +115,7 @@ import { createScanQueue } from './services/scanQueue.js';
 import { getScanPopupCourierOptions, getScanPopupStatusMeta } from './services/scanPopup.js';
 import { DEFAULT_SCAN_METHOD } from './services/scanPreferences.js';
 import { barcodeCharacterFromKeyEvent } from './services/barcodeKeyboard.js';
+import { scanErrorMessage } from './services/authErrors.js';
 import { shouldPollMissingOrders } from './services/missingCheckPolicy.js';
 import { getSheetRecoveryDates } from './services/sheetRecoveryDates.js';
 import { buildSheetSyncFailureUpdates } from './services/sheetSync.js';
@@ -1794,14 +1795,15 @@ function App() {
       }
       return { ...result, status: result.status };
     } catch (error) {
+      const message = scanErrorMessage(error);
       setStatus({
         type: 'error',
         title: 'บันทึกไม่สำเร็จ',
-        message: error.message,
+        message,
       });
-      showCameraMessage(error.message, 'error');
+      showCameraMessage(message, 'error');
       playTone('error');
-      return { status: 'error', message: error.message };
+      return { status: 'error', message };
     } finally {
       if (managesBusy) setBusy(false);
       if (source === 'camera') cameraSavingRef.current = false;
@@ -2179,14 +2181,15 @@ function App() {
 
       return { ...result, status: result.status };
     } catch (error) {
+      const message = scanErrorMessage(error);
       setStatus({
         type: 'error',
         title: 'ลง Drive ไม่สำเร็จ',
-        message: error.message,
+        message,
       });
-      showCameraMessage(error.message, 'error');
+      showCameraMessage(message, 'error');
       playTone('error');
-      return { status: 'error', message: error.message };
+      return { status: 'error', message };
     } finally {
       if (managesBusy) setBusy(false);
       if (source === 'camera') cameraSavingRef.current = false;

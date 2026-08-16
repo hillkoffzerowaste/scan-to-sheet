@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { CircleAlert, PackageCheck, RotateCcw, X } from 'lucide-react';
 
+import { AUTH_SESSION_EXPIRED, AUTH_SESSION_EXPIRED_MESSAGE } from '../../services/authErrors.js';
 import { barcodeCharacterFromKeyEvent } from '../../services/barcodeKeyboard.js';
 import { getPackingStream } from '../../services/packingRecorder.js';
 import { formatBangkokStamp } from '../../services/packingVideoFormat.js';
@@ -19,6 +20,7 @@ const STATUS_TEXT = {
 };
 
 const ERROR_TEXT = {
+  [AUTH_SESSION_EXPIRED]: AUTH_SESSION_EXPIRED_MESSAGE,
   PACKING_VIDEO_ORDER_NOT_FOUND: 'ไม่พบออเดอร์ของเลขพัสดุนี้ ระบบจะไม่เริ่มบันทึก',
   PACKING_VIDEO_OFFLINE_LOOKUP: 'ตอนนี้ออฟไลน์ จึงค้นหาออเดอร์ไม่ได้ (ไม่ได้แปลว่าไม่มีออเดอร์นี้)',
   PACKING_VIDEO_LOOKUP_FAILED: 'ค้นหาออเดอร์ไม่สำเร็จ กรุณาลองใหม่',
@@ -38,6 +40,7 @@ export default function RecordPanel({
   const videoRef = useRef(null);
   const { label: elapsedLabel } = useRecordingClock(state.status === PACKING_STATE.recording ? state.startedAt : null);
 
+  const errorText = state.errorCode ? ERROR_TEXT[state.errorCode] ?? '' : '';
   const isRecording = state.status === PACKING_STATE.recording;
   const busy = [PACKING_STATE.searching, PACKING_STATE.starting, PACKING_STATE.finalizing].includes(state.status);
 
@@ -116,12 +119,15 @@ export default function RecordPanel({
       {/* Announced politely so a packer using a screen reader hears the state change without
           the running timer being read out every second. */}
       <p className="pv-live-status" role="status" aria-live="polite">
-        {STATUS_TEXT[state.status] ?? ''}
+        {/* A lookup failure also lands on `notFound`, whose status line says the parcel has no
+            order — untrue when the real problem was an expired sign-in or lost Wi-Fi. The banner
+            below states the actual cause, so it speaks alone. */}
+        {errorText ? '' : (STATUS_TEXT[state.status] ?? '')}
       </p>
-      {state.errorCode && ERROR_TEXT[state.errorCode] && (
+      {errorText && (
         <p className="pv-banner pv-banner-danger" role="alert">
           <CircleAlert size={16} aria-hidden="true" />
-          {ERROR_TEXT[state.errorCode]}
+          {errorText}
         </p>
       )}
 
