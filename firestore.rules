@@ -75,6 +75,43 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // เวรประจำสัปดาห์ — ตารางตายตัวที่ทุกวันในสัปดาห์ยึดตาม
+    match /staffWeeklyDuties/{weeklyDutyId} {
+      allow read: if isSignedIn();
+      allow create, update: if isStaffAdmin()
+        && request.resource.data.keys().hasOnly([
+          'weekday', 'staffId', 'dutyTypeId', 'note', 'updatedAt', 'updatedBy'
+        ])
+        && request.resource.data.weekday is int
+        && request.resource.data.weekday >= 0
+        && request.resource.data.weekday <= 6
+        && request.resource.data.staffId is string
+        && request.resource.data.dutyTypeId is string
+        && request.resource.data.note is string
+        && request.resource.data.note.size() <= 200;
+      allow delete: if isStaffAdmin();
+    }
+
+    // การเปลี่ยนแปลงเฉพาะวัน — ผูกกับวันที่ ไม่แตะตารางเวรประจำ
+    // staffId เป็นสตริงว่างได้ หมายถึงงดเวรนั้นเฉพาะวันนั้น
+    match /staffDutyOverrides/{overrideId} {
+      allow read: if isSignedIn();
+      allow create, update: if isStaffAdmin()
+        && request.resource.data.keys().hasOnly([
+          'date', 'weeklyDutyId', 'staffId', 'note', 'updatedAt', 'updatedByUid'
+        ])
+        && request.resource.data.date is string
+        && request.resource.data.date.size() == 10
+        && request.resource.data.weeklyDutyId is string
+        && overrideId == request.resource.data.date + '__' + request.resource.data.weeklyDutyId
+        && request.resource.data.staffId is string
+        && request.resource.data.note is string
+        && request.resource.data.note.size() <= 200
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.updatedByUid == request.auth.uid;
+      allow delete: if isStaffAdmin();
+    }
+
     match /staffDailyAssignments/{assignmentId} {
       allow read: if isSignedIn();
       allow create, update: if isStaffAdmin()

@@ -123,7 +123,10 @@ https://www.googleapis.com/auth/spreadsheets
 
 - `staffMembers`: ข้อมูลสาธารณะและข้อมูลติดต่อแบบปกปิด
 - `staffPrivateContacts` และ `staffPrivateNotes`: ข้อมูลสำหรับ Admin เท่านั้น
-- `staffDutyTypes` และ `staffDailyAssignments`: ประเภทงานและหน้าที่ประจำวัน
+- `staffDutyTypes`: ประเภทงาน
+- `staffWeeklyDuties`: ตารางเวรประจำสัปดาห์ (ตายตัว มีผลทุกสัปดาห์) ใช้เป็นหน้าที่หลักของแต่ละวัน
+- `staffDutyOverrides`: การเปลี่ยนคนทำแทนหรืองดเวร เฉพาะวันนั้น (doc id = `วันที่__weeklyDutyId`) ไม่กระทบตารางหลัก
+- `staffDailyAssignments`: งานเพิ่มเฉพาะวันที่อยู่นอกตาราง
 - `staffDailyStatuses` และ `staffDailyLeads`: สถานะและผู้ช่วยหัวหน้าประจำวัน
 - `staffSettings/packingRoomNotice`: ประกาศและกฎระเบียบห้องแพ็ค
 

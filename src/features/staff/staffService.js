@@ -22,11 +22,14 @@ import {
 } from "firebase/storage";
 import { firebaseStorage, firestoreDb } from "../../services/firebase.js";
 import { maskStaffContact } from "./staffDirectory.js";
+import { overrideDocId } from "./packingSchedule.js";
 
 const STAFF_LIMIT = 200;
 const DUTY_LIMIT = 100;
 const ASSIGNMENT_LIMIT = 200;
 const DAILY_STATUS_LIMIT = 200;
+const WEEKLY_DUTY_LIMIT = 300;
+const OVERRIDE_LIMIT = 100;
 
 function requireFirebase() {
   if (!firestoreDb)
@@ -272,6 +275,77 @@ export async function saveDutyType(item, user) {
       updatedByUid: user.uid,
     },
     { merge: true }
+  );
+}
+
+export async function listWeeklyDuties() {
+  requireFirebase();
+  const snapshot = await getDocs(
+    query(collection(firestoreDb, "staffWeeklyDuties"), limit(WEEKLY_DUTY_LIMIT))
+  );
+  return snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+}
+
+export async function saveWeeklyDuty(item, user) {
+  requireFirebase();
+  const target = item.id
+    ? doc(firestoreDb, "staffWeeklyDuties", item.id)
+    : doc(collection(firestoreDb, "staffWeeklyDuties"));
+  await setDoc(
+    target,
+    {
+      weekday: Number(item.weekday),
+      staffId: String(item.staffId),
+      dutyTypeId: String(item.dutyTypeId),
+      note: String(item.note ?? "").trim(),
+      updatedAt: serverTimestamp(),
+      updatedBy: {
+        uid: user.uid,
+        email: user.email ?? "",
+        name: user.displayName ?? user.name ?? "",
+      },
+    },
+    { merge: true }
+  );
+  return target.id;
+}
+
+export async function deleteWeeklyDuty(id) {
+  requireFirebase();
+  await deleteDoc(doc(firestoreDb, "staffWeeklyDuties", id));
+}
+
+export async function listDutyOverrides(date) {
+  requireFirebase();
+  if (!date) return [];
+  const snapshot = await getDocs(
+    query(
+      collection(firestoreDb, "staffDutyOverrides"),
+      where("date", "==", date),
+      limit(OVERRIDE_LIMIT)
+    )
+  );
+  return snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+}
+
+// One document per (date, weekly duty) so repeating the same swap overwrites instead of
+// stacking. staffId === "" means the duty is dropped for that day only.
+export async function saveDutyOverride({ date, weeklyDutyId, staffId, note }, user) {
+  requireFirebase();
+  await setDoc(doc(firestoreDb, "staffDutyOverrides", overrideDocId(date, weeklyDutyId)), {
+    date,
+    weeklyDutyId,
+    staffId: String(staffId ?? ""),
+    note: String(note ?? "").trim(),
+    updatedAt: serverTimestamp(),
+    updatedByUid: user.uid,
+  });
+}
+
+export async function deleteDutyOverride(date, weeklyDutyId) {
+  requireFirebase();
+  await deleteDoc(
+    doc(firestoreDb, "staffDutyOverrides", overrideDocId(date, weeklyDutyId))
   );
 }
 

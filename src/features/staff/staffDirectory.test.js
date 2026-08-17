@@ -7,7 +7,6 @@ import {
   buildDailyReportText,
   buildWorkforceSummary,
   filterDirectoryStaff,
-  buildDutyLabelsByStaff,
   buildPackerOptions,
   copyAssignments,
   groupActiveStaff,
@@ -130,28 +129,6 @@ test("reports missing profile fields and reorders only within one position", () 
   );
   assert.deepEqual(reordered.map((item) => item.id), ["c2", "c1", "p1"]);
   assert.deepEqual(reordered.map((item) => item.sortOrder), [0, 1, undefined]);
-});
-
-test("groups today's duty labels by staff for directory cards", () => {
-  const dutyById = new Map([
-    ["packing", { name: "แพ็คสินค้าโซน A" }],
-    ["checking", { name: "ตรวจสอบสินค้า" }],
-  ]);
-
-  assert.deepEqual(
-    [...buildDutyLabelsByStaff(
-      [
-        { staffId: "u1", dutyTypeId: "packing", note: "โต๊ะ 1" },
-        { staffId: "u1", dutyTypeId: "checking", note: "" },
-        { staffId: "u2", dutyTypeId: "legacy", note: "ช่วยโหลดของ" },
-      ],
-      dutyById
-    )],
-    [
-      ["u1", ["แพ็คสินค้าโซน A — โต๊ะ 1", "ตรวจสอบสินค้า"]],
-      ["u2", ["ประเภทงานเดิม — ช่วยโหลดของ"]],
-    ]
-  );
 });
 
 test("groups active staff by position and preserves configured order", () => {

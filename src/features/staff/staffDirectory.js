@@ -183,19 +183,6 @@ export function mergeAssignments(existing, copied) {
   });
 }
 
-export function buildDutyLabelsByStaff(assignments, dutyById) {
-  const labelsByStaff = new Map();
-  for (const assignment of assignments) {
-    const dutyName = dutyById.get(assignment.dutyTypeId)?.name || "ประเภทงานเดิม";
-    const note = String(assignment.note ?? "").trim();
-    const label = note ? `${dutyName} — ${note}` : dutyName;
-    const labels = labelsByStaff.get(assignment.staffId) ?? [];
-    labels.push(label);
-    labelsByStaff.set(assignment.staffId, labels);
-  }
-  return labelsByStaff;
-}
-
 export function buildDailyReportText({
   dateLabel,
   summary,

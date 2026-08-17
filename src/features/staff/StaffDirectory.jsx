@@ -9,14 +9,27 @@ import {
   Pencil,
   Phone,
   Plus,
+  Printer,
+  Repeat,
   Search,
   Star,
+  Table2,
   UserRound,
   Users,
   X,
 } from "lucide-react";
 import {
-  buildDutyLabelsByStaff,
+  WEEKDAYS,
+  buildDayChangeRows,
+  buildDutyLabelsFromEntries,
+  buildWeeklyGrid,
+  resolveDayDuties,
+  validateWeeklyDuty,
+  weekdayFromDateKey,
+  weekdayLabel,
+  weeklyDutyErrorMessage,
+} from "./packingSchedule.js";
+import {
   buildDailyReportText,
   buildPackingRoomTeam,
   buildPackerOptions,
@@ -35,23 +48,29 @@ import {
   copyDailyAssignments,
   createStaffMemberId,
   deleteDailyAssignment,
+  deleteDutyOverride,
+  deleteWeeklyDuty,
   getStaffAdminStatus,
   getPackingRoomNotice,
   getDailyLead,
   listDailyAssignments,
   listDailyStatuses,
+  listDutyOverrides,
   listDutyTypes,
   listStaffMembers,
   listStaffPrivateNotes,
   listStaffPrivateContacts,
+  listWeeklyDuties,
   removeStaffPhoto,
   saveDailyAssignment,
   saveDailyLead,
   saveDailyStatus,
+  saveDutyOverride,
   saveDutyType,
   savePackingRoomNotice,
   saveStaffMember,
   saveStaffOrder,
+  saveWeeklyDuty,
   uploadStaffPhoto,
 } from "./staffService.js";
 
@@ -117,10 +136,15 @@ export default function StaffDirectory({
   const [staff, setStaff] = useState([]);
   const [dutyTypes, setDutyTypes] = useState([]);
   const [assignments, setAssignments] = useState([]);
+  const [weeklyDuties, setWeeklyDuties] = useState([]);
+  const [dutyOverrides, setDutyOverrides] = useState([]);
   const [dailyStatuses, setDailyStatuses] = useState(new Map());
   const [dailyLeadId, setDailyLeadId] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
   const [section, setSection] = useState("directory");
+  const [scheduleView, setScheduleView] = useState("day");
+  const [editingWeeklyDuty, setEditingWeeklyDuty] = useState(null);
+  const [substituting, setSubstituting] = useState(null);
   const [date, setDate] = useState(bangkokDateKey);
   const [queryText, setQueryText] = useState("");
   const [showInactive, setShowInactive] = useState(false);
@@ -141,13 +165,15 @@ export default function StaffDirectory({
   const [savingOrder, setSavingOrder] = useState(false);
 
   async function reloadBase(includePrivate = isAdmin) {
-    const [publicMembers, duties, privateNotes, privateContacts, notice] = await Promise.all([
-      listStaffMembers(),
-      listDutyTypes(),
-      includePrivate ? listStaffPrivateNotes() : Promise.resolve(new Map()),
-      includePrivate ? listStaffPrivateContacts() : Promise.resolve(new Map()),
-      getPackingRoomNotice(),
-    ]);
+    const [publicMembers, duties, weekly, privateNotes, privateContacts, notice] =
+      await Promise.all([
+        listStaffMembers(),
+        listDutyTypes(),
+        listWeeklyDuties(),
+        includePrivate ? listStaffPrivateNotes() : Promise.resolve(new Map()),
+        includePrivate ? listStaffPrivateContacts() : Promise.resolve(new Map()),
+        getPackingRoomNotice(),
+      ]);
     const members = publicMembers.map((person) => ({
       ...person,
       internalNote: privateNotes.get(person.id),
@@ -161,6 +187,7 @@ export default function StaffDirectory({
     }));
     setStaff(members);
     setDutyTypes(duties);
+    setWeeklyDuties(weekly);
     setPackingNotice(resolvePackingNotice(notice));
     try {
       onPackerOptionsChange?.(buildPackerOptions(members), members.length);
@@ -170,12 +197,14 @@ export default function StaffDirectory({
   }
 
   async function reloadDaily(selectedDate = date) {
-    const [items, statuses, lead] = await Promise.all([
+    const [items, overrides, statuses, lead] = await Promise.all([
       listDailyAssignments(selectedDate),
+      listDutyOverrides(selectedDate),
       listDailyStatuses(selectedDate),
       getDailyLead(selectedDate),
     ]);
     setAssignments(items);
+    setDutyOverrides(overrides);
     setDailyStatuses(
       new Map(statuses.map((item) => [item.staffId, item.status]))
     );
@@ -204,10 +233,35 @@ export default function StaffDirectory({
     () => new Map(dutyTypes.map((item) => [item.id, item])),
     [dutyTypes]
   );
-  const dutyLabelsByStaff = useMemo(
-    () => buildDutyLabelsByStaff(assignments, dutyById),
-    [assignments, dutyById]
+  const nicknameById = useMemo(
+    () => new Map(staff.map((person) => [person.id, person.nickname])),
+    [staff]
   );
+  // งานประจำวันยึดตามตารางเวรประจำเสมอ การเปลี่ยนเฉพาะวันแค่สลับคน ไม่ได้แก้ตาราง
+  const dayEntries = useMemo(
+    () =>
+      resolveDayDuties({
+        dateKey: date,
+        weeklyDuties,
+        overrides: dutyOverrides,
+        dailyAssignments: assignments,
+        dutyById,
+      }),
+    [date, weeklyDuties, dutyOverrides, assignments, dutyById]
+  );
+  const dutyLabelsByStaff = useMemo(
+    () => buildDutyLabelsFromEntries(dayEntries, nicknameById),
+    [dayEntries, nicknameById]
+  );
+  const weeklyGrid = useMemo(
+    () => buildWeeklyGrid({ weeklyDuties, dutyTypes, staffById }),
+    [weeklyDuties, dutyTypes, staffById]
+  );
+  const dayChangeRows = useMemo(
+    () => buildDayChangeRows(dayEntries, staffById),
+    [dayEntries, staffById]
+  );
+  const selectedWeekday = weekdayFromDateKey(date);
   const activeOrVisibleStaff = useMemo(
     () => staff.filter((person) => showInactive || person.active !== false),
     [staff, showInactive]
@@ -482,6 +536,79 @@ export default function StaffDirectory({
     }
   }
 
+  async function submitWeeklyDuty(event) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const item = {
+      ...editingWeeklyDuty,
+      weekday: Number(form.get("weekday")),
+      staffId: String(form.get("staffId") ?? ""),
+      dutyTypeId: String(form.get("dutyTypeId") ?? ""),
+      note: String(form.get("note") ?? ""),
+    };
+    const errors = validateWeeklyDuty(item, weeklyDuties);
+    if (errors.length) {
+      setMessage(weeklyDutyErrorMessage(errors));
+      return;
+    }
+    try {
+      await saveWeeklyDuty(item, firebaseUser);
+      setEditingWeeklyDuty(null);
+      await reloadBase();
+      setMessage("บันทึกเวรประจำสัปดาห์แล้ว");
+    } catch {
+      setMessage("บันทึกเวรประจำสัปดาห์ไม่สำเร็จ กรุณาลองใหม่");
+    }
+  }
+
+  async function removeWeeklyDuty(item) {
+    const person = staffById.get(item.staffId);
+    if (
+      !window.confirm(
+        `ลบเวรประจำวัน${weekdayLabel(item.weekday)} ของ ${person?.nickname ?? "พนักงาน"} หรือไม่? การเปลี่ยนแปลงนี้มีผลกับทุกสัปดาห์`
+      )
+    )
+      return;
+    try {
+      await deleteWeeklyDuty(item.id);
+      await reloadBase();
+      setMessage("ลบเวรประจำสัปดาห์แล้ว");
+    } catch {
+      setMessage("ลบเวรประจำสัปดาห์ไม่สำเร็จ กรุณาลองใหม่");
+    }
+  }
+
+  async function submitSubstitute(event) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    try {
+      await saveDutyOverride(
+        {
+          date,
+          weeklyDutyId: substituting.weeklyDutyId,
+          staffId: String(form.get("staffId") ?? ""),
+          note: String(form.get("note") ?? ""),
+        },
+        firebaseUser
+      );
+      setSubstituting(null);
+      await reloadDaily();
+      setMessage("บันทึกการเปลี่ยนเฉพาะวันแล้ว ตารางเวรประจำยังเหมือนเดิม");
+    } catch {
+      setMessage("บันทึกการเปลี่ยนเฉพาะวันไม่สำเร็จ กรุณาลองใหม่");
+    }
+  }
+
+  async function restoreScheduled(entry) {
+    try {
+      await deleteDutyOverride(date, entry.weeklyDutyId);
+      await reloadDaily();
+      setMessage("คืนค่าตามตารางเวรประจำแล้ว");
+    } catch {
+      setMessage("คืนค่าตามตารางไม่สำเร็จ กรุณาลองใหม่");
+    }
+  }
+
   async function copyFrom(offsetDays) {
     if (!date || copying) return;
     setCopying(true);
@@ -751,144 +878,410 @@ export default function StaffDirectory({
                 onChange={(e) => e.target.value && setDate(e.target.value)}
               />
             </label>
-            <strong>{thaiDate(date)}</strong>
-            {isAdmin && (
-              <div>
-                <button onClick={() => copyFrom(1)}>
-                  <Copy size={16} /> คัดลอกจากวันก่อน
-                </button>
-                <button onClick={() => copyFrom(7)}>
-                  <Copy size={16} /> คัดลอกจากสัปดาห์ก่อน
-                </button>
+            <strong>
+              {thaiDate(date)}
+              {selectedWeekday !== null && ` · เวรประจำวัน${weekdayLabel(selectedWeekday)}`}
+            </strong>
+            <div>
+              <button onClick={() => window.print()}>
+                <Printer size={16} /> พิมพ์ตารางทำงาน (A4 แนวนอน)
+              </button>
+              {isAdmin && scheduleView === "day" && (
+                <>
+                  <button onClick={() => copyFrom(1)}>
+                    <Copy size={16} /> คัดลอกงานเพิ่มจากวันก่อน
+                  </button>
+                  <button onClick={() => copyFrom(7)}>
+                    <Copy size={16} /> คัดลอกงานเพิ่มจากสัปดาห์ก่อน
+                  </button>
+                  <button
+                    className="primary-action"
+                    onClick={() => setEditingAssignment({})}
+                  >
+                    <Plus size={16} /> เพิ่มงานเฉพาะวัน
+                  </button>
+                </>
+              )}
+              {isAdmin && scheduleView === "weekly" && (
                 <button
                   className="primary-action"
-                  onClick={() => setEditingAssignment({})}
+                  onClick={() =>
+                    setEditingWeeklyDuty({ weekday: selectedWeekday ?? 1 })
+                  }
                 >
-                  <Plus size={16} /> จัดเวร
+                  <Plus size={16} /> เพิ่มเวรประจำ
                 </button>
-              </div>
-            )}
+              )}
+            </div>
           </div>
-          {isAdmin && (
-            <>
-              <form
-                className="duty-type-form"
-                onSubmit={async (event) => {
-                  event.preventDefault();
-                  if (!dutyName.trim()) return;
-                  await saveDutyType(
-                    {
-                      name: dutyName,
-                      active: true,
-                      sortOrder: dutyTypes.length,
-                    },
-                    firebaseUser
-                  );
-                  setDutyName("");
-                  await reloadBase();
-                }}
-              >
-                <label>
-                  เพิ่มประเภทงาน{" "}
-                  <input
-                    value={dutyName}
-                    onChange={(e) => setDutyName(e.target.value)}
-                    placeholder="เช่น แพ็คสินค้าโซน A"
-                  />
-                </label>
-                <button>เพิ่ม</button>
-              </form>
-              <div className="duty-type-list">
-                {dutyTypes.map((duty) => (
-                  <span
-                    key={duty.id}
-                    className={duty.active === false ? "inactive" : ""}
+          <div className="staff-section-tabs">
+            <button
+              className={scheduleView === "day" ? "active" : ""}
+              onClick={() => setScheduleView("day")}
+            >
+              <CalendarDays size={17} /> หน้าที่ของวันที่เลือก
+            </button>
+            <button
+              className={scheduleView === "weekly" ? "active" : ""}
+              onClick={() => setScheduleView("weekly")}
+            >
+              <Table2 size={17} /> ตารางเวรประจำสัปดาห์
+            </button>
+          </div>
+
+          {scheduleView === "day" ? (
+            <div className="assignment-list">
+              {dayEntries.map((entry) => {
+                const person = entry.staffId ? staffById.get(entry.staffId) : null;
+                const basePerson = entry.baseStaffId
+                  ? staffById.get(entry.baseStaffId)
+                  : null;
+                const assignment =
+                  entry.source === "daily"
+                    ? assignments.find((item) => item.id === entry.assignmentId)
+                    : null;
+                return (
+                  <article
+                    key={entry.key}
+                    className={entry.cancelled ? "duty-cancelled" : ""}
                   >
-                    <button
-                      onClick={async () => {
-                        const name = window.prompt(
-                          "แก้ไขชื่อประเภทงาน",
-                          duty.name
-                        );
-                        if (name === null || !name.trim()) return;
-                        await saveDutyType({ ...duty, name }, firebaseUser);
-                        await reloadBase();
-                      }}
-                    >
-                      {duty.name}
-                    </button>
-                    <button
-                      onClick={async () => {
-                        await saveDutyType(
-                          { ...duty, active: duty.active === false },
-                          firebaseUser
-                        );
-                        await reloadBase();
-                      }}
-                    >
-                      {duty.active === false ? "เปิดใช้" : "ปิดใช้"}
-                    </button>
-                  </span>
-                ))}
-              </div>
+                    <div className="assignment-avatar">
+                      {entry.cancelled ? "—" : initials(person || {})}
+                    </div>
+                    <div>
+                      <strong>
+                        {entry.cancelled
+                          ? "งดเวรเฉพาะวันนี้"
+                          : person
+                          ? `${person.nickname} — ${person.fullName}`
+                          : "พนักงานเดิม"}
+                      </strong>
+                      <p>
+                        {entry.dutyName}
+                        {entry.note ? ` · ${entry.note}` : ""}
+                      </p>
+                      <div className="duty-entry-badges">
+                        <span
+                          className={`duty-badge ${
+                            entry.source === "weekly" ? "scheduled" : "adhoc"
+                          }`}
+                        >
+                          {entry.source === "weekly"
+                            ? `เวรประจำวัน${weekdayLabel(entry.weekday)}`
+                            : "งานเพิ่มเฉพาะวัน"}
+                        </span>
+                        {entry.substituted && (
+                          <span className="duty-badge changed">
+                            ทำแทน {basePerson?.nickname ?? "ผู้รับผิดชอบเดิม"}
+                          </span>
+                        )}
+                        {entry.cancelled && (
+                          <span className="duty-badge changed">
+                            ตามตาราง {basePerson?.nickname ?? "ไม่พบพนักงาน"}
+                          </span>
+                        )}
+                      </div>
+                      {entry.overrideNote && <small>เหตุผล: {entry.overrideNote}</small>}
+                      {assignment && updatedLabel(assignment.updatedAt) && (
+                        <small>
+                          แก้ไขล่าสุด {updatedLabel(assignment.updatedAt)}
+                          {assignment.updatedBy?.name || assignment.updatedBy?.email
+                            ? ` โดย ${
+                                assignment.updatedBy.name ||
+                                assignment.updatedBy.email
+                              }`
+                            : ""}
+                        </small>
+                      )}
+                    </div>
+                    {isAdmin && (
+                      <div className="assignment-actions">
+                        {entry.source === "weekly" ? (
+                          <>
+                            <button onClick={() => setSubstituting(entry)}>
+                              <Repeat size={14} /> เปลี่ยนคนเฉพาะวันนี้
+                            </button>
+                            {entry.overrideId && (
+                              <button onClick={() => void restoreScheduled(entry)}>
+                                คืนค่าตามตาราง
+                              </button>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => setEditingAssignment(assignment ?? {})}
+                            >
+                              แก้ไข
+                            </button>
+                            <button
+                              className="danger-text"
+                              onClick={async () => {
+                                if (window.confirm("ลบงานเพิ่มเฉพาะวันรายการนี้หรือไม่?")) {
+                                  await deleteDailyAssignment(entry.assignmentId);
+                                  await reloadDaily();
+                                }
+                              }}
+                            >
+                              ลบ
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </article>
+                );
+              })}
+              {!dayEntries.length && (
+                <div className="staff-empty">
+                  <CalendarDays size={32} />
+                  <p>
+                    ยังไม่มีเวรประจำวัน
+                    {selectedWeekday === null ? "" : weekdayLabel(selectedWeekday)}
+                    {" "}กรุณาตั้งที่แท็บตารางเวรประจำสัปดาห์
+                  </p>
+                </div>
+              )}
+            </div>
+          ) : (
+            <>
+              {isAdmin && (
+                <>
+                  <form
+                    className="duty-type-form"
+                    onSubmit={async (event) => {
+                      event.preventDefault();
+                      if (!dutyName.trim()) return;
+                      await saveDutyType(
+                        {
+                          name: dutyName,
+                          active: true,
+                          sortOrder: dutyTypes.length,
+                        },
+                        firebaseUser
+                      );
+                      setDutyName("");
+                      await reloadBase();
+                    }}
+                  >
+                    <label>
+                      เพิ่มประเภทงาน{" "}
+                      <input
+                        value={dutyName}
+                        onChange={(e) => setDutyName(e.target.value)}
+                        placeholder="เช่น แพ็คสินค้าโซน A"
+                      />
+                    </label>
+                    <button>เพิ่ม</button>
+                  </form>
+                  <div className="duty-type-list">
+                    {dutyTypes.map((duty) => (
+                      <span
+                        key={duty.id}
+                        className={duty.active === false ? "inactive" : ""}
+                      >
+                        <button
+                          onClick={async () => {
+                            const name = window.prompt(
+                              "แก้ไขชื่อประเภทงาน",
+                              duty.name
+                            );
+                            if (name === null || !name.trim()) return;
+                            await saveDutyType({ ...duty, name }, firebaseUser);
+                            await reloadBase();
+                          }}
+                        >
+                          {duty.name}
+                        </button>
+                        <button
+                          onClick={async () => {
+                            await saveDutyType(
+                              { ...duty, active: duty.active === false },
+                              firebaseUser
+                            );
+                            await reloadBase();
+                          }}
+                        >
+                          {duty.active === false ? "เปิดใช้" : "ปิดใช้"}
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                </>
+              )}
+              {weeklyGrid.rows.length ? (
+                <div className="weekly-grid-wrap">
+                  <table className="weekly-grid">
+                    <caption>
+                      เวรประจำสัปดาห์ — ทุกวันในสัปดาห์ยึดตามตารางนี้ การเปลี่ยนคนที่หน้า
+                      “หน้าที่ของวันที่เลือก” มีผลเฉพาะวันนั้น
+                    </caption>
+                    <thead>
+                      <tr>
+                        <th scope="col">ประเภทงาน</th>
+                        {WEEKDAYS.map((weekday) => (
+                          <th
+                            key={weekday.value}
+                            scope="col"
+                            className={
+                              weekday.value === selectedWeekday ? "is-selected" : ""
+                            }
+                          >
+                            {weekday.label}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {weeklyGrid.rows.map((row) => (
+                        <tr key={row.dutyTypeId}>
+                          <th scope="row">
+                            {row.dutyName}
+                            {row.inactive && <small> (ปิดใช้)</small>}
+                          </th>
+                          {row.cells.map((cell) => (
+                            <td
+                              key={cell.weekday}
+                              className={
+                                cell.weekday === selectedWeekday ? "is-selected" : ""
+                              }
+                            >
+                              {cell.items.map((item) => (
+                                <span className="weekly-chip" key={item.id}>
+                                  <span title={item.note}>{item.name}</span>
+                                  {isAdmin && (
+                                    <>
+                                      <button
+                                        aria-label={`แก้ไขเวรของ ${item.name}`}
+                                        onClick={() =>
+                                          setEditingWeeklyDuty({
+                                            id: item.id,
+                                            weekday: cell.weekday,
+                                            staffId: item.staffId,
+                                            dutyTypeId: row.dutyTypeId,
+                                            note: item.note,
+                                          })
+                                        }
+                                      >
+                                        <Pencil size={12} />
+                                      </button>
+                                      <button
+                                        aria-label={`ลบเวรของ ${item.name}`}
+                                        onClick={() =>
+                                          void removeWeeklyDuty({
+                                            id: item.id,
+                                            weekday: cell.weekday,
+                                            staffId: item.staffId,
+                                          })
+                                        }
+                                      >
+                                        <X size={12} />
+                                      </button>
+                                    </>
+                                  )}
+                                </span>
+                              ))}
+                              {isAdmin && (
+                                <button
+                                  className="weekly-add"
+                                  aria-label={`เพิ่มเวร ${row.dutyName} วัน${weekdayLabel(
+                                    cell.weekday
+                                  )}`}
+                                  onClick={() =>
+                                    setEditingWeeklyDuty({
+                                      weekday: cell.weekday,
+                                      dutyTypeId: row.dutyTypeId,
+                                    })
+                                  }
+                                >
+                                  <Plus size={13} />
+                                </button>
+                              )}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="staff-empty">
+                  <Table2 size={32} />
+                  <p>ยังไม่มีประเภทงาน กรุณาเพิ่มประเภทงานก่อนจัดเวรประจำ</p>
+                </div>
+              )}
             </>
           )}
-          <div className="assignment-list">
-            {assignments.map((item) => {
-              const person = staffById.get(item.staffId);
-              return (
-                <article key={item.id}>
-                  <div className="assignment-avatar">
-                    {initials(person || {})}
-                  </div>
-                  <div>
-                    <strong>
-                      {person
-                        ? `${person.nickname} — ${person.fullName}`
-                        : "พนักงานเดิม"}
-                    </strong>
-                    <p>
-                      {dutyById.get(item.dutyTypeId)?.name || "ประเภทงานเดิม"}
-                      {item.note ? ` · ${item.note}` : ""}
-                    </p>
-                    {updatedLabel(item.updatedAt) && (
-                      <small>
-                        แก้ไขล่าสุด {updatedLabel(item.updatedAt)}
-                        {item.updatedBy?.name || item.updatedBy?.email
-                          ? ` โดย ${
-                              item.updatedBy.name || item.updatedBy.email
-                            }`
-                          : ""}
-                      </small>
-                    )}
-                  </div>
-                  {isAdmin && (
-                    <div className="assignment-actions">
-                      <button onClick={() => setEditingAssignment(item)}>
-                        แก้ไข
-                      </button>
-                      <button
-                        className="danger-text"
-                        onClick={async () => {
-                          if (window.confirm("ลบหน้าที่รายการนี้หรือไม่?")) {
-                            await deleteDailyAssignment(item.id);
-                            await reloadDaily();
-                          }
-                        }}
-                      >
-                        ลบ
-                      </button>
-                    </div>
-                  )}
-                </article>
-              );
-            })}
-            {!assignments.length && (
-              <div className="staff-empty">
-                <CalendarDays size={32} />
-                <p>ยังไม่ได้จัดหน้าที่สำหรับวันนี้</p>
+
+          {/* แผ่นพิมพ์ A4 แนวนอน — อยู่ใน DOM เสมอ แต่แสดงเฉพาะตอนสั่งพิมพ์ */}
+          <div className="duty-print-sheet" aria-hidden="true">
+            <header>
+              <div>
+                <h1>ตารางการทำงานห้องแพ็คสินค้า</h1>
+                <p>เวรประจำสัปดาห์ — ยึดตามตารางนี้ทุกสัปดาห์</p>
               </div>
-            )}
+              <dl>
+                <div>
+                  <dt>วันที่ใช้งาน</dt>
+                  <dd>{thaiDate(date)}</dd>
+                </div>
+                <div>
+                  <dt>หัวหน้า</dt>
+                  <dd>
+                    {staff.find(
+                      (person) =>
+                        person.position === "leader" && person.active !== false
+                    )?.fullName || "ยังไม่กำหนด"}
+                  </dd>
+                </div>
+                <div>
+                  <dt>ผู้ช่วยหัวหน้าวันนี้</dt>
+                  <dd>{staffById.get(dailyLeadId)?.fullName || "ยังไม่กำหนด"}</dd>
+                </div>
+              </dl>
+            </header>
+            <table className="weekly-grid">
+              <thead>
+                <tr>
+                  <th scope="col">ประเภทงาน</th>
+                  {WEEKDAYS.map((weekday) => (
+                    <th key={weekday.value} scope="col">
+                      {weekday.label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {weeklyGrid.rows.map((row) => (
+                  <tr key={row.dutyTypeId}>
+                    <th scope="row">{row.dutyName}</th>
+                    {row.cells.map((cell) => (
+                      <td key={cell.weekday}>
+                        {cell.items.map((item) => item.name).join(", ")}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <section className="print-changes">
+              <h2>การเปลี่ยนแปลงเฉพาะวันที่ {thaiDate(date)}</h2>
+              {dayChangeRows.length ? (
+                <ul>
+                  {dayChangeRows.map((row) => (
+                    <li key={row.key}>
+                      <strong>{row.dutyName}</strong> — {row.kind}: {row.detail}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p>ไม่มีการเปลี่ยนแปลง ทุกหน้าที่เป็นไปตามตารางเวรประจำ</p>
+              )}
+            </section>
+            <footer>
+              <span>ลงชื่อหัวหน้า ..............................</span>
+              <span>ลงชื่อผู้ตรวจ ..............................</span>
+            </footer>
           </div>
         </>
       )}
@@ -1137,6 +1530,152 @@ export default function StaffDirectory({
                 ยกเลิก
               </button>
               <button className="primary-action">บันทึก</button>
+            </footer>
+          </form>
+        </div>
+      )}
+      {editingWeeklyDuty && (
+        <div
+          className="staff-modal-overlay"
+          onClick={() => setEditingWeeklyDuty(null)}
+        >
+          <form
+            className="staff-modal compact"
+            onSubmit={submitWeeklyDuty}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <header>
+              <h3>
+                {editingWeeklyDuty.id ? "แก้ไขเวรประจำ" : "เพิ่มเวรประจำสัปดาห์"}
+              </h3>
+              <button
+                type="button"
+                aria-label="ปิด"
+                onClick={() => setEditingWeeklyDuty(null)}
+              >
+                <X />
+              </button>
+            </header>
+            <p className="staff-modal-hint">
+              เวรนี้จะมีผลทุกสัปดาห์ ถ้าต้องการเปลี่ยนแค่วันเดียว ให้ใช้ “เปลี่ยนคนเฉพาะวันนี้”
+              ที่แท็บหน้าที่ของวันที่เลือก
+            </p>
+            <label>
+              วันในสัปดาห์
+              <select
+                name="weekday"
+                defaultValue={String(editingWeeklyDuty.weekday ?? 1)}
+                required
+              >
+                {WEEKDAYS.map((weekday) => (
+                  <option key={weekday.value} value={weekday.value}>
+                    {weekday.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              ประเภทงาน
+              <select
+                name="dutyTypeId"
+                defaultValue={editingWeeklyDuty.dutyTypeId}
+                required
+              >
+                <option value="">เลือกประเภทงาน</option>
+                {dutyTypes
+                  .filter((duty) => duty.active !== false)
+                  .map((duty) => (
+                    <option key={duty.id} value={duty.id}>
+                      {duty.name}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <label>
+              พนักงานประจำเวร
+              <select
+                name="staffId"
+                defaultValue={editingWeeklyDuty.staffId}
+                required
+              >
+                <option value="">เลือกพนักงาน</option>
+                {staff
+                  .filter((person) => person.active !== false)
+                  .map((person) => (
+                    <option key={person.id} value={person.id}>
+                      {person.nickname} — {person.fullName}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <label>
+              หมายเหตุ
+              <textarea
+                name="note"
+                maxLength="200"
+                defaultValue={editingWeeklyDuty.note}
+              />
+            </label>
+            <footer>
+              <button type="button" onClick={() => setEditingWeeklyDuty(null)}>
+                ยกเลิก
+              </button>
+              <button className="primary-action">บันทึกเวรประจำ</button>
+            </footer>
+          </form>
+        </div>
+      )}
+      {substituting && (
+        <div className="staff-modal-overlay" onClick={() => setSubstituting(null)}>
+          <form
+            className="staff-modal compact"
+            onSubmit={submitSubstitute}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <header>
+              <h3>เปลี่ยนคนทำแทนเฉพาะวันนี้</h3>
+              <button
+                type="button"
+                aria-label="ปิด"
+                onClick={() => setSubstituting(null)}
+              >
+                <X />
+              </button>
+            </header>
+            <p className="staff-modal-hint">
+              {substituting.dutyName} · {thaiDate(date)}
+              <br />
+              ตามตารางคือ{" "}
+              {staffById.get(substituting.baseStaffId)?.nickname ?? "ไม่พบพนักงาน"} —
+              การเปลี่ยนนี้มีผลเฉพาะวันนี้ สัปดาห์หน้ายังยึดตามตารางเดิม
+            </p>
+            <label>
+              ผู้ทำแทน
+              <select name="staffId" defaultValue={substituting.staffId}>
+                <option value="">งดเวรนี้เฉพาะวันนี้</option>
+                {staff
+                  .filter((person) => person.active !== false)
+                  .map((person) => (
+                    <option key={person.id} value={person.id}>
+                      {person.nickname} — {person.fullName}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <label>
+              เหตุผล
+              <textarea
+                name="note"
+                maxLength="200"
+                defaultValue={substituting.overrideNote}
+                placeholder="เช่น ลาป่วย ช่วยงานโซนอื่น"
+              />
+            </label>
+            <footer>
+              <button type="button" onClick={() => setSubstituting(null)}>
+                ยกเลิก
+              </button>
+              <button className="primary-action">บันทึกเฉพาะวันนี้</button>
             </footer>
           </form>
         </div>

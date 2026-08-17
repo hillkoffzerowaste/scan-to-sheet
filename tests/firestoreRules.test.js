@@ -18,6 +18,29 @@ test("staff private contacts allow Admin reads without write payload validation"
   assert.doesNotMatch(match[1], /allow read, create, update:/);
 });
 
+test("a per-day duty change is pinned to the date in its own document id", async () => {
+  // Without the id check an Admin could write a change for one date into another date's slot,
+  // which would silently move a substitute onto the wrong day of the fixed roster.
+  const rules = await readRules();
+  const block = rules.match(/match \/staffDutyOverrides\/\{overrideId\} \{([\s\S]*?)\n    \}/);
+
+  assert.ok(block, "staffDutyOverrides rules must exist");
+  assert.match(
+    block[1],
+    /overrideId == request\.resource\.data\.date \+ '__' \+ request\.resource\.data\.weeklyDutyId/
+  );
+  assert.match(block[1], /request\.resource\.data\.date\.size\(\) == 10/);
+});
+
+test("a weekly duty only accepts a real weekday number", async () => {
+  const rules = await readRules();
+  const block = rules.match(/match \/staffWeeklyDuties\/\{weeklyDutyId\} \{([\s\S]*?)\n    \}/);
+
+  assert.ok(block, "staffWeeklyDuties rules must exist");
+  assert.match(block[1], /request\.resource\.data\.weekday is int/);
+  assert.match(block[1], /request\.resource\.data\.weekday <= 6/);
+});
+
 test("the packing video field whitelist matches the shared model exactly", async () => {
   // The Drive worker writes through firebase-admin, which skips these rules. If the two lists
   // ever drift, the worker can leave a document the client is no longer allowed to update and

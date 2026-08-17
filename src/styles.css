@@ -46,6 +46,12 @@
   --radius-md: 8px;
   --radius-lg: 10px;
   --radius-full: 999px;
+  /* Paper tokens. Deliberately absent from the dark block: a printed roster is always ink on
+     white, so printing from dark mode must not carry the dark surfaces onto the page. */
+  --print-paper: #ffffff;
+  --print-ink: #101820;
+  --print-muted: #4a5568;
+  --print-line: #8a949e;
 }
 
 /* Status and primary hues brighten here: the light-mode values are darkened for contrast
@@ -765,6 +771,29 @@ select:hover {
 .staff-modal footer { justify-content: flex-end; gap: 8px; margin-top: 18px; }
 .staff-modal footer button { padding: 8px 13px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--surface-soft); color: var(--text); }
 .staff-modal footer .primary-action { background: var(--primary-fill); color: var(--on-primary); border-color: var(--primary-fill); }
+.staff-modal-hint { margin: 0; padding: 8px 10px; border-inline-start: 3px solid var(--primary); border-radius: var(--radius-sm); background: var(--surface-soft); color: var(--muted); font-size: .84rem; line-height: 1.6; }
+.duty-entry-badges { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; }
+.duty-badge { padding: 2px 7px; border: 1px solid var(--line-strong); border-radius: var(--radius-full); font-size: .74rem; font-weight: 700; }
+.duty-badge.scheduled { border-color: var(--primary); background: var(--primary-soft); color: var(--primary-strong); }
+.duty-badge.adhoc { background: var(--surface-soft); color: var(--muted); }
+.duty-badge.changed { border-color: var(--warning-line); background: var(--warning-bg); color: var(--warning); }
+.assignment-list article.duty-cancelled { border-style: dashed; }
+.assignment-list article.duty-cancelled .assignment-avatar { background: var(--surface-soft); color: var(--muted); }
+.assignment-list small { display: block; margin-top: 4px; color: var(--muted); }
+.assignment-actions button { display: inline-flex; align-items: center; gap: 5px; }
+.weekly-grid-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); }
+.weekly-grid { width: 100%; min-width: 860px; border-collapse: collapse; }
+.weekly-grid caption { padding: 10px 12px; border-bottom: 1px solid var(--line); color: var(--muted); font-size: .82rem; text-align: start; }
+.weekly-grid th, .weekly-grid td { padding: 8px 9px; border: 1px solid var(--line); vertical-align: top; text-align: start; }
+.weekly-grid thead th { background: var(--surface-soft); color: var(--text); font-size: .86rem; white-space: nowrap; }
+.weekly-grid tbody th { min-width: 170px; background: var(--surface-soft); color: var(--text); font-size: .88rem; font-weight: 700; }
+.weekly-grid tbody th small { color: var(--muted); font-weight: 500; }
+.weekly-grid .is-selected { background: var(--primary-soft); }
+.weekly-chip { display: inline-flex; align-items: center; gap: 3px; margin: 0 4px 4px 0; padding: 2px 4px 2px 8px; border: 1px solid var(--line-strong); border-radius: var(--radius-full); background: var(--surface); color: var(--text); font-size: .82rem; }
+.weekly-chip button { display: grid; place-items: center; width: 20px; height: 20px; padding: 0; border: 0; border-radius: var(--radius-full); background: transparent; color: var(--muted); }
+.weekly-chip button:last-child { color: var(--danger); }
+.weekly-add { display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 1px dashed var(--line-strong); border-radius: var(--radius-sm); background: transparent; color: var(--primary-strong); }
+.duty-print-sheet { display: none; }
 
 @media (max-width: 1199px) {
   .staff-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -798,6 +827,34 @@ select:hover {
   .schedule-toolbar > div, .schedule-toolbar button { width: 100%; }
   .assignment-list article { align-items: flex-start; flex-wrap: wrap; }
   .assignment-actions { width: 100%; justify-content: flex-end; }
+}
+
+/* พิมพ์ตารางการทำงาน A4 แนวนอน
+   ซ่อนแอปด้วย visibility แทนการเลือก element เป็นชั้นๆ เพราะแผ่นพิมพ์ฝังอยู่ลึกใน
+   .enterprise-shell การไล่ display:none ทีละชั้นจะพังทันทีที่โครงสร้างเปลี่ยน */
+@media print {
+  @page { size: A4 landscape; margin: 10mm; }
+  html, body { background: var(--print-paper); }
+  body { visibility: hidden; }
+  .duty-print-sheet, .duty-print-sheet * { visibility: visible; }
+  .duty-print-sheet { display: grid; gap: 10px; position: absolute; inset-block-start: 0; inset-inline-start: 0; width: 100%; padding: 0; color: var(--print-ink); font-size: 10.5pt; line-height: 1.45; }
+  .duty-print-sheet header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding-bottom: 8px; border-bottom: 1.5px solid var(--print-ink); }
+  .duty-print-sheet h1 { margin: 0; font-size: 16pt; }
+  .duty-print-sheet header p { margin: 2px 0 0; color: var(--print-muted); font-size: 9.5pt; }
+  .duty-print-sheet dl { display: grid; gap: 2px; margin: 0; text-align: end; }
+  .duty-print-sheet dl > div { display: flex; justify-content: flex-end; gap: 6px; }
+  .duty-print-sheet dt { color: var(--print-muted); font-size: 9pt; }
+  .duty-print-sheet dt::after { content: ":"; }
+  .duty-print-sheet dd { margin: 0; font-size: 9.5pt; font-weight: 700; }
+  .duty-print-sheet .weekly-grid { min-width: 0; }
+  .duty-print-sheet .weekly-grid th, .duty-print-sheet .weekly-grid td { padding: 5px 6px; border: 0.7pt solid var(--print-line); background: var(--print-paper); color: var(--print-ink); font-size: 9.5pt; }
+  .duty-print-sheet .weekly-grid thead th { font-weight: 700; }
+  .duty-print-sheet .weekly-grid tbody th { min-width: 0; width: 22%; }
+  .duty-print-sheet .weekly-grid tr { break-inside: avoid; }
+  .duty-print-sheet .print-changes h2 { margin: 0 0 4px; font-size: 11pt; }
+  .duty-print-sheet .print-changes ul { margin: 0; padding-inline-start: 16px; }
+  .duty-print-sheet .print-changes li, .duty-print-sheet .print-changes p { margin: 0 0 2px; font-size: 9.5pt; }
+  .duty-print-sheet footer { display: flex; justify-content: space-between; gap: 24px; margin-top: 12px; color: var(--print-muted); font-size: 9.5pt; }
 }
 
 .skip-link {
