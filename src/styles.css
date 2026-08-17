@@ -33,9 +33,15 @@
   --warning: #9c5205;
   --warning-bg: rgba(180,95,6,0.1);
   --warning-line: rgba(180,95,6,0.3);
-  --danger: #c0342b;
+  /* Darkened from #c0342b, which measured 4.293 against its own 10% tint sitting on --page.
+     Banners land on --page, --surface and --surface-soft interchangeably, so the token has to
+     clear 4.5 on the darkest of the three. This value measures 5.03–5.68 across all of them. */
+  --danger: #b02b23;
   --danger-bg: rgba(192,52,43,0.1);
   --danger-line: rgba(192,52,43,0.3);
+  /* Fill for danger surfaces that carry white text, separate from --danger for the same reason
+     --primary-fill is separate: in dark mode --danger must stay light enough to read AS text. */
+  --danger-fill: #b02b23;
   --success: #1b7a3d;
   --success-bg: rgba(27,122,61,0.1);
   --success-line: rgba(27,122,61,0.3);
@@ -81,6 +87,8 @@
   /* Tint pulled down from 0.16: --danger on its own 16% tint over --surface measured 4.443,
      under the 4.5 floor, so every danger banner in dark mode failed together. 0.12 gives 4.72. */
   --danger-bg: rgba(239,106,96,0.12);
+  /* White on #ef6a60 measures 3.043, so the count badge needed a darker fill than the text hue. */
+  --danger-fill: #bd544c;
   --danger-line: rgba(239,106,96,0.35);
   --success: #45b96c;
   --success-bg: rgba(69,185,108,0.16);
@@ -2290,8 +2298,8 @@ tbody tr:nth-child(8){ animation-delay: 0.21s; }
   justify-content: center;
   padding: 0 6px;
   border-radius: var(--radius-full);
-  background: var(--danger);
-  color: #fff;
+  background: var(--danger-fill);
+  color: var(--on-primary);
   font-size: 0.72rem;
   font-weight: 900;
   animation: badge-pulse 1.5s ease-in-out infinite;
