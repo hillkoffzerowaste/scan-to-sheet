@@ -28,6 +28,7 @@ import {
   countStaleWeeklyDuties,
   countUncoveredDuties,
   dutyIssueLabel,
+  findMatchingWeeklyDuty,
   resolveDayDuties,
   validateWeeklyDuty,
   weekdayFromDateKey,
@@ -47,6 +48,7 @@ import {
   resolveDailyStatus,
   staffMissingFields,
   staffSaveErrorMessage,
+  telHref,
   validateStaffInput,
 } from "./staffDirectory.js";
 import {
@@ -74,6 +76,7 @@ import {
   saveDutyType,
   savePackingRoomNotice,
   saveStaffMember,
+  promoteAssignmentToWeekly,
   saveStaffOrder,
   saveWeeklyDuty,
   STAFF_QUERY_LIMITS,
@@ -450,7 +453,7 @@ export default function StaffDirectory({
           </div>
           <div className={`staff-contact ${isAdmin ? "private-visible" : "masked"}`}>
             {person.phone && (
-              isAdmin ? <a href={`tel:${person.phone}`}>
+              isAdmin ? <a href={telHref(person.phone)}>
                 <Phone size={15} />
                 {person.phone}
               </a> : <span><Phone size={15} />{person.phone}</span>
@@ -618,6 +621,47 @@ export default function StaffDirectory({
       );
     } catch {
       setMessage("ลบเวรประจำสัปดาห์ไม่สำเร็จ กรุณาลองใหม่");
+    }
+  }
+
+  async function promoteToWeekly(entry) {
+    const person = staffById.get(entry.staffId);
+    const existing = findMatchingWeeklyDuty(weeklyDuties, {
+      weekday: entry.weekday,
+      staffId: entry.staffId,
+      dutyTypeId: entry.dutyTypeId,
+    });
+    const dayName = weekdayLabel(entry.weekday);
+    if (
+      !window.confirm(
+        existing
+          ? `“${entry.dutyName}” ของ ${person?.nickname ?? "พนักงาน"} มีในเวรประจำวัน${dayName} อยู่แล้ว จะรวมหมายเหตุเข้าเวรเดิมและลบรายการเพิ่มเฉพาะวันนี้ทิ้ง ดำเนินการหรือไม่?`
+          : `ย้าย “${entry.dutyName}” ของ ${person?.nickname ?? "พนักงาน"} ขึ้นเป็นเวรประจำวัน${dayName} หรือไม่? หลังจากนี้จะมีผลทุกสัปดาห์`
+      )
+    )
+      return;
+    try {
+      await promoteAssignmentToWeekly(
+        {
+          assignmentId: entry.assignmentId,
+          existingWeeklyDutyId: existing?.id,
+          weekday: entry.weekday,
+          staffId: entry.staffId,
+          dutyTypeId: entry.dutyTypeId,
+          // เวรเดิมที่ยังไม่มีหมายเหตุ ให้รับรายละเอียดจากรายการรายวันไป ไม่งั้นข้อมูลจะหายพร้อมรายการ
+          note: entry.note || existing?.note || "",
+        },
+        firebaseUser
+      );
+      await reloadBase();
+      await reloadDaily();
+      setMessage(
+        existing
+          ? `รวมเข้ากับเวรประจำวัน${dayName} ที่มีอยู่แล้ว`
+          : `ย้ายขึ้นเป็นเวรประจำวัน${dayName} แล้ว มีผลทุกสัปดาห์`
+      );
+    } catch {
+      setMessage("ย้ายเข้าตารางเวรประจำไม่สำเร็จ กรุณาลองใหม่");
     }
   }
 
@@ -1051,6 +1095,9 @@ export default function StaffDirectory({
                             ตามตาราง {basePerson?.nickname ?? "ไม่พบพนักงาน"}
                           </span>
                         )}
+                        {entry.duplicateOfWeekly && (
+                          <span className="duty-badge changed">ซ้ำกับเวรประจำวันนี้</span>
+                        )}
                         {entry.issues.map((issue) => (
                           <span className="duty-badge issue" key={issue}>
                             <AlertTriangle size={12} />{" "}
@@ -1088,6 +1135,9 @@ export default function StaffDirectory({
                           </>
                         ) : (
                           <>
+                            <button onClick={() => void promoteToWeekly(entry)}>
+                              <Repeat size={14} /> ย้ายเข้าตารางเวรประจำ
+                            </button>
                             <button
                               onClick={() => setEditingAssignment(assignment ?? {})}
                             >

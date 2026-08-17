@@ -338,6 +338,38 @@ export async function deleteWeeklyDuty(id) {
   return stranded.size;
 }
 
+// ย้ายงานเพิ่มเฉพาะวันขึ้นไปเป็นเวรประจำ ทำในชุดเดียวเพื่อไม่ให้เกิดสถานะกลางที่มีทั้งสองรายการ
+// หรือไม่เหลือรายการไหนเลย ส่ง existingWeeklyDutyId มาเมื่อมีเวรเดิมอยู่แล้ว จะได้รวมโน้ตแทนสร้างซ้ำ
+export async function promoteAssignmentToWeekly(
+  { assignmentId, existingWeeklyDutyId, weekday, staffId, dutyTypeId, note },
+  user
+) {
+  requireFirebase();
+  const batch = writeBatch(firestoreDb);
+  const target = existingWeeklyDutyId
+    ? doc(firestoreDb, "staffWeeklyDuties", existingWeeklyDutyId)
+    : doc(collection(firestoreDb, "staffWeeklyDuties"));
+  batch.set(
+    target,
+    {
+      weekday: Number(weekday),
+      staffId: String(staffId),
+      dutyTypeId: String(dutyTypeId),
+      note: String(note ?? "").trim().slice(0, 200),
+      updatedAt: serverTimestamp(),
+      updatedBy: {
+        uid: user.uid,
+        email: user.email ?? "",
+        name: user.displayName ?? user.name ?? "",
+      },
+    },
+    { merge: true }
+  );
+  batch.delete(doc(firestoreDb, "staffDailyAssignments", assignmentId));
+  await batch.commit();
+  return target.id;
+}
+
 export async function listDutyOverrides(date) {
   requireFirebase();
   if (!date) return [];

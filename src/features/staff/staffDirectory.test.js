@@ -17,6 +17,7 @@ import {
   staffMissingFields,
   resolvePackingNotice,
   staffSaveErrorMessage,
+  telHref,
   validateStaffInput,
 } from "./staffDirectory.js";
 
@@ -74,14 +75,22 @@ test("defaults active staff to working and summarizes daily exceptions", () => {
   ];
   const statuses = new Map([["2", "leave"]]);
   assert.equal(resolveDailyStatus("1", statuses), "working");
+  // คนที่ลาไม่ถูกนับว่า "ยังไม่มีหน้าที่" เพราะวันนั้นเขาไม่ต้องมีหน้าที่อยู่แล้ว
+  // (เทสต์เดิมล็อกไว้ที่ 2 ซึ่งทำให้ตัวเลขค้างเตือนตลอดในข้อมูลจริง)
   assert.deepEqual(buildWorkforceSummary(staff, statuses, new Map()), {
     total: 2,
     working: 1,
     leave: 1,
     off: 0,
     outside: 0,
-    unassigned: 2,
+    unassigned: 1,
   });
+});
+
+test("strips spacing out of the dial link but keeps a leading plus", () => {
+  assert.equal(telHref("061 474 9196"), "tel:0614749196");
+  assert.equal(telHref("+66 61-474-9196"), "tel:+66614749196");
+  assert.equal(telHref("  "), "");
 });
 
 test("masks public contact details without hiding them from admins", () => {

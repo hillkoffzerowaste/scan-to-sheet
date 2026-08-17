@@ -131,10 +131,28 @@ export const DUTY_ISSUES = {
   dutyInactive: "duty-inactive",
 };
 
+export function findMatchingWeeklyDuty(weeklyDuties, { weekday, staffId, dutyTypeId }) {
+  return (
+    weeklyDuties.find(
+      (item) =>
+        Number(item.weekday) === Number(weekday) &&
+        item.staffId === staffId &&
+        item.dutyTypeId === dutyTypeId
+    ) ?? null
+  );
+}
+
 export function annotateDayDuties(
   entries,
   { staffById = new Map(), statuses = new Map(), dutyById = new Map() } = {}
 ) {
+  // งานเพิ่มเฉพาะวันที่ตรงกับเวรประจำของวันนั้นคือรายการซ้อน มักเป็นของเก่าที่ค้างจากก่อน
+  // มีตารางเวร ปล่อยไว้จะอ่านเหมือนคนคนเดียวต้องทำงานเดียวกันสองรอบ
+  const workedToday = new Set(
+    entries
+      .filter((entry) => entry.source === "weekly" && !entry.cancelled && entry.staffId)
+      .map((entry) => `${entry.staffId}__${entry.dutyTypeId}`)
+  );
   return entries.map((entry) => {
     const issues = [];
     let statusCode = "";
@@ -157,6 +175,9 @@ export function annotateDayDuties(
       ...entry,
       issues,
       statusCode,
+      duplicateOfWeekly:
+        entry.source === "daily" &&
+        workedToday.has(`${entry.staffId}__${entry.dutyTypeId}`),
       uncovered: issues.some((issue) => issue !== DUTY_ISSUES.dutyInactive),
     };
   });

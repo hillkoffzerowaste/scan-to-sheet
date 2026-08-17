@@ -10,6 +10,7 @@ import {
   buildWeeklyGrid,
   countStaleWeeklyDuties,
   countUncoveredDuties,
+  findMatchingWeeklyDuty,
   overrideDocId,
   resolveDayDuties,
   validateWeeklyDuty,
@@ -274,6 +275,65 @@ test("the weekly grid marks chips whose staff left the team", () => {
   assert.equal(
     countStaleWeeklyDuties(weeklyDuties, new Map([["staff-a", { active: false }]])),
     3
+  );
+});
+
+test("marks an ad-hoc row that repeats a duty the schedule already covers", () => {
+  const entries = annotateDayDuties(
+    resolveDayDuties({
+      dateKey: "2026-08-17",
+      weeklyDuties,
+      dailyAssignments: [
+        // ซ้ำกับ w-1 (เอ + แพ็คโซน A วันจันทร์) ต่างกันแค่โน้ต
+        { id: "d-1", staffId: "staff-a", dutyTypeId: "duty-pack", note: "โซนหน้า" },
+        { id: "d-2", staffId: "staff-a", dutyTypeId: "duty-check", note: "" },
+      ],
+      dutyById,
+    }),
+    { staffById, dutyById }
+  );
+  const byKey = new Map(entries.map((entry) => [entry.key, entry]));
+
+  assert.equal(byKey.get("daily-d-1").duplicateOfWeekly, true);
+  assert.equal(byKey.get("daily-d-2").duplicateOfWeekly, false);
+  assert.equal(byKey.get("weekly-w-1").duplicateOfWeekly, false);
+});
+
+test("a substitute doing the same duty twice counts as a duplicate too", () => {
+  const entries = annotateDayDuties(
+    resolveDayDuties({
+      dateKey: "2026-08-17",
+      weeklyDuties,
+      overrides: [
+        { id: "o", date: "2026-08-17", weeklyDutyId: "w-1", staffId: "staff-b" },
+      ],
+      dailyAssignments: [
+        { id: "d-1", staffId: "staff-b", dutyTypeId: "duty-pack", note: "" },
+      ],
+      dutyById,
+    }),
+    { staffById, dutyById }
+  );
+
+  assert.equal(entries.at(-1).duplicateOfWeekly, true);
+});
+
+test("finds the weekly duty an ad-hoc row should merge into", () => {
+  assert.equal(
+    findMatchingWeeklyDuty(weeklyDuties, {
+      weekday: 1,
+      staffId: "staff-a",
+      dutyTypeId: "duty-pack",
+    })?.id,
+    "w-1"
+  );
+  assert.equal(
+    findMatchingWeeklyDuty(weeklyDuties, {
+      weekday: 3,
+      staffId: "staff-a",
+      dutyTypeId: "duty-pack",
+    }),
+    null
   );
 });
 

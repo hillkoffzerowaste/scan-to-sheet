@@ -51,9 +51,19 @@ export function buildWorkforceSummary(staff, statuses, duties) {
   active.forEach((person) => {
     const status = resolveDailyStatus(person.id, statuses);
     if (status in summary) summary[status] += 1;
-    if (!(duties.get(person.id) ?? []).length) summary.unassigned += 1;
+    // นับเฉพาะคนที่มาทำงานวันนั้น คนที่ลาหรือหยุดไม่ควรมีหน้าที่อยู่แล้ว ถ้านับรวมด้วย
+    // ตัวเลขนี้จะค้างเตือนทุกวันโดยไม่มีอะไรต้องแก้ จนเลิกมีความหมาย
+    if (status === "working" && !(duties.get(person.id) ?? []).length)
+      summary.unassigned += 1;
   });
   return summary;
+}
+
+// เบอร์ที่คนกรอกมักมีเว้นวรรคหรือขีด ซึ่งทำให้ tel: URI เพี้ยนบนมือถือบางรุ่น
+// แสดงผลยังใช้ค่าที่กรอกไว้ตามเดิม ตัดอักขระออกแค่ใน href
+export function telHref(phone) {
+  const digits = String(phone ?? "").replace(/[^\d+]/g, "");
+  return digits ? `tel:${digits}` : "";
 }
 
 export function maskStaffContact(value, type) {
