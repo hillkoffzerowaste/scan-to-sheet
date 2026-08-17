@@ -122,6 +122,78 @@ export function resolveDayDuties({
   return [...scheduled, ...extras];
 }
 
+/* A duty on the board is worthless if the person behind it is not actually in the room today.
+   These flags are what turn the roster from a list into something a leader can act on. */
+export const DUTY_ISSUES = {
+  staffMissing: "staff-missing",
+  staffInactive: "staff-inactive",
+  staffAbsent: "staff-absent",
+  dutyInactive: "duty-inactive",
+};
+
+export function annotateDayDuties(
+  entries,
+  { staffById = new Map(), statuses = new Map(), dutyById = new Map() } = {}
+) {
+  return entries.map((entry) => {
+    const issues = [];
+    let statusCode = "";
+    if (dutyById.get(entry.dutyTypeId)?.active === false)
+      issues.push(DUTY_ISSUES.dutyInactive);
+    if (!entry.cancelled) {
+      const person = entry.staffId ? staffById.get(entry.staffId) : null;
+      if (!person) issues.push(DUTY_ISSUES.staffMissing);
+      else {
+        if (person.active === false) issues.push(DUTY_ISSUES.staffInactive);
+        const status = statuses.get(entry.staffId);
+        if (status && status !== "working") {
+          statusCode = status;
+          issues.push(DUTY_ISSUES.staffAbsent);
+        }
+      }
+    }
+    // งดเวรที่ตั้งใจงด ไม่นับว่าไม่มีคนทำ ส่วนงานที่ปิดใช้ยังมีคนทำอยู่จริง จึงไม่นับเช่นกัน
+    return {
+      ...entry,
+      issues,
+      statusCode,
+      uncovered: issues.some((issue) => issue !== DUTY_ISSUES.dutyInactive),
+    };
+  });
+}
+
+export function countUncoveredDuties(entries) {
+  return entries.filter((entry) => entry.uncovered).length;
+}
+
+export function dutyIssueLabel(issue, { statusLabel = "ไม่อยู่ปฏิบัติงาน" } = {}) {
+  if (issue === DUTY_ISSUES.staffMissing) return "ยังไม่มีคนรับผิดชอบ";
+  if (issue === DUTY_ISSUES.staffInactive) return "พนักงานถูกปิดใช้งานแล้ว";
+  if (issue === DUTY_ISSUES.staffAbsent) return `ผู้รับผิดชอบ${statusLabel}วันนี้`;
+  if (issue === DUTY_ISSUES.dutyInactive) return "ประเภทงานถูกปิดใช้";
+  return "";
+}
+
+export function buildCoverageRows(entries, staffById = new Map(), statusLabels = {}) {
+  return entries
+    .filter((entry) => entry.uncovered)
+    .map((entry) => {
+      const person = entry.staffId ? staffById.get(entry.staffId) : null;
+      const status = entry.issues.includes(DUTY_ISSUES.staffAbsent)
+        ? statusLabels[entry.statusCode] ?? "ไม่อยู่ปฏิบัติงาน"
+        : "";
+      return {
+        key: entry.key,
+        dutyName: entry.dutyName,
+        detail: entry.issues
+          .filter((issue) => issue !== DUTY_ISSUES.dutyInactive)
+          .map((issue) => dutyIssueLabel(issue, { statusLabel: status }))
+          .join(" · "),
+        person: person?.nickname ?? "",
+      };
+    });
+}
+
 export function buildDutyLabelsFromEntries(entries, staffNameById = new Map()) {
   const labels = new Map();
   for (const entry of entries) {
@@ -137,6 +209,13 @@ export function buildDutyLabelsFromEntries(entries, staffNameById = new Map()) {
     labels.set(entry.staffId, list);
   }
   return labels;
+}
+
+export function countStaleWeeklyDuties(weeklyDuties = [], staffById = new Map()) {
+  return weeklyDuties.filter((item) => {
+    const person = staffById.get(item.staffId);
+    return !person || person.active === false;
+  }).length;
 }
 
 export function buildWeeklyGrid({
@@ -164,12 +243,17 @@ export function buildWeeklyGrid({
             (item) =>
               item.dutyTypeId === duty.id && Number(item.weekday) === weekday.value
           )
-          .map((item) => ({
-            id: item.id,
-            staffId: item.staffId,
-            name: staffById.get(item.staffId)?.nickname || "ไม่พบพนักงาน",
-            note: String(item.note ?? "").trim(),
-          }))
+          .map((item) => {
+            const person = staffById.get(item.staffId);
+            return {
+              id: item.id,
+              staffId: item.staffId,
+              name: person?.nickname || "ไม่พบพนักงาน",
+              note: String(item.note ?? "").trim(),
+              missing: !person,
+              inactive: person?.active === false,
+            };
+          })
           .sort((a, b) => a.name.localeCompare(b.name, "th")),
       })),
     }));

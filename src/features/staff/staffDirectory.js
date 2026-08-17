@@ -194,6 +194,8 @@ export function buildDailyReportText({
   positionLabels,
   statusLabels,
   notice,
+  changeRows = [],
+  coverageRows = [],
 }) {
   const staffLines = staff
     .filter((person) => person.active !== false)
@@ -217,6 +219,19 @@ export function buildDailyReportText({
     "",
     "รายชื่อและหน้าที่",
     ...staffLines,
+    "",
+    "การเปลี่ยนแปลงเฉพาะวันนี้",
+    ...(changeRows.length
+      ? changeRows.map((row) => `- ${row.dutyName} — ${row.kind}: ${row.detail}`)
+      : ["- ไม่มี ทุกหน้าที่เป็นไปตามตารางเวรประจำ"]),
+    "",
+    "เวรที่ยังไม่มีคนทำ",
+    ...(coverageRows.length
+      ? coverageRows.map(
+          (row) =>
+            `- ${row.dutyName}${row.person ? ` (${row.person})` : ""} — ${row.detail}`
+        )
+      : ["- ไม่มี"]),
     "",
     "ประกาศและกฎระเบียบห้องแพ็ค",
     String(notice ?? "").trim() || "ไม่มีประกาศ",

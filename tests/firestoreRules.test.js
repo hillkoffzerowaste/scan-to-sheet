@@ -32,13 +32,23 @@ test("a per-day duty change is pinned to the date in its own document id", async
   assert.match(block[1], /request\.resource\.data\.date\.size\(\) == 10/);
 });
 
-test("a weekly duty only accepts a real weekday number", async () => {
+test("a weekly duty only accepts a real weekday number and a real staff member", async () => {
   const rules = await readRules();
   const block = rules.match(/match \/staffWeeklyDuties\/\{weeklyDutyId\} \{([\s\S]*?)\n    \}/);
 
   assert.ok(block, "staffWeeklyDuties rules must exist");
   assert.match(block[1], /request\.resource\.data\.weekday is int/);
   assert.match(block[1], /request\.resource\.data\.weekday <= 6/);
+  assert.match(block[1], /staffExists\(request\.resource\.data\.staffId\)/);
+});
+
+test("a per-day change keeps the empty substitute that means the duty is dropped", async () => {
+  const rules = await readRules();
+  const block = rules.match(/match \/staffDutyOverrides\/\{overrideId\} \{([\s\S]*?)\n    \}/);
+
+  assert.ok(block, "staffDutyOverrides rules must exist");
+  assert.match(block[1], /request\.resource\.data\.staffId == ''/);
+  assert.match(block[1], /staffExists\(request\.resource\.data\.staffId\)/);
 });
 
 test("the packing video field whitelist matches the shared model exactly", async () => {

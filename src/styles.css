@@ -78,7 +78,9 @@
   --warning-bg: rgba(232,148,47,0.16);
   --warning-line: rgba(232,148,47,0.35);
   --danger: #ef6a60;
-  --danger-bg: rgba(239,106,96,0.16);
+  /* Tint pulled down from 0.16: --danger on its own 16% tint over --surface measured 4.443,
+     under the 4.5 floor, so every danger banner in dark mode failed together. 0.12 gives 4.72. */
+  --danger-bg: rgba(239,106,96,0.12);
   --danger-line: rgba(239,106,96,0.35);
   --success: #45b96c;
   --success-bg: rgba(69,185,108,0.16);
@@ -777,6 +779,15 @@ select:hover {
 .duty-badge.scheduled { border-color: var(--primary); background: var(--primary-soft); color: var(--primary-strong); }
 .duty-badge.adhoc { background: var(--surface-soft); color: var(--muted); }
 .duty-badge.changed { border-color: var(--warning-line); background: var(--warning-bg); color: var(--warning); }
+/* พื้นทึบเสมอ: ถ้าปล่อยให้ tint โปร่งใสไปทับพื้นเพจ ค่า contrast จะเปลี่ยนตามที่วางและวัดได้
+   4.293 บนพื้น --page การซ้อน tint ลงบน --surface ตรึงค่าไว้ที่ 4.79 ไม่ว่าจะวางที่ไหน */
+.duty-badge.issue { display: inline-flex; align-items: center; gap: 4px; border-color: var(--danger-line); background: linear-gradient(var(--danger-bg), var(--danger-bg)), var(--surface); color: var(--danger); }
+.duty-alert { display: flex; align-items: flex-start; gap: 9px; padding: 10px 12px; border: 1px solid var(--danger-line); border-inline-start: 4px solid var(--danger); border-radius: var(--radius-md); background: linear-gradient(var(--danger-bg), var(--danger-bg)), var(--surface); color: var(--danger); }
+.duty-alert svg { flex: 0 0 auto; margin-top: 2px; }
+.duty-alert strong { display: block; font-size: .95rem; }
+.duty-alert p { margin: 2px 0 0; color: var(--text); font-size: .84rem; }
+.weekly-chip.is-stale { border-color: var(--danger-line); background: linear-gradient(var(--danger-bg), var(--danger-bg)), var(--surface); color: var(--danger); }
+.weekly-chip.is-stale > span { text-decoration: line-through; }
 .assignment-list article.duty-cancelled { border-style: dashed; }
 .assignment-list article.duty-cancelled .assignment-avatar { background: var(--surface-soft); color: var(--muted); }
 .assignment-list small { display: block; margin-top: 4px; color: var(--muted); }
@@ -835,7 +846,9 @@ select:hover {
 @media print {
   @page { size: A4 landscape; margin: 10mm; }
   html, body { background: var(--print-paper); }
-  body { visibility: hidden; }
+  /* :has() จำกัดการซ่อนไว้เฉพาะหน้าที่มีแผ่นพิมพ์อยู่จริง ถ้าซ่อน body ทุกกรณี
+     การกด Ctrl+P ที่แท็บอื่นของแอปจะได้กระดาษเปล่า */
+  body:has(.duty-print-sheet) { visibility: hidden; }
   .duty-print-sheet, .duty-print-sheet * { visibility: visible; }
   .duty-print-sheet { display: grid; gap: 10px; position: absolute; inset-block-start: 0; inset-inline-start: 0; width: 100%; padding: 0; color: var(--print-ink); font-size: 10.5pt; line-height: 1.45; }
   .duty-print-sheet header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding-bottom: 8px; border-bottom: 1.5px solid var(--print-ink); }
@@ -851,6 +864,7 @@ select:hover {
   .duty-print-sheet .weekly-grid thead th { font-weight: 700; }
   .duty-print-sheet .weekly-grid tbody th { min-width: 0; width: 22%; }
   .duty-print-sheet .weekly-grid tr { break-inside: avoid; }
+  .duty-print-sheet .print-uncovered { padding: 6px 8px; border: 1pt solid var(--print-ink); border-radius: 2mm; }
   .duty-print-sheet .print-changes h2 { margin: 0 0 4px; font-size: 11pt; }
   .duty-print-sheet .print-changes ul { margin: 0; padding-inline-start: 16px; }
   .duty-print-sheet .print-changes li, .duty-print-sheet .print-changes p { margin: 0 0 2px; font-size: 9.5pt; }

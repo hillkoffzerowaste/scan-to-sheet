@@ -2,9 +2,14 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  DUTY_ISSUES,
+  annotateDayDuties,
+  buildCoverageRows,
   buildDayChangeRows,
   buildDutyLabelsFromEntries,
   buildWeeklyGrid,
+  countStaleWeeklyDuties,
+  countUncoveredDuties,
   overrideDocId,
   resolveDayDuties,
   validateWeeklyDuty,
@@ -176,6 +181,99 @@ test("the printed change list explains every deviation from the table", () => {
       ["งดเวรวันนี้", "ตามตาราง บี"],
       ["เพิ่มเฉพาะวัน", "เอ"],
     ]
+  );
+});
+
+test("flags a duty whose owner is on leave, deactivated or gone", () => {
+  const entries = annotateDayDuties(
+    resolveDayDuties({ dateKey: "2026-08-17", weeklyDuties, dutyById }),
+    {
+      staffById: new Map([
+        ["staff-a", { id: "staff-a", nickname: "เอ", active: true }],
+        ["staff-b", { id: "staff-b", nickname: "บี", active: false }],
+      ]),
+      statuses: new Map([["staff-a", "leave"]]),
+      dutyById,
+    }
+  );
+
+  assert.deepEqual(entries[0].issues, [DUTY_ISSUES.staffAbsent]);
+  assert.equal(entries[0].statusCode, "leave");
+  assert.deepEqual(entries[1].issues, [DUTY_ISSUES.staffInactive]);
+  assert.equal(countUncoveredDuties(entries), 2);
+});
+
+test("a deliberately cancelled duty is not counted as uncovered", () => {
+  const entries = annotateDayDuties(
+    resolveDayDuties({
+      dateKey: "2026-08-18",
+      weeklyDuties,
+      overrides: [{ id: "x", date: "2026-08-18", weeklyDutyId: "w-3", staffId: "" }],
+      dutyById,
+    }),
+    { staffById, statuses: new Map([["staff-a", "off"]]), dutyById }
+  );
+
+  assert.equal(entries[0].cancelled, true);
+  assert.deepEqual(entries[0].issues, []);
+  assert.equal(countUncoveredDuties(entries), 0);
+});
+
+test("a duty type turned off is marked but still counts as covered", () => {
+  const entries = annotateDayDuties(
+    resolveDayDuties({ dateKey: "2026-08-18", weeklyDuties, dutyById }),
+    {
+      staffById,
+      dutyById: new Map([
+        ["duty-check", { id: "duty-check", name: "ตรวจสินค้า", active: false }],
+      ]),
+    }
+  );
+
+  assert.deepEqual(entries[0].issues, [DUTY_ISSUES.dutyInactive]);
+  assert.equal(entries[0].uncovered, false);
+});
+
+test("the coverage list names the duty and why nobody is on it", () => {
+  const entries = annotateDayDuties(
+    resolveDayDuties({ dateKey: "2026-08-17", weeklyDuties, dutyById }),
+    {
+      staffById,
+      statuses: new Map([["staff-a", "leave"]]),
+      dutyById,
+    }
+  );
+
+  assert.deepEqual(buildCoverageRows(entries, staffById, { leave: "ลา" }), [
+    {
+      key: "weekly-w-1",
+      dutyName: "แพ็คโซน A",
+      detail: "ผู้รับผิดชอบลาวันนี้",
+      person: "เอ",
+    },
+  ]);
+});
+
+test("the weekly grid marks chips whose staff left the team", () => {
+  const grid = buildWeeklyGrid({
+    weeklyDuties,
+    dutyTypes: [...dutyById.values()],
+    staffById: new Map([["staff-a", { id: "staff-a", nickname: "เอ", active: false }]]),
+  });
+  const [packChip] = grid.rows[0].cells[0].items;
+  const [checkChip] = grid.rows[1].cells[0].items;
+
+  assert.deepEqual(
+    [packChip.name, packChip.inactive, packChip.missing],
+    ["เอ", true, false]
+  );
+  assert.deepEqual(
+    [checkChip.name, checkChip.inactive, checkChip.missing],
+    ["ไม่พบพนักงาน", false, true]
+  );
+  assert.equal(
+    countStaleWeeklyDuties(weeklyDuties, new Map([["staff-a", { active: false }]])),
+    3
   );
 });
 

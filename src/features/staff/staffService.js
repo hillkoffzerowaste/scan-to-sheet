@@ -31,6 +31,16 @@ const DAILY_STATUS_LIMIT = 200;
 const WEEKLY_DUTY_LIMIT = 300;
 const OVERRIDE_LIMIT = 100;
 
+// Every query here is capped to protect the Firestore quota, which means a full page silently
+// drops whatever sits past the cap. Callers compare against these numbers to warn instead.
+export const STAFF_QUERY_LIMITS = {
+  staff: STAFF_LIMIT,
+  dutyTypes: DUTY_LIMIT,
+  assignments: ASSIGNMENT_LIMIT,
+  weeklyDuties: WEEKLY_DUTY_LIMIT,
+  overrides: OVERRIDE_LIMIT,
+};
+
 function requireFirebase() {
   if (!firestoreDb)
     throw Object.assign(new Error("ระบบข้อมูลพนักงานยังไม่พร้อมใช้งาน"), {
@@ -310,9 +320,22 @@ export async function saveWeeklyDuty(item, user) {
   return target.id;
 }
 
+// Deleting the duty alone would strand every per-day change that points at it: the roster stops
+// reading them, so they become invisible documents that only ever grow.
 export async function deleteWeeklyDuty(id) {
   requireFirebase();
-  await deleteDoc(doc(firestoreDb, "staffWeeklyDuties", id));
+  const stranded = await getDocs(
+    query(
+      collection(firestoreDb, "staffDutyOverrides"),
+      where("weeklyDutyId", "==", id),
+      limit(OVERRIDE_LIMIT)
+    )
+  );
+  const batch = writeBatch(firestoreDb);
+  stranded.docs.forEach((item) => batch.delete(item.ref));
+  batch.delete(doc(firestoreDb, "staffWeeklyDuties", id));
+  await batch.commit();
+  return stranded.size;
 }
 
 export async function listDutyOverrides(date) {

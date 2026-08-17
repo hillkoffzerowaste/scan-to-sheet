@@ -20,9 +20,14 @@ import {
 } from "lucide-react";
 import {
   WEEKDAYS,
+  annotateDayDuties,
+  buildCoverageRows,
   buildDayChangeRows,
   buildDutyLabelsFromEntries,
   buildWeeklyGrid,
+  countStaleWeeklyDuties,
+  countUncoveredDuties,
+  dutyIssueLabel,
   resolveDayDuties,
   validateWeeklyDuty,
   weekdayFromDateKey,
@@ -71,6 +76,7 @@ import {
   saveStaffMember,
   saveStaffOrder,
   saveWeeklyDuty,
+  STAFF_QUERY_LIMITS,
   uploadStaffPhoto,
 } from "./staffService.js";
 
@@ -164,6 +170,17 @@ export default function StaffDirectory({
   const [draggedStaffId, setDraggedStaffId] = useState("");
   const [savingOrder, setSavingOrder] = useState(false);
 
+  // ชนเพดาน = Firestore ตัดข้อมูลที่เหลือทิ้งเงียบๆ หน้าจอจะดูเหมือนข้อมูลครบทั้งที่ไม่ครบ
+  function warnIfTruncated(checks) {
+    const hit = checks.filter(([count, cap]) => count >= cap);
+    if (!hit.length) return;
+    setMessage(
+      `แสดงข้อมูลได้ไม่ครบ: ${hit
+        .map(([, cap, label]) => `${label} เกิน ${cap.toLocaleString("th-TH")} รายการ`)
+        .join(" และ ")} กรุณาแจ้ง Admin เพื่อจัดเก็บข้อมูลเก่า`
+    );
+  }
+
   async function reloadBase(includePrivate = isAdmin) {
     const [publicMembers, duties, weekly, privateNotes, privateContacts, notice] =
       await Promise.all([
@@ -189,6 +206,11 @@ export default function StaffDirectory({
     setDutyTypes(duties);
     setWeeklyDuties(weekly);
     setPackingNotice(resolvePackingNotice(notice));
+    warnIfTruncated([
+      [members.length, STAFF_QUERY_LIMITS.staff, "รายชื่อพนักงาน"],
+      [duties.length, STAFF_QUERY_LIMITS.dutyTypes, "ประเภทงาน"],
+      [weekly.length, STAFF_QUERY_LIMITS.weeklyDuties, "เวรประจำสัปดาห์"],
+    ]);
     try {
       onPackerOptionsChange?.(buildPackerOptions(members), members.length);
     } catch (error) {
@@ -205,6 +227,10 @@ export default function StaffDirectory({
     ]);
     setAssignments(items);
     setDutyOverrides(overrides);
+    warnIfTruncated([
+      [items.length, STAFF_QUERY_LIMITS.assignments, "งานเพิ่มเฉพาะวัน"],
+      [overrides.length, STAFF_QUERY_LIMITS.overrides, "การเปลี่ยนเฉพาะวัน"],
+    ]);
     setDailyStatuses(
       new Map(statuses.map((item) => [item.staffId, item.status]))
     );
@@ -240,14 +266,26 @@ export default function StaffDirectory({
   // งานประจำวันยึดตามตารางเวรประจำเสมอ การเปลี่ยนเฉพาะวันแค่สลับคน ไม่ได้แก้ตาราง
   const dayEntries = useMemo(
     () =>
-      resolveDayDuties({
-        dateKey: date,
-        weeklyDuties,
-        overrides: dutyOverrides,
-        dailyAssignments: assignments,
-        dutyById,
-      }),
-    [date, weeklyDuties, dutyOverrides, assignments, dutyById]
+      annotateDayDuties(
+        resolveDayDuties({
+          dateKey: date,
+          weeklyDuties,
+          overrides: dutyOverrides,
+          dailyAssignments: assignments,
+          dutyById,
+        }),
+        { staffById, statuses: dailyStatuses, dutyById }
+      ),
+    [date, weeklyDuties, dutyOverrides, assignments, dutyById, staffById, dailyStatuses]
+  );
+  const uncoveredCount = useMemo(() => countUncoveredDuties(dayEntries), [dayEntries]);
+  const coverageRows = useMemo(
+    () => buildCoverageRows(dayEntries, staffById, STATUS_LABELS),
+    [dayEntries, staffById]
+  );
+  const staleWeeklyCount = useMemo(
+    () => countStaleWeeklyDuties(weeklyDuties, staffById),
+    [weeklyDuties, staffById]
   );
   const dutyLabelsByStaff = useMemo(
     () => buildDutyLabelsFromEntries(dayEntries, nicknameById),
@@ -570,9 +608,14 @@ export default function StaffDirectory({
     )
       return;
     try {
-      await deleteWeeklyDuty(item.id);
+      const clearedOverrides = await deleteWeeklyDuty(item.id);
       await reloadBase();
-      setMessage("ลบเวรประจำสัปดาห์แล้ว");
+      await reloadDaily();
+      setMessage(
+        clearedOverrides
+          ? `ลบเวรประจำสัปดาห์แล้ว พร้อมการเปลี่ยนเฉพาะวันที่ผูกอยู่ ${clearedOverrides} รายการ`
+          : "ลบเวรประจำสัปดาห์แล้ว"
+      );
     } catch {
       setMessage("ลบเวรประจำสัปดาห์ไม่สำเร็จ กรุณาลองใหม่");
     }
@@ -757,6 +800,8 @@ export default function StaffDirectory({
                   positionLabels: POSITION_LABELS,
                   statusLabels: STATUS_LABELS,
                   notice: packingNotice,
+                  changeRows: dayChangeRows,
+                  coverageRows,
                 });
                 try {
                   await navigator.clipboard.writeText(report);
@@ -929,6 +974,32 @@ export default function StaffDirectory({
             </button>
           </div>
 
+          {scheduleView === "day" && uncoveredCount > 0 && (
+            <div className="duty-alert" role="status">
+              <AlertTriangle size={17} />
+              <div>
+                <strong>
+                  มี {uncoveredCount} เวรที่ยังไม่มีคนทำจริงในวันนี้
+                </strong>
+                <p>
+                  ผู้รับผิดชอบตามตารางไม่อยู่ปฏิบัติงานหรือไม่ได้อยู่ในทีมแล้ว
+                  {isAdmin ? " กด “เปลี่ยนคนเฉพาะวันนี้” เพื่อหาคนแทน" : ""}
+                </p>
+              </div>
+            </div>
+          )}
+          {scheduleView === "weekly" && staleWeeklyCount > 0 && (
+            <div className="duty-alert" role="status">
+              <AlertTriangle size={17} />
+              <div>
+                <strong>
+                  มี {staleWeeklyCount} เวรประจำที่ผูกกับพนักงานที่ไม่ได้อยู่ในทีมแล้ว
+                </strong>
+                <p>เวรเหล่านี้จะไม่มีคนทำทุกสัปดาห์จนกว่าจะเปลี่ยนผู้รับผิดชอบ</p>
+              </div>
+            </div>
+          )}
+
           {scheduleView === "day" ? (
             <div className="assignment-list">
               {dayEntries.map((entry) => {
@@ -980,6 +1051,14 @@ export default function StaffDirectory({
                             ตามตาราง {basePerson?.nickname ?? "ไม่พบพนักงาน"}
                           </span>
                         )}
+                        {entry.issues.map((issue) => (
+                          <span className="duty-badge issue" key={issue}>
+                            <AlertTriangle size={12} />{" "}
+                            {dutyIssueLabel(issue, {
+                              statusLabel: STATUS_LABELS[entry.statusCode] ?? "ไม่อยู่",
+                            })}
+                          </span>
+                        ))}
                       </div>
                       {entry.overrideNote && <small>เหตุผล: {entry.overrideNote}</small>}
                       {assignment && updatedLabel(assignment.updatedAt) && (
@@ -1147,8 +1226,23 @@ export default function StaffDirectory({
                               }
                             >
                               {cell.items.map((item) => (
-                                <span className="weekly-chip" key={item.id}>
-                                  <span title={item.note}>{item.name}</span>
+                                <span
+                                  className={`weekly-chip ${
+                                    item.missing || item.inactive ? "is-stale" : ""
+                                  }`}
+                                  key={item.id}
+                                  title={
+                                    item.missing
+                                      ? "ไม่พบพนักงานคนนี้แล้ว"
+                                      : item.inactive
+                                      ? "พนักงานถูกปิดใช้งานแล้ว"
+                                      : item.note
+                                  }
+                                >
+                                  {(item.missing || item.inactive) && (
+                                    <AlertTriangle size={12} />
+                                  )}
+                                  <span>{item.name}</span>
                                   {isAdmin && (
                                     <>
                                       <button
@@ -1264,6 +1358,19 @@ export default function StaffDirectory({
                 ))}
               </tbody>
             </table>
+            {coverageRows.length > 0 && (
+              <section className="print-changes print-uncovered">
+                <h2>เวรที่ยังไม่มีคนทำ ({coverageRows.length} รายการ)</h2>
+                <ul>
+                  {coverageRows.map((row) => (
+                    <li key={row.key}>
+                      <strong>{row.dutyName}</strong>
+                      {row.person ? ` (${row.person})` : ""} — {row.detail}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
             <section className="print-changes">
               <h2>การเปลี่ยนแปลงเฉพาะวันที่ {thaiDate(date)}</h2>
               {dayChangeRows.length ? (
@@ -1655,11 +1762,16 @@ export default function StaffDirectory({
                 <option value="">งดเวรนี้เฉพาะวันนี้</option>
                 {staff
                   .filter((person) => person.active !== false)
-                  .map((person) => (
-                    <option key={person.id} value={person.id}>
-                      {person.nickname} — {person.fullName}
-                    </option>
-                  ))}
+                  .map((person) => {
+                    // บอกสถานะไว้ในตัวเลือก ไม่ปิดกั้น เพราะบางครั้งคนที่ลาครึ่งวันยังรับงานได้
+                    const status = resolveDailyStatus(person.id, dailyStatuses);
+                    return (
+                      <option key={person.id} value={person.id}>
+                        {person.nickname} — {person.fullName}
+                        {status === "working" ? "" : ` (${STATUS_LABELS[status]}วันนี้)`}
+                      </option>
+                    );
+                  })}
               </select>
             </label>
             <label>
