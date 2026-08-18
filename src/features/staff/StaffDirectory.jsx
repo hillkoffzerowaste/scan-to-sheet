@@ -1389,8 +1389,13 @@ export default function StaffDirectory({
                 <tr>
                   <th scope="col">ประเภทงาน</th>
                   {WEEKDAYS.map((weekday) => (
-                    <th key={weekday.value} scope="col">
+                    <th
+                      key={weekday.value}
+                      scope="col"
+                      className={weekday.value === selectedWeekday ? "is-today" : ""}
+                    >
                       {weekday.label}
+                      {weekday.value === selectedWeekday && <small>วันที่พิมพ์</small>}
                     </th>
                   ))}
                 </tr>
@@ -1400,7 +1405,10 @@ export default function StaffDirectory({
                   <tr key={row.dutyTypeId}>
                     <th scope="row">{row.dutyName}</th>
                     {row.cells.map((cell) => (
-                      <td key={cell.weekday}>
+                      <td
+                        key={cell.weekday}
+                        className={cell.weekday === selectedWeekday ? "is-today" : ""}
+                      >
                         {cell.items.map((item) => item.name).join(", ")}
                       </td>
                     ))}
