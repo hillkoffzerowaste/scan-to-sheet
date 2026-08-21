@@ -872,26 +872,31 @@ select:hover {
      การกด Ctrl+P ที่แท็บอื่นของแอปจะได้กระดาษเปล่า */
   body:has(.duty-print-sheet) { visibility: hidden; }
   .duty-print-sheet, .duty-print-sheet * { visibility: visible; }
-  /* min-height ไม่ใช่ height: กินเต็มหน้าเมื่อเนื้อหาสั้น แต่ยังไหลลงหน้าถัดไปได้เมื่อเวรเยอะ
-     ส่วนแถว 1fr คือตาราง จึงเป็นตัวยืดรับพื้นที่ว่างที่เหลือทั้งหมด */
-  .duty-print-sheet { display: grid; grid-template-rows: auto 1fr auto; gap: 4mm; position: absolute; inset-block-start: 0; inset-inline-start: 0; width: 100%; min-height: 100%; padding: 0; color: var(--print-ink); font-size: 14pt; line-height: 1.35; }
+  /* ความสูงเป็น mm ไม่ใช่ % : พื้นที่พิมพ์จริงของ A4 แนวนอนคือ 190mm (210 ลบ margin 10mm สองด้าน)
+     แต่ถ้าผู้ใช้เปิด "Headers and footers" ของเบราว์เซอร์ เบราว์เซอร์จะกินความสูงเพิ่มอีกราว 10mm
+     เคยตั้งเป็น min-height: 100% แล้วออกมา 3 หน้า เพราะ % ไม่ได้เท่ากับหนึ่งหน้าอย่างที่คิด
+     176mm คือค่าที่เหลือที่พิมพ์จบแผ่นเดียวทั้งกรณีเปิดและปิด header/footer ของเบราว์เซอร์ */
+  .duty-print-sheet { display: grid; grid-template-rows: auto 1fr auto; gap: 3mm; position: absolute; inset-block-start: 0; inset-inline-start: 0; width: 100%; height: 176mm; padding: 0; color: var(--print-ink); font-size: 14pt; line-height: 1.3; break-inside: avoid; }
   /* เบราว์เซอร์ตัดพื้นหลังทิ้งตอนพิมพ์เป็นค่าเริ่มต้น สีที่ใช้แยกส่วนจึงต้องบังคับให้พิมพ์จริง */
   .duty-print-sheet, .duty-print-sheet * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .duty-print-sheet header { display: flex; align-items: stretch; justify-content: space-between; gap: 6mm; padding: 3mm 4mm; border-radius: 2mm; background: var(--print-accent); color: var(--print-paper); }
+  /* หัวเอกสารแบบฟอร์มมาตรฐาน: ชื่อหน่วยงาน ชื่อเอกสาร คำขยาย จัดกลางทั้งบล็อก */
+  .duty-print-sheet header { padding: 2.5mm 4mm; border-radius: 1.5mm; background: var(--print-accent); text-align: center; }
   /* ต้องระบุสีตรงๆ ไม่พึ่ง inheritance เพราะกฎ h1 ของแอปกำหนดสีตัวหนังสือไว้แล้วและชนะการสืบทอด
      ปล่อยไว้จะได้ตัวเข้มบนพื้น teal วัดได้ 2.394 */
-  .duty-print-sheet h1 { margin: 0; color: var(--print-paper); font-size: 22pt; letter-spacing: .01em; }
-  .duty-print-sheet header p { margin: 1mm 0 0; color: var(--print-accent-soft); font-size: 12pt; }
-  .duty-print-sheet dl { display: grid; align-content: center; gap: 1mm; margin: 0; padding-inline-start: 5mm; border-inline-start: 0.7pt solid var(--print-accent-line); text-align: end; }
-  .duty-print-sheet dl > div { display: flex; justify-content: flex-end; gap: 2mm; }
-  .duty-print-sheet dt { color: var(--print-accent-soft); font-size: 12pt; }
-  .duty-print-sheet dt::after { content: ":"; }
-  .duty-print-sheet dd { margin: 0; color: var(--print-paper); font-size: 13pt; font-weight: 700; }
+  .duty-print-sheet h1 { margin: 0.5mm 0; color: var(--print-paper); font-size: 20pt; letter-spacing: .01em; }
+  .duty-print-sheet .print-org { margin: 0; color: var(--print-accent-soft); font-size: 10.5pt; letter-spacing: .08em; }
+  .duty-print-sheet .print-sub { margin: 0; color: var(--print-accent-soft); font-size: 10.5pt; }
   .duty-print-sheet .weekly-grid { min-width: 0; height: 100%; table-layout: fixed; }
-  .duty-print-sheet .weekly-grid th, .duty-print-sheet .weekly-grid td { padding: 2.5mm 2.5mm; border: 0.7pt solid var(--print-accent-line); background: var(--print-paper); color: var(--print-ink); font-size: 15pt; vertical-align: top; overflow-wrap: anywhere; }
-  .duty-print-sheet .weekly-grid thead th { font-weight: 700; text-align: center; }
-  .duty-print-sheet .weekly-grid thead th:first-child { background: var(--print-accent); color: var(--print-paper); text-align: start; }
-  .duty-print-sheet .weekly-grid tbody th { width: 21%; background: var(--print-accent-soft); color: var(--print-accent); font-weight: 700; }
+  /* จัดกลางแนวตั้งและแนวนอน แถวจึงดูเท่ากันแบบฟอร์ม แม้ตารางจะยืดเต็มความสูงกระดาษ
+     คอลัมน์ชื่องานกว้าง 26% เพราะที่ 21% ชื่ออย่าง "กาแฟบดและลูกค้าหน้าร้าน/แกรป" ตัดเป็น 4 บรรทัด
+     แล้วดันแถวนั้นสูงกว่าแถวอื่นเท่าตัว */
+  .duty-print-sheet .weekly-grid th, .duty-print-sheet .weekly-grid td { padding: 2mm; border: 0.7pt solid var(--print-accent-line); background: var(--print-paper); color: var(--print-ink); font-size: 15pt; text-align: center; vertical-align: middle; overflow-wrap: anywhere; }
+  .duty-print-sheet .weekly-grid thead th { font-weight: 700; }
+  /* ความกว้างต้องประกาศที่แถวแรก: table-layout: fixed อ่านความกว้างจาก thead เท่านั้น
+     ตอนตั้งไว้ที่ tbody คอลัมน์นี้ได้แค่ 131px เท่าคอลัมน์วัน ชื่องานยาวจึงตัด 3 บรรทัด
+     และดันแถวนั้นสูง 106px ขณะที่แถวอื่น 48px ที่ 30% ทุกแถวสูงเท่ากันที่ 69px */
+  .duty-print-sheet .weekly-grid thead th:first-child { width: 30%; background: var(--print-accent); color: var(--print-paper); }
+  .duty-print-sheet .weekly-grid tbody th { background: var(--print-accent-soft); color: var(--print-accent); font-weight: 700; text-align: start; }
   /* ชื่อคนละบรรทัด อ่านจากระยะไกลได้เร็วกว่าบรรทัดเดียวคั่นจุลภาค */
   .duty-print-sheet .weekly-grid td span { display: block; }
   /* ระบายสีทั้งคอลัมน์ตามวัน เลือกด้วย data-weekday ไม่ใช่ nth-child เพื่อไม่ให้พังถ้าลำดับวันเปลี่ยน
@@ -924,7 +929,11 @@ select:hover {
   .duty-print-sheet .weekly-grid:has(tbody tr:nth-child(17)) td { padding: 0.8mm; font-size: 8pt; }
   .duty-print-sheet .weekly-grid:has(tbody tr:nth-child(20)) th,
   .duty-print-sheet .weekly-grid:has(tbody tr:nth-child(20)) td { padding: 0.6mm; font-size: 7pt; }
-  .duty-print-sheet footer { display: flex; justify-content: space-between; gap: 10mm; padding-top: 2mm; border-top: 0.7pt solid var(--print-accent-line); color: var(--print-muted); font-size: 12pt; }
+  /* ช่องลงชื่อสามช่องแบบฟอร์มราชการ/โรงงาน: เส้นประอยู่บน ป้ายตำแหน่งอยู่ใต้เส้น */
+  .duty-print-sheet footer { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12mm; padding-top: 1mm; color: var(--print-ink); font-size: 11pt; }
+  .duty-print-sheet footer > div { display: grid; gap: 1mm; justify-items: center; }
+  .duty-print-sheet .print-sig-line { width: 100%; border-bottom: 0.7pt dotted var(--print-ink); }
+  .duty-print-sheet footer span:last-child { color: var(--print-muted); }
 }
 
 .skip-link {

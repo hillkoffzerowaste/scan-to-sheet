@@ -1363,21 +1363,11 @@ export default function StaffDirectory({
               ข้อมูลเฉพาะวันดูบนจอ หรือใช้ปุ่มคัดลอกสรุปรายงานแทน */}
           <div className="duty-print-sheet" aria-hidden="true">
             <header>
-              <div>
-                <h1>ตารางการทำงานประจำวัน ห้องแพ็คสินค้า</h1>
-                <p>ตารางถาวร ใช้ทุกวัน — เวรประจำของแต่ละวันในสัปดาห์</p>
-              </div>
-              <dl>
-                <div>
-                  <dt>หัวหน้า</dt>
-                  <dd>
-                    {staff.find(
-                      (person) =>
-                        person.position === "leader" && person.active !== false
-                    )?.fullName || "ยังไม่กำหนด"}
-                  </dd>
-                </div>
-              </dl>
+              <p className="print-org">HILLKOFF · ฝ่ายแพ็คสินค้า</p>
+              <h1>ตารางการทำงานประจำวัน ห้องแพ็คสินค้า</h1>
+              <p className="print-sub">
+                ตารางถาวร ใช้ทุกวัน — เวรประจำของแต่ละวันในสัปดาห์
+              </p>
             </header>
             <table className="weekly-grid">
               <thead>
@@ -1406,8 +1396,27 @@ export default function StaffDirectory({
               </tbody>
             </table>
             <footer>
-              <span>ลงชื่อหัวหน้า ..............................</span>
-              <span>ลงชื่อผู้ตรวจ ..............................</span>
+              <div>
+                <span className="print-sig-line" />
+                <span>ผู้จัดทำ</span>
+              </div>
+              <div>
+                <span className="print-sig-line" />
+                <span>
+                  หัวหน้าห้องแพ็ค
+                  {(() => {
+                    const leader = staff.find(
+                      (person) =>
+                        person.position === "leader" && person.active !== false
+                    );
+                    return leader ? ` (${leader.fullName})` : "";
+                  })()}
+                </span>
+              </div>
+              <div>
+                <span className="print-sig-line" />
+                <span>ผู้อนุมัติ</span>
+              </div>
             </footer>
           </div>
         </>
