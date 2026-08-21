@@ -1357,18 +1357,17 @@ export default function StaffDirectory({
             </>
           )}
 
-          {/* แผ่นพิมพ์ A4 แนวนอน — อยู่ใน DOM เสมอ แต่แสดงเฉพาะตอนสั่งพิมพ์ */}
+          {/* แผ่นพิมพ์ A4 แนวนอน — ตารางถาวรสำหรับติดผนัง ใช้ทุกวัน
+              ห้ามใส่ข้อมูลที่ผูกกับวันที่สั่งพิมพ์ (วันที่ ผู้ช่วยหัวหน้าวันนั้น การเปลี่ยนเฉพาะวัน
+              เวรที่ขาดคนวันนั้น) ไม่งั้นแผ่นที่ติดไว้จะกลายเป็นข้อมูลผิดตั้งแต่วันรุ่งขึ้น
+              ข้อมูลเฉพาะวันดูบนจอ หรือใช้ปุ่มคัดลอกสรุปรายงานแทน */}
           <div className="duty-print-sheet" aria-hidden="true">
             <header>
               <div>
-                <h1>ตารางการทำงานห้องแพ็คสินค้า</h1>
-                <p>เวรประจำสัปดาห์ — ยึดตามตารางนี้ทุกสัปดาห์</p>
+                <h1>ตารางการทำงานประจำวัน ห้องแพ็คสินค้า</h1>
+                <p>ตารางถาวร ใช้ทุกวัน — เวรประจำของแต่ละวันในสัปดาห์</p>
               </div>
               <dl>
-                <div>
-                  <dt>วันที่ใช้งาน</dt>
-                  <dd>{thaiDate(date)}</dd>
-                </div>
                 <div>
                   <dt>หัวหน้า</dt>
                   <dd>
@@ -1378,10 +1377,6 @@ export default function StaffDirectory({
                     )?.fullName || "ยังไม่กำหนด"}
                   </dd>
                 </div>
-                <div>
-                  <dt>ผู้ช่วยหัวหน้าวันนี้</dt>
-                  <dd>{staffById.get(dailyLeadId)?.fullName || "ยังไม่กำหนด"}</dd>
-                </div>
               </dl>
             </header>
             <table className="weekly-grid">
@@ -1389,13 +1384,8 @@ export default function StaffDirectory({
                 <tr>
                   <th scope="col">ประเภทงาน</th>
                   {WEEKDAYS.map((weekday) => (
-                    <th
-                      key={weekday.value}
-                      scope="col"
-                      className={weekday.value === selectedWeekday ? "is-today" : ""}
-                    >
+                    <th key={weekday.value} scope="col">
                       {weekday.label}
-                      {weekday.value === selectedWeekday && <small>วันที่พิมพ์</small>}
                     </th>
                   ))}
                 </tr>
@@ -1405,44 +1395,16 @@ export default function StaffDirectory({
                   <tr key={row.dutyTypeId}>
                     <th scope="row">{row.dutyName}</th>
                     {row.cells.map((cell) => (
-                      <td
-                        key={cell.weekday}
-                        className={cell.weekday === selectedWeekday ? "is-today" : ""}
-                      >
-                        {cell.items.map((item) => item.name).join(", ")}
+                      <td key={cell.weekday}>
+                        {cell.items.map((item) => (
+                          <span key={item.id}>{item.name}</span>
+                        ))}
                       </td>
                     ))}
                   </tr>
                 ))}
               </tbody>
             </table>
-            {coverageRows.length > 0 && (
-              <section className="print-changes print-uncovered">
-                <h2>เวรที่ยังไม่มีคนทำ ({coverageRows.length} รายการ)</h2>
-                <ul>
-                  {coverageRows.map((row) => (
-                    <li key={row.key}>
-                      <strong>{row.dutyName}</strong>
-                      {row.person ? ` (${row.person})` : ""} — {row.detail}
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            )}
-            <section className="print-changes">
-              <h2>การเปลี่ยนแปลงเฉพาะวันที่ {thaiDate(date)}</h2>
-              {dayChangeRows.length ? (
-                <ul>
-                  {dayChangeRows.map((row) => (
-                    <li key={row.key}>
-                      <strong>{row.dutyName}</strong> — {row.kind}: {row.detail}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p>ไม่มีการเปลี่ยนแปลง ทุกหน้าที่เป็นไปตามตารางเวรประจำ</p>
-              )}
-            </section>
             <footer>
               <span>ลงชื่อหัวหน้า ..............................</span>
               <span>ลงชื่อผู้ตรวจ ..............................</span>

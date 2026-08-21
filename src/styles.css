@@ -58,15 +58,11 @@
   --print-ink: #101820;
   --print-muted: #4a5568;
   --print-line: #8a949e;
-  /* Section hues for the printed roster. Each band gets one ink and one tint so a section is
-     identifiable at arm's length on the wall, and every ink clears 4.5 on its own tint. */
+  /* Section hues for the printed roster: one ink and one tint, so the sheet is readable at
+     arm's length on the wall and the ink clears 4.5 on its own tint. */
   --print-accent: #04635f;
   --print-accent-soft: #e3f0ef;
   --print-accent-line: #79aeab;
-  --print-alert: #9e2820;
-  --print-alert-soft: #fbeae9;
-  --print-change: #8a4904;
-  --print-change-soft: #fdf0e2;
   --print-zebra: #f4f7f7;
 }
 
@@ -870,41 +866,30 @@ select:hover {
   .duty-print-sheet, .duty-print-sheet * { visibility: visible; }
   /* min-height ไม่ใช่ height: กินเต็มหน้าเมื่อเนื้อหาสั้น แต่ยังไหลลงหน้าถัดไปได้เมื่อเวรเยอะ
      ส่วนแถว 1fr คือตาราง จึงเป็นตัวยืดรับพื้นที่ว่างที่เหลือทั้งหมด */
-  .duty-print-sheet { display: grid; grid-template-rows: auto 1fr; gap: 4mm; position: absolute; inset-block-start: 0; inset-inline-start: 0; width: 100%; min-height: 100%; padding: 0; color: var(--print-ink); font-size: 10.5pt; line-height: 1.4; }
+  .duty-print-sheet { display: grid; grid-template-rows: auto 1fr auto; gap: 4mm; position: absolute; inset-block-start: 0; inset-inline-start: 0; width: 100%; min-height: 100%; padding: 0; color: var(--print-ink); font-size: 14pt; line-height: 1.35; }
   /* เบราว์เซอร์ตัดพื้นหลังทิ้งตอนพิมพ์เป็นค่าเริ่มต้น สีที่ใช้แยกส่วนจึงต้องบังคับให้พิมพ์จริง */
   .duty-print-sheet, .duty-print-sheet * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .duty-print-sheet header { display: flex; align-items: stretch; justify-content: space-between; gap: 6mm; padding: 3mm 4mm; border-radius: 2mm; background: var(--print-accent); color: var(--print-paper); }
   /* ต้องระบุสีตรงๆ ไม่พึ่ง inheritance เพราะกฎ h1 ของแอปกำหนดสีตัวหนังสือไว้แล้วและชนะการสืบทอด
      ปล่อยไว้จะได้ตัวเข้มบนพื้น teal วัดได้ 2.394 */
-  .duty-print-sheet h1 { margin: 0; color: var(--print-paper); font-size: 17pt; letter-spacing: .01em; }
-  .duty-print-sheet header p { margin: 1mm 0 0; color: var(--print-accent-soft); font-size: 9.5pt; }
+  .duty-print-sheet h1 { margin: 0; color: var(--print-paper); font-size: 22pt; letter-spacing: .01em; }
+  .duty-print-sheet header p { margin: 1mm 0 0; color: var(--print-accent-soft); font-size: 12pt; }
   .duty-print-sheet dl { display: grid; align-content: center; gap: 1mm; margin: 0; padding-inline-start: 5mm; border-inline-start: 0.7pt solid var(--print-accent-line); text-align: end; }
   .duty-print-sheet dl > div { display: flex; justify-content: flex-end; gap: 2mm; }
-  .duty-print-sheet dt { color: var(--print-accent-soft); font-size: 9pt; }
+  .duty-print-sheet dt { color: var(--print-accent-soft); font-size: 12pt; }
   .duty-print-sheet dt::after { content: ":"; }
-  .duty-print-sheet dd { margin: 0; color: var(--print-paper); font-size: 9.5pt; font-weight: 700; }
+  .duty-print-sheet dd { margin: 0; color: var(--print-paper); font-size: 13pt; font-weight: 700; }
   .duty-print-sheet .weekly-grid { min-width: 0; height: 100%; table-layout: fixed; }
-  .duty-print-sheet .weekly-grid th, .duty-print-sheet .weekly-grid td { padding: 2.5mm 2mm; border: 0.7pt solid var(--print-accent-line); background: var(--print-paper); color: var(--print-ink); font-size: 9.5pt; vertical-align: top; overflow-wrap: anywhere; }
+  .duty-print-sheet .weekly-grid th, .duty-print-sheet .weekly-grid td { padding: 2.5mm 2.5mm; border: 0.7pt solid var(--print-accent-line); background: var(--print-paper); color: var(--print-ink); font-size: 15pt; vertical-align: top; overflow-wrap: anywhere; }
   .duty-print-sheet .weekly-grid thead th { background: var(--print-accent); color: var(--print-paper); font-weight: 700; text-align: center; }
   .duty-print-sheet .weekly-grid thead th:first-child { text-align: start; }
-  .duty-print-sheet .weekly-grid tbody th { width: 20%; background: var(--print-accent-soft); color: var(--print-accent); font-weight: 700; }
+  .duty-print-sheet .weekly-grid tbody th { width: 21%; background: var(--print-accent-soft); color: var(--print-accent); font-weight: 700; }
+  /* ชื่อคนละบรรทัด อ่านจากระยะไกลได้เร็วกว่าบรรทัดเดียวคั่นจุลภาค */
+  .duty-print-sheet .weekly-grid td span { display: block; }
   /* แถบสลับสีช่วยไล่สายตาตามแถวยาวๆ ข้ามเจ็ดคอลัมน์โดยไม่หลุดบรรทัด */
   .duty-print-sheet .weekly-grid tbody tr:nth-child(even) td { background: var(--print-zebra); }
-  /* คอลัมน์ของวันที่สั่งพิมพ์ ต้องหาเจอทันทีบนกระดาษที่มีเจ็ดวันเท่ากันหมด */
-  .duty-print-sheet .weekly-grid thead th.is-today { background: var(--print-change); }
-  .duty-print-sheet .weekly-grid thead th.is-today small { display: block; font-size: 7pt; font-weight: 400; }
-  .duty-print-sheet .weekly-grid tbody td.is-today,
-  .duty-print-sheet .weekly-grid tbody tr:nth-child(even) td.is-today { border-inline: 0.7pt solid var(--print-change); background: var(--print-change-soft); font-weight: 700; }
   .duty-print-sheet .weekly-grid tr { break-inside: avoid; }
-  .duty-print-sheet section { padding: 3mm 4mm; border-radius: 2mm; break-inside: avoid; }
-  .duty-print-sheet section h2 { margin: 0 0 1.5mm; font-size: 11pt; }
-  .duty-print-sheet section ul { margin: 0; padding-inline-start: 5mm; }
-  .duty-print-sheet section li, .duty-print-sheet section p { margin: 0 0 1mm; font-size: 9.5pt; }
-  .duty-print-sheet .print-uncovered { border: 0.7pt solid var(--print-alert); border-inline-start: 1.5mm solid var(--print-alert); background: var(--print-alert-soft); }
-  .duty-print-sheet .print-uncovered h2 { color: var(--print-alert); }
-  .duty-print-sheet .print-changes { border: 0.7pt solid var(--print-change); border-inline-start: 1.5mm solid var(--print-change); background: var(--print-change-soft); }
-  .duty-print-sheet .print-changes h2 { color: var(--print-change); }
-  .duty-print-sheet footer { display: flex; justify-content: space-between; gap: 10mm; padding-top: 2mm; border-top: 0.7pt solid var(--print-accent-line); color: var(--print-muted); font-size: 9.5pt; }
+  .duty-print-sheet footer { display: flex; justify-content: space-between; gap: 10mm; padding-top: 2mm; border-top: 0.7pt solid var(--print-accent-line); color: var(--print-muted); font-size: 12pt; }
 }
 
 .skip-link {
