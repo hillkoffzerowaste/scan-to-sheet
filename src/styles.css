@@ -63,7 +63,15 @@
   --print-accent: #04635f;
   --print-accent-soft: #e3f0ef;
   --print-accent-line: #79aeab;
-  --print-zebra: #f4f7f7;
+  /* สีประจำวันแบบไทย (จันทร์เหลือง อังคารชมพู พุธเขียว พฤหัสส้ม ศุกร์ฟ้า เสาร์ม่วง อาทิตย์แดง)
+     พนักงานอ่านออกทันทีว่าคอลัมน์ไหนคือวันไหนโดยไม่ต้องไล่หัวตาราง */
+  --print-mon: #7a5c00; --print-mon-soft: #fdf6dd;
+  --print-tue: #9b2560; --print-tue-soft: #fdeaf1;
+  --print-wed: #1f6b2c; --print-wed-soft: #e8f6e9;
+  --print-thu: #8a4904; --print-thu-soft: #fdefe0;
+  --print-fri: #14567f; --print-fri-soft: #e6f2fb;
+  --print-sat: #5b3a9b; --print-sat-soft: #f1ebfa;
+  --print-sun: #a02a26; --print-sun-soft: #fdeaea;
 }
 
 /* Status and primary hues brighten here: the light-mode values are darkened for contrast
@@ -881,14 +889,41 @@ select:hover {
   .duty-print-sheet dd { margin: 0; color: var(--print-paper); font-size: 13pt; font-weight: 700; }
   .duty-print-sheet .weekly-grid { min-width: 0; height: 100%; table-layout: fixed; }
   .duty-print-sheet .weekly-grid th, .duty-print-sheet .weekly-grid td { padding: 2.5mm 2.5mm; border: 0.7pt solid var(--print-accent-line); background: var(--print-paper); color: var(--print-ink); font-size: 15pt; vertical-align: top; overflow-wrap: anywhere; }
-  .duty-print-sheet .weekly-grid thead th { background: var(--print-accent); color: var(--print-paper); font-weight: 700; text-align: center; }
-  .duty-print-sheet .weekly-grid thead th:first-child { text-align: start; }
+  .duty-print-sheet .weekly-grid thead th { font-weight: 700; text-align: center; }
+  .duty-print-sheet .weekly-grid thead th:first-child { background: var(--print-accent); color: var(--print-paper); text-align: start; }
   .duty-print-sheet .weekly-grid tbody th { width: 21%; background: var(--print-accent-soft); color: var(--print-accent); font-weight: 700; }
   /* ชื่อคนละบรรทัด อ่านจากระยะไกลได้เร็วกว่าบรรทัดเดียวคั่นจุลภาค */
   .duty-print-sheet .weekly-grid td span { display: block; }
-  /* แถบสลับสีช่วยไล่สายตาตามแถวยาวๆ ข้ามเจ็ดคอลัมน์โดยไม่หลุดบรรทัด */
-  .duty-print-sheet .weekly-grid tbody tr:nth-child(even) td { background: var(--print-zebra); }
+  /* ระบายสีทั้งคอลัมน์ตามวัน เลือกด้วย data-weekday ไม่ใช่ nth-child เพื่อไม่ให้พังถ้าลำดับวันเปลี่ยน
+     หัวคอลัมน์ใช้หมึกสีเข้มบนพื้นอ่อนของวันเดียวกัน แทนพื้นทึบ เพราะกินหมึกน้อยกว่าและอ่านชัดกว่า */
+  .duty-print-sheet .weekly-grid [data-weekday="1"] { background: var(--print-mon-soft); }
+  .duty-print-sheet .weekly-grid [data-weekday="2"] { background: var(--print-tue-soft); }
+  .duty-print-sheet .weekly-grid [data-weekday="3"] { background: var(--print-wed-soft); }
+  .duty-print-sheet .weekly-grid [data-weekday="4"] { background: var(--print-thu-soft); }
+  .duty-print-sheet .weekly-grid [data-weekday="5"] { background: var(--print-fri-soft); }
+  .duty-print-sheet .weekly-grid [data-weekday="6"] { background: var(--print-sat-soft); }
+  .duty-print-sheet .weekly-grid [data-weekday="0"] { background: var(--print-sun-soft); }
+  .duty-print-sheet .weekly-grid thead th[data-weekday="1"] { border-bottom: 1mm solid var(--print-mon); color: var(--print-mon); }
+  .duty-print-sheet .weekly-grid thead th[data-weekday="2"] { border-bottom: 1mm solid var(--print-tue); color: var(--print-tue); }
+  .duty-print-sheet .weekly-grid thead th[data-weekday="3"] { border-bottom: 1mm solid var(--print-wed); color: var(--print-wed); }
+  .duty-print-sheet .weekly-grid thead th[data-weekday="4"] { border-bottom: 1mm solid var(--print-thu); color: var(--print-thu); }
+  .duty-print-sheet .weekly-grid thead th[data-weekday="5"] { border-bottom: 1mm solid var(--print-fri); color: var(--print-fri); }
+  .duty-print-sheet .weekly-grid thead th[data-weekday="6"] { border-bottom: 1mm solid var(--print-sat); color: var(--print-sat); }
+  .duty-print-sheet .weekly-grid thead th[data-weekday="0"] { border-bottom: 1mm solid var(--print-sun); color: var(--print-sun); }
   .duty-print-sheet .weekly-grid tr { break-inside: avoid; }
+  /* ย่อขนาดเองตามจำนวนประเภทงาน เพื่อการันตีว่าจบในกระดาษแผ่นเดียว
+     ความจุที่วัดจากกระดาษจำลอง 1047x718px: 15pt=7 แถว, 13pt=8, 11pt=13, 9.5pt=16, 8pt=19
+     แต่ละกฎจึงเริ่มทำงานที่แถวถัดจากความจุของขนาดก่อนหน้า และเรียงจากน้อยไปมากให้กฎล่างชนะ */
+  .duty-print-sheet .weekly-grid:has(tbody tr:nth-child(8)) th,
+  .duty-print-sheet .weekly-grid:has(tbody tr:nth-child(8)) td { padding: 2mm; font-size: 13pt; }
+  .duty-print-sheet .weekly-grid:has(tbody tr:nth-child(9)) th,
+  .duty-print-sheet .weekly-grid:has(tbody tr:nth-child(9)) td { padding: 1.5mm; font-size: 11pt; }
+  .duty-print-sheet .weekly-grid:has(tbody tr:nth-child(14)) th,
+  .duty-print-sheet .weekly-grid:has(tbody tr:nth-child(14)) td { padding: 1mm; font-size: 9.5pt; }
+  .duty-print-sheet .weekly-grid:has(tbody tr:nth-child(17)) th,
+  .duty-print-sheet .weekly-grid:has(tbody tr:nth-child(17)) td { padding: 0.8mm; font-size: 8pt; }
+  .duty-print-sheet .weekly-grid:has(tbody tr:nth-child(20)) th,
+  .duty-print-sheet .weekly-grid:has(tbody tr:nth-child(20)) td { padding: 0.6mm; font-size: 7pt; }
   .duty-print-sheet footer { display: flex; justify-content: space-between; gap: 10mm; padding-top: 2mm; border-top: 0.7pt solid var(--print-accent-line); color: var(--print-muted); font-size: 12pt; }
 }
 
