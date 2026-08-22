@@ -192,6 +192,8 @@ service cloud.firestore {
         ]
         && request.resource.data.sheetSyncStatus in [
           'pending',
+          'writing',
+          'verified',
           'synced',
           'failed'
         ];
@@ -205,6 +207,31 @@ service cloud.firestore {
         && request.resource.data.marketplaceSkus.size() <= 100
         && request.resource.data.marketplaceItems is list
         && request.resource.data.marketplaceItems.size() <= 100;
+    }
+
+    // Immutable operational history for scans and Sheet outbox transitions. It records
+    // the actor and timestamp at the same time as the order transaction, so diagnosis does
+    // not depend on a mutable "latest status" field.
+    match /orderAuditEvents/{eventId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn()
+        && request.resource.data.keys().hasOnly([
+          'orderId', 'type', 'code', 'courier', 'actor', 'detail', 'createdAt', 'createdAtIso'
+        ])
+        && request.resource.data.orderId is string
+        && request.resource.data.type in [
+          'admin_scanned', 'packer_scanned', 'sheet_sync_pending', 'sheet_sync_writing',
+          'sheet_sync_verified', 'sheet_sync_failed', 'status_repaired'
+        ]
+        && request.resource.data.code is string
+        && request.resource.data.courier is string
+        && request.resource.data.actor.uid == request.auth.uid
+        && request.resource.data.actor.email is string
+        && request.resource.data.actor.name is string
+        && request.resource.data.detail is map
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.createdAtIso is string;
+      allow update, delete: if false;
     }
 
     match /marketplaceOrders/{orderId} {

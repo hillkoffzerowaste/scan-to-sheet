@@ -13,7 +13,7 @@ import {
   where,
   writeBatch,
 } from 'firebase/firestore';
-import { firestoreDb, isFirebaseConfigured, serverTimestamp } from './firebase.js';
+import { firebaseAuth, firestoreDb, isFirebaseConfigured, serverTimestamp } from './firebase.js';
 import { marketplaceMetadata } from '../../scripts/marketplace-sync/normalize.js';
 import { isCompleteScanOrder, marketplaceMetadataChanged } from './marketplaceImport.js';
 import { nextCalendarDate } from './calendarDate.js';
@@ -22,6 +22,7 @@ import {
   prioritizeSheetSyncCandidates,
   shouldIncludeInManualSheetRecovery,
   shouldReconcileSheetOnRescan,
+  isSheetSyncVerified,
 } from './sheetSync.js';
 import { collectFirestorePages } from './firestorePagination.js';
 import { buildRecoveredOrderFields, chooseCanonicalOrder, mergeExistingOrderWithCandidate, mergeScanEventIntoOrder } from './orderRecovery.js';
@@ -84,6 +85,42 @@ function userPayload(user) {
     email: user?.email ?? '',
     name: user?.displayName ?? user?.name ?? '',
   };
+}
+
+const ORDER_AUDIT_EVENTS = new Set([
+  'admin_scanned',
+  'packer_scanned',
+  'sheet_sync_pending',
+  'sheet_sync_writing',
+  'sheet_sync_verified',
+  'sheet_sync_failed',
+  'status_repaired',
+]);
+
+function currentActor() {
+  return userPayload(firebaseAuth?.currentUser);
+}
+
+function orderAuditPayload({ orderId: id, order, type, detail = {}, actor = currentActor() }) {
+  if (!ORDER_AUDIT_EVENTS.has(type)) throw new Error(`Unsupported order audit event: ${type}`);
+  return {
+    orderId: id,
+    type,
+    code: String(order?.code ?? order?.normalizedCode ?? ''),
+    courier: String(order?.courier ?? ''),
+    actor,
+    detail,
+    createdAt: serverTimestamp(),
+    createdAtIso: nowIso(),
+  };
+}
+
+function addOrderAuditInTransaction(transaction, { orderId: id, order, type, detail = {}, actor = currentActor() }) {
+  // Firestore event documents are append-only. Keeping this in the same transaction as the
+  // order transition means an audit entry cannot be lost when a scan/update succeeds.
+  transaction.set(doc(collection(firestoreDb, 'orderAuditEvents')), orderAuditPayload({
+    orderId: id, order, type, detail, actor,
+  }));
 }
 
 function normalizeCode(value) {
@@ -936,6 +973,13 @@ export async function recordPackerScanPrimary({ code, courier, date, time, user,
     }
 
     transaction.set(ref, payload, { merge: true });
+    addOrderAuditInTransaction(transaction, {
+      orderId: ref.id,
+      order: payload,
+      type: 'packer_scanned',
+      detail: { note: correctedNote },
+      actor: userPayload(user),
+    });
 
     const adminScannedAt = effectiveExisting?.admin?.scannedAt ?? '';
     return {
@@ -1057,6 +1101,12 @@ export async function recordAdminScanPrimary({ code, courier, date, time, user }
     }
 
     transaction.set(ref, payload, { merge: true });
+    addOrderAuditInTransaction(transaction, {
+      orderId: ref.id,
+      order: payload,
+      type: 'admin_scanned',
+      actor: userPayload(user),
+    });
 
     return {
       status: effectiveExisting?.packerScan?.scannedAt ? 'matched' : 'created',
@@ -1071,7 +1121,36 @@ export async function recordAdminScanPrimary({ code, courier, date, time, user }
   return result;
 }
 
-export async function markSheetSyncResult({ orderId: id, attemptId = '', ok, result = null, error = null }) {
+export async function markSheetSyncWriting({ orderId: id, attemptId = '', recordAudit = true }) {
+  if (!canWriteFirestore() || !id) return false;
+
+  const ref = doc(firestoreDb, 'orders', id);
+  return runTransaction(firestoreDb, async (transaction) => {
+    const snap = await transaction.get(ref);
+    if (!snap.exists()) return false;
+    const current = snap.data();
+    if (attemptId && current.sheetSyncAttemptId !== attemptId) return false;
+    if (isSheetSyncVerified(current)) return false;
+    transaction.update(ref, {
+      sheetSyncStatus: 'writing',
+      sheetSyncError: '',
+      sheetSyncStartedAtIso: nowIso(),
+      updatedAt: serverTimestamp(),
+      updatedAtIso: nowIso(),
+    });
+    if (recordAudit) {
+      addOrderAuditInTransaction(transaction, {
+        orderId: id,
+        order: current,
+        type: 'sheet_sync_writing',
+        detail: { attemptId: current.sheetSyncAttemptId ?? '' },
+      });
+    }
+    return true;
+  });
+}
+
+export async function markSheetSyncResult({ orderId: id, attemptId = '', ok, result = null, error = null, recordAudit = true }) {
   if (!canWriteFirestore() || !id) {
     return false;
   }
@@ -1082,15 +1161,37 @@ export async function markSheetSyncResult({ orderId: id, attemptId = '', ok, res
     if (!snap.exists()) return false;
     const current = snap.data();
     if (attemptId && current.sheetSyncAttemptId !== attemptId) return false;
+    const nextStatus = ok ? 'verified' : 'failed';
     transaction.update(ref, {
-      sheetSyncStatus: ok ? 'synced' : 'failed',
+      sheetSyncStatus: nextStatus,
       sheetSyncError: ok ? '' : String(error?.message ?? error ?? 'Unknown sync error'),
       sheetSyncedAt: ok ? serverTimestamp() : null,
+      sheetVerifiedAt: ok ? serverTimestamp() : null,
+      sheetVerifiedAtIso: ok ? nowIso() : '',
       sheetResultStatus: result?.status ?? '',
       sheetUrl: result?.sheetUrl ?? '',
       updatedAt: serverTimestamp(),
       updatedAtIso: nowIso(),
     });
+    // A periodic readback may find an already-correct row. Record the first verification
+    // and every repair, but do not flood the audit trail for routine no-change checks.
+    const type = ok
+      ? result?.repaired
+        ? 'status_repaired'
+        : isSheetSyncVerified(current) && result?.status === 'duplicate'
+          ? null
+          : 'sheet_sync_verified'
+      : 'sheet_sync_failed';
+    if (type && recordAudit) {
+      addOrderAuditInTransaction(transaction, {
+        orderId: id,
+        order: current,
+        type,
+        detail: ok
+          ? { attemptId: current.sheetSyncAttemptId ?? '', sheetStatus: result?.status ?? '' }
+          : { attemptId: current.sheetSyncAttemptId ?? '', error: String(error?.message ?? error ?? 'Unknown sync error').slice(0, 500) },
+      });
+    }
     return true;
   });
 }
@@ -1100,6 +1201,7 @@ export async function claimRecoverableSheetSyncs({
   includeSynced = false,
   role = 'both',
   dates = [],
+  recordAudit = true,
 } = {}) {
   if (!canWriteFirestore()) return [];
   let candidates;
@@ -1116,18 +1218,26 @@ export async function claimRecoverableSheetSyncs({
     const eligible = [...byId.values()].filter((order) => shouldIncludeInManualSheetRecovery(order, role));
     const failed = eligible.filter((order) => order.sheetSyncStatus === 'failed');
     const pending = eligible.filter((order) => order.sheetSyncStatus === 'pending');
-    const synced = eligible.filter((order) => order.sheetSyncStatus === 'synced');
-    candidates = [...prioritizeSheetSyncCandidates({ failed, pending, maxRows }), ...synced]
+    // Rotate routine verification across the whole day: the least recently read-back row
+    // goes first, so the first 20 document ids are not the only rows checked forever.
+    const verified = eligible
+      .filter((order) => isSheetSyncVerified(order))
+      .sort((left, right) => {
+        const leftAt = new Date(left.sheetVerifiedAtIso ?? 0).getTime() || 0;
+        const rightAt = new Date(right.sheetVerifiedAtIso ?? 0).getTime() || 0;
+        return leftAt - rightAt;
+      });
+    candidates = [...prioritizeSheetSyncCandidates({ failed, pending, maxRows }), ...verified]
       .filter((order, index, list) => list.findIndex((item) => item.id === order.id) === index)
       .slice(0, Math.max(0, maxRows));
   } else {
-    const statuses = ['failed', 'pending'];
+    const statuses = ['failed', 'pending', 'writing'];
     const snapshots = await Promise.all(statuses.map((status) => getDocs(query(
       collection(firestoreDb, 'orders'), where('sheetSyncStatus', '==', status), limit(maxRows),
     ))));
     candidates = prioritizeSheetSyncCandidates({
       failed: snapshots[0]?.docs,
-      pending: snapshots[1]?.docs,
+      pending: [...(snapshots[1]?.docs ?? []), ...(snapshots[2]?.docs ?? [])],
       maxRows,
     });
   }
@@ -1141,7 +1251,7 @@ export async function claimRecoverableSheetSyncs({
       if (!snap.exists()) return null;
       const current = snap.data();
       const manualSyncedClaim = includeSynced
-        && current.sheetSyncStatus === 'synced'
+        && isSheetSyncVerified(current)
         && shouldIncludeInManualSheetRecovery({ id: ref.id, ...current }, role);
       if (manualSyncedClaim ? false : !isSheetSyncClaimable(current)) return null;
       transaction.update(ref, {
@@ -1149,6 +1259,14 @@ export async function claimRecoverableSheetSyncs({
         updatedAt: serverTimestamp(),
         updatedAtIso: nowIso(),
       });
+      if (recordAudit) {
+        addOrderAuditInTransaction(transaction, {
+          orderId: ref.id,
+          order: current,
+          type: 'sheet_sync_pending',
+          detail: { attemptId, recovery: true },
+        });
+      }
       return { id: ref.id, ...current, sheetSyncAttemptId: attemptId, sheetSyncStatus: 'pending' };
     });
     if (order) claimed.push(order);
@@ -1294,7 +1412,7 @@ export async function backfillOrdersFromSheetRows({ rows, user }) {
           packer: row.packer ?? '',
           note,
           status,
-          sheetSyncStatus: 'synced',
+          sheetSyncStatus: 'verified',
           sheetSyncError: '',
           sheetSyncedAt: serverTimestamp(),
           sheetUrl: row.sheetUrl ?? '',

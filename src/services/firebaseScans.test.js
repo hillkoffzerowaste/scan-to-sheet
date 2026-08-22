@@ -5,6 +5,7 @@ import { nextCalendarDate } from './calendarDate.js';
 import { getScanEventDate } from './scanRow.js';
 import {
   SHEET_SYNC_STALE_MS,
+  isSheetSyncVerified,
   isSheetSyncClaimable,
   prioritizeSheetSyncCandidates,
   shouldIncludeInManualSheetRecovery,
@@ -20,10 +21,19 @@ test('nextCalendarDate advances without depending on local timezone', () => {
 test('only failed or stale per-order Sheet syncs can be claimed again', () => {
   const now = Date.now();
   assert.equal(isSheetSyncClaimable({ sheetSyncStatus: 'synced' }, now), false);
+  assert.equal(isSheetSyncClaimable({ sheetSyncStatus: 'verified' }, now), false);
+  assert.equal(isSheetSyncClaimable({ sheetSyncStatus: 'writing', sheetSyncStartedAtIso: new Date(now - 1_000).toISOString() }, now), false);
+  assert.equal(isSheetSyncClaimable({ sheetSyncStatus: 'writing', sheetSyncStartedAtIso: new Date(now - SHEET_SYNC_STALE_MS).toISOString() }, now), true);
   assert.equal(isSheetSyncClaimable({ sheetSyncStatus: 'failed' }, now), true);
   assert.equal(isSheetSyncClaimable({ sheetSyncStatus: 'pending', sheetSyncStartedAtIso: new Date(now - 1_000).toISOString() }, now), false);
   assert.equal(isSheetSyncClaimable({ sheetSyncStatus: 'pending', sheetSyncStartedAtIso: new Date(now - SHEET_SYNC_STALE_MS).toISOString() }, now), true);
   assert.equal(isSheetSyncClaimable({ sheetSyncStatus: 'pending' }, now), true);
+});
+
+test('verified is the current terminal Sheet state while synced remains readable for old orders', () => {
+  assert.equal(isSheetSyncVerified({ sheetSyncStatus: 'verified' }), true);
+  assert.equal(isSheetSyncVerified({ sheetSyncStatus: 'synced' }), true);
+  assert.equal(isSheetSyncVerified({ sheetSyncStatus: 'writing' }), false);
 });
 
 test('scan row date follows the primary scan event across days', () => {

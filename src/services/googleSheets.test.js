@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   buildMarketplaceFormattingRequests,
+  buildStatusValidationRequest,
   appendScanGoogle,
   batchAppendScanGoogle,
   findCancellationRow,
@@ -70,6 +71,17 @@ test('buildMarketplaceFormattingRequests colors platform cells with readable bra
   assert.deepEqual(rules[1].booleanRule.format.backgroundColor, { red: 0.102, green: 0.451, blue: 0.910 });
   assert.match(rules[2].booleanRule.condition.values[0].userEnteredValue, /tiktok/);
   assert.deepEqual(rules[2].booleanRule.format.backgroundColor, { red: 0, green: 0, blue: 0 });
+});
+
+test('Status has strict validation so a scanner cannot enter a tracking number into the column', () => {
+  const request = buildStatusValidationRequest(123);
+  assert.equal(request.setDataValidation.range.sheetId, 123);
+  assert.equal(request.setDataValidation.range.startColumnIndex, 8);
+  assert.equal(request.setDataValidation.rule.strict, true);
+  assert.deepEqual(
+    request.setDataValidation.rule.condition.values.map((value) => value.userEnteredValue),
+    ['Success', 'Cancelled', 'Returned', 'Damaged', 'Issue', 'Duplicate', 'รอแพ็ค'],
+  );
 });
 
 test('getDailySheetPropertiesForMarketplaceBackfill includes today and conflict tabs', () => {

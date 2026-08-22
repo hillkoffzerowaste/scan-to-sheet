@@ -1,7 +1,21 @@
 export const SHEET_SYNC_STALE_MS = 2 * 60 * 1000;
 
+// `synced` is retained only for documents written before the outbox rollout.
+// New work always reaches `verified` after the corresponding Sheet row is read back.
+export const SHEET_SYNC_STATES = Object.freeze({
+  PENDING: 'pending',
+  WRITING: 'writing',
+  VERIFIED: 'verified',
+  FAILED: 'failed',
+  LEGACY_SYNCED: 'synced',
+});
+
+export function isSheetSyncVerified(order) {
+  return ['verified', 'synced'].includes(order?.sheetSyncStatus);
+}
+
 export function isSheetSyncClaimable(order, now = Date.now()) {
-  if (!order || order.sheetSyncStatus === 'synced') return false;
+  if (!order || isSheetSyncVerified(order)) return false;
   if (order.sheetSyncStatus === 'failed' || !order.sheetSyncStatus) return true;
   const startedAt = new Date(order.sheetSyncStartedAtIso ?? 0).getTime();
   return !Number.isFinite(startedAt) || now - startedAt >= SHEET_SYNC_STALE_MS;
@@ -10,7 +24,7 @@ export function isSheetSyncClaimable(order, now = Date.now()) {
 export function shouldReconcileSheetOnRescan(order, scanType) {
   return Boolean(
     order?.[scanType]?.scannedAt
-    && order.sheetSyncStatus !== 'synced',
+    && !isSheetSyncVerified(order),
   );
 }
 

@@ -92,6 +92,18 @@ test("the packing video audit trail is append-only and Admin-only to read", asyn
   assert.match(block[1], /request\.resource\.data\.at == request\.time/);
 });
 
+test("order audit events are append-only and cover every Sheet outbox transition", async () => {
+  const rules = await readRules();
+  const block = rules.match(/match \/orderAuditEvents\/\{eventId\} \{([\s\S]*?)\n    \}/);
+
+  assert.ok(block, "orderAuditEvents rules must exist");
+  assert.match(block[1], /allow update, delete: if false;/);
+  assert.match(block[1], /request\.resource\.data\.actor\.uid == request\.auth\.uid/);
+  assert.match(block[1], /'sheet_sync_writing'/);
+  assert.match(block[1], /'sheet_sync_verified'/);
+  assert.match(block[1], /'status_repaired'/);
+});
+
 test("stored packing video objects are immutable and packers cannot delete them", async () => {
   const rules = await readStorageRules();
   const block = rules.match(

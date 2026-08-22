@@ -90,6 +90,7 @@ import {
   getScanReportFirestore,
   getTodayRowsFirestore,
   getUploadedMarketplaceOrders,
+  markSheetSyncWriting,
   markSheetSyncResult,
   mirrorScanToFirestore,
   recordAdminScanPrimary,
@@ -118,7 +119,7 @@ import { barcodeCharacterFromKeyEvent } from './services/barcodeKeyboard.js';
 import { scanErrorMessage } from './services/authErrors.js';
 import { shouldPollMissingOrders } from './services/missingCheckPolicy.js';
 import { getSheetRecoveryDates } from './services/sheetRecoveryDates.js';
-import { buildSheetSyncFailureUpdates } from './services/sheetSync.js';
+import { buildSheetSyncFailureUpdates, isSheetSyncVerified } from './services/sheetSync.js';
 import {
   getAdminScanTiming,
   getPackerDuplicateMessage,
@@ -140,6 +141,7 @@ const MARKETPLACE_BACKFILL_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 const MARKETPLACE_IMPORT_MAX_ORDERS = 100;
 const SHEET_RECOVERY_BATCH_SIZE = 20;
 const SHEET_RECOVERY_COOLDOWN_MS = 5 * 1000;
+const SHEET_INTEGRITY_INTERVAL_MS = 10 * 60 * 1000;
 const COUNT_REFRESH_DELAY_MS = 1000;
 
 const EMPTY_USER = {
@@ -273,6 +275,7 @@ function App() {
   const [addingCourier, setAddingCourier] = useState(false);
   const [courierSelectValue, setCourierSelectValue] = useState('');
   const [scanValue, setScanValue] = useState('');
+  const [scannerWindowFocused, setScannerWindowFocused] = useState(true);
   const [selectedPacker, setSelectedPacker] = useState(PACKER_UNASSIGNED);
   const [packerOptions, setPackerOptions] = useState(DEFAULT_PACKERS);
   const [scanRemark, setScanRemark] = useState('');
@@ -398,7 +401,9 @@ function App() {
   const isPackerReady = !requiresPacker || selectedPacker !== PACKER_UNASSIGNED;
   const isDriveReady = isSignedIn && scanMethod === 'manual' ? true : isSignedIn;
   const queuedScanCount = scanQueueSnapshot.pending.length;
-  const scanQueueStatusText = scanQueueSnapshot.processing
+  const scanQueueStatusText = isSignedIn && scanMethod === 'manual' && !scannerWindowFocused
+    ? 'หยุดสแกนชั่วคราว: หน้าระบบไม่ได้ active — กลับมาที่ระบบก่อนยิงบาร์โค้ด'
+    : scanQueueSnapshot.processing
     ? `กำลังบันทึก ${scanQueueSnapshot.processing.code}${queuedScanCount ? ` • รอคิว ${queuedScanCount} รายการ` : ''}`
     : scanQueueSnapshot.lastResult?.status === 'error'
       ? `${scanQueueSnapshot.lastResult.job.code} บันทึกไม่สำเร็จ — ยิงเลขเดิมอีกครั้งได้`
@@ -663,6 +668,28 @@ function App() {
   }, [isSignedIn, selectedCourier, activeTab, scanMethod, scanPopupOpen, selectedPacker]);
 
   useEffect(() => {
+    if (!isSignedIn || scanMethod !== 'manual') {
+      setScannerWindowFocused(true);
+      return () => {};
+    }
+    const regainScannerFocus = () => {
+      if (document.visibilityState === 'hidden') return;
+      setScannerWindowFocused(true);
+      window.setTimeout(() => focusScanInput({ force: true }), 0);
+    };
+    const loseScannerFocus = () => setScannerWindowFocused(false);
+    window.addEventListener('focus', regainScannerFocus);
+    window.addEventListener('blur', loseScannerFocus);
+    document.addEventListener('visibilitychange', regainScannerFocus);
+    regainScannerFocus();
+    return () => {
+      window.removeEventListener('focus', regainScannerFocus);
+      window.removeEventListener('blur', loseScannerFocus);
+      document.removeEventListener('visibilitychange', regainScannerFocus);
+    };
+  }, [isSignedIn, scanMethod, activeTab, scanPopupOpen]);
+
+  useEffect(() => {
     if (!isSignedIn || scanMethod !== 'camera') {
       void stopCamera();
     }
@@ -735,6 +762,22 @@ function App() {
     const interval = setInterval(() => {
       void recoverPendingSheetSyncs();
     }, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [firebaseUser, token, config]);
+
+  // A synced marker only proves the last write completed. Re-read a bounded part of today's
+  // ledger every 10 minutes so direct Sheet edits (including a keyboard-wedge scanner) are
+  // detected and repaired from Firestore without waiting for someone to press Recovery.
+  useEffect(() => {
+    if (!firebaseUser || !token || !config?.master?.id) return;
+    const verifyToday = () => {
+      void recoverPendingSheetSyncs({
+        includeSynced: true,
+        dates: [getBangkokParts().date],
+        routineVerification: true,
+      });
+    };
+    const interval = setInterval(verifyToday, SHEET_INTEGRITY_INTERVAL_MS);
     return () => clearInterval(interval);
   }, [firebaseUser, token, config]);
 
@@ -1299,6 +1342,7 @@ function App() {
     includeSynced = false,
     role = 'both',
     dates = [],
+    routineVerification = false,
   } = {}) {
     if (sheetRecoveryRunningRef.current) {
       if (showStatus) {
@@ -1334,6 +1378,7 @@ function App() {
         includeSynced,
         role,
         dates,
+        recordAudit: !routineVerification,
       });
       claimedOrders = orders;
       claimedCount = orders.length;
@@ -1380,6 +1425,16 @@ function App() {
         if (marketplaceResults[i]) bo.marketplaceOrder = marketplaceResults[i];
       });
 
+      // Move claimed outbox entries to `writing` before the Google request. A stale writing
+      // entry remains claimable, so a browser close cannot strand an order permanently.
+      await Promise.all(orders.map((order) => (
+        markSheetSyncWriting({
+          orderId: order.id,
+          attemptId: order.sheetSyncAttemptId,
+          recordAudit: !routineVerification,
+        }).catch(() => false)
+      )));
+
       // Execute one batch call
       const results = await runWithGoogleRetry((accessToken, googleConfig) =>
         batchAppendScanGoogle({ token: accessToken, config: googleConfig, orders: batchOrders, repairExisting: true }),
@@ -1398,6 +1453,7 @@ function App() {
             attemptId: firestoreOrder.sheetSyncAttemptId,
             ok: true,
             result,
+            recordAudit: !routineVerification || Boolean(result.repaired),
           }).catch(() => {}));
         } else {
           failed += 1;
@@ -1408,6 +1464,7 @@ function App() {
             // Name the role from the order itself: `role` may be 'both' for a mixed batch,
             // and result.isPacker reflects what was actually attempted for this row.
             error: error || new Error(`ซิงก์เป็นชุดแล้วแต่ยืนยันแถว ${(result?.isPacker ?? batchOrder?.isPacker) ? 'Packer' : 'Admin'} ใน Google Sheet ไม่ได้`),
+            recordAudit: !routineVerification,
           }).catch(() => {}));
         }
       }
@@ -1434,7 +1491,13 @@ function App() {
     } catch (error) {
       const failureUpdates = buildSheetSyncFailureUpdates(claimedOrders, error);
       await Promise.all(failureUpdates.map(({ orderId, attemptId, error: syncError }) => (
-        markSheetSyncResult({ orderId, attemptId, ok: false, error: syncError }).catch(() => {})
+        markSheetSyncResult({
+          orderId,
+          attemptId,
+          ok: false,
+          error: syncError,
+          recordAudit: !routineVerification,
+        }).catch(() => {})
       )));
       failed = Math.max(failed, failureUpdates.length);
       if (showStatus) {
@@ -1636,6 +1699,10 @@ function App() {
         runAfterScanCommit(async () => {
           let backgroundResult = result;
           try {
+            await markSheetSyncWriting({
+              orderId: firestorePrimary.id,
+              attemptId: firestorePrimary.sheetSyncAttemptId,
+            }).catch(() => false);
             const marketplaceOrder = await marketplaceOrderPromise;
             // If admin scanned first, include admin K-M data so Sheet row gets admin columns
             const adminData = firestorePrimary?.admin?.scannedAt
@@ -1663,7 +1730,7 @@ function App() {
               throw new Error('Google Sheet แจ้งว่าซ้ำ แต่ยืนยันแถว Packer ไม่ได้');
             }
             await markSheetSyncResult({ orderId: firestorePrimary.id, attemptId: firestorePrimary.sheetSyncAttemptId, ok: true, result: sheetResult }).catch(() => {});
-            backgroundResult = { ...result, ...sheetResult, sheetSyncStatus: 'synced' };
+            backgroundResult = { ...result, ...sheetResult, sheetSyncStatus: 'verified' };
           } catch (sheetError) {
             await markSheetSyncResult({ orderId: firestorePrimary.id, attemptId: firestorePrimary.sheetSyncAttemptId, ok: false, error: sheetError }).catch(() => {});
             setStatus({
@@ -1861,7 +1928,7 @@ function App() {
         const order = firestorePrimary;
         
         // If already synced to Sheet → genuine duplicate
-        if (order.sheetSyncStatus === 'synced') {
+        if (isSheetSyncVerified(order)) {
           setStatus({
             type: 'duplicate',
             title: 'เลขซ้ำใน Firebase',
@@ -1939,6 +2006,10 @@ function App() {
         // Background: re-sync to Sheet via appendAdminScanGoogle
         runAfterScanCommit(async () => {
           try {
+            await markSheetSyncWriting({
+              orderId: order.id,
+              attemptId: order.sheetSyncAttemptId || '',
+            }).catch(() => false);
             const marketplaceOrder = await findMarketplaceOrderByTracking({ trackingNo: validation.code }).catch(() => null);
             const sheetResult = await runWithGoogleRetry((accessToken, googleConfig) =>
               appendAdminScanGoogle({
@@ -2026,6 +2097,10 @@ function App() {
         runAfterScanCommit(async () => {
           let backgroundResult = result;
           try {
+            await markSheetSyncWriting({
+              orderId: firestorePrimary.id,
+              attemptId: firestorePrimary.sheetSyncAttemptId,
+            }).catch(() => false);
             const marketplaceOrder = await marketplaceOrderPromise;
             const adminScanTiming = getAdminScanTiming(
               firestorePrimary?.existing ?? firestorePrimary,
@@ -2070,7 +2145,7 @@ function App() {
               throw new Error(`Google Sheet แจ้งว่าซ้ำ แต่ยืนยันแถว ${hasPackerScan ? 'Packer' : 'Admin'} ไม่ได้`);
             }
             await markSheetSyncResult({ orderId: firestorePrimary.id, attemptId: firestorePrimary.sheetSyncAttemptId, ok: true, result: sheetResult }).catch(() => {});
-            backgroundResult = { ...result, ...sheetResult, sheetSyncStatus: 'synced' };
+            backgroundResult = { ...result, ...sheetResult, sheetSyncStatus: 'verified' };
           } catch (sheetError) {
             await markSheetSyncResult({ orderId: firestorePrimary.id, attemptId: firestorePrimary.sheetSyncAttemptId, ok: false, error: sheetError }).catch(() => {});
             backgroundResult = {

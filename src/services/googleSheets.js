@@ -872,6 +872,7 @@ async function formatDailyWorksheet({ token, spreadsheetId, date, sheetId }) {
           },
         },
         ...buildStatusFormattingRequests(sheetId),
+        buildStatusValidationRequest(sheetId),
         ...buildMarketplaceFormattingRequests(sheetId),
       ],
     }),
@@ -938,6 +939,32 @@ function buildStatusFormattingRequests(sheetId) {
     rule(orderStatusRange, '=$U2="รอแพ็คเกิน 1 วัน"', { red: 0.98, green: 0.82, blue: 0.82 }, { red: 0.65, green: 0.05, blue: 0.05 }, true),
     rule(crossDayRange, '=$V2="ใช่"', { red: 1, green: 0.9, blue: 0.75 }, { red: 0.65, green: 0.35, blue: 0 }),
   ];
+}
+
+export function buildStatusValidationRequest(sheetId) {
+  // Barcode scanners behave like keyboards. A strict list prevents an accidental scanner
+  // focus in Google Sheets from replacing Status with a tracking number; every value the
+  // app writes is deliberately listed here.
+  return {
+    setDataValidation: {
+      range: {
+        sheetId,
+        startRowIndex: 1,
+        endRowIndex: 5000,
+        startColumnIndex: 8,
+        endColumnIndex: 9,
+      },
+      rule: {
+        condition: {
+          type: 'ONE_OF_LIST',
+          values: ['Success', 'Cancelled', 'Returned', 'Damaged', 'Issue', 'Duplicate', 'รอแพ็ค']
+            .map((userEnteredValue) => ({ userEnteredValue })),
+        },
+        strict: true,
+        showCustomUi: true,
+      },
+    },
+  };
 }
 
 export function buildMarketplaceFormattingRequests(sheetId) {
@@ -2665,6 +2692,7 @@ export async function batchAppendScanGoogle({ token, config, orders, repairExist
       const placeholders = [];
       const placeholderMeta = []; // track which placeholder maps to which order
       const directUpdates = [];
+      let didWriteSheet = false;
       for (const order of dateOrders) {
         const { normalizedCode, courier, email, packer, note, isPacker, adminDate, adminTime, adminCode } = order;
         const issueMeta = isPacker ? getScanIssueMeta(note) : null;
@@ -2855,6 +2883,7 @@ export async function batchAppendScanGoogle({ token, config, orders, repairExist
           token,
           { method: 'PUT', body: JSON.stringify({ values: placeholders }) },
         );
+        didWriteSheet = true;
       }
 
       // d) Re-read (1 read)
@@ -2932,6 +2961,7 @@ export async function batchAppendScanGoogle({ token, config, orders, repairExist
           token,
           { method: 'POST', body: JSON.stringify({ valueInputOption: 'USER_ENTERED', data: batchData }) },
         );
+        didWriteSheet = true;
 
         const verifiedRows = (await readDailyRows({ token, spreadsheetId: sheet.id, date }))
           .map((row, index) => rowFromSheet(row, index));
@@ -2945,12 +2975,14 @@ export async function batchAppendScanGoogle({ token, config, orders, repairExist
       }
 
       // g) Apply status cell colors (1 read + 1 write, optional)
-      try {
-        const spreadsheet = await getSpreadsheet(token, sheet.id);
-        const sheetId = spreadsheet.sheets?.find((s) => s.properties.title === date)?.properties.sheetId;
-        if (sheetId) await applyStatusCellColors({ token, spreadsheetId: sheet.id, date, sheetId });
-      } catch {
-        // Colors are nice-to-have, not critical
+      if (didWriteSheet) {
+        try {
+          const spreadsheet = await getSpreadsheet(token, sheet.id);
+          const sheetId = spreadsheet.sheets?.find((s) => s.properties.title === date)?.properties.sheetId;
+          if (sheetId) await applyStatusCellColors({ token, spreadsheetId: sheet.id, date, sheetId });
+        } catch {
+          // Colors are nice-to-have, not critical
+        }
       }
     } catch (error) {
       // If the whole date batch fails, mark all orders in this group as failed
