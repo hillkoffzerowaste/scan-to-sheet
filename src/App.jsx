@@ -1382,7 +1382,7 @@ function App() {
 
       // Execute one batch call
       const results = await runWithGoogleRetry((accessToken, googleConfig) =>
-        batchAppendScanGoogle({ token: accessToken, config: googleConfig, orders: batchOrders }),
+        batchAppendScanGoogle({ token: accessToken, config: googleConfig, orders: batchOrders, repairExisting: true }),
         { sheetWrite: true },
       );
 

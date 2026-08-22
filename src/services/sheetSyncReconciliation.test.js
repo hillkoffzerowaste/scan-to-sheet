@@ -147,6 +147,40 @@ test('does not confirm a Packer duplicate without the Packer row', () => {
   }), true);
 });
 
+test('does not certify a successful Sheet write when the returned Status is corrupted', () => {
+  assert.equal(isSheetSyncResultConfirmed({
+    status: 'success',
+    code: 'TH123',
+    row: { code: 'TH123', status: 'TH999' },
+  }), false);
+  assert.equal(isSheetSyncResultConfirmed({
+    status: 'admin_scan',
+    code: 'TH123',
+    isPacker: false,
+    row: { code: '', adminCode: 'TH123', status: 'Success' },
+  }), false);
+});
+
+test('certifies only the expected status for each successful Sheet write', () => {
+  assert.equal(isSheetSyncResultConfirmed({
+    status: 'success',
+    code: 'TH123',
+    row: { code: 'TH123', status: 'Success' },
+  }), true);
+  assert.equal(isSheetSyncResultConfirmed({
+    status: 'admin_scan',
+    code: 'TH123',
+    isPacker: false,
+    row: { code: '', adminCode: 'TH123', status: 'รอแพ็ค' },
+  }), true);
+  assert.equal(isSheetSyncResultConfirmed({
+    status: 'admin_matched',
+    code: 'TH123',
+    isPacker: false,
+    row: { code: 'TH123', adminCode: 'TH123', status: 'Success' },
+  }), true);
+});
+
 test('a Packer row from an earlier day is reported as a duplicate, not appended again', () => {
   // The bug: cross-day searches only looked at the Admin column, so a row the Packer created
   // yesterday was invisible today and a second row was appended on today's sheet.

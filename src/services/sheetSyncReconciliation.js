@@ -106,14 +106,26 @@ export function getAdminScanTiming(order, { fallbackDate = '', fallbackTime = ''
 
 export function isSheetSyncResultConfirmed(result) {
   if (!result) return false;
-  if (result.status !== 'duplicate') return true;
 
   const row = result.row;
-  const rowCode = result.isPacker ? row?.code : (row?.adminCode || row?.code);
+  const isPacker = typeof result.isPacker === 'boolean'
+    ? result.isPacker
+    : !['admin_scan', 'admin_matched'].includes(result.status);
+  const rowCode = isPacker ? row?.code : (row?.adminCode || row?.code);
   if (!row || normalizeCode(rowCode) !== normalizeCode(result.code)) return false;
-  // The packer-column code matching is the proof that a packer scan landed. Admin-only
-  // rows leave that column empty, so they already fail the check above. Requiring a packer
-  // *name* here too would leave every unnamed packer's duplicate permanently unconfirmed
-  // and retried forever, now that such rows correctly reconcile as duplicates.
-  return true;
+
+  // A duplicate performs no write. Its matching tracking value is enough to prove the
+  // original write exists, while every fresh write must also prove the resulting status.
+  if (result.status === 'duplicate') return true;
+
+  const rowStatus = String(row.status ?? '').trim();
+  if (result.status === 'success') return rowStatus === 'Success';
+  if (result.status === 'cancelled') return rowStatus === 'Cancelled';
+  if (result.status === 'returned') return rowStatus === 'Returned';
+  if (result.status === 'admin_scan') return rowStatus === 'รอแพ็ค';
+  if (result.status === 'admin_matched') {
+    return ['Success', 'Cancelled', 'Damaged', 'Issue', 'Returned'].includes(rowStatus);
+  }
+
+  return false;
 }

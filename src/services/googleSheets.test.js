@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
   buildMarketplaceFormattingRequests,
   appendScanGoogle,
+  batchAppendScanGoogle,
   findCancellationRow,
   getDailySheetPropertiesForMarketplaceBackfill,
   apiFetch,
@@ -126,7 +127,12 @@ test('appendScanGoogle returns the newly written Packer row after placeholder re
       storedRows = body?.values ?? storedRows;
       return jsonResponse({});
     }
-    if (decodedUrl.includes('/values:batchUpdate') || decodedUrl.includes(':batchUpdate')) {
+    if (decodedUrl.includes('/values:batchUpdate')) {
+      const rowUpdate = body?.data?.find((item) => item.range.includes('!A2:O2'));
+      if (rowUpdate) storedRows = [rowUpdate.values[0]];
+      return jsonResponse({});
+    }
+    if (decodedUrl.includes(':batchUpdate')) {
       return jsonResponse({});
     }
     if (decodedUrl.includes('/values/') && method === 'POST') {
@@ -155,6 +161,68 @@ test('appendScanGoogle returns the newly written Packer row after placeholder re
     assert.equal(result.rows.length, 1);
     assert.equal(result.rows[0].courier, 'Shopee');
     assert.equal(result.rows[0].code, 'TH1234567890');
+    assert.equal(result.row.code, 'TH1234567890');
+    assert.equal(result.row.status, 'Success');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('batch recovery repairs an existing row whose Status does not match Firestore', async () => {
+  const originalFetch = globalThis.fetch;
+  const date = '2026-08-06';
+  const spreadsheetId = 'sheet-recovery-test';
+  const sheetProperties = {
+    sheets: [{ properties: { sheetId: 456, title: date, gridProperties: { rowCount: 1000, columnCount: 23 } } }],
+  };
+  let storedRows = [[
+    '1', '1', date, '10:00:00', 'Shopee', 'TH1234567890', 'packer@example.com', 'เบ้น', 'TH999', '',
+    date, '09:00:00', 'TH1234567890',
+  ]];
+  const jsonResponse = (payload) => new Response(JSON.stringify(payload), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  });
+
+  globalThis.fetch = async (url, options = {}) => {
+    const decodedUrl = decodeURIComponent(String(url));
+    const method = options.method ?? 'GET';
+    const body = options.body ? JSON.parse(options.body) : null;
+    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A1:W1') && method === 'PUT') return jsonResponse({});
+    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A2:W') && method === 'GET') return jsonResponse({ values: storedRows });
+    if (decodedUrl.includes('/values:batchUpdate')) {
+      const rowUpdate = body?.data?.find((item) => item.range.includes('!A2:O2'));
+      if (rowUpdate) storedRows = [rowUpdate.values[0]];
+      return jsonResponse({});
+    }
+    if (decodedUrl.includes(':batchUpdate')) return jsonResponse({});
+    if (decodedUrl.includes('/spreadsheets/')) return jsonResponse(sheetProperties);
+    throw new Error(`Unexpected mock request: ${method} ${decodedUrl}`);
+  };
+
+  try {
+    const [outcome] = await batchAppendScanGoogle({
+      token: 'token',
+      config: { master: { id: spreadsheetId, webViewLink: 'https://example.test/sheet' } },
+      repairExisting: true,
+      orders: [{
+        code: 'TH1234567890',
+        courier: 'Shopee',
+        date,
+        time: '10:00:00',
+        email: 'packer@example.com',
+        packer: 'เบ้น',
+        isPacker: true,
+        adminDate: date,
+        adminTime: '09:00:00',
+        adminCode: 'TH1234567890',
+      }],
+    });
+
+    assert.equal(outcome.result.repaired, true);
+    assert.equal(outcome.result.status, 'success');
+    assert.equal(outcome.result.row.status, 'Success');
+    assert.equal(storedRows[0][8], 'Success');
   } finally {
     globalThis.fetch = originalFetch;
   }
