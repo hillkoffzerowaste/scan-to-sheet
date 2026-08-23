@@ -1,11 +1,10 @@
 /**
  * Recognises the "your sign-in ran out" family of backend errors.
  *
- * Every Firestore rule in this project is gated on `isSignedIn()`, so an expired token does not
- * fail as an auth error — it comes back as `permission-denied` on whatever the user happened to
- * do next. Raw, that reads as "Missing or insufficient permissions." in English on the scan
- * screen, and as nothing at all on the packing-video screen, which looks like a frozen app to a
- * packer who cannot act on either.
+ * Firestore uses `permission-denied` both when a session is absent and when an authenticated
+ * request fails a rule. The scan boundary verifies Firebase Auth before writing, so a remaining
+ * `permission-denied` is actionable as an authorization or data-validation problem rather than
+ * incorrectly sending an already signed-in operator through another login.
  */
 
 /** Stable code for branching and tests; the Thai text below is free to change. */
@@ -13,8 +12,13 @@ export const AUTH_SESSION_EXPIRED = 'AUTH_SESSION_EXPIRED';
 
 export const AUTH_SESSION_EXPIRED_MESSAGE = 'เซสชันหมดอายุ กรุณาออกจากระบบแล้วเข้าสู่ระบบใหม่';
 
+export const FIREBASE_AUTH_REQUIRED = 'FIREBASE_AUTH_REQUIRED';
+
+export const FIREBASE_AUTH_REQUIRED_MESSAGE = 'เชื่อม Google แล้ว แต่ Firebase ยังยืนยันตัวตนไม่สำเร็จ จึงบันทึกข้อมูลไม่ได้ กรุณาแจ้งผู้ดูแลระบบ';
+
+export const FIRESTORE_PERMISSION_DENIED_MESSAGE = 'ไม่มีสิทธิ์บันทึกข้อมูลใน Firebase กรุณาติดต่อผู้ดูแลระบบ';
+
 const EXPIRED_CODES = [
-  'permission-denied',
   'unauthenticated',
   'storage/unauthorized',
   'storage/unauthenticated',
@@ -27,11 +31,21 @@ export function isAuthExpiredError(error) {
   return EXPIRED_CODES.some((candidate) => code.includes(candidate));
 }
 
+export function createFirebaseAuthRequiredError() {
+  return Object.assign(new Error(FIREBASE_AUTH_REQUIRED_MESSAGE), {
+    code: FIREBASE_AUTH_REQUIRED,
+  });
+}
+
 /**
  * Message for a failed scan. Anything that is not an expired session keeps the error's own
  * message, which is where the existing Thai `throw new Error(...)` texts live.
  */
 export function scanErrorMessage(error) {
+  if (error?.code === FIREBASE_AUTH_REQUIRED) return FIREBASE_AUTH_REQUIRED_MESSAGE;
   if (isAuthExpiredError(error)) return AUTH_SESSION_EXPIRED_MESSAGE;
+  if (String(error?.code ?? '').toLowerCase().includes('permission-denied')) {
+    return FIRESTORE_PERMISSION_DENIED_MESSAGE;
+  }
   return error?.message || 'บันทึกไม่สำเร็จ กรุณาลองใหม่';
 }

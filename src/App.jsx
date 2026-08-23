@@ -116,7 +116,7 @@ import { createScanQueue } from './services/scanQueue.js';
 import { getScanPopupCourierOptions, getScanPopupStatusMeta } from './services/scanPopup.js';
 import { DEFAULT_SCAN_METHOD } from './services/scanPreferences.js';
 import { barcodeCharacterFromKeyEvent } from './services/barcodeKeyboard.js';
-import { scanErrorMessage } from './services/authErrors.js';
+import { createFirebaseAuthRequiredError, scanErrorMessage } from './services/authErrors.js';
 import { shouldPollMissingOrders } from './services/missingCheckPolicy.js';
 import { getSheetRecoveryDates } from './services/sheetRecoveryDates.js';
 import { buildSheetSyncFailureUpdates, isSheetSyncVerified } from './services/sheetSync.js';
@@ -357,7 +357,9 @@ function App() {
 
   const isGoogleReady = isFirebaseConfigured || Boolean(GOOGLE_CLIENT_ID);
   const isSheetConnected = Boolean(token && config);
-  const isSignedIn = Boolean(firebaseUser || isSheetConnected);
+  // Firestore is the write authority whenever Firebase is configured. A Google Sheet token on
+  // its own must not unlock the scanner, because its next Firestore write would be rejected.
+  const isSignedIn = isFirebaseConfigured ? Boolean(firebaseUser) : isSheetConnected;
   useEffect(() => {
     if (!firebaseUser) return;
     return subscribeStaffMembers({
@@ -1009,8 +1011,14 @@ function App() {
         method: 'POST',
         body: JSON.stringify({ code, redirectUri, clientId: GOOGLE_CLIENT_ID }),
       });
-      await activateGoogleSession(data);
-      setStatus(data.serverSession === false
+      const session = await activateGoogleSession(data);
+      setStatus(session.firebaseSignInFailed
+        ? {
+            type: 'warning',
+            title: 'เข้าสู่ระบบ Firebase ไม่สำเร็จ',
+            message: 'เชื่อม Google Sheet แล้ว แต่ Firebase ยังยืนยันตัวตนไม่สำเร็จ จึงยังลง Drive ไม่ได้ กรุณาแจ้งผู้ดูแลระบบ',
+          }
+        : data.serverSession === false
         ? {
             type: 'warning',
             title: 'เชื่อม Google แล้ว แต่ยังจำ Login ไม่ได้',
@@ -1128,6 +1136,7 @@ function App() {
       }
     }
 
+    let firebaseSignInFailed = false;
     if (firebaseAuth && idToken) {
       try {
         const credential = GoogleAuthProvider.credential(idToken, accessToken);
@@ -1135,6 +1144,9 @@ function App() {
         setFirebaseUser(result.user);
         await upsertFirebaseUser(result.user).catch(() => {});
       } catch (error) {
+        const existingFirebaseUser = firebaseAuth.currentUser;
+        firebaseSignInFailed = !existingFirebaseUser;
+        setFirebaseUser(existingFirebaseUser);
         console.warn('Firebase Auth sign-in failed after Google OAuth:', error);
       }
     } else if (data.firebaseUser) {
@@ -1144,7 +1156,23 @@ function App() {
 
     await refreshAllCounts(accessToken, prepared);
     setConfig(prepared);
-    return { accessToken, config: prepared, user: nextUser };
+    return { accessToken, config: prepared, user: nextUser, firebaseSignInFailed };
+  }
+
+  async function getFirebaseUserForPrimary() {
+    if (!isFirebaseConfigured) return null;
+
+    const authUser = firebaseAuth?.currentUser;
+    if (!authUser) throw createFirebaseAuthRequiredError();
+
+    try {
+      // Ask the SDK for the current ID token before a Firestore transaction. It refreshes an
+      // expiring token without forcing the operator through another Google login.
+      await authUser.getIdToken();
+    } catch {
+      throw createFirebaseAuthRequiredError();
+    }
+    return authUser;
   }
 
   async function runWithGoogleRetry(action, { sheetWrite = false } = {}) {
@@ -1621,13 +1649,14 @@ function App() {
     if (managesBusy) setBusy(true);
     try {
       const nowParts = getBangkokParts();
-      const firestorePrimary = canUseFirestorePrimary()
+      const firestoreUser = canUseFirestorePrimary() ? await getFirebaseUserForPrimary() : null;
+      const firestorePrimary = firestoreUser
         ? await recordPackerScanPrimary({
             code: validation.code,
             courier: scanCourier,
             date: nowParts.date,
             time: nowParts.time,
-            user: firebaseUser ?? user,
+            user: firestoreUser,
             packer: scanPacker === PACKER_UNASSIGNED ? '' : scanPacker,
             note: scanNote,
           })
@@ -1914,13 +1943,14 @@ function App() {
     if (managesBusy) setBusy(true);
     try {
       const nowParts = getBangkokParts();
-      const firestorePrimary = canUseFirestorePrimary()
+      const firestoreUser = canUseFirestorePrimary() ? await getFirebaseUserForPrimary() : null;
+      const firestorePrimary = firestoreUser
         ? await recordAdminScanPrimary({
             code: validation.code,
             courier: scanCourier,
             date: nowParts.date,
             time: nowParts.time,
-            user: firebaseUser ?? user,
+            user: firestoreUser,
           })
         : null;
 
