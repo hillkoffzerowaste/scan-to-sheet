@@ -2241,11 +2241,11 @@ function App() {
         playTone('error');
       } else if (result.status === 'admin_scan' && result.sheetSyncStatus === 'pending') {
         setStatus({
-          type: 'warning',
+          type: 'success',
           title: 'บันทึก Firebase แล้ว กำลังลง Sheet',
           message: `${result.code} บันทึกแล้ว กรุณารอการซิงก์ Google Sheet`,
         });
-        showCameraMessage(`${result.code} กำลังลง Sheet`, 'warning');
+        showCameraMessage(`${result.code} กำลังลง Sheet`, 'success');
         playTone('success');
       } else if (result.status === 'admin_scan') {
         setScanFlash(true);
