@@ -743,7 +743,17 @@ async function formatDailyWorksheet({ token, spreadsheetId, date, sheetId }) {
   await applyStatusCellColors({ token, spreadsheetId, date, sheetId });
 }
 
-async function applyStatusCellColors({ token, spreadsheetId, date, sheetId }) {
+/**
+ * Recolours the status columns.
+ *
+ * `rowNumbers` narrows it to the rows a write actually touched. Without it every single scan
+ * re-read the whole day and sent up to ~1,500 repeatCell requests to repaint rows whose colour
+ * had not changed — on top of the ~12 Google calls a scan already makes, against a sheet lock
+ * with a limited TTL. Passing nothing still repaints the whole day, which is what the
+ * historical-recolour pass wants.
+ */
+async function applyStatusCellColors({ token, spreadsheetId, date, sheetId, rowNumbers = null }) {
+  const only = rowNumbers ? new Set(rowNumbers) : null;
   const rows = await readDailyRows({ token, spreadsheetId, date });
   const requests = [];
   const colors = {
@@ -753,7 +763,11 @@ async function applyStatusCellColors({ token, spreadsheetId, date, sheetId }) {
     cancelled: { backgroundColor: { red: 0.98, green: 0.82, blue: 0.82 }, foregroundColor: { red: 0.65, green: 0.05, blue: 0.05 } },
     crossDay: { backgroundColor: { red: 1, green: 0.9, blue: 0.75 }, foregroundColor: { red: 0.65, green: 0.35, blue: 0 } },
   };
-  rows.slice(0, 500).forEach((row, index) => {
+  // The 500 cap bounds a full repaint. A targeted repaint must not be capped, or a row past
+  // the cap would silently keep the colour of whatever it used to be.
+  (only ? rows : rows.slice(0, 500)).forEach((row, index) => {
+    // index 0 is sheet row 2, the first data row.
+    if (only && !only.has(index + 2)) return;
     const status = String(row[8] ?? '').trim();
     const hasPacker = Boolean(String(row[5] ?? '').trim());
     const hasAdmin = Boolean(String(row[12] ?? '').trim());
@@ -950,7 +964,7 @@ async function updateDailyRow({ token, spreadsheetId, date, rowNumber, row }) {
   );
   const spreadsheet = await getSpreadsheet(token, spreadsheetId);
   const sheetId = spreadsheet.sheets?.find((sheet) => sheet.properties.title === date)?.properties.sheetId;
-  if (sheetId) await applyStatusCellColors({ token, spreadsheetId, date, sheetId });
+  if (sheetId) await applyStatusCellColors({ token, spreadsheetId, date, sheetId, rowNumbers: [rowNumber] });
   return readDailyRow({ token, spreadsheetId, date, rowNumber });
 }
 
@@ -2795,6 +2809,8 @@ export async function batchAppendScanGoogle({ token, config, orders, repairExist
       const batchData = directUpdates.flatMap(({ rowNumber, row }) => (
         buildDailyRowUpdateData(date, rowNumber, row)
       ));
+      // Only the rows this batch wrote need recolouring.
+      const touchedRowNumbers = directUpdates.map(({ rowNumber }) => rowNumber);
       for (let i = 0; i < placeholderMeta.length; i++) {
         const { order, placeholder, isPacker } = placeholderMeta[i];
         // Find the placeholder row in current parsed data
@@ -2838,6 +2854,7 @@ export async function batchAppendScanGoogle({ token, config, orders, repairExist
 
         const data = buildDailyRowUpdateData(date, rowNumber, correctedRow);
         batchData.push(...data);
+        touchedRowNumbers.push(rowNumber);
 
         results.push({
           order,
@@ -2880,7 +2897,11 @@ export async function batchAppendScanGoogle({ token, config, orders, repairExist
         try {
           const spreadsheet = await getSpreadsheet(token, sheet.id);
           const sheetId = spreadsheet.sheets?.find((s) => s.properties.title === date)?.properties.sheetId;
-          if (sheetId) await applyStatusCellColors({ token, spreadsheetId: sheet.id, date, sheetId });
+          if (sheetId && touchedRowNumbers.length > 0) {
+            await applyStatusCellColors({
+              token, spreadsheetId: sheet.id, date, sheetId, rowNumbers: touchedRowNumbers,
+            });
+          }
         } catch {
           // Colors are nice-to-have, not critical
         }
