@@ -374,12 +374,18 @@ async function repairPlaceholderRows({ token, spreadsheetId, date, parsedRows, s
   return stranded.length;
 }
 
-// A cross-day merge keeps the row on the admin's original sheet, so column C has to stay
-// that sheet's date. Record the day the packer actually scanned in the note instead, since
-// the row schema has no separate column for it.
-function crossDayNote(note, rowDate, scanDate) {
-  if (!scanDate || rowDate === scanDate) return note;
-  return [note, `แพ็คข้ามวัน (สแกน ${scanDate})`].filter(Boolean).join(' | ');
+function normalizeCrossDayNote(note, { status, scanDate, adminDate }) {
+  const noteParts = String(note ?? '')
+    .split('|')
+    .map((part) => part.trim())
+    .filter((part) => part && !/^แพ็คข้ามวัน \(สแกน \d{4}-\d{2}-\d{2}\)$/.test(part));
+  const isCrossDaySuccess = status === 'Success'
+    && /^\d{4}-\d{2}-\d{2}$/.test(scanDate)
+    && /^\d{4}-\d{2}-\d{2}$/.test(adminDate)
+    && scanDate > adminDate;
+
+  if (isCrossDaySuccess) noteParts.push(`แพ็คข้ามวัน (สแกน ${scanDate})`);
+  return noteParts.join(' | ');
 }
 
 function marketplaceOrderFromRow(row) {
@@ -398,6 +404,7 @@ function withMarketplaceCells(row, marketplaceOrder = null) {
   const status = String(baseRow[8] ?? '').trim();
   const scanDate = String(baseRow[2] ?? '').trim();
   const adminDate = String(baseRow[10] ?? '').trim();
+  baseRow[9] = normalizeCrossDayNote(baseRow[9], { status, scanDate, adminDate });
   const hasAdmin = Boolean(String(baseRow[12] ?? '').trim());
   const hasPacker = Boolean(String(baseRow[5] ?? '').trim());
   const adminDateTime = hasAdmin ? parseDateTime(adminDate, String(baseRow[11] ?? '').trim()) : null;
@@ -1648,7 +1655,7 @@ export async function appendScanGoogle({
         const mergedRow = withMarketplaceCells([
           overallNo,
           courierNo,
-          currentRow.adminDate || effectiveAdminDate || currentRow.date || date,
+          date,
           time,
           currentRow.courier,
           normalizedCode,
@@ -1702,7 +1709,7 @@ export async function appendScanGoogle({
       // every later issue update on it fail with "ไม่พบรายการใน Google Sheet".
       const mergedRow = withMarketplaceCells([
         currentRow.no, currentRow.courierNo, crossDayMatch.date, time, currentRow.courier, normalizedCode, email, packer,
-        'Success', crossDayNote(note, crossDayMatch.date, date), currentRow.adminDate || effectiveAdminDate || crossDayMatch.date, currentRow.adminTime || effectiveAdminTime || '', currentRow.adminCode || effectiveAdminCode,
+        'Success', note, currentRow.adminDate || effectiveAdminDate || crossDayMatch.date, currentRow.adminTime || effectiveAdminTime || '', currentRow.adminCode || effectiveAdminCode,
       ], marketplaceOrder ?? marketplaceOrderFromRow(currentRow));
       await updateDailyRow({ token, spreadsheetId: sheet.id, date: crossDayMatch.date, rowNumber: currentRow.sheetRowNumber, row: mergedRow });
       const resultRows = crossDayMatch.parsedRows
@@ -1729,7 +1736,7 @@ export async function appendScanGoogle({
       // Same invariant as the cross-day merge above: column C names the row's own sheet.
       const mergedRow = withMarketplaceCells([
         currentRow.no, currentRow.courierNo, adminMatchAnyCourier.date, time, currentRow.courier, normalizedCode, email, packer,
-        'Success', crossDayNote(correctedNote, adminMatchAnyCourier.date, date), currentRow.adminDate || effectiveAdminDate || adminMatchAnyCourier.date, currentRow.adminTime || effectiveAdminTime || '', currentRow.adminCode || effectiveAdminCode,
+        'Success', correctedNote, currentRow.adminDate || effectiveAdminDate || adminMatchAnyCourier.date, currentRow.adminTime || effectiveAdminTime || '', currentRow.adminCode || effectiveAdminCode,
       ], marketplaceOrder ?? marketplaceOrderFromRow(currentRow));
       const confirmedRow = await updateDailyRow({ token, spreadsheetId: sheet.id, date: adminMatchAnyCourier.date, rowNumber: currentRow.sheetRowNumber, row: mergedRow });
       const resultRows = adminMatchAnyCourier.parsedRows
@@ -1769,7 +1776,7 @@ export async function appendScanGoogle({
       const mergedRow = withMarketplaceCells([
         currentRow.no, currentRow.courierNo, packerMatch.date, currentRow.time || time,
         currentRow.courier, currentRow.code || normalizedCode, currentRow.email || email, packer,
-        'Success', crossDayNote(currentRow.note || note, packerMatch.date, date),
+        'Success', currentRow.note || note,
         currentRow.adminDate || effectiveAdminDate || '', currentRow.adminTime || effectiveAdminTime || '',
         currentRow.adminCode || effectiveAdminCode,
       ], marketplaceOrder ?? marketplaceOrderFromRow(currentRow));
@@ -2704,7 +2711,7 @@ export async function batchAppendScanGoogle({ token, config, orders, repairExist
 
         if (reconciliation.action === 'skip') {
           const currentRow = reconciliation.row;
-          if (repairExisting && String(currentRow.status ?? '').trim() !== expectedStatus) {
+          if (repairExisting) {
             const repairedRow = withMarketplaceCells([
               currentRow.no,
               currentRow.courierNo,
@@ -2720,6 +2727,25 @@ export async function batchAppendScanGoogle({ token, config, orders, repairExist
               currentRow.adminTime,
               currentRow.adminCode,
             ], order.marketplaceOrder ?? marketplaceOrderFromRow(currentRow));
+            const needsRepair = String(currentRow.status ?? '').trim() !== expectedStatus
+              || String(currentRow.note ?? '') !== String(repairedRow[9] ?? '');
+            if (!needsRepair) {
+              results.push({
+                order,
+                result: {
+                  status: 'duplicate',
+                  courier,
+                  date,
+                  time: order.time,
+                  code: normalizedCode,
+                  isPacker: Boolean(isPacker),
+                  row: reconciliation.row,
+                  rows: existingParsed.filter((row) => row.courier === courier).reverse().slice(0, 20),
+                  sheetUrl: sheet.webViewLink,
+                },
+              });
+              continue;
+            }
             let confirmedRow = null;
             if (currentRow._sheetDate && currentRow._sheetDate !== date) {
               confirmedRow = await updateDailyRow({

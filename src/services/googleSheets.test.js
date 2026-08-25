@@ -180,6 +180,133 @@ test('appendScanGoogle returns the newly written Packer row after placeholder re
   }
 });
 
+test('appendScanGoogle does not mark a row as cross-day when its saved Scan Date equals Admin Scan Date', async () => {
+  const originalFetch = globalThis.fetch;
+  const today = '2026-08-25';
+  const yesterday = '2026-08-24';
+  const spreadsheetId = 'sheet-cross-day-remark-test';
+  const code = 'TH2695488345554';
+  const sheetProperties = {
+    sheets: [
+      { properties: { sheetId: 124, title: yesterday, gridProperties: { rowCount: 1000, columnCount: 23 } } },
+      { properties: { sheetId: 125, title: today, gridProperties: { rowCount: 1000, columnCount: 23 } } },
+    ],
+  };
+  const rowsByDate = new Map([
+    [yesterday, [[
+      '1', '1', yesterday, '09:00:00', 'Shopee', '', '', '', 'รอแพ็ค', '',
+      yesterday, '09:00:00', code,
+    ]]],
+    [today, []],
+  ]);
+
+  const jsonResponse = (payload) => new Response(JSON.stringify(payload), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  });
+
+  globalThis.fetch = async (url, options = {}) => {
+    const decodedUrl = decodeURIComponent(String(url));
+    const method = options.method ?? 'GET';
+    const body = options.body ? JSON.parse(options.body) : null;
+    const date = [today, yesterday].find((value) => decodedUrl.includes(value));
+
+    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A1:W1') && method === 'PUT') return jsonResponse({});
+    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A:A') && method === 'GET') return jsonResponse({ values: [['No.']] });
+    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A2:W') && method === 'GET') return jsonResponse({ values: rowsByDate.get(date) ?? [] });
+    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A2') && method === 'GET') return jsonResponse({ values: [rowsByDate.get(date)?.[0] ?? []] });
+    if (decodedUrl.includes('/values:batchUpdate')) {
+      const rowUpdate = body?.data?.find((item) => item.range.includes('!A2:O2'));
+      const updateDate = date ?? [today, yesterday].find((value) => rowUpdate?.range?.includes(value));
+      if (rowUpdate && updateDate) rowsByDate.set(updateDate, [rowUpdate.values[0]]);
+      return jsonResponse({});
+    }
+    if (decodedUrl.includes(':batchUpdate')) return jsonResponse({});
+    if (decodedUrl.includes('/spreadsheets/')) return jsonResponse(sheetProperties);
+    throw new Error(`Unexpected mock request: ${method} ${decodedUrl}`);
+  };
+
+  try {
+    const result = await appendScanGoogle({
+      token: 'token',
+      config: { master: { id: spreadsheetId, webViewLink: 'https://example.test/sheet' } },
+      courier: 'Shopee',
+      code,
+      email: 'packer@example.com',
+      packer: 'เบ้น',
+      scanDate: today,
+      scanTime: '10:20:30',
+    });
+
+    assert.equal(result.status, 'success');
+    assert.equal(result.crossDay, true);
+    assert.equal(rowsByDate.get(today).length, 0);
+    assert.equal(rowsByDate.get(yesterday)[0][2], yesterday);
+    assert.equal(rowsByDate.get(yesterday)[0][10], yesterday);
+    assert.equal(rowsByDate.get(yesterday)[0][9], '');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('appendScanGoogle marks a successful row as cross-day when its saved Scan Date is after Admin Scan Date', async () => {
+  const originalFetch = globalThis.fetch;
+  const today = '2026-08-25';
+  const yesterday = '2026-08-24';
+  const spreadsheetId = 'sheet-valid-cross-day-remark-test';
+  const code = 'JTTH203025858346';
+  const sheetProperties = {
+    sheets: [{ properties: { sheetId: 126, title: today, gridProperties: { rowCount: 1000, columnCount: 23 } } }],
+  };
+  let storedRows = [[
+    '1', '1', today, '09:00:00', 'Shopee', '', '', '', 'รอแพ็ค', '',
+    yesterday, '09:00:00', code,
+  ]];
+
+  const jsonResponse = (payload) => new Response(JSON.stringify(payload), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  });
+
+  globalThis.fetch = async (url, options = {}) => {
+    const decodedUrl = decodeURIComponent(String(url));
+    const method = options.method ?? 'GET';
+    const body = options.body ? JSON.parse(options.body) : null;
+
+    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A1:W1') && method === 'PUT') return jsonResponse({});
+    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A2:W') && method === 'GET') return jsonResponse({ values: storedRows });
+    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A2') && method === 'GET') return jsonResponse({ values: [storedRows[0] ?? []] });
+    if (decodedUrl.includes('/values:batchUpdate')) {
+      const rowUpdate = body?.data?.find((item) => item.range.includes('!A2:O2'));
+      if (rowUpdate) storedRows = [rowUpdate.values[0]];
+      return jsonResponse({});
+    }
+    if (decodedUrl.includes(':batchUpdate')) return jsonResponse({});
+    if (decodedUrl.includes('/spreadsheets/')) return jsonResponse(sheetProperties);
+    throw new Error(`Unexpected mock request: ${method} ${decodedUrl}`);
+  };
+
+  try {
+    const result = await appendScanGoogle({
+      token: 'token',
+      config: { master: { id: spreadsheetId, webViewLink: 'https://example.test/sheet' } },
+      courier: 'Shopee',
+      code,
+      email: 'packer@example.com',
+      packer: 'เบ้น',
+      scanDate: today,
+      scanTime: '10:20:30',
+    });
+
+    assert.equal(result.status, 'success');
+    assert.equal(storedRows[0][2], today);
+    assert.equal(storedRows[0][10], yesterday);
+    assert.equal(storedRows[0][9], `แพ็คข้ามวัน (สแกน ${today})`);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('batch recovery repairs an existing row whose Status does not match Firestore', async () => {
   const originalFetch = globalThis.fetch;
   const date = '2026-08-06';
@@ -235,6 +362,65 @@ test('batch recovery repairs an existing row whose Status does not match Firesto
     assert.equal(outcome.result.status, 'success');
     assert.equal(outcome.result.row.status, 'Success');
     assert.equal(storedRows[0][8], 'Success');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('batch recovery removes a stale cross-day Remark even when the Status is already correct', async () => {
+  const originalFetch = globalThis.fetch;
+  const date = '2026-08-24';
+  const spreadsheetId = 'sheet-cross-day-recovery-test';
+  const sheetProperties = {
+    sheets: [{ properties: { sheetId: 457, title: date, gridProperties: { rowCount: 1000, columnCount: 23 } } }],
+  };
+  let storedRows = [[
+    '1', '1', date, '10:00:00', 'Shopee', 'TH2695488345554', 'packer@example.com', 'เบ้น', 'Success',
+    'แพ็คข้ามวัน (สแกน 2026-08-25)', date, '09:00:00', 'TH2695488345554',
+  ]];
+  const jsonResponse = (payload) => new Response(JSON.stringify(payload), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  });
+
+  globalThis.fetch = async (url, options = {}) => {
+    const decodedUrl = decodeURIComponent(String(url));
+    const method = options.method ?? 'GET';
+    const body = options.body ? JSON.parse(options.body) : null;
+    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A1:W1') && method === 'PUT') return jsonResponse({});
+    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A2:W') && method === 'GET') return jsonResponse({ values: storedRows });
+    if (decodedUrl.includes('/values:batchUpdate')) {
+      const rowUpdate = body?.data?.find((item) => item.range.includes('!A2:O2'));
+      if (rowUpdate) storedRows = [rowUpdate.values[0]];
+      return jsonResponse({});
+    }
+    if (decodedUrl.includes(':batchUpdate')) return jsonResponse({});
+    if (decodedUrl.includes('/spreadsheets/')) return jsonResponse(sheetProperties);
+    throw new Error(`Unexpected mock request: ${method} ${decodedUrl}`);
+  };
+
+  try {
+    const [outcome] = await batchAppendScanGoogle({
+      token: 'token',
+      config: { master: { id: spreadsheetId, webViewLink: 'https://example.test/sheet' } },
+      repairExisting: true,
+      orders: [{
+        code: 'TH2695488345554',
+        courier: 'Shopee',
+        date,
+        time: '10:00:00',
+        email: 'packer@example.com',
+        packer: 'เบ้น',
+        isPacker: true,
+        adminDate: date,
+        adminTime: '09:00:00',
+        adminCode: 'TH2695488345554',
+      }],
+    });
+
+    assert.equal(outcome.result.repaired, true);
+    assert.equal(outcome.result.row.note, '');
+    assert.equal(storedRows[0][9], '');
   } finally {
     globalThis.fetch = originalFetch;
   }
