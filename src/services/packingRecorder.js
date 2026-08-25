@@ -250,7 +250,10 @@ export function stopPackingRecording() {
             code: 'PACKING_VIDEO_EMPTY_RECORDING',
           });
         }
-        // Surfaced rather than swallowed: a clip missing chunks must not be filed as a clean one.
+        // Surfaced rather than swallowed: a clip missing chunks must not be filed as a clean
+        // one. `complete` travels with the result because that is the only path the caller
+        // actually reads — setting state.errorCode alone reached nobody, and an incomplete clip
+        // was queued as an ordinary pending_upload, indistinguishable from a whole recording.
         if (!complete) state.errorCode = 'PACKING_VIDEO_CHUNK_WRITE_FAILED';
 
         recorder = null;
@@ -263,6 +266,7 @@ export function stopPackingRecording() {
         resolve({
           videoId: current.videoId,
           blob,
+          complete,
           mimeType: state.mimeType,
           extension: state.extension,
           startedAt: current.startedAt,

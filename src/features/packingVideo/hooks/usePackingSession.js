@@ -153,7 +153,26 @@ export function usePackingSession({ deviceId, user, queue, notify, playTone, ini
     if (!pending || !effect.blob) return;
 
     const order = pending.order ?? {};
-    const status = OUTCOME_STATUS[effect.outcome] ?? PACKING_VIDEO_STATUS.pendingUpload;
+    // A clip whose chunks did not all reach IndexedDB is short in the middle. The footage is
+    // kept — the blob stays in IndexedDB and an Admin can still release it from the dashboard —
+    // but it must never enter the upload lane as if it were whole, which is exactly what
+    // happened while the recorder's `complete` flag reached nobody. Same treatment as an
+    // interrupted or auto-stopped clip.
+    const status = effect.complete === false
+      ? PACKING_VIDEO_STATUS.needsReview
+      : OUTCOME_STATUS[effect.outcome] ?? PACKING_VIDEO_STATUS.pendingUpload;
+    const notes = [
+      effect.outcome === RECORD_OUTCOME.autostop ? 'หยุดบันทึกอัตโนมัติเมื่อครบ 15 นาที' : '',
+      effect.complete === false ? 'วิดีโอไม่สมบูรณ์: เขียนลงเครื่องไม่ครบทุกช่วง' : '',
+    ].filter(Boolean);
+
+    if (effect.complete === false) {
+      notify?.({
+        type: 'warning',
+        title: 'วิดีโอไม่สมบูรณ์',
+        message: 'เขียนวิดีโอลงเครื่องไม่ครบทุกช่วง คลิปนี้รอ Admin ตรวจสอบก่อนอัปโหลด',
+      });
+    }
 
     try {
       // The attempt number is reserved server-side; if that fails the clip is still stored and
@@ -185,7 +204,7 @@ export function usePackingSession({ deviceId, user, queue, notify, playTone, ini
         status,
         createdByUid: user?.uid ?? '',
         createdByEmail: user?.email ?? '',
-        note: effect.outcome === RECORD_OUTCOME.autostop ? 'หยุดบันทึกอัตโนมัติเมื่อครบ 15 นาที' : '',
+        note: notes.join(' | '),
       });
       await discardRecordedChunks(pending.videoId);
       void queue?.kick();

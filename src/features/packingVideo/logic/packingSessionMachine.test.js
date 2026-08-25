@@ -144,6 +144,30 @@ test('stopping with nothing queued returns to idle', () => {
   assert.deepEqual(effectTypes(state), ['handOff', 'focusScanInput']);
 });
 
+test('an incomplete recording is carried to the hand-off, not silently dropped', () => {
+  // The recorder knows when a chunk failed to reach IndexedDB, but that flag reached nobody:
+  // the hand-off was built from the event without it, so a clip short in the middle was queued
+  // as an ordinary pending_upload and looked exactly like a whole one.
+  const short = run(
+    [{ type: 'PACK_DONE' }, { type: 'RECORDER_STOPPED', blob: 'blob', complete: false }],
+    recording('TH111'),
+  );
+  assert.equal(short.effects[0].type, 'handOff');
+  assert.equal(short.effects[0].complete, false);
+
+  // Whole recordings, and events that say nothing about it, stay complete.
+  const whole = run(
+    [{ type: 'PACK_DONE' }, { type: 'RECORDER_STOPPED', blob: 'blob', complete: true }],
+    recording('TH111'),
+  );
+  assert.equal(whole.effects[0].complete, true);
+  const silent = run(
+    [{ type: 'PACK_DONE' }, { type: 'RECORDER_STOPPED', blob: 'blob' }],
+    recording('TH111'),
+  );
+  assert.equal(silent.effects[0].complete, true);
+});
+
 test('"บันทึกใหม่" stores the discarded clip then re-scans the same parcel', () => {
   const restarted = reducePackingSession(recording('TH111'), { type: 'RESTART' });
   assert.equal(restarted.outcome, RECORD_OUTCOME.discarded);

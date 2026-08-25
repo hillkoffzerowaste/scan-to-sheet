@@ -237,6 +237,9 @@ export function reducePackingSession(state = initialPackingState, event) {
         type: 'handOff',
         outcome: state.outcome,
         blob: event.blob ?? null,
+        // Only an explicit false marks a clip as missing chunks; an event that says nothing
+        // about it is a whole recording, which is what every existing caller means.
+        complete: event.complete !== false,
         mimeType: event.mimeType ?? '',
         durationMs: event.durationMs ?? 0,
         finishedAt: event.finishedAt ?? null,
