@@ -74,8 +74,17 @@ export function usePackingSession({ deviceId, user, queue, notify, playTone, ini
    * subscribed to the recorder, so it was never shown while there was still something to save.
    */
   useEffect(() => {
+    // subscribePackingRecorder delivers the current snapshot immediately, and the recorder's
+    // errorCode outlives the clip that set it (it is cleared when the next recording starts).
+    // Priming on that first snapshot keeps a tab switch from re-announcing an old fault.
+    let primed = false;
     let lastCode = '';
     return subscribePackingRecorder((snapshot) => {
+      if (!primed) {
+        primed = true;
+        lastCode = snapshot.errorCode;
+        return;
+      }
       if (!snapshot.errorCode || snapshot.errorCode === lastCode) return;
       lastCode = snapshot.errorCode;
       notify?.({
