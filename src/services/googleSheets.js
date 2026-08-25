@@ -1711,13 +1711,17 @@ export async function appendScanGoogle({
         currentRow.no, currentRow.courierNo, crossDayMatch.date, time, currentRow.courier, normalizedCode, email, packer,
         'Success', note, currentRow.adminDate || effectiveAdminDate || crossDayMatch.date, currentRow.adminTime || effectiveAdminTime || '', currentRow.adminCode || effectiveAdminCode,
       ], marketplaceOrder ?? marketplaceOrderFromRow(currentRow));
-      await updateDailyRow({ token, spreadsheetId: sheet.id, date: crossDayMatch.date, rowNumber: currentRow.sheetRowNumber, row: mergedRow });
+      // `row` is the written-back row, not the pre-merge one: isSheetSyncResultConfirmed needs
+      // it to certify the write, and this was the one merge path that dropped it. Without it
+      // every cross-day Packer scan reported "Sheet ยังไม่สำเร็จ" and re-queued an order that
+      // had in fact been merged correctly.
+      const confirmedRow = await updateDailyRow({ token, spreadsheetId: sheet.id, date: crossDayMatch.date, rowNumber: currentRow.sheetRowNumber, row: mergedRow });
       const resultRows = crossDayMatch.parsedRows
         .map((row) => row.sheetRowNumber === currentRow.sheetRowNumber ? rowFromSheet(mergedRow) : row)
         .filter((row) => row.courier === currentRow.courier)
         .reverse()
         .slice(0, 20);
-      return { status: 'success', courier: currentRow.courier, selectedCourier: courier, date, time, code: normalizedCode, rows: resultRows, sheetUrl: sheet.webViewLink, merged: true, wrongCourier: currentRow.courier !== courier, crossDay: true };
+      return { status: 'success', courier: currentRow.courier, selectedCourier: courier, date, time, code: normalizedCode, row: confirmedRow, rows: resultRows, sheetUrl: sheet.webViewLink, merged: true, wrongCourier: currentRow.courier !== courier, crossDay: true };
     }
   }
 

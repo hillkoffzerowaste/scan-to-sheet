@@ -181,6 +181,24 @@ test('certifies only the expected status for each successful Sheet write', () =>
   }), true);
 });
 
+test('a cross-day merge is only certifiable when it returns the row it wrote', () => {
+  // appendScanGoogle's cross-day admin-merge branch wrote the row correctly but returned no
+  // `row`, so this said false and App.jsx threw "ยืนยันแถว Packer ไม่ได้" on a write that had
+  // in fact succeeded — every cross-day Packer scan warned and re-queued the order.
+  const merged = {
+    status: 'success',
+    code: 'TH123',
+    courier: 'Flash',
+    merged: true,
+    crossDay: true,
+  };
+  assert.equal(isSheetSyncResultConfirmed(merged), false);
+  assert.equal(isSheetSyncResultConfirmed({
+    ...merged,
+    row: { code: 'TH123', status: 'Success', date: '2026-08-14' },
+  }), true);
+});
+
 test('a Packer row from an earlier day is reported as a duplicate, not appended again', () => {
   // The bug: cross-day searches only looked at the Admin column, so a row the Packer created
   // yesterday was invisible today and a second row was appended on today's sheet.
