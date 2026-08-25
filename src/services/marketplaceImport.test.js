@@ -6,7 +6,8 @@ import path from 'node:path';
 import test from 'node:test';
 import {
   buildSheetBackfillUpdates, classifyLateOrder, groupMarketplaceRows, isCompleteScanOrder,
-  marketplaceMetadataChanged, normalizeMarketplaceOrderDate, parseMarketplaceRows,
+  marketplaceMetadataChanged, normalizeMarketplaceOrderDate, normalizeMarketplaceShipDeadline,
+  parseMarketplaceRows,
   validateMarketplaceIdentifier,
 } from './marketplaceImport.js';
 import * as marketplaceImport from './marketplaceImport.js';
@@ -86,7 +87,34 @@ test('parses Shopee headers', () => {
   const parsed = parseMarketplaceRows(rows)[0];
   assert.equal(parsed.platform, 'shopee');
   assert.equal(parsed.sellerOrderStatus, 'ที่ต้องจัดส่ง');
-  assert.equal(parsed.expectedShipAt, '2026-07-17 23:59');
+  // Normalized to seconds like orderedAt, so the late/on-time comparison is a sortable string
+  // comparison rather than whatever shape the seller happened to export.
+  assert.equal(parsed.expectedShipAt, '2026-07-17 23:59:00');
+});
+
+test('a ship deadline is normalized whatever shape the seller exported', () => {
+  // The bug: expectedShipAt was stored verbatim but compared with `<` against a Bangkok
+  // "YYYY-MM-DD HH:mm" string, so any non-ISO export compared as nonsense and the late verdict
+  // was arbitrary.
+  assert.equal(normalizeMarketplaceShipDeadline('2026-08-26 09:30'), '2026-08-26 09:30:00');
+  assert.equal(normalizeMarketplaceShipDeadline('26/08/2026 09:30:15'), '2026-08-26 09:30:15');
+  assert.equal(normalizeMarketplaceShipDeadline('26 Aug 2026 09:30'), '2026-08-26 09:30:00');
+  // A whole-day deadline resolves to the end of that day: a parcel due "26 Aug" is not late
+  // at 09:00 on the 26th, which is what a bare date compared as text used to say.
+  assert.equal(normalizeMarketplaceShipDeadline('2026-08-26'), '2026-08-26 23:59:59');
+  assert.equal(normalizeMarketplaceShipDeadline('26/08/2026'), '2026-08-26 23:59:59');
+  assert.equal(normalizeMarketplaceShipDeadline('26 Aug 2026'), '2026-08-26 23:59:59');
+  assert.equal(normalizeMarketplaceShipDeadline('ไม่ระบุ'), '');
+  assert.equal(normalizeMarketplaceShipDeadline(''), '');
+});
+
+test('a non-ISO ship deadline is classified by date, not by text order', () => {
+  const now = new Date('2026-08-26T02:00:00Z'); // 09:00 Bangkok
+  // '26 Aug 2026' sorts below every '2026-…' string, so this used to read as overdue.
+  assert.equal(classifyLateOrder({ scanned: false, expectedShipAt: '26 Aug 2026' }, now).key, 'due_today');
+  assert.equal(classifyLateOrder({ scanned: false, expectedShipAt: '25/08/2026' }, now).key, 'overdue');
+  assert.equal(classifyLateOrder({ scanned: false, expectedShipAt: '27/08/2026' }, now).key, 'future');
+  assert.equal(classifyLateOrder({ scanned: false, expectedShipAt: 'ไม่ระบุ' }, now).key, 'unknown');
 });
 
 test('accepts an order with SKU before its tracking number is assigned', () => {

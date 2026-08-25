@@ -100,6 +100,45 @@ export function normalizeMarketplaceOrderDate(value) {
   return '';
 }
 
+/**
+ * The ship deadline, in the same sortable shape as `orderedAt`.
+ *
+ * `expectedShipAt` used to be stored exactly as the seller exported it while `classifyLateOrder`
+ * compared it to a Bangkok "YYYY-MM-DD HH:mm" string with `<`. Any non-ISO export (Lazada's
+ * "27 Jul 2026 21:18", TikTok's "27/07/2026 20:33") therefore compared as nonsense and the
+ * late/on-time verdict was arbitrary.
+ *
+ * A date with no time is a whole-day deadline, so it resolves to the end of that day — a parcel
+ * due "26 Aug" is not late at 09:00 on the 26th.
+ */
+export function normalizeMarketplaceShipDeadline(value) {
+  const withTime = normalizeMarketplaceOrderDate(value);
+  if (withTime) return withTime;
+
+  const text = cleanCell(value);
+  const iso = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (iso) return endOfDay(iso[1], iso[2], iso[3]);
+
+  const slash = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (slash) {
+    let day = Number(slash[1]);
+    let month = Number(slash[2]);
+    if (month > 12 && day <= 12) [day, month] = [month, day];
+    return endOfDay(slash[3], month, day);
+  }
+
+  const monthName = text.match(/^(\d{1,2})\s+([A-Za-z]{3,})\s+(\d{4})$/);
+  if (monthName) {
+    return endOfDay(monthName[3], MONTH_ABBR[monthName[2].slice(0, 3).toLowerCase()], monthName[1]);
+  }
+
+  return '';
+}
+
+function endOfDay(year, month, day) {
+  return formatOrderTimestamp({ year, month, day, hour: 23, minute: 59, second: 59 });
+}
+
 export function parseCsvText(text) {
   const rows = [];
   let row = [];
@@ -199,7 +238,7 @@ export function parseMarketplaceRows(rows) {
       platform, rowNumber: index + 2, field: 'เลขพัสดุ',
     }),
     sellerOrderStatus: statusIndex >= 0 ? cleanCell(row[statusIndex]) : '',
-    expectedShipAt: expectedShipIndex >= 0 ? cleanCell(row[expectedShipIndex]) : '',
+    expectedShipAt: expectedShipIndex >= 0 ? normalizeMarketplaceShipDeadline(row[expectedShipIndex]) : '',
     orderedAt: orderDateIndex >= 0 ? normalizeMarketplaceOrderDate(row[orderDateIndex]) : '',
   })).filter((row) => (
     row.orderId
@@ -258,7 +297,12 @@ function bangkokDateTime(now) {
 
 export function classifyLateOrder(order, now = new Date()) {
   if (order.scanned) return { key: 'scanned', label: 'สแกนแล้ว', color: 'green' };
-  const expected = cleanCell(order.expectedShipAt).replace('T', ' ').slice(0, 16);
+  // Normalized again here, not only at import: orders imported before the deadline was
+  // normalized are still in Firestore holding whatever the seller exported. An unparseable
+  // value is reported as unknown rather than silently compared as text.
+  const expected = normalizeMarketplaceShipDeadline(
+    cleanCell(order.expectedShipAt).replace('T', ' '),
+  ).slice(0, 16);
   if (!expected) return { key: 'unknown', label: 'ไม่พบกำหนดส่ง', color: 'neutral' };
   const current = bangkokDateTime(now);
   if (expected < current) return { key: 'overdue', label: 'ล่าช้า', color: 'red' };
