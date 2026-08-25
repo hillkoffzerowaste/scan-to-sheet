@@ -296,8 +296,8 @@ service cloud.firestore {
         'marketplaceOrderDocId', 'packer', 'packerStaffId', 'stationId', 'deviceId', 'sessionId',
         'startedAt', 'finishedAt', 'durationMs', 'bangkokDate', 'status', 'mimeType', 'sizeBytes',
         'storagePath', 'storageUrl', 'uploadedAt', 'uploadAttempts', 'lastErrorCode',
-        'sheetStatus', 'sheetRowNumber', 'driveStatus', 'driveFileId', 'driveUrl',
-        'movedToDriveAt', 'note', 'createdByUid', 'createdByEmail', 'updatedAt'
+        'sheetStatus', 'sheetRowNumber', 'driveStatus', 'driveAttempts', 'driveFileId',
+        'driveUrl', 'movedToDriveAt', 'note', 'createdByUid', 'createdByEmail', 'updatedAt'
       ];
     }
 
@@ -342,8 +342,8 @@ service cloud.firestore {
       // Admin lane: fix a note or a status by hand, and record where the file ended up.
       allow update: if isStaffAdmin()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'status', 'note', 'driveStatus', 'driveFileId', 'driveUrl', 'movedToDriveAt',
-          'sheetStatus', 'sheetRowNumber', 'updatedAt'
+          'status', 'note', 'driveStatus', 'driveAttempts', 'driveFileId', 'driveUrl',
+          'movedToDriveAt', 'sheetStatus', 'sheetRowNumber', 'updatedAt'
         ])
         && request.resource.data.note is string
         && request.resource.data.note.size() <= 500

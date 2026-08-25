@@ -12,10 +12,12 @@ import { GoogleAuth } from 'google-auth-library';
 
 import { PACKING_VIDEO_FIELDS } from '../../src/services/packingVideoModel.js';
 import {
+  MAX_DRIVE_ATTEMPTS,
   buildDriveFolderPath,
   buildDriveNameForDoc,
   extensionFromMimeType,
-  isStorageDeletable,
+  planDriveRetry,
+  planStoragePurge,
   toDate,
 } from './drivePaths.js';
 
@@ -34,7 +36,6 @@ const BASE_DIR = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_CONFIG_PATH = path.join(BASE_DIR, 'config.json');
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive';
 const BATCH_SIZE = 25;
-const MAX_DRIVE_ATTEMPTS = 5;
 const DEFAULT_INTERVAL_SECONDS = 60;
 // Each pass costs a Firestore query even when nothing is waiting, so the floor keeps a typo
 // like `--interval 1` from turning an idle night into ~30k billed reads.
@@ -247,14 +248,23 @@ async function movePending({ drive, bucket, db, config }) {
       moved += 1;
       console.log(`Moved ${result.videoId} -> ${result.driveUrl}`);
     } catch (error) {
-      const attempts = Number(data.driveAttempts ?? 0) + 1;
-      console.warn(`Move failed for ${data.videoId} (attempt ${attempts}):`, error.message);
+      // `driveAttempts` has to be persisted, not just computed: it used to be read off a field
+      // nothing ever wrote, so it was 1 on every pass, MAX_DRIVE_ATTEMPTS was unreachable and
+      // no clip ever reached needs_review. A failure also has to go back to 'pending' to be
+      // picked up again — the query only looks at 'pending', so 'failed' was already terminal
+      // and the retry budget existed on paper only.
+      // Give up automatically rather than retrying a broken file forever; a human decides
+      // what to do with it from the dashboard.
+      const plan = planDriveRetry(data);
+      console.warn(
+        `Move failed for ${data.videoId} (attempt ${plan.driveAttempts}/${MAX_DRIVE_ATTEMPTS}):`,
+        error.message,
+      );
       await doc.ref.update({
-        driveStatus: 'failed',
+        driveAttempts: plan.driveAttempts,
+        driveStatus: plan.driveStatus,
         lastErrorCode: 'PACKING_VIDEO_DRIVE_MOVE_FAILED',
-        // Give up automatically rather than retrying a broken file forever; a human decides
-        // what to do with it from the dashboard.
-        status: attempts >= MAX_DRIVE_ATTEMPTS ? 'needs_review' : data.status,
+        status: plan.status,
         updatedAt: FieldValue.serverTimestamp(),
       });
     }
@@ -275,6 +285,12 @@ async function movePending({ drive, bucket, db, config }) {
  * play, and keeps the current week's dashboard playback fast. A bucket lifecycle rule on the
  * `packing-videos/` prefix should back this up, so a worker that silently dies cannot run up
  * an unbounded storage bill.
+ *
+ * A purged document is moved to `driveStatus: 'purged'` so it leaves this query. Clearing only
+ * `storagePath` left it as `moved`, and since the batch reads the OLDEST `moved` documents the
+ * same already-purged 25 filled every later pass — `isStorageDeletable` skipped them all, so
+ * after the first sweep no Storage object was ever deleted again and the bucket grew without
+ * bound at roughly 12 GB a day.
  */
 async function purgeMovedObjects({ bucket, db }) {
   const snapshot = await db.collection('packingVideos')
@@ -286,10 +302,22 @@ async function purgeMovedObjects({ bucket, db }) {
   let deleted = 0;
   for (const doc of snapshot.docs) {
     const data = doc.data();
-    if (!isStorageDeletable({ ...data, movedToDriveAt: toDate(data.movedToDriveAt) })) continue;
+    const action = planStoragePurge({ ...data, movedToDriveAt: toDate(data.movedToDriveAt) });
+    if (action === 'wait' || action === 'skip') continue;
+    // 'retire': purged before this fix, so there is no object left to delete — but it still has
+    // to leave the queue or it blocks the head of the batch for ever.
+    if (action === 'retire') {
+      await doc.ref.update({ driveStatus: 'purged', updatedAt: FieldValue.serverTimestamp() });
+      continue;
+    }
     try {
       await bucket.file(data.storagePath).delete({ ignoreNotFound: true });
-      await doc.ref.update({ storagePath: '', storageUrl: '', updatedAt: FieldValue.serverTimestamp() });
+      await doc.ref.update({
+        driveStatus: 'purged',
+        storagePath: '',
+        storageUrl: '',
+        updatedAt: FieldValue.serverTimestamp(),
+      });
       deleted += 1;
     } catch (error) {
       console.warn(`Could not delete ${data.storagePath}:`, error.message);

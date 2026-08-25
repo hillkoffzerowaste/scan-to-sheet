@@ -65,3 +65,37 @@ export function isStorageDeletable(doc, now = Date.now()) {
   if (!movedAt) return false;
   return now - movedAt >= STORAGE_RETENTION_MS;
 }
+
+/** Retries a Drive move up to this many times before handing the clip to a human. */
+export const MAX_DRIVE_ATTEMPTS = 5;
+
+/**
+ * What a failed Drive move should leave behind.
+ *
+ * Kept pure and separate because the two halves used to disagree: the attempt count was never
+ * written back, and 'failed' is not in the pending query, so a clip got exactly one try and
+ * then sat still while the code claimed a budget of five.
+ */
+export function planDriveRetry({ driveAttempts, status }, maxAttempts = MAX_DRIVE_ATTEMPTS) {
+  const attempts = Math.max(0, Math.floor(Number(driveAttempts) || 0)) + 1;
+  const exhausted = attempts >= maxAttempts;
+  return {
+    driveAttempts: attempts,
+    driveStatus: exhausted ? 'failed' : 'pending',
+    status: exhausted ? 'needs_review' : status,
+    exhausted,
+  };
+}
+
+/**
+ * What the retention sweep should do with one `moved` document.
+ *
+ * `retire` is the case that matters: a document whose Storage object is already gone must stop
+ * matching the sweep's query, or — because the sweep reads the oldest `moved` documents first —
+ * it occupies a batch slot for ever and newer clips are never reached.
+ */
+export function planStoragePurge(doc, now = Date.now()) {
+  if (doc?.driveStatus !== 'moved') return 'skip';
+  if (!doc?.storagePath) return 'retire';
+  return isStorageDeletable(doc, now) ? 'delete' : 'wait';
+}

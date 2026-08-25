@@ -37,6 +37,7 @@ export const PACKING_VIDEO_FIELDS = [
   'sheetStatus',
   'sheetRowNumber',
   'driveStatus',
+  'driveAttempts',
   'driveFileId',
   'driveUrl',
   'movedToDriveAt',
@@ -72,7 +73,20 @@ const STATUS_LABELS_TH = {
 };
 
 export const SHEET_STATUS = { pending: 'pending', written: 'written', failed: 'failed' };
-export const DRIVE_STATUS = { pending: 'pending', moving: 'moving', moved: 'moved', failed: 'failed' };
+/**
+ * `purged` is terminal and exists so the retention sweep can leave the queue.
+ *
+ * The sweep reads the oldest `moved` documents; without a status change a document whose
+ * Storage object was already deleted stayed `moved` for ever and kept occupying the batch,
+ * so after the first sweep nothing was ever deleted again.
+ */
+export const DRIVE_STATUS = {
+  pending: 'pending',
+  moving: 'moving',
+  moved: 'moved',
+  purged: 'purged',
+  failed: 'failed',
+};
 
 export const PACKING_VIDEO_SHEET_NAME = 'PackingVideos';
 
@@ -189,6 +203,7 @@ export function buildPackingVideoDoc(input) {
     sheetStatus: input.sheetStatus ?? SHEET_STATUS.pending,
     sheetRowNumber: int(input.sheetRowNumber),
     driveStatus: input.driveStatus ?? DRIVE_STATUS.pending,
+    driveAttempts: int(input.driveAttempts),
     driveFileId: text(input.driveFileId),
     driveUrl: text(input.driveUrl),
     movedToDriveAt: input.movedToDriveAt ?? null,
