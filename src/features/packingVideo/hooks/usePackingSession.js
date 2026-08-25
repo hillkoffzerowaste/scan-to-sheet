@@ -8,6 +8,7 @@ import {
   startPackingRecording,
   stopPackingCamera,
   stopPackingRecording,
+  subscribePackingRecorder,
   lockCameraForRecording,
   unlockCameraAfterRecording,
 } from '../../../services/packingRecorder.js';
@@ -26,6 +27,7 @@ import {
   initialPackingState,
   reducePackingSession,
 } from '../logic/packingSessionMachine.js';
+import { packingVideoErrorText } from '../logic/packingVideoMessages.js';
 import { writePackingPreferences } from '../logic/packingVideoPreferences.js';
 
 const OUTCOME_STATUS = {
@@ -64,6 +66,25 @@ export function usePackingSession({ deviceId, user, queue, notify, playTone, ini
   useEffect(() => {
     void requestPersistentStorage();
   }, []);
+
+  /**
+   * Faults the recorder notices while a clip is still running — a chunk that would not write,
+   * a camera that went away. PACKING_VIDEO_CHUNK_WRITE_FAILED's own text says "กรุณาหยุดบันทึก
+   * และแจ้ง Admin", which is only actionable if the packer is told at the time; nothing
+   * subscribed to the recorder, so it was never shown while there was still something to save.
+   */
+  useEffect(() => {
+    let lastCode = '';
+    return subscribePackingRecorder((snapshot) => {
+      if (!snapshot.errorCode || snapshot.errorCode === lastCode) return;
+      lastCode = snapshot.errorCode;
+      notify?.({
+        type: 'warning',
+        title: 'กล้องหรือการบันทึกมีปัญหา',
+        message: packingVideoErrorText(snapshot.errorCode),
+      });
+    });
+  }, [notify]);
 
   const focusScan = useCallback(() => {
     window.requestAnimationFrame(() => scanInputRef.current?.focus({ preventScroll: true }));
@@ -246,7 +267,13 @@ export function usePackingSession({ deviceId, user, queue, notify, playTone, ini
           playTone?.(effect.tone);
           break;
         case 'showError':
-          notify?.({ type: 'error', title: 'บันทึกวิดีโอไม่สำเร็จ', message: '', code: effect.code });
+          // `notify` is App.jsx's setStatus, which renders title + message and ignores `code`,
+          // so passing the code alone left the banner with a blank body.
+          notify?.({
+            type: 'error',
+            title: 'บันทึกวิดีโอไม่สำเร็จ',
+            message: packingVideoErrorText(effect.code),
+          });
           break;
         case 'persistPreferences':
           writePackingPreferences(window.localStorage, {

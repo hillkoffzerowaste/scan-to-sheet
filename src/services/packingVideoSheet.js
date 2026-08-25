@@ -156,23 +156,3 @@ export async function updatePackingVideoDriveUrl({ token, spreadsheetId, rowNumb
     { method: 'PUT', body: JSON.stringify({ values: [[driveUrl]] }) },
   );
 }
-
-/**
- * Video ids already written to the sheet.
- *
- * Backstop for the one gap the document status cannot cover: an append that succeeded but
- * whose Firestore update did not, which would otherwise write the row twice on retry.
- */
-export async function readWrittenVideoIds({ token, spreadsheetId }) {
-  const range = `${escapeSheetName(PACKING_VIDEO_SHEET_NAME)}!A2:A`;
-  try {
-    const response = await apiFetch(
-      `${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent(range)}`,
-      token,
-    );
-    return new Set((response?.values ?? []).map((row) => String(row[0] ?? '').trim()).filter(Boolean));
-  } catch (error) {
-    if (error?.status === 400) return new Set(); // Tab not created yet.
-    throw error;
-  }
-}

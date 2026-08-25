@@ -42,7 +42,7 @@ test('blocks a Packer scan only when the Packer code already exists', () => {
 
 test('blocks a Packer scan when the same tracking exists under another courier', () => {
   assert.equal(
-    shouldBlockPackerScan([{ courier: 'J&T', code: 'TH123', adminCode: '' }], 'TH123', 'Shopee'),
+    shouldBlockPackerScan([{ courier: 'J&T', code: 'TH123', adminCode: '' }], 'TH123'),
     true,
   );
 });

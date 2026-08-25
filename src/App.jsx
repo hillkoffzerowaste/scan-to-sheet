@@ -1633,7 +1633,7 @@ function App() {
     // Prevent only a true duplicate Packer scan. An Admin-only row must still
     // reach the backend so the Packer fields can be merged into that row.
     if (!getScanIssueMeta(scanNote).isIssue) {
-      const alreadyInPacker = shouldBlockPackerScan(recentRows, validation.code, scanCourier);
+      const alreadyInPacker = shouldBlockPackerScan(recentRows, validation.code);
       if (alreadyInPacker) {
         setStatus({
           type: 'duplicate',

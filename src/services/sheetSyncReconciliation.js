@@ -44,11 +44,14 @@ export function resolveCrossDayPackerRow(row, { packerName = '' } = {}) {
   return { action: 'duplicate', row };
 }
 
-export function shouldBlockPackerScan(rows, code, courier = null) {
+/**
+ * Deliberately courier-blind: the same tracking number under a different courier is still the
+ * same parcel, so it is still a duplicate. The courier used to be a parameter that the body
+ * never read, which read as an oversight rather than as the rule.
+ */
+export function shouldBlockPackerScan(rows, code) {
   const normalizedCode = normalizeCode(code);
-  return rows.some((row) => (
-    normalizeCode(row.code) === normalizedCode
-  ));
+  return rows.some((row) => normalizeCode(row.code) === normalizedCode);
 }
 
 export function getPackerDuplicateMessage(code) {

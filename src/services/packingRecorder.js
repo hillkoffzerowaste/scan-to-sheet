@@ -64,10 +64,6 @@ export function subscribePackingRecorder(listener) {
   return () => listeners.delete(listener);
 }
 
-export function getPackingRecorderState() {
-  return { ...state, isRecording: state.phase === 'recording' };
-}
-
 export function isPackingRecording() {
   return state.phase === 'recording' || state.phase === 'stopping';
 }
