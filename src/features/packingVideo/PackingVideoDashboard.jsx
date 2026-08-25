@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CircleAlert, Play, RefreshCw, Search } from 'lucide-react';
 
 import { getBangkokParts } from '../../services/googleSheets.js';
@@ -9,6 +9,12 @@ import {
   packingVideoStatusLabel,
 } from '../../services/packingVideoModel.js';
 import { logPackingVideoAudit, searchPackingVideos } from '../../services/packingVideos.js';
+import {
+  PACKING_VIDEO_ACTION,
+  resolveUploadAction,
+  reviewReasonText,
+  uploadActionLabel,
+} from './logic/packingVideoActions.js';
 import {
   DASHBOARD_MAX_ITEMS,
   applyResidualFilters,
@@ -38,12 +44,35 @@ function toDate(value) {
   return typeof value?.toDate === 'function' ? value.toDate() : new Date(value);
 }
 
-export default function PackingVideoDashboard({ packerOptions, user, deviceId, queue, localVideoIds }) {
+export default function PackingVideoDashboard({
+  packerOptions,
+  user,
+  deviceId,
+  queue,
+  localVideos = [],
+  onLocalChange,
+}) {
+  // Search reads Firestore, but a clip's document is only created *while* it uploads — so a clip
+  // that never uploaded (a defective one parked in needs_review, or one that failed every
+  // attempt) cannot be found here at all. Its own workstation is the only place that knows it
+  // exists, which is why the local rows are listed separately rather than searched for.
+  const localVideoIds = useMemo(
+    () => new Set(localVideos.map((row) => row.videoId)),
+    [localVideos],
+  );
+  const localPending = useMemo(
+    () => localVideos
+      .filter((row) => resolveUploadAction(row, { localVideoIds }).action !== PACKING_VIDEO_ACTION.none)
+      .sort((left, right) => Number(right.createdAt ?? 0) - Number(left.createdAt ?? 0)),
+    [localVideos, localVideoIds],
+  );
+
   const [form, setForm] = useState(EMPTY_FORM);
   const [rows, setRows] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [player, setPlayer] = useState(null);
+  const [releasing, setReleasing] = useState(null);
   const videoRef = useRef(null);
 
   const setField = (field) => (event) => setForm((current) => ({ ...current, [field]: event.target.value }));
@@ -94,11 +123,15 @@ export default function PackingVideoDashboard({ packerOptions, user, deviceId, q
 
   async function retryUpload(row) {
     setError('');
+    setReleasing(null);
     try {
       await queue?.retry(row.videoId);
-      await runSearch();
+      // The local list is the only view of a clip with no Firestore document yet, so it has to
+      // be refreshed here; re-running the search would not show the change.
+      await onLocalChange?.();
+      if (rows !== null) await runSearch();
     } catch (caught) {
-      setError(caught?.message ?? 'สั่งอัปโหลดซ้ำไม่สำเร็จ');
+      setError(caught?.message ?? 'สั่งอัปโหลดไม่สำเร็จ');
     }
   }
 
@@ -168,6 +201,65 @@ export default function PackingVideoDashboard({ packerOptions, user, deviceId, q
         </p>
       )}
 
+      {localPending.length > 0 && (
+        <section className="pv-local-queue" aria-labelledby="pv-local-title">
+          <header className="pv-panel-header">
+            <h4 id="pv-local-title">ยังอยู่ในเครื่องนี้ ({localPending.length})</h4>
+            <p>
+              คลิปที่ยังไม่ได้ขึ้นระบบ จะค้นหาจากเครื่องอื่นไม่เจอเพราะยังไม่มีข้อมูลบนเซิร์ฟเวอร์
+              ต้องสั่งอัปโหลดจากเครื่องนี้
+            </p>
+          </header>
+          <div className="pv-table-wrap">
+            <table className="pv-table">
+              <thead>
+                <tr>
+                  <th scope="col">เวลาเริ่ม</th>
+                  <th scope="col">Tracking</th>
+                  <th scope="col">ผู้แพ็ค</th>
+                  <th scope="col">ความยาว</th>
+                  <th scope="col">สถานะ</th>
+                  <th scope="col">สั่งอัปโหลด</th>
+                </tr>
+              </thead>
+              <tbody>
+                {localPending.map((row) => {
+                  const upload = resolveUploadAction(row, { localVideoIds });
+                  const inReview = row.status === PACKING_VIDEO_STATUS.needsReview;
+                  return (
+                    <tr key={row.videoId}>
+                      <td data-label="เวลาเริ่ม">{row.startedAt ? formatBangkokStamp(toDate(row.startedAt)) : '—'}</td>
+                      <td data-label="Tracking">{row.trackingNo || '—'}</td>
+                      <td data-label="ผู้แพ็ค">{row.packer || '—'}</td>
+                      <td data-label="ความยาว">{formatDuration(row.durationMs)}</td>
+                      <td data-label="สถานะ">
+                        {packingVideoStatusLabel(row.status)}
+                        {inReview && <small className="pv-hint">{reviewReasonText(row)}</small>}
+                      </td>
+                      <td data-label="สั่งอัปโหลด">
+                        <button
+                          type="button"
+                          className="pv-link-button"
+                          disabled={!upload.enabled}
+                          title={upload.reason || undefined}
+                          onClick={() => (
+                            upload.action === PACKING_VIDEO_ACTION.release
+                              ? setReleasing(row)
+                              : retryUpload(row)
+                          )}
+                        >
+                          <RefreshCw size={14} aria-hidden="true" /> {uploadActionLabel(upload.action)}
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
       {rows !== null && (
         <div className="pv-table-wrap">
           <table className="pv-table">
@@ -189,11 +281,11 @@ export default function PackingVideoDashboard({ packerOptions, user, deviceId, q
               )}
               {rows.map((row) => {
                 const playable = Boolean(row.storageUrl || row.driveUrl);
-                const needsRetry = [PACKING_VIDEO_STATUS.uploadFailed, PACKING_VIDEO_STATUS.pendingUpload]
-                  .includes(row.status);
-                // The blob only exists on the workstation that recorded it, so a retry from
-                // any other machine has nothing to upload.
-                const retryHere = localVideoIds?.has(row.videoId);
+                // The blob only exists on the workstation that recorded it, so an upload
+                // action anywhere else has nothing to send.
+                const upload = resolveUploadAction(row, { localVideoIds });
+                const hasAction = upload.action !== PACKING_VIDEO_ACTION.none;
+                const inReview = row.status === PACKING_VIDEO_STATUS.needsReview;
                 return (
                   <tr key={row.videoId}>
                     <td data-label="วันที่">{row.startedAt ? formatBangkokStamp(toDate(row.startedAt)) : row.bangkokDate}</td>
@@ -202,31 +294,74 @@ export default function PackingVideoDashboard({ packerOptions, user, deviceId, q
                     <td data-label="ผู้แพ็ค">{row.packer || '—'}</td>
                     <td data-label="จุดแพ็ค">{packingStationLabel(row.stationId)}</td>
                     <td data-label="ความยาว">{formatDuration(row.durationMs)}</td>
-                    <td data-label="สถานะ">{packingVideoStatusLabel(row.status)}</td>
+                    <td data-label="สถานะ">
+                      {packingVideoStatusLabel(row.status)}
+                      {inReview && <small className="pv-hint">{reviewReasonText(row)}</small>}
+                    </td>
                     <td data-label="วิดีโอ">
                       {playable && (
                         <button type="button" className="pv-link-button" onClick={() => openPlayer(row)}>
                           <Play size={14} aria-hidden="true" /> เปิดดู
                         </button>
                       )}
-                      {needsRetry && (
+                      {hasAction && (
                         <button
                           type="button"
                           className="pv-link-button"
-                          disabled={!retryHere}
-                          title={retryHere ? undefined : `ต้องอัปโหลดซ้ำจากเครื่องที่บันทึก (${row.deviceId || 'ไม่ทราบเครื่อง'})`}
-                          onClick={() => retryUpload(row)}
+                          disabled={!upload.enabled}
+                          title={upload.reason || undefined}
+                          onClick={() => (
+                            upload.action === PACKING_VIDEO_ACTION.release
+                              ? setReleasing(row)
+                              : retryUpload(row)
+                          )}
                         >
-                          <RefreshCw size={14} aria-hidden="true" /> อัปโหลดซ้ำ
+                          <RefreshCw size={14} aria-hidden="true" /> {uploadActionLabel(upload.action)}
                         </button>
                       )}
-                      {!playable && !needsRetry && '—'}
+                      {!playable && !hasAction && '—'}
                     </td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {releasing && (
+        <div className="pv-modal-overlay" role="presentation" onClick={() => setReleasing(null)}>
+          <div
+            className="pv-modal"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="pv-release-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h3 id="pv-release-title">อัปโหลดคลิปที่ไม่สมบูรณ์?</h3>
+            <dl className="pv-dup-detail">
+              <div><dt>เลขพัสดุ</dt><dd>{releasing.trackingNo}</dd></div>
+              <div><dt>ผู้แพ็ค</dt><dd>{releasing.packer || 'ไม่ระบุ'}</dd></div>
+              <div><dt>สาเหตุที่ต้องตรวจ</dt><dd>{reviewReasonText(releasing)}</dd></div>
+            </dl>
+            <p className="pv-hint">
+              คลิปนี้อาจขาดภาพบางช่วง อัปโหลดแล้วจะย้ายเข้า Drive เหมือนคลิปอื่น
+              แต่หมายเหตุที่บอกว่าไม่สมบูรณ์จะติดไปกับแถวในชีตด้วย
+            </p>
+            <div className="pv-modal-actions">
+              <button
+                type="button"
+                className="pv-primary-button"
+                autoFocus
+                onClick={() => retryUpload(releasing)}
+              >
+                อัปโหลดเลย
+              </button>
+              <button type="button" className="pv-ghost-button" onClick={() => setReleasing(null)}>
+                ยกเลิก
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

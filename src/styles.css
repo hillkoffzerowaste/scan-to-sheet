@@ -3856,6 +3856,21 @@ tbody tr:nth-child(8){ animation-delay: 0.21s; }
 .pv-dup-detail dt { color: var(--muted); font-size: 0.9rem; }
 .pv-dup-detail dd { margin: 0; font-weight: 500; }
 
+/* Nested inside the dashboard card, so it carries no shadow of its own — the border and the
+   softer fill are what separate it from the search results below. */
+.pv-local-queue {
+  display: grid; gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-soft);
+  min-width: 0;
+}
+.pv-local-queue .pv-panel-header h4 { margin-bottom: 2px; font-size: 1rem; }
+
+/* Used as a block under a status label inside a table cell, as well as a standalone paragraph. */
+small.pv-hint { display: block; margin-top: 2px; }
+
 .pv-table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius-sm); }
 .pv-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
 .pv-table th, .pv-table td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--line); }

@@ -161,6 +161,45 @@ test('the queue drains every runnable job in one kick', async () => {
   assert.deepEqual(seen, ['a', 'b']);
 });
 
+test('a clip parked in review is not uploaded on its own, but can be released', async () => {
+  // The whole point of needs_review: a defective clip must not drift into the archive by
+  // itself. It must still be releasable, or the footage is stuck in IndexedDB until
+  // purgeOldMetadata eventually drops the row.
+  const db = fakeDb([job({ status: 'needs_review' })]);
+  let uploads = 0;
+  const queue = createPackingVideoQueue({
+    db,
+    now: () => 1000,
+    pipeline: async () => { uploads += 1; return { storageUrl: 'u' }; },
+  });
+
+  assert.deepEqual(await queue.kick(), []);
+  assert.equal(uploads, 0);
+  assert.equal(db.rows.get('pv_1').status, 'needs_review');
+
+  await queue.retry('pv_1');
+  assert.equal(uploads, 1);
+  assert.equal(db.rows.get('pv_1').status, 'uploaded');
+  assert.equal(db.rows.get('pv_1').blob, null);
+});
+
+test('releasing a reviewed clip keeps the note that says why it was flagged', async () => {
+  // The status becomes 'uploaded' like any other clip, so `note` is the only thing left saying
+  // the footage has a hole in it — and it is what reaches Firestore and the sheet.
+  const note = 'วิดีโอไม่สมบูรณ์: เขียนลงเครื่องไม่ครบทุกช่วง';
+  const db = fakeDb([job({ status: 'needs_review', note })]);
+  let seenNote = '';
+  const queue = createPackingVideoQueue({
+    db,
+    now: () => 1000,
+    pipeline: async (item) => { seenNote = item.note; return { storageUrl: 'u' }; },
+  });
+
+  await queue.retry('pv_1');
+  assert.equal(seenNote, note);
+  assert.equal(db.rows.get('pv_1').note, note);
+});
+
 test('a transient store failure does not kill the queue for good', async () => {
   // kick() memoises the drain promise. Without a finally the rejected promise stayed cached,
   // so one failed listPending() meant every later kick returned that same rejection and no

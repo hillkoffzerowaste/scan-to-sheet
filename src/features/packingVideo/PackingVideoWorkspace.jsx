@@ -50,7 +50,7 @@ export default function PackingVideoWorkspace({
   const [deviceSeq, setDeviceSeq] = useState(prefs.deviceSeq);
   const [queueSummary, setQueueSummary] = useState(EMPTY_SUMMARY);
   const [interrupted, setInterrupted] = useState([]);
-  const [localVideoIds, setLocalVideoIds] = useState(() => new Set());
+  const [localVideos, setLocalVideos] = useState([]);
   const [online, setOnline] = useState(() => navigator.onLine !== false);
 
   const queueRef = useRef(null);
@@ -59,7 +59,10 @@ export default function PackingVideoWorkspace({
     try {
       const [summary, pending] = await Promise.all([summarizeQueue(), listPendingVideos()]);
       setQueueSummary(summary);
-      setLocalVideoIds(new Set(pending.map((row) => row.videoId)));
+      // The blob itself is deliberately dropped here: these rows are rendered and kept in React
+      // state, and holding a few hundred megabytes of video in a state object is how the tab
+      // gets OOM-killed. The queue reads the blob straight from IndexedDB when it uploads.
+      setLocalVideos(pending.map(({ blob, ...row }) => row));
     } catch {
       // A local store that cannot be read must not blank the screen.
     }
@@ -225,7 +228,8 @@ export default function PackingVideoWorkspace({
           user={{ uid: firebaseUser?.uid, email: user?.email }}
           deviceId={deviceId}
           queue={queueRef.current}
-          localVideoIds={localVideoIds}
+          localVideos={localVideos}
+          onLocalChange={refreshLocalState}
         />
       )}
 
