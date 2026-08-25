@@ -161,6 +161,46 @@ test('the queue drains every runnable job in one kick', async () => {
   assert.deepEqual(seen, ['a', 'b']);
 });
 
+test('a transient store failure does not kill the queue for good', async () => {
+  // kick() memoises the drain promise. Without a finally the rejected promise stayed cached,
+  // so one failed listPending() meant every later kick returned that same rejection and no
+  // clip was ever uploaded again for the life of the tab.
+  const db = fakeDb([job()]);
+  let failNext = true;
+  const listPending = db.listPending;
+  db.listPending = async () => {
+    if (failNext) {
+      failNext = false;
+      throw new Error('IndexedDB unavailable');
+    }
+    return listPending();
+  };
+
+  const queue = createPackingVideoQueue({ db, now: () => 1000, pipeline: async () => ({ storageUrl: 'u' }) });
+  assert.deepEqual(await queue.kick(), []);
+
+  const results = await queue.kick();
+  assert.equal(results[0].status, 'uploaded');
+  assert.equal(db.rows.get('pv_1').status, 'uploaded');
+});
+
+test('backoff is measured from when the attempt failed, not when it started', async () => {
+  // A slow upload spent most of its own backoff before the retry was scheduled, so a clip that
+  // timed out after minutes came straight back instead of waiting out the network problem.
+  const db = fakeDb([job()]);
+  const clock = [1_000, 601_000, 601_000];
+  let tick = 0;
+  const queue = createPackingVideoQueue({
+    db,
+    now: () => clock[Math.min(tick++, clock.length - 1)],
+    pipeline: async () => { throw new Error('timeout'); },
+  });
+
+  await queue.kick();
+  const stored = db.rows.get('pv_1');
+  assert.equal(stored.nextAttemptAt, 601_000 + UPLOAD_BACKOFF_MS[1]);
+});
+
 test('a disposed queue stops accepting work', async () => {
   const db = fakeDb([job()]);
   let calls = 0;

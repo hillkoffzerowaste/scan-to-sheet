@@ -68,9 +68,9 @@ export function createPackingVideoQueue({
   }
 
   async function runJob(job) {
-    const timestamp = now();
+    const startedAt = now();
     running.add(job.videoId);
-    await db.update(job.videoId, { leaseUntil: timestamp + leaseMs });
+    await db.update(job.videoId, { leaseUntil: startedAt + leaseMs });
 
     try {
       const result = await pipeline(job);
@@ -80,7 +80,7 @@ export function createPackingVideoQueue({
         storagePath: result?.storagePath ?? job.storagePath ?? '',
         sheetStatus: result?.sheetStatus ?? 'pending',
         sheetRowNumber: result?.sheetRowNumber ?? 0,
-        uploadedAt: timestamp,
+        uploadedAt: now(),
         leaseUntil: 0,
         lastErrorCode: '',
       });
@@ -95,7 +95,10 @@ export function createPackingVideoQueue({
         lastErrorCode: error?.code ?? 'PACKING_VIDEO_UPLOAD_FAILED',
         leaseUntil: 0,
         // A retry has to keep its file, so the blob is deliberately never dropped here.
-        nextAttemptAt: exhausted ? 0 : timestamp + uploadBackoffMs(attempts),
+        // Measured from when the attempt FAILED, not when it started: a 25 MB upload that
+        // times out after four minutes would otherwise have most of its backoff already spent
+        // and retry almost immediately, which is the opposite of riding out a Wi-Fi drop.
+        nextAttemptAt: exhausted ? 0 : now() + uploadBackoffMs(attempts),
         status: exhausted ? PACKING_VIDEO_STATUS.uploadFailed : job.status,
       });
       return { videoId: job.videoId, status: exhausted ? 'failed' : 'retry', error };
@@ -106,14 +109,21 @@ export function createPackingVideoQueue({
 
   async function drain() {
     const results = [];
-    while (!disposed) {
-      const jobs = (await db.listPending()).filter((job) => !running.has(job.videoId));
-      const job = selectNextJob(jobs, { now: now() });
-      if (!job) break;
-      results.push(await runJob(job));
-      await notify();
+    try {
+      while (!disposed) {
+        const jobs = (await db.listPending()).filter((job) => !running.has(job.videoId));
+        const job = selectNextJob(jobs, { now: now() });
+        if (!job) break;
+        results.push(await runJob(job));
+        await notify();
+      }
+    } finally {
+      // Must run even when db.listPending() throws. `kick()` memoises this promise, so a single
+      // transient IndexedDB failure used to leave `draining` holding a rejected promise: every
+      // later kick returned that same rejection and the queue never ran again for the life of
+      // the tab, with the clips still sitting in the local store.
+      draining = null;
     }
-    draining = null;
     return results;
   }
 
@@ -121,7 +131,9 @@ export function createPackingVideoQueue({
     /** Starts a drain if one is not already running; safe to call on every trigger. */
     kick() {
       if (disposed) return Promise.resolve([]);
-      draining ??= drain();
+      // The rejection is swallowed here rather than left unhandled: the next kick starts a
+      // fresh drain, and callers use `void queue.kick()`.
+      draining ??= drain().catch(() => []);
       return draining;
     },
     /**
