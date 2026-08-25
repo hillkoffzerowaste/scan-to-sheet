@@ -2133,6 +2133,9 @@ export async function appendAdminScanGoogle({
   await ensureDailyWorksheet({ token, spreadsheetId: sheet.id, date });
   const rows = await readDailyRows({ token, spreadsheetId: sheet.id, date });
   const parsedRows = rows.map(rowFromSheet);
+  // The Packer path memoises its cross-day reads; this one never did, so each of the two
+  // searches below re-fetched the spreadsheet listing and re-read the same four days.
+  const crossDayCache = createCrossDayCache();
 
   // 1) Reconcile against the existing row before any write.
   const reconciliation = findScanReconciliation(parsedRows, {
@@ -2213,7 +2216,7 @@ export async function appendAdminScanGoogle({
     }
   }
 
-  const crossDayAdminMatch = await findRowsAcrossDays({ token, spreadsheetId: sheet.id, currentDate: date, code: effectiveAdminCode, field: 'adminCode' });
+  const crossDayAdminMatch = await findRowsAcrossDays({ token, spreadsheetId: sheet.id, currentDate: date, code: effectiveAdminCode, field: 'adminCode', cache: crossDayCache });
   if (crossDayAdminMatch) {
     return {
       status: 'duplicate',
@@ -2230,7 +2233,7 @@ export async function appendAdminScanGoogle({
     };
   }
 
-  const crossDayMatch = await findRowsAcrossDays({ token, spreadsheetId: sheet.id, currentDate: date, code: normalizedCode, field: 'code' });
+  const crossDayMatch = await findRowsAcrossDays({ token, spreadsheetId: sheet.id, currentDate: date, code: normalizedCode, field: 'code', cache: crossDayCache });
   if (crossDayMatch) {
     const currentRow = crossDayMatch.row;
     const mergedRow = withMarketplaceCells([
@@ -2336,13 +2339,25 @@ export async function appendAdminScanGoogle({
     effectiveAdminCode,
   ], marketplaceOrder);
 
+  // Write where the placeholder actually is, not where it was expected to land. The Packer
+  // path already does this; here the corrected row went to `appendedRowNumber` — the position
+  // computed from column A *before* the re-read. If a row was deleted by hand in Sheets in
+  // between (see AGENTS.md §7) the two differ, and the corrected row overwrote a real scan
+  // while leaving the _TEMP_ marker stranded.
+  const targetRowNumber = placeholderIdx >= 0 ? placeholderIdx + 2 : appendedRowNumber;
   const confirmedRow = await updateDailyRow({
     token,
     spreadsheetId: sheet.id,
     date,
-    rowNumber: appendedRowNumber,
+    rowNumber: targetRowNumber,
     row: correctedRow,
   });
+
+  // Best-effort, same as the Packer path: an admin-only day would otherwise never get its
+  // stranded markers repaired, because only the Packer path used to run this.
+  await repairPlaceholderRows({
+    token, spreadsheetId: sheet.id, date, parsedRows: updatedParsedRows, skipPlaceholder: placeholder,
+  }).catch(() => {});
 
   const driveRows = updatedParsedRows
     .filter((row) => row.adminCode && row.adminCode.trim() !== '')
