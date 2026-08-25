@@ -103,6 +103,10 @@ export function usePackingSession({ deviceId, user, queue, notify, playTone, ini
       setCameraInfo({ ready: true, resolution: camera.resolution, errorCode: '' });
 
       const videoId = newVideoId({ deviceId, startedAt: new Date() });
+      // Locked before the recorder starts, not after. The QR scanner can claim the camera at
+      // any moment and eviction runs stopPackingCamera(), which stops the recorder and drops
+      // the stream — so locking afterwards left a window where a just-started clip died.
+      lockCameraForRecording();
       const started = await startPackingRecording({
         videoId,
         onAutoStopWarning: () => notify?.({
@@ -113,7 +117,6 @@ export function usePackingSession({ deviceId, user, queue, notify, playTone, ini
         onAutoStop: () => dispatchRef.current({ type: 'AUTO_STOP_LIMIT' }),
         onError: () => dispatchRef.current({ type: 'RECORDER_ERROR' }),
       });
-      lockCameraForRecording();
 
       sessionRef.current.pending = {
         videoId,
@@ -125,6 +128,9 @@ export function usePackingSession({ deviceId, user, queue, notify, playTone, ini
       };
       dispatchRef.current({ type: 'RECORDER_READY', startedAt: started.startedAt });
     } catch (error) {
+      // Nothing is recording after a failure, so the camera must go back to being evictable —
+      // otherwise a failed start would hold it un-evictable and block QR scanning.
+      unlockCameraAfterRecording();
       setCameraInfo((current) => ({ ...current, ready: false, errorCode: error?.code ?? '' }));
       notify?.({ type: 'error', title: 'เริ่มบันทึกวิดีโอไม่ได้', message: error?.message ?? '' });
       dispatchRef.current({ type: 'CAMERA_FAILED', code: error?.code ?? 'PACKING_VIDEO_CAMERA_UNAVAILABLE' });
