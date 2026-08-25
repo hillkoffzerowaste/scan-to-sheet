@@ -557,175 +557,31 @@ export async function getSpreadsheet(token, spreadsheetId) {
   );
 }
 
-const MANAGEMENT_SHEETS = {
-  dashboard: 'Dashboard',
-  audit: 'Audit Log',
-  allOrders: 'All Orders',
-};
+/**
+ * Deletes the legacy management tabs.
+ *
+ * Dashboard / Audit Log / All Orders were dropped: everything they showed is in the app, and
+ * rebuilding them cost a read per date tab plus a dozen writes on every sign-in. The builder
+ * that used to live here sat behind an unconditional `return` for long enough that it had
+ * drifted out of step with the live row layout, so it is gone rather than dormant.
+ */
+const LEGACY_MANAGEMENT_SHEETS = ['Dashboard', 'Audit Log', 'All Orders'];
 
-async function ensureManagementSheets({ token, spreadsheetId, today = getBangkokParts().date }) {
+async function ensureManagementSheets({ token, spreadsheetId }) {
   const spreadsheet = await getSpreadsheet(token, spreadsheetId);
-  const sheets = spreadsheet.sheets ?? [];
-  const removedManagementSheets = sheets
-    .filter((sheet) => ['Dashboard', 'Audit Log', 'All Orders'].includes(sheet.properties.title))
+  const removedManagementSheets = (spreadsheet.sheets ?? [])
+    .filter((sheet) => LEGACY_MANAGEMENT_SHEETS.includes(sheet.properties.title))
     .map((sheet) => ({ deleteSheet: { sheetId: sheet.properties.sheetId } }));
-  if (removedManagementSheets.length > 0) {
-    await apiFetch(`${SHEETS_API}/${spreadsheetId}:batchUpdate`, token, {
-      method: 'POST',
-      body: JSON.stringify({ requests: removedManagementSheets }),
-    });
-  }
-  return;
-  const requests = [];
-  const existing = new Map(sheets.map((sheet) => [sheet.properties.title, sheet.properties]));
+  if (removedManagementSheets.length === 0) return;
 
-  if (!existing.has(MANAGEMENT_SHEETS.dashboard)) {
-    requests.push({ addSheet: { properties: { title: MANAGEMENT_SHEETS.dashboard, index: 0, gridProperties: { rowCount: 100, columnCount: 8 } } } });
-  }
-  if (!existing.has(MANAGEMENT_SHEETS.audit)) {
-    requests.push({ addSheet: { properties: { title: MANAGEMENT_SHEETS.audit, index: 1, gridProperties: { rowCount: 1000, columnCount: 9 } } } });
-  }
-  if (!existing.has(MANAGEMENT_SHEETS.allOrders)) {
-    requests.push({ addSheet: { properties: { title: MANAGEMENT_SHEETS.allOrders, index: 2, gridProperties: { rowCount: 5000, columnCount: TOTAL_COLUMNS + 6 } } } });
-  }
-
-  for (const sheet of sheets) {
-    const title = sheet.properties.title;
-    if (/^\d{4}-\d{2}-\d{2}(?:_conflict\d+)?$/.test(title) && title < today && !sheet.properties.hidden) {
-      requests.push({ updateSheetProperties: { properties: { sheetId: sheet.properties.sheetId, hidden: true }, fields: 'hidden' } });
-    }
-  }
-  if (requests.length > 0) {
-    await apiFetch(`${SHEETS_API}/${spreadsheetId}:batchUpdate`, token, { method: 'POST', body: JSON.stringify({ requests }) });
-  }
-
-  const refreshed = await getSpreadsheet(token, spreadsheetId);
-  const dashboard = refreshed.sheets?.find((sheet) => sheet.properties.title === MANAGEMENT_SHEETS.dashboard)?.properties;
-  const audit = refreshed.sheets?.find((sheet) => sheet.properties.title === MANAGEMENT_SHEETS.audit)?.properties;
-  const allOrders = refreshed.sheets?.find((sheet) => sheet.properties.title === MANAGEMENT_SHEETS.allOrders)?.properties;
-  if (!dashboard || !audit || !allOrders) return;
-
-  await apiFetch(`${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent('Dashboard!A1:B2')}?valueInputOption=RAW`, token, {
-    method: 'PUT',
-    body: JSON.stringify({ values: [['Dashboard', 'Loading'], ['Last sync', new Date().toISOString()]] }),
+  await apiFetch(`${SHEETS_API}/${spreadsheetId}:batchUpdate`, token, {
+    method: 'POST',
+    body: JSON.stringify({ requests: removedManagementSheets }),
   });
-
-  await apiFetch(`${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent('Audit Log!A1:I1')}?valueInputOption=RAW`, token, {
-    method: 'PUT', body: JSON.stringify({ values: [['เวลา', 'Tracking Number', 'ผู้ใช้งาน', 'บทบาท', 'การกระทำ', 'ขนส่งเดิม', 'ขนส่งใหม่', 'ผลลัพธ์', 'หมายเหตุ']] }),
-  });
-  const dateSheets = refreshed.sheets?.map((sheet) => sheet.properties.title).filter((title) => /^\d{4}-\d{2}-\d{2}(?:_conflict\d+)?$/.test(title)).sort().reverse() ?? [];
-  const dateList = [...new Set(dateSheets.map((title) => title.slice(0, 10)))];
-  const allOrderRows = [];
-  const shouldBuildAllOrders = !existing.has(MANAGEMENT_SHEETS.allOrders);
-  for (const date of shouldBuildAllOrders ? dateSheets : [today]) {
-    const rows = await readDailyRows({ token, spreadsheetId, date }).catch(() => []);
-    for (const row of rows) {
-      const hasAdmin = Boolean(String(row[11] ?? '').trim());
-      const status = String(row[8] ?? '').trim();
-      const hasPacker = Boolean(String(row[5] ?? '').trim());
-      const crossDay = String(row[21] ?? '').trim() === 'ใช่' ? 1 : 0;
-      allOrderRows.push([...row, date.slice(0, 10), hasAdmin ? 1 : 0, status === 'Success' ? 1 : 0, hasAdmin && !hasPacker ? 1 : 0, crossDay, date.slice(0, 7)]);
-    }
-  }
-  const allOrdersHeaders = [...ALL_HEADERS, 'Source Sheet', 'Admin Flag', 'Packed Flag', 'Pending Flag', 'Cross-day Flag', 'Month'];
-  if (shouldBuildAllOrders) {
-    await apiFetch(`${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent('All Orders!A1:AC5000')}:clear`, token, {
-      method: 'POST', body: JSON.stringify({}),
-    });
-    await apiFetch(`${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent('All Orders!A1:AC5000')}?valueInputOption=USER_ENTERED`, token, {
-      method: 'PUT', body: JSON.stringify({ values: [allOrdersHeaders, ...allOrderRows] }),
-    });
-  }
-  await apiFetch(`${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent('Dashboard!A1:AC100')}?valueInputOption=USER_ENTERED`, token, {
-    method: 'PUT', body: JSON.stringify({ values: [
-      ['สรุปการสแกน', '', '', '', '', '', '', ''],
-      ['เลือกวันที่', dateList[0], '', '', '', '', '', ''],
-      ['รายการแอดมินสแกน', `=COUNTIF(INDIRECT("'"&B2&"'!L2:L"),"<>")`, '', 'แพ็คแล้ว', `=COUNTIF(INDIRECT("'"&B2&"'!I2:I"),"Success")`, '', 'รอแพ็ค', `=COUNTIF(INDIRECT("'"&B2&"'!I2:I"),"รอแพ็ค")`],
-      ['ข้ามวัน', `=COUNTIF(INDIRECT("'"&B2&"'!V2:V"),"ใช่")`, '', 'อัปเดตล่าสุด', new Date().toISOString(), '', '', ''],
-      ['วันที่ในระบบ', ...dateList],
-    ] }),
-  }).catch((error) => {
-    console.warn('Legacy Dashboard formulas skipped:', error);
-  });
-  let dashboardRows = [];
-  for (const date of dateSheets) {
-    const rows = await readDailyRows({ token, spreadsheetId, date }).catch((error) => {
-      console.warn(`Dashboard read failed for ${date}:`, error);
-      return [];
-    });
-    dashboardRows.push([
-      date,
-      rows.filter((row) => String(row[11] ?? '').trim()).length,
-      rows.filter((row) => String(row[8] ?? '').trim() === 'Success').length,
-      rows.filter((row) => String(row[8] ?? '').trim() === 'รอแพ็ค').length,
-      rows.filter((row) => String(row[21] ?? '').trim() === 'ใช่').length,
-    ]);
-  }
-  const dailyMap = new Map();
-  for (const [date, admin, shipped, pending, crossDay] of dashboardRows) {
-    const key = date.slice(0, 10);
-    const stats = dailyMap.get(key) ?? [0, 0, 0, 0];
-    stats[0] += admin;
-    stats[1] += shipped;
-    stats[2] += pending;
-    stats[3] += crossDay;
-    dailyMap.set(key, stats);
-  }
-  dashboardRows = [...dailyMap.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([date, stats]) => [date, ...stats]);
-  const monthlyMap = new Map();
-  for (const [date, ...stats] of dashboardRows) {
-    const month = date.slice(0, 7);
-    const total = monthlyMap.get(month) ?? [0, 0, 0, 0];
-    stats.forEach((value, index) => { total[index] += value; });
-    monthlyMap.set(month, total);
-  }
-  const monthlyRows = [...monthlyMap.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([month, stats]) => [month, ...stats]);
-  await apiFetch(`${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent('Dashboard!A1:AC100')}:clear`, token, {
-    method: 'POST', body: JSON.stringify({}),
-  });
-  await apiFetch(`${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent('Dashboard!A10:E100')}?valueInputOption=USER_ENTERED`, token, {
-    method: 'PUT', body: JSON.stringify({ values: [['วันที่', 'แอดมินสแกน', 'แพ็คแล้ว', 'รอแพ็ค', 'ข้ามวัน'], ...dashboardRows] }),
-  });
-  await apiFetch(`${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent('Dashboard!A1:E100')}?valueInputOption=USER_ENTERED`, token, {
-    method: 'PUT', body: JSON.stringify({ values: [['วันที่', 'แอดมินสแกน', 'แพ็คแล้ว', 'รอแพ็ค', 'ข้ามวัน'], ...dashboardRows] }),
-  });
-  await apiFetch(`${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent('Dashboard!G1:K100')}?valueInputOption=USER_ENTERED`, token, {
-    method: 'PUT', body: JSON.stringify({ values: [['เดือน', 'แอดมินสแกน', 'แพ็คแล้ว', 'รอแพ็ค', 'ข้ามวัน'], ...monthlyRows] }),
-  });
-  const todayStats = dailyMap.get(today) ?? [0, 0, 0, 0];
-  await apiFetch(`${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent('Dashboard!A1:E5')}?valueInputOption=USER_ENTERED`, token, {
-    method: 'PUT', body: JSON.stringify({ values: [
-      ['Dashboard Summary', '', '', '', ''],
-      ['Last sync', new Date().toISOString(), '', '', ''],
-      ['Today', today, '', '', ''],
-      ['Admin scans', todayStats[0], 'Packed', todayStats[1], ''],
-      ['Pending pack', todayStats[2], 'Cross-day', todayStats[3], 'Packed count uses packer scan date'],
-    ] }),
-  });
-  await apiFetch(`${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent('Dashboard!A7:E100')}?valueInputOption=USER_ENTERED`, token, {
-    method: 'PUT', body: JSON.stringify({ values: [['Daily summary', '', '', '', ''], ['Date', 'Admin scans', 'Packed', 'Pending', 'Cross-day'], ...dashboardRows] }),
-  });
-  await apiFetch(`${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent('Dashboard!G7:K100')}?valueInputOption=USER_ENTERED`, token, {
-    method: 'PUT', body: JSON.stringify({ values: [['Monthly summary', '', '', '', ''], ['Month', 'Admin scans', 'Packed', 'Pending', 'Cross-day'], ...monthlyRows] }),
-  });
-  await apiFetch(`${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent('Dashboard!A8:E15')}?valueInputOption=USER_ENTERED`, token, {
-    method: 'PUT', body: JSON.stringify({ values: [[
-      '=QUERY(\'All Orders\'!A2:AC,"select Col24,sum(Col25),sum(Col26),sum(Col27),sum(Col28) where Col24 is not null group by Col24 order by Col24 desc limit 7 label Col24 \'Date\',sum(Col25) \'Admin scans\',sum(Col26) \'Packed\',sum(Col27) \'Pending\',sum(Col28) \'Cross-day\'",0)', '', '', '', ''],
-    ] }),
-  }).catch((error) => console.warn('Daily Dashboard formula skipped:', error));
-  await apiFetch(`${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent('Dashboard!G8:K20')}?valueInputOption=USER_ENTERED`, token, {
-    method: 'PUT', body: JSON.stringify({ values: [[
-      '=QUERY(\'All Orders\'!A2:AC,"select Col29,sum(Col25),sum(Col26),sum(Col27),sum(Col28) where Col29 is not null group by Col29 order by Col29 desc label Col29 \'Month\',sum(Col25) \'Admin scans\',sum(Col26) \'Packed\',sum(Col27) \'Pending\',sum(Col28) \'Cross-day\'",0)', '', '', '', ''],
-    ] }),
-  }).catch((error) => console.warn('Monthly Dashboard formula skipped:', error));
-  await apiFetch(`${SHEETS_API}/${spreadsheetId}:batchUpdate`, token, { method: 'POST', body: JSON.stringify({ requests: [
-    { updateSheetProperties: { properties: { sheetId: dashboard.sheetId, index: 0 }, fields: 'index' } },
-    { updateSheetProperties: { properties: { sheetId: audit.sheetId, index: 1 }, fields: 'index' } },
-  ] }) });
 }
 
-export async function ensureGoogleSheetOrganization({ token, config, today = getBangkokParts().date }) {
-  if (config?.master?.id) await ensureManagementSheets({ token, spreadsheetId: config.master.id, today });
+export async function ensureGoogleSheetOrganization({ token, config }) {
+  if (config?.master?.id) await ensureManagementSheets({ token, spreadsheetId: config.master.id });
 }
 
 async function ensureDailyWorksheet({ token, spreadsheetId, date }) {
