@@ -88,6 +88,35 @@ export function planDriveRetry({ driveAttempts, status }, maxAttempts = MAX_DRIV
 }
 
 /**
+ * How long a document may sit at `driveStatus: 'moving'` before it is assumed abandoned.
+ *
+ * An hour is deliberately far above any real transfer. The largest clip the recorder will
+ * produce is capped at 500 MB (MAX_SIZE_BYTES), which is 4,000 Mbit — about 33 minutes on a
+ * 2 Mbps line. The cost of being wrong is asymmetric: reclaiming too early while an upload is
+ * genuinely still running can leave a duplicate file in Drive, whereas reclaiming late only
+ * delays an archive.
+ */
+export const MOVING_LEASE_MS = 60 * 60 * 1000;
+
+/**
+ * Whether a `moving` document has been abandoned by a worker that died mid-upload.
+ *
+ * `moveOne` flips a document to 'moving' before it streams, and the pending query only matches
+ * 'pending' — so a worker killed during the transfer left the document stuck at 'moving' with
+ * nothing on either side able to pick it up again.
+ *
+ * A document whose `updatedAt` cannot be read yet is left alone rather than reclaimed: a
+ * serverTimestamp reads back null for a moment after it is written, and that moment is exactly
+ * when an upload is most likely to be genuinely in flight.
+ */
+export function planStaleMoveReclaim(doc, now = Date.now(), leaseMs = MOVING_LEASE_MS) {
+  if (doc?.driveStatus !== 'moving') return 'skip';
+  const updatedAt = toDate(doc.updatedAt).getTime();
+  if (!updatedAt) return 'wait';
+  return now - updatedAt >= leaseMs ? 'reclaim' : 'wait';
+}
+
+/**
  * What the retention sweep should do with one `moved` document.
  *
  * `retire` is the case that matters: a document whose Storage object is already gone must stop

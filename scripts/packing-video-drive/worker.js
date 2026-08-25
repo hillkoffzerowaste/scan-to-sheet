@@ -17,6 +17,7 @@ import {
   buildDriveNameForDoc,
   extensionFromMimeType,
   planDriveRetry,
+  planStaleMoveReclaim,
   planStoragePurge,
   toDate,
 } from './drivePaths.js';
@@ -279,7 +280,47 @@ async function movePending({ drive, bucket, db, config }) {
 }
 
 /**
- * Second pass: delete Storage objects that have been in Drive long enough.
+ * Recovery pass: hand back documents a dead worker left mid-transfer.
+ *
+ * `moveOne` sets 'moving' before it streams, and `movePending` only matches 'pending', so a
+ * worker killed during an upload — a reboot, an OOM, Ctrl+C at the wrong second — left the clip
+ * stuck at 'moving' for ever with no pass on either side able to see it again.
+ *
+ * A reclaim spends one attempt from the same budget as a failed move, so a clip that keeps
+ * stalling ends up in needs_review for a human instead of cycling for ever.
+ */
+async function reclaimStalledMoves({ db }) {
+  const snapshot = await db.collection('packingVideos')
+    .where('driveStatus', '==', 'moving')
+    .orderBy('updatedAt', 'asc')
+    .limit(BATCH_SIZE)
+    .get();
+
+  let reclaimed = 0;
+  for (const doc of snapshot.docs) {
+    const data = doc.data();
+    if (planStaleMoveReclaim({ ...data, updatedAt: toDate(data.updatedAt) }) !== 'reclaim') continue;
+    const plan = planDriveRetry(data);
+    await doc.ref.update({
+      driveAttempts: plan.driveAttempts,
+      driveStatus: plan.driveStatus,
+      lastErrorCode: 'PACKING_VIDEO_DRIVE_MOVE_STALLED',
+      status: plan.status,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    reclaimed += 1;
+    console.warn(
+      `Reclaimed ${data.videoId} stuck in 'moving'`
+      + ` (attempt ${plan.driveAttempts}/${MAX_DRIVE_ATTEMPTS}${plan.exhausted ? ', now needs review' : ''}).`,
+    );
+  }
+
+  if (reclaimed) console.log(`Reclaimed ${reclaimed} stalled move(s).`);
+  return reclaimed;
+}
+
+/**
+ * Third pass: delete Storage objects that have been in Drive long enough.
  *
  * Deliberately not immediate. A week of overlap leaves time to notice a file that will not
  * play, and keeps the current week's dashboard playback fast. A bucket lifecycle rule on the
@@ -343,6 +384,9 @@ export function parseArgs(argv, { defaultIntervalSeconds = DEFAULT_INTERVAL_SECO
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function runPass({ drive, bucket, db, config }) {
+  // Reclaim first, so a clip a dead worker abandoned is back in 'pending' before this pass
+  // picks its batch and can be archived in the same run.
+  await reclaimStalledMoves({ db });
   const moved = await movePending({ drive, bucket, db, config });
   await purgeMovedObjects({ bucket, db });
   return moved;

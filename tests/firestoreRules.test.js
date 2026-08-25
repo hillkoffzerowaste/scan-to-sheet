@@ -115,3 +115,26 @@ test("stored packing video objects are immutable and packers cannot delete them"
   assert.match(block[1], /allow delete: if isStaffAdmin\(\);/);
   assert.match(block[1], /contentType\.matches\('video\/\.\*'\)/);
 });
+
+test("every packingVideos query the Drive worker runs has a composite index", async () => {
+  // Firestore needs a composite index for one equality filter plus an orderBy on another
+  // field. Two of the worker's three queries had none — movePending's index was missing the
+  // `status` equality and purgeMovedObjects had no index at all — so both would fail with
+  // FAILED_PRECONDITION and nothing would ever be archived or cleaned up.
+  const indexes = JSON.parse(
+    await readFile(new URL("../firestore.indexes.json", import.meta.url), "utf8")
+  ).indexes;
+
+  const has = (fields) => indexes.some((index) => (
+    index.collectionGroup === "packingVideos"
+    && index.fields.length === fields.length
+    && index.fields.every((field, position) => field.fieldPath === fields[position])
+  ));
+
+  // movePending: driveStatus == 'pending' AND status == 'uploaded' ORDER BY uploadedAt
+  assert.ok(has(["driveStatus", "status", "uploadedAt"]), "movePending index missing");
+  // purgeMovedObjects: driveStatus == 'moved' ORDER BY movedToDriveAt
+  assert.ok(has(["driveStatus", "movedToDriveAt"]), "purgeMovedObjects index missing");
+  // reclaimStalledMoves: driveStatus == 'moving' ORDER BY updatedAt
+  assert.ok(has(["driveStatus", "updatedAt"]), "reclaimStalledMoves index missing");
+});

@@ -207,7 +207,39 @@
           "order": "ASCENDING"
         },
         {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
           "fieldPath": "uploadedAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "packingVideos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "driveStatus",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "movedToDriveAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "packingVideos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "driveStatus",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "updatedAt",
           "order": "ASCENDING"
         }
       ]

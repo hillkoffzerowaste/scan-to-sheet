@@ -3,12 +3,14 @@ import assert from 'node:assert/strict';
 
 import {
   MAX_DRIVE_ATTEMPTS,
+  MOVING_LEASE_MS,
   STORAGE_RETENTION_MS,
   buildDriveFolderPath,
   buildDriveNameForDoc,
   extensionFromMimeType,
   isStorageDeletable,
   planDriveRetry,
+  planStaleMoveReclaim,
   planStoragePurge,
   platformFolder,
   toDate,
@@ -107,4 +109,42 @@ test('a failed Drive move keeps its attempt count and stays retryable until the 
     if (plan.exhausted) break;
   }
   assert.equal(passes, MAX_DRIVE_ATTEMPTS);
+});
+
+test('a move abandoned by a dead worker is reclaimed once its lease expires', () => {
+  // moveOne flips the document to 'moving' before it streams, and movePending only matches
+  // 'pending'. A worker killed during the transfer therefore left the clip stuck at 'moving'
+  // with no pass on either side able to see it again.
+  const at = new Date('2026-08-20T00:00:00Z');
+  const moving = { driveStatus: 'moving', updatedAt: at };
+
+  assert.equal(planStaleMoveReclaim(moving, at.getTime() + MOVING_LEASE_MS), 'reclaim');
+  assert.equal(planStaleMoveReclaim(moving, at.getTime() + MOVING_LEASE_MS - 1), 'wait');
+  // An upload that is genuinely still running must never be reclaimed underneath itself.
+  assert.equal(planStaleMoveReclaim(moving, at.getTime() + 60_000), 'wait');
+  assert.equal(planStaleMoveReclaim({ driveStatus: 'pending', updatedAt: at }, Date.now()), 'skip');
+  assert.equal(planStaleMoveReclaim({ driveStatus: 'moved', updatedAt: at }, Date.now()), 'skip');
+});
+
+test('a moving document with no readable timestamp is left alone, not reclaimed', () => {
+  // A serverTimestamp reads back null for a moment after it is written, and that moment is
+  // exactly when the upload is most likely to be in flight.
+  assert.equal(planStaleMoveReclaim({ driveStatus: 'moving', updatedAt: null }, Date.now()), 'wait');
+  assert.equal(planStaleMoveReclaim({ driveStatus: 'moving' }, Date.now()), 'wait');
+});
+
+test('the reclaim lease is comfortably longer than the largest possible transfer', () => {
+  // Reclaiming early risks a duplicate file in Drive, so the lease has to clear the worst case,
+  // not the typical one: MAX_SIZE_BYTES is 500 MB, which is 4,000 Mbit — about 33 minutes on a
+  // 2 Mbps line. The lease must sit above that with room to spare.
+  const worstCaseMs = ((500 * 8) / 2) * 1000; // 500 MB at 2 Mbps, in ms
+  assert.equal(Math.round(worstCaseMs / 60_000), 33);
+  assert.ok(MOVING_LEASE_MS > worstCaseMs * 1.5, 'lease must clear the worst-case upload by 50%');
+});
+
+test('a reclaim spends the same attempt budget as a failed move', () => {
+  // Otherwise a clip that stalls every pass would cycle for ever instead of reaching a human.
+  const plan = planDriveRetry({ driveAttempts: MAX_DRIVE_ATTEMPTS - 1, status: 'uploaded' });
+  assert.equal(plan.driveStatus, 'failed');
+  assert.equal(plan.status, 'needs_review');
 });
