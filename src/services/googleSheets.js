@@ -195,7 +195,6 @@ export function validateScanCode(courier, value, { allowAnyFormat = false } = {}
 export async function apiFetch(url, token, options = {}) {
   const { timeoutMs = GOOGLE_API_TIMEOUT_MS, ...requestOptions } = options;
   const maxRetries = 4;
-  let lastError;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     const controller = new AbortController();
@@ -211,8 +210,16 @@ export async function apiFetch(url, token, options = {}) {
         },
       });
 
-      if (response.status === 429 && attempt < maxRetries) {
-        lastError = new Error(`Google จำกัดการเรียกใช้ชั่วคราว (ลองแล้ว ${attempt + 1} ครั้ง) กรุณารอสักครู่แล้วลองใหม่`);
+      if (response.status === 429) {
+        // The last 429 used to fall through to the generic !response.ok branch, so the
+        // rate-limit message built here was never the one the user saw and the `throw lastError`
+        // after the loop was unreachable. Throw the specific error on the final attempt instead.
+        if (attempt >= maxRetries) {
+          throw Object.assign(
+            new Error(`Google จำกัดการเรียกใช้ชั่วคราว (ลองแล้ว ${attempt + 1} ครั้ง) กรุณารอสักครู่แล้วลองใหม่`),
+            { status: 429, code: 'GOOGLE_RATE_LIMITED' },
+          );
+        }
         const retryAfter = response.headers.get('Retry-After');
         const retryAfterSeconds = Number(retryAfter);
         const retryAfterMs = Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
@@ -255,7 +262,9 @@ export async function apiFetch(url, token, options = {}) {
     }
   }
 
-  throw lastError ?? new Error('ลองเชื่อมต่อ Google หลายครั้งแล้วไม่สำเร็จ กรุณาลองใหม่ภายหลัง');
+  // Every iteration returns or throws, and the final one cannot `continue`, so this is only a
+  // guard against a future edit turning the loop into a silent `undefined`.
+  throw new Error('ลองเชื่อมต่อ Google หลายครั้งแล้วไม่สำเร็จ กรุณาลองใหม่ภายหลัง');
 }
 
 async function clearSheetRange({ token, spreadsheetId, range }) {
@@ -694,7 +703,9 @@ async function ensureWorksheetReady({ token, spreadsheetId, date, sheetId }) {
 
 async function writeHeaders({ token, spreadsheetId, date }) {
   await apiFetch(
-    `${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent(`${date}!A1:${sheetEndColumn()}1`)}?valueInputOption=RAW`,
+    // Quoted like every other range in this file: a bare sheet name is the one thing A1
+    // notation will not reliably accept, and _conflict tabs are not plain dates.
+    `${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent(`${escapeSheetName(date)}!A1:${sheetEndColumn()}1`)}?valueInputOption=RAW`,
     token,
     {
       method: 'PUT',
@@ -1503,7 +1514,6 @@ export async function appendScanGoogle({
   if (!duplicate && !isIssueScan) {
     const adminMatchRow = reconciliation.action === 'merge-packer' ? reconciliation.row : null;
     if (adminMatchRow) {
-      const rowNumber = adminMatchRow.sheetRowNumber;
       // Re-read to get fresh row position
       const verifyRows = await readDailyRows({ token, spreadsheetId: sheet.id, date });
       const verifyParsed = verifyRows.map(rowFromSheet);
@@ -2033,7 +2043,6 @@ export async function appendAdminScanGoogle({
 
   if (packerRow) {
     // Merge: update existing row with admin fields
-    const rowNumber = packerRow.sheetRowNumber;
     // Re-read for fresh position
     const verifyRows = await readDailyRows({ token, spreadsheetId: sheet.id, date });
     const verifyParsed = verifyRows.map(rowFromSheet);
@@ -2325,9 +2334,11 @@ export async function checkMissingOrders({
   const relevantDates = sheetTitles.filter((title) => {
     const d = parseDateOnly(title);
     if (!d) return false;
-    const titleTime = d.getTime();
-    // Include today and yesterday based on lookback
-    return (now.getTime() - titleTime) <= lookbackMs;
+    // The elapsed time is negative for a tab dated in the future, which used to pass the
+    // upper bound and drag a mistyped tab into every missing-order report. Bangkok is UTC+7,
+    // so today's tab is legitimately up to 7h "ahead" of its UTC midnight.
+    const elapsedMs = now.getTime() - d.getTime();
+    return elapsedMs >= -BANGKOK_UTC_OFFSET_MS && elapsedMs <= lookbackMs;
   });
 
   const matched = [];
