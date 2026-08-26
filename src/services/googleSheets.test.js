@@ -8,6 +8,7 @@ import {
   appendScanGoogle,
   batchAppendScanGoogle,
   buildDailyDataTypeFormattingRequests,
+  buildDailyRowDataTypeFormattingRequests,
   buildDailyRowUpdateData,
   findCancellationRow,
   getDailySheetPropertiesForMarketplaceBackfill,
@@ -74,6 +75,41 @@ test('daily data type formatting targets only date, time and tracking columns', 
       { startRowIndex: 1, startColumnIndex: 12, endColumnIndex: 13, numberFormat: { type: 'TEXT', pattern: '@' }, fields: 'userEnteredFormat.numberFormat' },
     ],
   );
+});
+
+test('touched scan rows restore date and time formats without rewriting other columns', () => {
+  const requests = buildDailyRowDataTypeFormattingRequests(123, [187, 168, 187, 179]);
+
+  assert.deepEqual(
+    requests.map(({ repeatCell }) => ({
+      range: repeatCell.range,
+      numberFormat: repeatCell.cell.userEnteredFormat.numberFormat,
+      fields: repeatCell.fields,
+    })),
+    [
+      {
+        range: { sheetId: 123, startRowIndex: 167, endRowIndex: 187, startColumnIndex: 2, endColumnIndex: 3 },
+        numberFormat: { type: 'DATE', pattern: 'yyyy-mm-dd' },
+        fields: 'userEnteredFormat.numberFormat',
+      },
+      {
+        range: { sheetId: 123, startRowIndex: 167, endRowIndex: 187, startColumnIndex: 3, endColumnIndex: 4 },
+        numberFormat: { type: 'TIME', pattern: 'h:mm:ss' },
+        fields: 'userEnteredFormat.numberFormat',
+      },
+      {
+        range: { sheetId: 123, startRowIndex: 167, endRowIndex: 187, startColumnIndex: 10, endColumnIndex: 11 },
+        numberFormat: { type: 'DATE', pattern: 'yyyy-mm-dd' },
+        fields: 'userEnteredFormat.numberFormat',
+      },
+      {
+        range: { sheetId: 123, startRowIndex: 167, endRowIndex: 187, startColumnIndex: 11, endColumnIndex: 12 },
+        numberFormat: { type: 'TIME', pattern: 'h:mm:ss' },
+        fields: 'userEnteredFormat.numberFormat',
+      },
+    ],
+  );
+  assert.deepEqual(buildDailyRowDataTypeFormattingRequests(123, [1, '2']), []);
 });
 
 test('apiFetch aborts a Google request that never responds', async () => {

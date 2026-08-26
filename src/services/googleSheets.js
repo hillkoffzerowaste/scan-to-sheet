@@ -803,6 +803,39 @@ export function buildDailyDataTypeFormattingRequests(sheetId) {
   }));
 }
 
+export function buildDailyRowDataTypeFormattingRequests(sheetId, rowNumbers) {
+  const rows = [...new Set(rowNumbers ?? [])]
+    .filter((rowNumber) => Number.isInteger(rowNumber) && rowNumber >= 2)
+    .sort((left, right) => left - right);
+  if (rows.length === 0) return [];
+
+  // A Values API write preserves an existing format, but cannot restore one that was removed
+  // by an earlier paste or legacy writer. Apply the standard types to every touched span while
+  // the status batch is already in flight, so a repaired row never leaves date/time serials.
+  const startRowIndex = rows[0] - 1;
+  const endRowIndex = rows.at(-1);
+  const formats = [
+    { columnIndex: 2, numberFormat: { type: 'DATE', pattern: 'yyyy-mm-dd' } },
+    { columnIndex: 3, numberFormat: { type: 'TIME', pattern: 'h:mm:ss' } },
+    { columnIndex: 10, numberFormat: { type: 'DATE', pattern: 'yyyy-mm-dd' } },
+    { columnIndex: 11, numberFormat: { type: 'TIME', pattern: 'h:mm:ss' } },
+  ];
+
+  return formats.map(({ columnIndex, numberFormat }) => ({
+    repeatCell: {
+      range: {
+        sheetId,
+        startRowIndex,
+        endRowIndex,
+        startColumnIndex: columnIndex,
+        endColumnIndex: columnIndex + 1,
+      },
+      cell: { userEnteredFormat: { numberFormat } },
+      fields: 'userEnteredFormat.numberFormat',
+    },
+  }));
+}
+
 /**
  * Recolours the status columns.
  *
@@ -815,7 +848,9 @@ export function buildDailyDataTypeFormattingRequests(sheetId) {
 async function applyStatusCellColors({ token, spreadsheetId, date, sheetId, rowNumbers = null }) {
   const only = rowNumbers ? new Set(rowNumbers) : null;
   const rows = await readDailyRows({ token, spreadsheetId, date });
-  const requests = [];
+  const requests = rowNumbers
+    ? buildDailyRowDataTypeFormattingRequests(sheetId, rowNumbers)
+    : [];
   const colors = {
     success: { backgroundColor: { red: 0.85, green: 0.95, blue: 0.88 }, foregroundColor: { red: 0.1, green: 0.45, blue: 0.2 } },
     pending: { backgroundColor: { red: 1, green: 0.95, blue: 0.75 }, foregroundColor: { red: 0.55, green: 0.35, blue: 0 } },
