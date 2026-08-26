@@ -151,7 +151,14 @@ const ALLOWED_TRANSITIONS = {
     PACKING_VIDEO_STATUS.needsReview,
   ],
   [PACKING_VIDEO_STATUS.uploaded]: [PACKING_VIDEO_STATUS.needsReview],
-  [PACKING_VIDEO_STATUS.cancelled]: [PACKING_VIDEO_STATUS.needsReview],
+  // A cancelled pack still uploads its clip — `cancelled` is a status, not a removal, and the
+  // queue treats it as runnable for exactly that reason. The table used to say this could not
+  // happen while the queue did it on every cancelled parcel; the table was the wrong half.
+  [PACKING_VIDEO_STATUS.cancelled]: [
+    PACKING_VIDEO_STATUS.uploaded,
+    PACKING_VIDEO_STATUS.uploadFailed,
+    PACKING_VIDEO_STATUS.needsReview,
+  ],
   // A reviewed clip can be re-queued once an Admin decides it is worth another try.
   [PACKING_VIDEO_STATUS.needsReview]: [PACKING_VIDEO_STATUS.pendingUpload],
 };

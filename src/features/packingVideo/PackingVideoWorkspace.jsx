@@ -6,6 +6,7 @@ import {
   dropBlob,
   findInterruptedRecordings,
   getMeta,
+  getVideo,
   listPendingVideos,
   purgeOldMetadata,
   setMeta,
@@ -90,6 +91,7 @@ export default function PackingVideoWorkspace({
     const queue = createPackingVideoQueue({
       db: {
         listPending: listPendingVideos,
+        get: getVideo,
         update: updateVideo,
         dropBlob,
         summarize: summarizeQueue,

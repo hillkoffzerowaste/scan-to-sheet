@@ -15,7 +15,10 @@ function fakeDb(initial = []) {
   const rows = new Map(initial.map((row) => [row.videoId, { ...row }]));
   return {
     rows,
-    listPending: async () => [...rows.values()].map((row) => ({ ...row })),
+    // Mirrors listPendingVideos, which returns only rows that still hold a blob. A fake that
+    // returned everything would let a guard pass in tests and miss in production.
+    listPending: async () => [...rows.values()].filter((row) => row.blob).map((row) => ({ ...row })),
+    get: async (videoId) => (rows.has(videoId) ? { ...rows.get(videoId) } : null),
     update: async (videoId, patch) => {
       rows.set(videoId, { ...rows.get(videoId), ...patch });
     },
@@ -252,4 +255,31 @@ test('a disposed queue stops accepting work', async () => {
 test('the queue refuses to be built without its dependencies', () => {
   assert.throws(() => createPackingVideoQueue({ db: null, pipeline: () => {} }), TypeError);
   assert.throws(() => createPackingVideoQueue({ db: {}, pipeline: null }), TypeError);
+});
+
+test('re-queueing a clip the queue already finished is refused', async () => {
+  // canTransition existed but was enforced nowhere, so the table drifted from the code and an
+  // uploaded clip could be sent round again — rewriting its Firestore document with a job that
+  // no longer has a blob.
+  const db = fakeDb([job({ status: 'uploaded', blob: null })]);
+  let calls = 0;
+  const queue = createPackingVideoQueue({ db, now: () => 1000, pipeline: async () => { calls += 1; } });
+
+  await assert.rejects(
+    () => queue.retry('pv_1'),
+    (error) => error.code === 'PACKING_VIDEO_INVALID_TRANSITION',
+  );
+  assert.equal(calls, 0);
+  assert.equal(db.rows.get('pv_1').status, 'uploaded');
+});
+
+test('a cancelled pack still uploads its clip', async () => {
+  // "Cancelled" is a status, not a removal: the evidence is kept either way, which is why
+  // isRunnable treats it as runnable. The transition table used to contradict that.
+  const db = fakeDb([job({ status: 'cancelled' })]);
+  const queue = createPackingVideoQueue({ db, now: () => 1000, pipeline: async () => ({ storageUrl: 'u' }) });
+
+  const results = await queue.kick();
+  assert.equal(results[0].status, 'uploaded');
+  assert.equal(db.rows.get('pv_1').status, 'uploaded');
 });

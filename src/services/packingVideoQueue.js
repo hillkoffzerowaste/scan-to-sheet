@@ -1,4 +1,4 @@
-import { PACKING_VIDEO_STATUS } from './packingVideoModel.js';
+import { PACKING_VIDEO_STATUS, canTransition } from './packingVideoModel.js';
 
 /**
  * The upload queue.
@@ -141,6 +141,20 @@ export function createPackingVideoQueue({
      * count instead of continuing the backoff.
      */
     async retry(videoId) {
+      // The transition table was previously enforced nowhere, so it drifted out of step with
+      // what the queue actually did. This is the one place a human re-queues a clip — from the
+      // dashboard, for a failed upload or a defective one — so it is where the table earns its
+      // keep. An already-uploaded clip must not be sent round again: it has no local blob left
+      // and re-running the pipeline would rewrite its Firestore document.
+      // `db.get`, not listPending: that one only returns rows that still hold a blob, so an
+      // already-uploaded clip — the exact case worth refusing — would not be found at all.
+      const current = await db.get?.(videoId);
+      if (current && !canTransition(current.status, PACKING_VIDEO_STATUS.pendingUpload)) {
+        throw Object.assign(
+          new Error('วิดีโอนี้อยู่ในสถานะที่สั่งอัปโหลดซ้ำไม่ได้'),
+          { code: 'PACKING_VIDEO_INVALID_TRANSITION', from: current.status },
+        );
+      }
       await db.update(videoId, {
         status: PACKING_VIDEO_STATUS.pendingUpload,
         uploadAttempts: 0,

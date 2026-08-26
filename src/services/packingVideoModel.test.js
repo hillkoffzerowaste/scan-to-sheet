@@ -99,8 +99,20 @@ test('canTransition allows a retry back into the queue but not a finished clip b
   assert.equal(canTransition('pending_upload', 'uploaded'), true);
   assert.equal(canTransition('uploaded', 'needs_review'), true);
   assert.equal(canTransition('uploaded', 'pending_upload'), false);
-  assert.equal(canTransition('cancelled', 'uploaded'), false);
   assert.equal(canTransition('uploaded', 'uploaded'), true);
+});
+
+test('a cancelled pack may still finish its upload', () => {
+  // This assertion used to read `canTransition('cancelled', 'uploaded') === false`, which
+  // contradicted the queue: isRunnable has always treated `cancelled` as runnable, because
+  // "cancelled" describes the pack, not the evidence, and the clip is kept either way. The
+  // table was enforced nowhere, so nothing caught the disagreement — the test was locking in
+  // a rule the code never followed.
+  assert.equal(canTransition('cancelled', 'uploaded'), true);
+  assert.equal(canTransition('cancelled', 'upload_failed'), true);
+  assert.equal(canTransition('cancelled', 'needs_review'), true);
+  // A cancelled clip is still not something an Admin re-queues from scratch.
+  assert.equal(canTransition('cancelled', 'pending_upload'), false);
 });
 
 test('normalizePackingTracking matches how marketplace orders are indexed', () => {
