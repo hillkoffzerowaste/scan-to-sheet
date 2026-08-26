@@ -566,6 +566,17 @@ export async function getSpreadsheet(token, spreadsheetId) {
   );
 }
 
+async function getSheetConditionalFormats({ token, spreadsheetId, date, sheetId }) {
+  const range = `${escapeSheetName(date)}!A1`;
+  const fields = 'sheets(properties(sheetId),conditionalFormats(ranges,booleanRule))';
+  const spreadsheet = await apiFetch(
+    `${SHEETS_API}/${spreadsheetId}?ranges=${encodeURIComponent(range)}&fields=${encodeURIComponent(fields)}`,
+    token,
+  );
+  return spreadsheet.sheets?.find((sheet) => sheet.properties?.sheetId === sheetId)
+    ?.conditionalFormats ?? [];
+}
+
 /**
  * Deletes the legacy management tabs.
  *
@@ -717,6 +728,16 @@ async function writeHeaders({ token, spreadsheetId, date }) {
 }
 
 async function formatDailyWorksheet({ token, spreadsheetId, date, sheetId }) {
+  const existingConditionalFormats = await getSheetConditionalFormats({
+    token,
+    spreadsheetId,
+    date,
+    sheetId,
+  });
+  const managedConditionalFormats = [
+    ...buildStatusFormattingRequests(sheetId),
+    ...buildMarketplaceFormattingRequests(sheetId),
+  ];
   await apiFetch(`${SHEETS_API}/${spreadsheetId}:batchUpdate`, token, {
     method: 'POST',
     body: JSON.stringify({
@@ -745,13 +766,41 @@ async function formatDailyWorksheet({ token, spreadsheetId, date, sheetId }) {
             },
           },
         },
-        ...buildStatusFormattingRequests(sheetId),
+        ...buildDailyDataTypeFormattingRequests(sheetId),
+        ...buildConditionalFormatReconciliationRequests({
+          sheetId,
+          existingRules: existingConditionalFormats,
+          managedRequests: managedConditionalFormats,
+        }),
         buildStatusValidationRequest(sheetId),
-        ...buildMarketplaceFormattingRequests(sheetId),
       ],
     }),
   });
   await applyStatusCellColors({ token, spreadsheetId, date, sheetId });
+}
+
+export function buildDailyDataTypeFormattingRequests(sheetId) {
+  const formats = [
+    { columnIndex: 2, numberFormat: { type: 'DATE', pattern: 'yyyy-mm-dd' } },
+    { columnIndex: 3, numberFormat: { type: 'TIME', pattern: 'h:mm:ss' } },
+    { columnIndex: 5, numberFormat: { type: 'TEXT', pattern: '@' } },
+    { columnIndex: 10, numberFormat: { type: 'DATE', pattern: 'yyyy-mm-dd' } },
+    { columnIndex: 11, numberFormat: { type: 'TIME', pattern: 'h:mm:ss' } },
+    { columnIndex: 12, numberFormat: { type: 'TEXT', pattern: '@' } },
+  ];
+
+  return formats.map(({ columnIndex, numberFormat }) => ({
+    repeatCell: {
+      range: {
+        sheetId,
+        startRowIndex: 1,
+        startColumnIndex: columnIndex,
+        endColumnIndex: columnIndex + 1,
+      },
+      cell: { userEnteredFormat: { numberFormat } },
+      fields: 'userEnteredFormat.numberFormat',
+    },
+  }));
 }
 
 /**
@@ -829,6 +878,44 @@ function buildStatusFormattingRequests(sheetId) {
   ];
 }
 
+function conditionalFormatRuleKey(rule) {
+  if (rule?.ranges?.length !== 1 || rule.booleanRule?.condition?.type !== 'CUSTOM_FORMULA') {
+    return '';
+  }
+  const range = rule.ranges[0];
+  const formula = rule.booleanRule.condition.values?.[0]?.userEnteredValue;
+  if (!formula) return '';
+  return [
+    range.sheetId,
+    range.startRowIndex ?? 0,
+    range.startColumnIndex ?? 0,
+    range.endColumnIndex ?? '',
+    formula,
+  ].join('|');
+}
+
+/**
+ * Replaces only the conditional-format rules owned by this app. Google normalizes colours
+ * and fills in omitted row bounds when a rule is saved, so matching the complete API object
+ * would miss the same logical rule and let another copy accumulate on every new session.
+ */
+export function buildConditionalFormatReconciliationRequests({
+  sheetId,
+  existingRules = [],
+  managedRequests = [],
+}) {
+  const managedKeys = new Set(managedRequests
+    .map((request) => request.addConditionalFormatRule?.rule)
+    .map(conditionalFormatRuleKey)
+    .filter(Boolean));
+  const deleteRequests = existingRules
+    .map((rule, index) => ({ index, key: conditionalFormatRuleKey(rule) }))
+    .filter(({ key }) => managedKeys.has(key))
+    .sort((left, right) => right.index - left.index)
+    .map(({ index }) => ({ deleteConditionalFormatRule: { sheetId, index } }));
+  return [...deleteRequests, ...managedRequests];
+}
+
 export function buildStatusValidationRequest(sheetId) {
   // Barcode scanners behave like keyboards. A strict list prevents an accidental scanner
   // focus in Google Sheets from replacing Status with a tracking number; every value the
@@ -894,10 +981,20 @@ export function getDailySheetPropertiesForMarketplaceBackfill(sheetProperties) {
   ));
 }
 
-async function applyMarketplaceFormatting({ token, spreadsheetId, sheetId }) {
+async function applyMarketplaceFormatting({
+  token,
+  spreadsheetId,
+  sheetId,
+  existingRules = [],
+}) {
+  const requests = buildConditionalFormatReconciliationRequests({
+    sheetId,
+    existingRules,
+    managedRequests: buildMarketplaceFormattingRequests(sheetId),
+  });
   await apiFetch(`${SHEETS_API}/${spreadsheetId}:batchUpdate`, token, {
     method: 'POST',
-    body: JSON.stringify({ requests: buildMarketplaceFormattingRequests(sheetId) }),
+    body: JSON.stringify({ requests }),
   });
 }
 
@@ -944,16 +1041,89 @@ async function batchReadDailyRows({ token, spreadsheetId, sheetNames }) {
   return rowsBySheet;
 }
 
+const GOOGLE_SHEETS_EPOCH_UTC = Date.UTC(1899, 11, 30);
+const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
+
+function googleSheetsDateSerial(value) {
+  if (typeof value !== 'string') return null;
+  const match = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+
+  const [, yearText, monthText, dayText] = match;
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  const timestamp = Date.UTC(year, month - 1, day);
+  const parsed = new Date(timestamp);
+  if (
+    parsed.getUTCFullYear() !== year
+    || parsed.getUTCMonth() !== month - 1
+    || parsed.getUTCDate() !== day
+  ) return null;
+
+  return (timestamp - GOOGLE_SHEETS_EPOCH_UTC) / MILLISECONDS_PER_DAY;
+}
+
+function googleSheetsTimeSerial(value) {
+  if (typeof value !== 'string') return null;
+  const match = value.trim().match(/^(\d{1,2}):(\d{2}):(\d{2})$/);
+  if (!match) return null;
+
+  const [, hourText, minuteText, secondText] = match;
+  const hour = Number(hourText);
+  const minute = Number(minuteText);
+  const second = Number(secondText);
+  if (hour > 23 || minute > 59 || second > 59) return null;
+  return ((hour * 60 * 60) + (minute * 60) + second) / (24 * 60 * 60);
+}
+
+function normalizeDailyRawCells(row) {
+  const normalizedRow = [...row];
+
+  // The Values API returns formatted cells as strings. Restore the native types
+  // before RAW merge/recovery writes so Sheets keeps its normal alignment and formats.
+  for (const columnIndex of [0, 1]) {
+    const value = normalizedRow[columnIndex];
+    if (typeof value !== 'string') continue;
+
+    const trimmedValue = value.trim();
+    if (!/^[1-9]\d*$/.test(trimmedValue)) continue;
+
+    const numericValue = Number(trimmedValue);
+    if (Number.isSafeInteger(numericValue)) normalizedRow[columnIndex] = numericValue;
+  }
+
+  for (const columnIndex of [2, 10]) {
+    const serial = googleSheetsDateSerial(normalizedRow[columnIndex]);
+    if (serial !== null) normalizedRow[columnIndex] = serial;
+  }
+
+  for (const columnIndex of [3, 11]) {
+    const serial = googleSheetsTimeSerial(normalizedRow[columnIndex]);
+    if (serial !== null) normalizedRow[columnIndex] = serial;
+  }
+
+  for (const columnIndex of [5, 12]) {
+    const value = normalizedRow[columnIndex];
+    if (typeof value === 'number' && Number.isSafeInteger(value)) {
+      normalizedRow[columnIndex] = String(value);
+    }
+  }
+
+  return normalizedRow;
+}
+
 export function buildDailyRowUpdateData(date, rowNumber, row) {
   const sheetName = escapeSheetName(date);
+  const normalizedRow = normalizeDailyRawCells(row);
   return [
     {
       range: `${sheetName}!A${rowNumber}:O${rowNumber}`,
-      values: [row.slice(0, 15)],
+      values: [normalizedRow.slice(0, 15)],
     },
     {
       range: `${sheetName}!Q${rowNumber}:${sheetEndColumn()}${rowNumber}`,
-      values: [row.slice(16, TOTAL_COLUMNS)],
+      values: [normalizedRow.slice(16, TOTAL_COLUMNS)],
     },
   ];
 }
@@ -1112,7 +1282,14 @@ export async function getTodayRowsGoogle({ token, config, courier, date = getBan
 export async function colorAllHistoricalSheetsGoogle({ token, config }) {
   const spreadsheetId = config?.master?.id;
   if (!spreadsheetId) return { colored: 0, total: 0 };
-  const spreadsheet = await getSpreadsheet(token, spreadsheetId);
+  const spreadsheet = await apiFetch(
+    `${SHEETS_API}/${spreadsheetId}?fields=${encodeURIComponent('sheets(properties(sheetId,title,gridProperties(rowCount,columnCount)),conditionalFormats(ranges,booleanRule))')}`,
+    token,
+  );
+  const conditionalFormatsBySheetId = new Map((spreadsheet.sheets ?? []).map((sheet) => [
+    sheet.properties.sheetId,
+    sheet.conditionalFormats ?? [],
+  ]));
   const dateSheets = getDailySheetPropertiesForMarketplaceBackfill(
     (spreadsheet.sheets ?? []).map((item) => item.properties),
   );
@@ -1127,7 +1304,12 @@ export async function colorAllHistoricalSheetsGoogle({ token, config }) {
         } }] }),
       });
     }
-    await applyMarketplaceFormatting({ token, spreadsheetId, sheetId: sheet.sheetId });
+    await applyMarketplaceFormatting({
+      token,
+      spreadsheetId,
+      sheetId: sheet.sheetId,
+      existingRules: conditionalFormatsBySheetId.get(sheet.sheetId) ?? [],
+    });
     await applyStatusCellColors({ token, spreadsheetId, date: sheet.title, sheetId: sheet.sheetId });
     colored += 1;
   }

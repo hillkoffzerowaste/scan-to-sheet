@@ -3,13 +3,78 @@ import assert from 'node:assert/strict';
 
 import {
   buildMarketplaceFormattingRequests,
+  buildConditionalFormatReconciliationRequests,
   buildStatusValidationRequest,
   appendScanGoogle,
   batchAppendScanGoogle,
+  buildDailyDataTypeFormattingRequests,
+  buildDailyRowUpdateData,
   findCancellationRow,
   getDailySheetPropertiesForMarketplaceBackfill,
   apiFetch,
 } from './googleSheets.js';
+
+test('buildDailyRowUpdateData restores native RAW types after formatted-value reads', () => {
+  const row = Array(23).fill('');
+  row[0] = '117';
+  row[1] = ' 8 ';
+  row[2] = '2026-08-26';
+  row[3] = '11:21:22';
+  row[5] = 66857226387700;
+  row[10] = '2026-08-25';
+  row[11] = '9:47:52';
+  row[12] = 66857221393746;
+
+  const [primaryRange] = buildDailyRowUpdateData('2026-08-26', 118, row);
+  const updatedRow = primaryRange.values[0];
+  assert.equal(updatedRow[0], 117);
+  assert.equal(updatedRow[1], 8);
+  assert.equal(updatedRow[2], 46260);
+  assert.equal(updatedRow[3], ((11 * 60 * 60) + (21 * 60) + 22) / (24 * 60 * 60));
+  assert.equal(updatedRow[5], '66857226387700');
+  assert.equal(updatedRow[10], 46259);
+  assert.equal(updatedRow[11], ((9 * 60 * 60) + (47 * 60) + 52) / (24 * 60 * 60));
+  assert.equal(updatedRow[12], '66857221393746');
+  assert.equal(row[0], '117');
+  assert.equal(row[2], '2026-08-26');
+  assert.equal(row[5], 66857226387700);
+
+  const invalidRow = Array(23).fill('');
+  invalidRow[0] = '_TEMP_scan-id';
+  invalidRow[2] = '2026-02-30';
+  invalidRow[3] = '24:00:00';
+  invalidRow[5] = '001234';
+  invalidRow[10] = 'not-a-date';
+  invalidRow[11] = '9:99:00';
+  invalidRow[12] = Number.MAX_SAFE_INTEGER + 1;
+  const [invalidRange] = buildDailyRowUpdateData('2026-08-26', 118, invalidRow);
+  assert.deepEqual(
+    [0, 2, 3, 5, 10, 11, 12].map((index) => invalidRange.values[0][index]),
+    ['_TEMP_scan-id', '2026-02-30', '24:00:00', '001234', 'not-a-date', '9:99:00', Number.MAX_SAFE_INTEGER + 1],
+  );
+});
+
+test('daily data type formatting targets only date, time and tracking columns', () => {
+  const requests = buildDailyDataTypeFormattingRequests(123);
+  assert.equal(requests.length, 6);
+  assert.deepEqual(
+    requests.map(({ repeatCell }) => ({
+      startRowIndex: repeatCell.range.startRowIndex,
+      startColumnIndex: repeatCell.range.startColumnIndex,
+      endColumnIndex: repeatCell.range.endColumnIndex,
+      numberFormat: repeatCell.cell.userEnteredFormat.numberFormat,
+      fields: repeatCell.fields,
+    })),
+    [
+      { startRowIndex: 1, startColumnIndex: 2, endColumnIndex: 3, numberFormat: { type: 'DATE', pattern: 'yyyy-mm-dd' }, fields: 'userEnteredFormat.numberFormat' },
+      { startRowIndex: 1, startColumnIndex: 3, endColumnIndex: 4, numberFormat: { type: 'TIME', pattern: 'h:mm:ss' }, fields: 'userEnteredFormat.numberFormat' },
+      { startRowIndex: 1, startColumnIndex: 5, endColumnIndex: 6, numberFormat: { type: 'TEXT', pattern: '@' }, fields: 'userEnteredFormat.numberFormat' },
+      { startRowIndex: 1, startColumnIndex: 10, endColumnIndex: 11, numberFormat: { type: 'DATE', pattern: 'yyyy-mm-dd' }, fields: 'userEnteredFormat.numberFormat' },
+      { startRowIndex: 1, startColumnIndex: 11, endColumnIndex: 12, numberFormat: { type: 'TIME', pattern: 'h:mm:ss' }, fields: 'userEnteredFormat.numberFormat' },
+      { startRowIndex: 1, startColumnIndex: 12, endColumnIndex: 13, numberFormat: { type: 'TEXT', pattern: '@' }, fields: 'userEnteredFormat.numberFormat' },
+    ],
+  );
+});
 
 test('apiFetch aborts a Google request that never responds', async () => {
   const originalFetch = globalThis.fetch;
@@ -71,6 +136,42 @@ test('buildMarketplaceFormattingRequests colors platform cells with readable bra
   assert.deepEqual(rules[1].booleanRule.format.backgroundColor, { red: 0.102, green: 0.451, blue: 0.910 });
   assert.match(rules[2].booleanRule.condition.values[0].userEnteredValue, /tiktok/);
   assert.deepEqual(rules[2].booleanRule.format.backgroundColor, { red: 0, green: 0, blue: 0 });
+});
+
+test('conditional formatting reconciliation removes managed copies but preserves custom rules', () => {
+  const sheetId = 123;
+  const managedRequests = buildMarketplaceFormattingRequests(sheetId);
+  const shopeeRule = managedRequests[0].addConditionalFormatRule.rule;
+  const googleNormalizedCopy = {
+    ...structuredClone(shopeeRule),
+    ranges: [{ ...shopeeRule.ranges[0], endRowIndex: 1000 }],
+  };
+  const customRule = {
+    ranges: [{ sheetId, startRowIndex: 1, endRowIndex: 1000, startColumnIndex: 13, endColumnIndex: 14 }],
+    booleanRule: {
+      condition: { type: 'CUSTOM_FORMULA', values: [{ userEnteredValue: '=$N2="manual"' }] },
+      format: { backgroundColor: { red: 1 } },
+    },
+  };
+
+  const requests = buildConditionalFormatReconciliationRequests({
+    sheetId,
+    existingRules: [shopeeRule, googleNormalizedCopy, customRule],
+    managedRequests,
+  });
+
+  assert.deepEqual(
+    requests.slice(0, 2),
+    [
+      { deleteConditionalFormatRule: { sheetId, index: 1 } },
+      { deleteConditionalFormatRule: { sheetId, index: 0 } },
+    ],
+  );
+  assert.deepEqual(requests.slice(2), managedRequests);
+  assert.equal(
+    requests.some((request) => request.deleteConditionalFormatRule?.index === 2),
+    false,
+  );
 });
 
 test('Status has strict validation so a scanner cannot enter a tracking number into the column', () => {
@@ -241,8 +342,8 @@ test('appendScanGoogle does not mark a row as cross-day when its saved Scan Date
     assert.equal(result.status, 'success');
     assert.equal(result.crossDay, true);
     assert.equal(rowsByDate.get(today).length, 0);
-    assert.equal(rowsByDate.get(yesterday)[0][2], yesterday);
-    assert.equal(rowsByDate.get(yesterday)[0][10], yesterday);
+    assert.equal(rowsByDate.get(yesterday)[0][2], 46258);
+    assert.equal(rowsByDate.get(yesterday)[0][10], 46258);
     assert.equal(rowsByDate.get(yesterday)[0][9], '');
   } finally {
     globalThis.fetch = originalFetch;
@@ -299,8 +400,8 @@ test('appendScanGoogle marks a successful row as cross-day when its saved Scan D
     });
 
     assert.equal(result.status, 'success');
-    assert.equal(storedRows[0][2], today);
-    assert.equal(storedRows[0][10], yesterday);
+    assert.equal(storedRows[0][2], 46259);
+    assert.equal(storedRows[0][10], 46258);
     assert.equal(storedRows[0][9], `แพ็คข้ามวัน (สแกน ${today})`);
   } finally {
     globalThis.fetch = originalFetch;
