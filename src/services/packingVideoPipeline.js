@@ -1,5 +1,6 @@
-import { SHEET_STATUS } from './packingVideoModel.js';
+import { PACKING_VIDEO_STATUS, SHEET_STATUS } from './packingVideoModel.js';
 import { buildStoragePath } from './packingVideoIds.js';
+import { buildUploadedPackingVideoSheetDoc } from './packingVideoPipelinePayload.js';
 import { appendPackingVideoRow, withFreshToken } from './packingVideoSheet.js';
 import { uploadPackingVideo } from './packingVideoStorage.js';
 import { createPackingVideo, updatePackingVideoUpload } from './packingVideos.js';
@@ -51,7 +52,11 @@ export function createPackingVideoPipeline({ getToken, refreshToken, getConfig, 
 
     // Do not persist Firebase download tokens in Firestore. They remain valid independently of
     // Storage Rules and turned a readable metadata document into a reusable public URL.
-    await updatePackingVideoUpload(job.videoId, { status: 'uploaded', uploadedAt: new Date() });
+    const uploadedAt = new Date();
+    await updatePackingVideoUpload(job.videoId, {
+      status: PACKING_VIDEO_STATUS.uploaded,
+      uploadedAt,
+    });
 
     const spreadsheetId = getConfig?.()?.packingVideos?.id;
     if (!spreadsheetId) {
@@ -60,7 +65,11 @@ export function createPackingVideoPipeline({ getToken, refreshToken, getConfig, 
 
     try {
       const { rowNumber } = await withFreshToken(
-        (token) => appendPackingVideoRow({ token, spreadsheetId, doc: { ...saved, storageUrl } }),
+        (token) => appendPackingVideoRow({
+          token,
+          spreadsheetId,
+          doc: buildUploadedPackingVideoSheetDoc(saved, { storageUrl, uploadedAt }),
+        }),
         { getToken, refreshToken },
       );
       await updatePackingVideoUpload(job.videoId, {

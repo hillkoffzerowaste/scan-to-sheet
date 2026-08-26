@@ -1,13 +1,49 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { parseAppendedRowNumber, withFreshToken } from './packingVideoSheet.js';
+import {
+  ensurePackingVideoSheetConfig,
+  parseAppendedRowNumber,
+  withFreshToken,
+} from './packingVideoSheet.js';
 
 test('parseAppendedRowNumber reads the row Google actually wrote to', () => {
   assert.equal(parseAppendedRowNumber('PackingVideos!A42:N42'), 42);
   assert.equal(parseAppendedRowNumber("'PackingVideos'!A7:N7"), 7);
   assert.equal(parseAppendedRowNumber(undefined), 0);
   assert.equal(parseAppendedRowNumber('nonsense'), 0);
+});
+
+test('adds the packing-video spreadsheet to an existing Google config once', async () => {
+  const config = { folder: { id: 'folder_1' }, master: { id: 'master_1' } };
+  let calls = 0;
+
+  const prepared = await ensurePackingVideoSheetConfig({
+    token: 'token_1',
+    config,
+    prepare: async ({ token, config: receivedConfig }) => {
+      calls += 1;
+      assert.equal(token, 'token_1');
+      assert.equal(receivedConfig, config);
+      return { id: 'packing_1', name: 'Scan to Sheet Packing Videos' };
+    },
+  });
+
+  assert.equal(calls, 1);
+  assert.equal(prepared.master.id, 'master_1');
+  assert.equal(prepared.packingVideos.id, 'packing_1');
+
+  const reused = await ensurePackingVideoSheetConfig({
+    token: 'token_2',
+    config: prepared,
+    prepare: async () => {
+      calls += 1;
+      return { id: 'unexpected' };
+    },
+  });
+
+  assert.equal(calls, 1);
+  assert.equal(reused, prepared);
 });
 
 test('withFreshToken passes the current token straight through on success', async () => {

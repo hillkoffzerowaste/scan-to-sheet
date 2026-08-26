@@ -72,6 +72,17 @@ export async function preparePackingVideoSheet({ token, config }) {
   return createDriveItem({ token, name: PACKING_SHEET_FILE_NAME, mimeType: MIME_SHEET, parentId });
 }
 
+/** Adds the separate packing-video log to legacy Google configs without replacing the master. */
+export async function ensurePackingVideoSheetConfig({
+  token,
+  config,
+  prepare = preparePackingVideoSheet,
+}) {
+  if (config?.packingVideos?.id) return config;
+  const packingVideos = await prepare({ token, config });
+  return { ...config, packingVideos };
+}
+
 /** Adds the tab and its header row once per session, mirroring `ensureWorksheetReady`. */
 export async function ensurePackingVideoWorksheet({ token, spreadsheetId }) {
   if (preparedWorksheets.has(spreadsheetId)) return;

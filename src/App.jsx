@@ -35,6 +35,7 @@ import {
 import StaffDirectory from './features/staff/StaffDirectory.jsx';
 import PackingVideoWorkspace from './features/packingVideo/PackingVideoWorkspace.jsx';
 import { isPackingRecording } from './services/packingRecorder.js';
+import { ensurePackingVideoSheetConfig } from './services/packingVideoSheet.js';
 import { buildPackerOptions } from './features/staff/staffDirectory.js';
 import { subscribeStaffMembers } from './features/staff/staffService.js';
 import {
@@ -1107,7 +1108,8 @@ function App() {
     const idToken = data.idToken;
     const profile = data.profile ?? (await fetchGoogleProfile(accessToken));
     const serverConfig = data.config ?? (await loadServerGoogleConfig().catch(() => null));
-    const prepared = serverConfig ?? (await prepareGoogleSheets(accessToken));
+    const baseConfig = serverConfig ?? (await prepareGoogleSheets(accessToken));
+    const prepared = await ensurePackingVideoSheetConfig({ token: accessToken, config: baseConfig });
     const nextUser = {
       email: profile.email ?? 'google-user',
       name: profile.name ?? 'Google User',
