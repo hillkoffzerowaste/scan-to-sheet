@@ -2,7 +2,7 @@
 
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import os from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { chromium } from 'playwright';
@@ -52,8 +52,13 @@ async function ensureLocalDirs(config) {
 }
 
 function createLogger(config) {
-  const logPath = path.resolve(BASE_DIR, config.logDir, `marketplace-${new Date().toISOString().slice(0, 10)}.log`);
+  // Resolved per line, not once at startup: this worker runs for days at a time, and a path
+  // fixed at boot put every later day's lines into the first day's file.
+  const logPathFor = (date) => path.resolve(
+    BASE_DIR, config.logDir, `marketplace-${date.toISOString().slice(0, 10)}.log`,
+  );
   async function append(level, message) {
+    const logPath = logPathFor(new Date());
     const line = `[${new Date().toISOString()}] ${level} ${message}`;
     console[level === 'ERROR' ? 'error' : level === 'WARN' ? 'warn' : 'log'](line);
     await writeFile(logPath, `${line}\n`, { flag: 'a' }).catch(() => {});
@@ -183,30 +188,68 @@ async function getPlatformPage(session, platform) {
   return page;
 }
 
+/**
+ * Waits for whichever of the candidate selectors appears first.
+ *
+ * Raced, not tried in sequence. Sequentially the first selector consumed the entire budget and
+ * every later one got only the 1000ms floor, so a single stale selector — the normal outcome of
+ * a marketplace redesign — starved the selector that would actually have matched, and the run
+ * reported "no known order selector found" as if the page were unrecognisable.
+ */
 async function waitForAnySelector(page, selectors, timeoutMs) {
-  const deadline = Date.now() + timeoutMs;
-  for (const selector of selectors) {
-    const remaining = Math.max(deadline - Date.now(), 1000);
-    try {
-      await page.waitForSelector(selector, { timeout: remaining });
-      return selector;
-    } catch {
-    }
+  const list = (selectors ?? []).filter(Boolean);
+  if (!list.length) return null;
+  try {
+    // Promise.any rejects only when every selector times out — the genuinely
+    // "page not recognised" case — and it consumes the losers' rejections itself.
+    return await Promise.any(list.map((selector) => page
+      .waitForSelector(selector, { timeout: timeoutMs })
+      .then(() => selector)));
+  } catch {
+    return null;
   }
-  return null;
 }
 
-function extractTrackingToken(text) {
-  return String(text ?? '').match(/\b(?:TH|SPX|SPE|JNT|JT|KEX|LEX|BEST|FLASH|DHL|NINJA|NJV)(?=[A-Z0-9-]*\d)[A-Z0-9-]{6,}\b/i)?.[0] ?? '';
+/**
+ * A courier prefix, a short letter run, then digits.
+ *
+ * The `[A-Z]{0,4}\d` is the guard. Real numbers put at most a few letters between the prefix
+ * and the digits — LEXTH400123456, KEXDOLM00037667, TH1234567890 — whereas the previous
+ * `(?=[A-Z0-9-]*\d)[A-Z0-9-]{6,}` accepted any word starting with a prefix as long as a digit
+ * appeared somewhere later, so an address line reading "THAILAND 10250" written without the
+ * space matched and a bogus tracking number was copied onto the order. Bounding the letter run
+ * rejects that while still accepting every real prefix shape.
+ */
+export function extractTrackingToken(text) {
+  return String(text ?? '')
+    .match(/\b(?:TH|SPX|SPE|JNT|JT|KEX|LEX|BEST|FLASH|DHL|NINJA|NJV)[A-Z]{0,4}\d[A-Z0-9-]{4,}\b/i)?.[0] ?? '';
 }
 
+const TRACKING_SELECTORS = [
+  '[class*="tracking" i]',
+  '[class*="awb" i]',
+  '[class*="waybill" i]',
+  '[class*="logistics" i]',
+  '[id*="tracking" i]',
+  '[data-testid*="tracking" i]',
+];
+
+/**
+ * Reads the tracking number from a detail page, narrow selectors first.
+ *
+ * `body` used to sit at the end of one comma-separated selector list, which read as a
+ * last-resort fallback but was not one: Playwright returns matches in document order and
+ * `body` is an ancestor of everything, so the whole page text was always scanned *first* and
+ * the specific selectors never got to decide. Two passes, in order, is what the original
+ * comma list was trying to express.
+ */
 async function extractTrackingFromDetail(page) {
-  const texts = await page.locator(
-    '[class*="tracking" i], [class*="awb" i], [class*="waybill" i], [class*="logistics" i], [id*="tracking" i], [data-testid*="tracking" i], body',
-  ).allTextContents();
-  for (const text of texts) {
-    const trackingNo = extractTrackingToken(text);
-    if (trackingNo) return trackingNo;
+  for (const selector of [TRACKING_SELECTORS.join(', '), 'body']) {
+    const texts = await page.locator(selector).allTextContents().catch(() => []);
+    for (const text of texts) {
+      const trackingNo = extractTrackingToken(text);
+      if (trackingNo) return trackingNo;
+    }
   }
   return '';
 }
@@ -401,6 +444,7 @@ async function syncPlatform({ db, config, platform, logger, session }) {
       },
     });
     await logger.info(`${platform}: sync finished with status=${result.status}, seen=${result.orders.length}, upserted=${upserted}`);
+    return result.status;
   } catch (error) {
     await setSyncStatus({
       db,
@@ -417,6 +461,7 @@ async function syncPlatform({ db, config, platform, logger, session }) {
       },
     });
     await logger.error(`${platform}: ${error.stack || error.message}`);
+    return 'error';
   }
 }
 
@@ -473,6 +518,7 @@ async function main() {
   }
 
   let session = null;
+  let failedPlatforms = [];
   try {
     session = await createBrowserSession(config, shutdownController);
     do {
@@ -487,11 +533,13 @@ async function main() {
         throw new Error('Lost the shared Chromium profile lock.');
       }
 
+      failedPlatforms = [];
       for (const platform of platforms) {
         if (shutdownController.isStopping()) {
           break;
         }
-        await syncPlatform({ db, config, platform, logger, session });
+        const status = await syncPlatform({ db, config, platform, logger, session });
+        if (status !== 'synced') failedPlatforms.push(`${platform}=${status}`);
       }
       if (shutdownController.isStopping()) {
         return;
@@ -509,11 +557,21 @@ async function main() {
     const exitCode = shutdownController.dispose();
     if (exitCode) {
       process.exitCode = exitCode;
+    } else if (args.once && failedPlatforms.length) {
+      // syncPlatform records every failure and carries on, which is right for the long-running
+      // mode. A single `--once` pass is a scheduled job, though, and exiting 0 after every
+      // platform failed told the scheduler the sync had worked.
+      await logger.error(`Sync finished with failures: ${failedPlatforms.join(', ')}`);
+      process.exitCode = 1;
     }
   }
 }
 
-main().catch((error) => {
-  console.error(error.stack || error.message);
-  process.exitCode = 1;
-});
+// Only run when executed directly, so tests can import the pure helpers without starting a
+// browser and a Firestore connection.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((error) => {
+    console.error(error.stack || error.message);
+    process.exitCode = 1;
+  });
+}
