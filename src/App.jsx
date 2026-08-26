@@ -111,6 +111,7 @@ import { parseXlsxArrayBuffer } from './services/xlsxImport.js';
 import { loadHtml5Qrcode } from './services/cameraLoader.js';
 import { commitFallbackScan } from './services/scanCommit.js';
 import { createScanQueue } from './services/scanQueue.js';
+import { hasDeploymentUpdate } from './services/deploymentUpdate.js';
 import { getScanPopupCourierOptions, getScanPopupStatusMeta } from './services/scanPopup.js';
 import { DEFAULT_SCAN_METHOD } from './services/scanPreferences.js';
 import { barcodeCharacterFromKeyEvent } from './services/barcodeKeyboard.js';
@@ -140,6 +141,7 @@ const SHEET_RECOVERY_BATCH_SIZE = 20;
 const SHEET_RECOVERY_COOLDOWN_MS = 5 * 1000;
 const SHEET_INTEGRITY_INTERVAL_MS = 10 * 60 * 1000;
 const COUNT_REFRESH_DELAY_MS = 1000;
+const DEPLOYMENT_UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;
 
 const EMPTY_USER = {
   email: 'ยังไม่ได้เข้าสู่ระบบ',
@@ -283,6 +285,7 @@ function App() {
       ? 'เข้าสู่ระบบด้วย Google ก่อนเริ่มสแกนจริง'
       : 'เพิ่ม VITE_GOOGLE_CLIENT_ID ใน Vercel Environment Variables แล้ว deploy ใหม่',
   }));
+  const [deploymentUpdateAvailable, setDeploymentUpdateAvailable] = useState(false);
   const [busy, setBusy] = useState(false);
   const [scanQueueSnapshot, setScanQueueSnapshot] = useState({
     pending: [],
@@ -588,6 +591,45 @@ function App() {
       setToday(getBangkokParts());
     }, 1000);
     return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    if (!import.meta.env.PROD) return undefined;
+
+    let disposed = false;
+
+    const checkForDeploymentUpdate = async () => {
+      try {
+        const response = await fetch(new URL('/', window.location.origin), {
+          cache: 'no-store',
+          credentials: 'same-origin',
+        });
+        if (!response.ok) return;
+        const html = await response.text();
+        if (!disposed && hasDeploymentUpdate({
+          html,
+          documentUrl: response.url,
+          currentEntrypointUrl: import.meta.url,
+        })) {
+          setDeploymentUpdateAvailable(true);
+        }
+      } catch {
+        // A temporary network failure must not interrupt warehouse scanning.
+      }
+    };
+
+    const checkWhenReturningToApp = () => {
+      if (document.visibilityState === 'visible') void checkForDeploymentUpdate();
+    };
+
+    void checkForDeploymentUpdate();
+    const timer = window.setInterval(checkForDeploymentUpdate, DEPLOYMENT_UPDATE_CHECK_INTERVAL_MS);
+    document.addEventListener('visibilitychange', checkWhenReturningToApp);
+    return () => {
+      disposed = true;
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', checkWhenReturningToApp);
+    };
   }, []);
 
   useEffect(() => {
@@ -3598,6 +3640,7 @@ function App() {
                 )}
               </details>
 
+              {deploymentUpdateAvailable && <DeploymentUpdateBanner />}
               <StatusBanner status={status} />
 
               <div className="metric-row">
@@ -3700,6 +3743,7 @@ function App() {
           {/* Drive-only: Dashboard + Missing Order Check */}
           {activeTab === 'drive' && (
             <>
+              {deploymentUpdateAvailable && <DeploymentUpdateBanner />}
               <StatusBanner status={status} />
 
               {/* Drive Dashboard */}
@@ -4335,6 +4379,21 @@ function StatusBanner({ status }) {
         <strong>{status.title}</strong>
         <span>{status.message}</span>
       </div>
+    </div>
+  );
+}
+
+function DeploymentUpdateBanner() {
+  return (
+    <div className="status-banner warning" role="status" aria-live="polite" aria-atomic="true">
+      <RefreshCw size={22} />
+      <div>
+        <strong>มีเวอร์ชันใหม่พร้อมใช้งาน</strong>
+        <span>รีเฟรชก่อนสแกนต่อ เพื่อใช้รูปแบบการบันทึกล่าสุด</span>
+      </div>
+      <button className="secondary-button" type="button" onClick={() => window.location.reload()}>
+        รีเฟรชตอนนี้
+      </button>
     </div>
   );
 }
