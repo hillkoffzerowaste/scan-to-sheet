@@ -11,14 +11,12 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:chromium": "playwright test --project=chromium",
-    "test:marketplace": "node --test src/services/packingVideoFormat.test.js src/services/packingVideoModel.test.js src/services/packingVideoIds.test.js src/services/packingVideoQueue.test.js src/services/packingVideoSheet.test.js src/services/packingVideoPipeline.test.js src/services/cameraOwner.test.js src/features/packingVideo/hooks/usePackingSession.test.js src/features/packingVideo/logic/packingSessionMachine.test.js src/features/packingVideo/logic/recorderCapabilities.test.js src/features/packingVideo/logic/packingVideoFilters.test.js src/features/packingVideo/logic/packingVideoActions.test.js src/features/packingVideo/logic/packingVideoPreferences.test.js src/features/staff/staffDirectory.test.js src/features/staff/packingSchedule.test.js scripts/marketplace-sync/normalize.test.js scripts/marketplace-sync/reconcile.test.js scripts/marketplace-sync/tracking.test.js src/services/marketplaceImport.test.js src/services/missingOrderCheck.test.js src/services/googleSheets.test.js src/services/firebaseScans.test.js src/services/scanCommit.test.js src/services/scanQueue.test.js src/services/scanPopup.test.js src/services/scanPreferences.test.js src/services/barcodeKeyboard.test.js src/services/authErrors.test.js src/features/packingVideo/logic/packingVideoMessages.test.js src/features/packingVideo/logic/barcodeScanner.test.js src/services/canonicalApp.test.js src/services/orderRecovery.test.js src/services/firestorePagination.test.js src/services/firestoreQueryPlanning.test.js src/services/cameraLoader.test.js src/services/sheetSync.test.js src/services/sheetSyncReconciliation.test.js src/services/sheetRecoveryDates.test.js api/google-auth.test.js api/sheet-lock.test.js api/_auth.test.js tests/firestoreRules.test.js scripts/packing-video-drive/drivePaths.test.js scripts/packing-video-drive/workerArgs.test.js",
+    "test:marketplace": "node --test src/features/staff/staffDirectory.test.js src/features/staff/packingSchedule.test.js scripts/marketplace-sync/normalize.test.js scripts/marketplace-sync/reconcile.test.js scripts/marketplace-sync/tracking.test.js src/services/marketplaceImport.test.js src/services/missingOrderCheck.test.js src/services/googleSheets.test.js src/services/firebaseScans.test.js src/services/scanCommit.test.js src/services/scanQueue.test.js src/services/scanPopup.test.js src/services/scanPreferences.test.js src/services/barcodeKeyboard.test.js src/services/authErrors.test.js src/services/canonicalApp.test.js src/services/orderRecovery.test.js src/services/firestorePagination.test.js src/services/firestoreQueryPlanning.test.js src/services/cameraLoader.test.js src/services/sheetSync.test.js src/services/sheetSyncReconciliation.test.js src/services/sheetRecoveryDates.test.js api/google-auth.test.js api/sheet-lock.test.js api/_auth.test.js tests/firestoreRules.test.js",
     "test:label-sync": "node --test scripts/label-sync/labelParser.test.js scripts/label-sync/matching.test.js scripts/label-sync/retryState.test.js",
     "marketplace:login": "node scripts/marketplace-sync/worker.js --login",
     "marketplace:sync": "node scripts/marketplace-sync/worker.js",
     "marketplace:sync:once": "node scripts/marketplace-sync/worker.js --once",
     "marketplace:dashboard": "node scripts/marketplace-sync/dashboard.js",
-    "packing:drive:once": "node scripts/packing-video-drive/worker.js",
-    "packing:drive:watch": "node scripts/packing-video-drive/worker.js --watch",
     "firebase:deploy": "npm run build && firebase deploy --only hosting",
     "firebase:preview": "npm run build && firebase hosting:channel:deploy preview --expires 7d",
     "firebase:serve": "npm run build && firebase emulators:start --only hosting",
@@ -43,8 +41,7 @@
     "lucide-react": "^0.475.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "vite": "^6.0.11",
-    "zxing-wasm": "^3.1.3"
+    "vite": "^6.0.11"
   },
   "devDependencies": {
     "@capacitor/assets": "^3.0.5",

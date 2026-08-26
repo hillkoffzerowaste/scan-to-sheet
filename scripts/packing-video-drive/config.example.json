@@ -1,7 +1,0 @@
-{
-  "serviceAccountPath": "firebase-service-account.json",
-  "driveServiceAccountPath": "packing-video-drive-service-account.json",
-  "storageBucket": "hillkoff-twin-oganization.firebasestorage.app",
-  "sharedDriveId": "PUT_THE_SHARED_DRIVE_ID_HERE",
-  "workerEmail": "packing-video-worker@hillkoff.co.th"
-}

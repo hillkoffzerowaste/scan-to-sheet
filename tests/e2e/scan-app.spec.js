@@ -118,6 +118,13 @@ const CONTRAST_HELPERS = `
 `;
 
 test.describe('Scan to Sheet — External tools', () => {
+  test('does not expose the retired packing video workspace', async ({ page }) => {
+    await page.goto(BASE_URL);
+
+    await expect(page.getByTestId('packing-video-tab')).toHaveCount(0);
+    await expect(page.getByText('บันทึกวิดีโอแพ็ค', { exact: true })).toHaveCount(0);
+  });
+
   test('opens the delivery system from the sidebar in a new tab', async ({ page }) => {
     await page.goto(BASE_URL);
 

@@ -41,8 +41,6 @@ scripts/marketplace-sync/profiles/
 scripts/marketplace-sync/marketplace-profile/
 scripts/marketplace-sync/logs/
 scripts/marketplace-sync/screenshots/
-scripts/packing-video-drive/config.json
-packing-video-drive-service-account*.json
 
 # debug
 pnpm-debug.log*

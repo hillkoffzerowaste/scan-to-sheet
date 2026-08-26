@@ -432,8 +432,6 @@ function withMarketplaceCells(row, marketplaceOrder = null) {
   return [...baseRow, ...marketplaceCells(source), orderStatus, crossDay, ''].slice(0, TOTAL_COLUMNS);
 }
 
-// Exported for the packing-video sheet, which discovers its own spreadsheet the same way
-// prepareGoogleSheets discovers the master one.
 export async function findDriveItem({ token, name, mimeType, parentId }) {
   const items = await listDriveItems({ token, name, mimeType, parentId, pageSize: 1 });
   return items[0] ?? null;

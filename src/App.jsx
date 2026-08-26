@@ -30,12 +30,8 @@ import {
   ArrowRightLeft,
   Plus,
   Users,
-  Video,
 } from 'lucide-react';
 import StaffDirectory from './features/staff/StaffDirectory.jsx';
-import PackingVideoWorkspace from './features/packingVideo/PackingVideoWorkspace.jsx';
-import { isPackingRecording } from './services/packingRecorder.js';
-import { ensurePackingVideoSheetConfig } from './services/packingVideoSheet.js';
 import { buildPackerOptions } from './features/staff/staffDirectory.js';
 import { subscribeStaffMembers } from './features/staff/staffService.js';
 import {
@@ -1108,8 +1104,7 @@ function App() {
     const idToken = data.idToken;
     const profile = data.profile ?? (await fetchGoogleProfile(accessToken));
     const serverConfig = data.config ?? (await loadServerGoogleConfig().catch(() => null));
-    const baseConfig = serverConfig ?? (await prepareGoogleSheets(accessToken));
-    const prepared = await ensurePackingVideoSheetConfig({ token: accessToken, config: baseConfig });
+    const prepared = serverConfig ?? (await prepareGoogleSheets(accessToken));
     const nextUser = {
       email: profile.email ?? 'google-user',
       name: profile.name ?? 'Google User',
@@ -2323,12 +2318,6 @@ function App() {
   }
 
   function switchTab(nextTab) {
-    // The packing recorder lives outside React, so leaving the tab does not stop the camera —
-    // but walking away from a running clip is almost always a mis-tap, so confirm it.
-    if (activeTab === 'packvideo' && nextTab !== 'packvideo' && isPackingRecording()
-      && !window.confirm('กำลังบันทึกวิดีโอแพ็คอยู่ ต้องการออกจากหน้านี้หรือไม่? (การบันทึกจะยังทำงานต่อ)')) {
-      return;
-    }
     setActiveTab(nextTab);
     setScanPopupOpen(false);
     void stopCamera();
@@ -3092,16 +3081,6 @@ function App() {
         >
           <Users size={18} />
           <span>แผนผังพนักงานห้องแพ็ค</span>
-        </button>
-        <button
-          data-testid="packing-video-tab"
-          className={`tab-button ${activeTab === 'packvideo' ? 'active' : ''}`}
-          type="button"
-          aria-current={activeTab === 'packvideo' ? 'page' : undefined}
-          onClick={() => switchTab('packvideo')}
-        >
-          <Video size={18} />
-          <span>บันทึกวิดีโอแพ็ค</span>
         </button>
         <a
           className="tab-button"
@@ -4188,20 +4167,6 @@ function App() {
             </table>
           </div>
         </details>
-      )}
-
-      {activeTab === 'packvideo' && (
-        <PackingVideoWorkspace
-          isSignedIn={isSignedIn}
-          user={user}
-          firebaseUser={firebaseUser}
-          packerOptions={packerOptions.filter((name) => name !== PACKER_UNASSIGNED)}
-          getToken={async () => token}
-          refreshToken={async () => (await refreshGoogleSessionFromServer({ silent: true }))?.accessToken ?? null}
-          getConfig={() => config}
-          notify={setStatus}
-          playTone={playTone}
-        />
       )}
 
       {activeTab === 'staff' && isSignedIn && (

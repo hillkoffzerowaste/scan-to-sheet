@@ -84,15 +84,8 @@ src/services/
   marketplaceImport.js       parse ไฟล์ Shopee/Lazada/TikTok
   scanCommit.js              commit การสแกน
   sheetSyncReconciliation.js ตัดสินว่าสแกนซ้ำ/merge/สร้างแถวใหม่
-  packingVideoModel.js       field list + สถานะของวิดีโอแพ็ค (แหล่งเดียว rules/worker อ้างอิง)
-  packingVideoDb.js          IndexedDB เก็บวิดีโอก่อนอัปโหลด
-  packingVideoQueue.js       คิวอัปโหลด + backoff
-  packingRecorder.js         MediaRecorder singleton **นอก React** (ดูข้อ 9)
-  cameraOwner.js             กันกล้องชนกันระหว่างสแกน QR กับอัดวิดีโอ
-src/features/packingVideo/   แท็บบันทึกวิดีโอแพ็ค (logic/ เป็น pure ทั้งหมด)
 api/                         Vercel serverless (OAuth, sheet lock)
 scripts/marketplace-sync/    Playwright worker (ใช้ firebase-admin → ข้าม rules)
-scripts/packing-video-drive/ worker ย้ายวิดีโอเข้า Shared Drive (firebase-admin เช่นกัน)
 firestore.rules              ต้องแก้ตามเมื่อเพิ่ม field ใน Firestore
 ```
 
@@ -159,17 +152,6 @@ firestore.rules              ต้องแก้ตามเมื่อเพ
 - แอปทำงานตามเวลา **Asia/Bangkok (UTC+7)** ค่าวันเวลาในชีตเป็นเวลาท้องถิ่น ถ้าจะแปลงเป็น instant ต้องหักออฟเซ็ต — เคยมีบั๊กที่คลาดไป 7 ชั่วโมงเพราะใช้ `Date.UTC` ตรงๆ
 
 ---
-
-## 7.1 กับดักของโมดูลบันทึกวิดีโอแพ็ค
-
-- **MediaRecorder ต้องอยู่ที่ `src/services/packingRecorder.js` ระดับโมดูล ห้ามย้ายเข้า React state** — ปุ่มแท็บทุกตัวเรียก `setActiveTab` ซึ่ง unmount คอมโพเนนต์เดิม ถ้า recorder ผูกกับคอมโพเนนต์ วิดีโอที่กำลังอัดจะหายทันทีที่ผู้ใช้กดสลับแท็บ
-- **เขียน chunk ลง IndexedDB เสมอ ไม่ใช่เฉพาะตอนออฟไลน์** — blob อยู่ใน heap ของแท็บอย่างเดียว refresh/OOM/ไฟดับ = หลักฐานหายถาวร และการมี code path เดียวคือเหตุผลหลัก (เส้นทาง offline ที่แยกไว้จะไม่เคยถูกทดสอบจนวันที่ต้องใช้จริง)
-- **รายชื่อ field มีที่เดียวคือ `PACKING_VIDEO_FIELDS`** ใน `packingVideoModel.js` — `firestore.rules` และ worker ต้องตรงกันเป๊ะ มีเทสต์ `tests/firestoreRules.test.js` คุมไว้แล้ว
-- **`videoId` เป็น idempotency key ตัวเดียวของทั้งสาย** (IndexedDB key = ชื่อไฟล์ Storage = doc id = คอลัมน์ A ของชีต) และ **ห้ามใส่ attempt number เข้าไปใน id** เพราะสองเครื่องที่แพ็คใบเดียวกันจะชนกัน
-- **ชีต PackingVideos ใช้ `values:append` ไม่ใช้ `_TEMP_` placeholder และไม่ใช้ sheet-lock** — ชีตนี้ไม่มีคอลัมน์ลำดับที่ต้องคำนวณจากตำแหน่งแถว ต่างจากชีตสแกนเดิม
-- **`bangkokDate` ต้องมาจาก `startedAt` ไม่ใช่ `finishedAt`** ทั้งใน storage path, โฟลเดอร์ Drive และแถวในชีต ไม่งั้นคลิปที่แพ็คคร่อมเที่ยงคืนจะกระจายไปคนละวัน
-- **ห้ามใช้ `onSnapshot` กับ Dashboard** และ audit `view` ต้อง throttle ไม่งั้นเลื่อนดู 100 การ์ด = 100 write
-- **ต้องตั้ง lifecycle rule บน bucket prefix `packing-videos/`** ที่ 500 แพ็ค/วัน × 25MB ≈ 12.5 GB/วัน ค่า storage จะโตไม่มีเพดานถ้า worker ตายแล้วไม่มีใครรู้
 
 ## 8. Git
 
