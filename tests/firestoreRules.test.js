@@ -6,6 +6,9 @@ import { PACKING_VIDEO_FIELDS } from "../src/services/packingVideoModel.js";
 
 const readRules = () => readFile(new URL("../firestore.rules", import.meta.url), "utf8");
 const readStorageRules = () => readFile(new URL("../storage.rules", import.meta.url), "utf8");
+const readSheetWriter = () => readFile(new URL("../src/services/googleSheets.js", import.meta.url), "utf8");
+const readPackingVideoSheetWriter = () => readFile(new URL("../src/services/packingVideoSheet.js", import.meta.url), "utf8");
+const readLabelScript = () => readFile(new URL("../apps-script/label-sync/Code.gs", import.meta.url), "utf8");
 
 test("staff private contacts allow Admin reads without write payload validation", async () => {
   const rules = await readFile(new URL("../firestore.rules", import.meta.url), "utf8");
@@ -116,6 +119,19 @@ test("stored packing video objects are immutable and packers cannot delete them"
   assert.match(block[1], /contentType\.matches\('video\/\.\*'\)/);
 });
 
+test("operational data and packing evidence require an approved staff claim, not merely Firebase sign-in", async () => {
+  const rules = await readRules();
+  const storageRules = await readStorageRules();
+  assert.match(rules, /function isOperationalStaff\(\)/);
+  assert.match(rules, /request\.auth\.token\.operator == true/);
+  assert.match(storageRules, /function isOperationalStaff\(\)/);
+  for (const collection of ['staffMembers', 'staffDutyTypes', 'staffWeeklyDuties', 'staffDutyOverrides', 'staffDailyAssignments', 'staffDailyStatuses', 'staffDailyLeads', 'scanEvents', 'orders', 'marketplaceOrders', 'packingVideos', 'packingVideoTracking', 'couriers']) {
+    const block = rules.match(new RegExp(`match /${collection}/\\{[^}]+\\} \\{([\\s\\S]*?)\\n    \\}`));
+    assert.ok(block, `${collection} rules must exist`);
+    assert.doesNotMatch(block[1], /allow (?:read|create|update|write)[^\n]*isSignedIn\(\)/);
+  }
+});
+
 test("every packingVideos query the Drive worker runs has a composite index", async () => {
   // Firestore needs a composite index for one equality filter plus an orderBy on another
   // field. Two of the worker's three queries had none — movePending's index was missing the
@@ -137,4 +153,13 @@ test("every packingVideos query the Drive worker runs has a composite index", as
   assert.ok(has(["driveStatus", "movedToDriveAt"]), "purgeMovedObjects index missing");
   // reclaimStalledMoves: driveStatus == 'moving' ORDER BY updatedAt
   assert.ok(has(["driveStatus", "updatedAt"]), "reclaimStalledMoves index missing");
+});
+
+test("external operational text is never written to Sheets as a formula", async () => {
+  const [sheetWriter, packingVideoSheetWriter, labelScript] = await Promise.all([readSheetWriter(), readPackingVideoSheetWriter(), readLabelScript()]);
+  assert.doesNotMatch(sheetWriter, /valueInputOption:\s*'USER_ENTERED'/);
+  assert.doesNotMatch(sheetWriter, /valueInputOption=USER_ENTERED/);
+  assert.doesNotMatch(packingVideoSheetWriter, /valueInputOption=USER_ENTERED/);
+  assert.match(labelScript, /function literalizeSheetText_\(value\)/);
+  assert.match(labelScript, /setValue\(literalizeSheetText_\(value\)\)/);
 });

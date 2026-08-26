@@ -76,7 +76,12 @@ export async function allocatePackingAttempt({ trackingNo, videoId }) {
 export async function createPackingVideo(input) {
   requireFirestore();
   const payload = buildPackingVideoDoc({ ...input, updatedAt: serverTimestamp() });
-  await setDoc(doc(firestoreDb, COLLECTION, payload.videoId), payload);
+  const videoRef = doc(firestoreDb, COLLECTION, payload.videoId);
+  // A retry must reuse the immutable reservation. Rewriting its full payload would be a broad
+  // client update, which Rules intentionally reject after the document already exists.
+  const existing = await getDoc(videoRef);
+  if (existing.exists()) return { id: existing.id, ...existing.data() };
+  await setDoc(videoRef, payload);
   return payload;
 }
 

@@ -16,6 +16,7 @@ import {
   buildDriveFolderPath,
   buildDriveNameForDoc,
   extensionFromMimeType,
+  hasCanonicalStoragePath,
   planDriveRetry,
   planStaleMoveReclaim,
   planStoragePurge,
@@ -188,6 +189,16 @@ async function moveOne({ drive, bucket, db, config, doc, folderCache }) {
   const data = doc.data();
   const ref = doc.ref;
 
+  if (!hasCanonicalStoragePath(data)) {
+    await ref.update({
+      driveStatus: 'failed',
+      status: 'needs_review',
+      lastErrorCode: 'PACKING_VIDEO_STORAGE_PATH_INVALID',
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    throw new Error(`Refusing non-canonical Storage path for ${data.videoId}`);
+  }
+
   await ref.update({ driveStatus: 'moving', updatedAt: FieldValue.serverTimestamp() });
 
   const parentId = await ensureFolderPath(drive, config.sharedDriveId, buildDriveFolderPath(data), folderCache);
@@ -343,6 +354,17 @@ async function purgeMovedObjects({ bucket, db }) {
   let deleted = 0;
   for (const doc of snapshot.docs) {
     const data = doc.data();
+    if (!hasCanonicalStoragePath(data)) {
+      await doc.ref.update({
+        // The object was deliberately not touched. Marking it purged would falsely claim that
+        // evidence had been deleted and remove the case from review.
+        driveStatus: 'failed',
+        status: 'needs_review',
+        lastErrorCode: 'PACKING_VIDEO_STORAGE_PATH_INVALID',
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      continue;
+    }
     const action = planStoragePurge({ ...data, movedToDriveAt: toDate(data.movedToDriveAt) });
     if (action === 'wait' || action === 'skip') continue;
     // 'retire': purged before this fix, so there is no object left to delete — but it still has

@@ -128,7 +128,7 @@ export async function appendPackingVideoRow({ token, spreadsheetId, doc }) {
   const range = `${escapeSheetName(PACKING_VIDEO_SHEET_NAME)}!A:${lastColumn}`;
   const response = await apiFetch(
     `${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent(range)}:append`
-      + '?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS',
+      + '?valueInputOption=RAW&insertDataOption=INSERT_ROWS',
     token,
     { method: 'POST', body: JSON.stringify({ values: [buildPackingVideoSheetRow(doc)] }) },
   );
@@ -151,7 +151,7 @@ export async function updatePackingVideoDriveUrl({ token, spreadsheetId, rowNumb
   const driveColumn = columnLetter(PACKING_VIDEO_SHEET_HEADERS.indexOf('Drive URL') + 1);
   const range = `${escapeSheetName(PACKING_VIDEO_SHEET_NAME)}!${driveColumn}${rowNumber}`;
   await apiFetch(
-    `${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`,
+    `${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent(range)}?valueInputOption=RAW`,
     token,
     { method: 'PUT', body: JSON.stringify({ values: [[driveUrl]] }) },
   );

@@ -9,6 +9,7 @@ import {
   packingVideoStatusLabel,
 } from '../../services/packingVideoModel.js';
 import { logPackingVideoAudit, searchPackingVideos } from '../../services/packingVideos.js';
+import { getPackingVideoPlaybackUrl } from '../../services/packingVideoStorage.js';
 import {
   PACKING_VIDEO_ACTION,
   resolveUploadAction,
@@ -98,7 +99,7 @@ export default function PackingVideoDashboard({
   }, [form]);
 
   async function openPlayer(row) {
-    if (!row.storageUrl && !row.driveUrl) return;
+    if (!row.storagePath && !row.driveUrl) return;
     // Recorded before the URL is opened, so the log reflects viewing rather than clicking.
     await logPackingVideoAudit({
       videoId: row.videoId,
@@ -106,7 +107,12 @@ export default function PackingVideoDashboard({
       actor: { uid: user?.uid, email: user?.email },
       deviceId,
     }).catch(() => setError('บันทึกประวัติการเปิดดูไม่สำเร็จ แต่ยังเปิดดูวิดีโอได้'));
-    setPlayer(row);
+    try {
+      const storageUrl = row.driveUrl ? '' : await getPackingVideoPlaybackUrl(row.storagePath);
+      setPlayer({ ...row, storageUrl });
+    } catch (caught) {
+      setError(caught?.message ?? 'เปิดวิดีโอไม่สำเร็จ');
+    }
   }
 
   function closePlayer() {
@@ -280,7 +286,7 @@ export default function PackingVideoDashboard({
                 <tr><td colSpan={8} className="pv-empty">ไม่พบวิดีโอตามเงื่อนไขนี้</td></tr>
               )}
               {rows.map((row) => {
-                const playable = Boolean(row.storageUrl || row.driveUrl);
+                const playable = Boolean(row.storagePath || row.driveUrl);
                 // The blob only exists on the workstation that recorded it, so an upload
                 // action anywhere else has nothing to send.
                 const upload = resolveUploadAction(row, { localVideoIds });

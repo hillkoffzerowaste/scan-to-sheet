@@ -4,6 +4,8 @@ const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const GOOGLE_USERINFO_URL = 'https://www.googleapis.com/oauth2/v3/userinfo';
 const SESSION_COOKIE = 'scan_to_sheet_session';
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30;
+const OAUTH_TRANSACTION_COOKIE = 'scan_to_sheet_oauth_transaction';
+const OAUTH_TRANSACTION_TTL_SECONDS = 10 * 60;
 
 function getRedisConfig() {
   const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
@@ -102,18 +104,77 @@ export function createSessionId() {
   return crypto.randomBytes(32).toString('hex');
 }
 
+export function createOAuthTransaction({ redirectUri, randomBytes = crypto.randomBytes } = {}) {
+  if (!redirectUri) throw new Error('OAuth redirect URI is required');
+  const state = randomBytes(32).toString('base64url');
+  const codeVerifier = randomBytes(48).toString('base64url');
+  const codeChallenge = crypto.createHash('sha256').update(codeVerifier).digest('base64url');
+  return { state, codeVerifier, codeChallenge, redirectUri, createdAt: Date.now() };
+}
+
+export function verifyOAuthTransaction({ expectedState, receivedState }) {
+  if (typeof expectedState !== 'string' || typeof receivedState !== 'string') return false;
+  const expected = Buffer.from(expectedState);
+  const received = Buffer.from(receivedState);
+  return expected.length === received.length && crypto.timingSafeEqual(expected, received);
+}
+
+function oauthTransactionSecret() {
+  const value = process.env.OAUTH_TRANSACTION_SECRET;
+  if (!value || value.length < 32) throw new Error('Missing OAUTH_TRANSACTION_SECRET');
+  return value;
+}
+
+function encodeOAuthTransaction(transaction) {
+  const payload = Buffer.from(JSON.stringify(transaction)).toString('base64url');
+  const signature = crypto.createHmac('sha256', oauthTransactionSecret()).update(payload).digest('base64url');
+  return `${payload}.${signature}`;
+}
+
+function decodeOAuthTransaction(value) {
+  const [payload, signature] = String(value ?? '').split('.');
+  if (!payload || !signature) return null;
+  const expected = crypto.createHmac('sha256', oauthTransactionSecret()).update(payload).digest('base64url');
+  if (!verifyOAuthTransaction({ expectedState: expected, receivedState: signature })) return null;
+  try {
+    const transaction = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+    if (!transaction?.state || !transaction?.codeVerifier || !transaction?.redirectUri) return null;
+    if (Date.now() - Number(transaction.createdAt) > OAUTH_TRANSACTION_TTL_SECONDS * 1000) return null;
+    return transaction;
+  } catch {
+    return null;
+  }
+}
+
+function appendCookie(res, value) {
+  const current = res.getHeader?.('Set-Cookie');
+  res.setHeader('Set-Cookie', current ? [...(Array.isArray(current) ? current : [current]), value] : value);
+}
+
+export function setOAuthTransactionCookie(res, transaction) {
+  appendCookie(res, `${OAUTH_TRANSACTION_COOKIE}=${encodeOAuthTransaction(transaction)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${OAUTH_TRANSACTION_TTL_SECONDS}`);
+}
+
+export function readOAuthTransaction(req) {
+  return decodeOAuthTransaction(readCookie(req, OAUTH_TRANSACTION_COOKIE));
+}
+
+export function clearOAuthTransactionCookie(res) {
+  appendCookie(res, `${OAUTH_TRANSACTION_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`);
+}
+
 export function setSessionCookie(res, sessionId) {
-  res.setHeader(
-    'Set-Cookie',
+  appendCookie(
+    res,
     `${SESSION_COOKIE}=${sessionId}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${SESSION_TTL_SECONDS}`,
   );
 }
 
 export function clearSessionCookie(res) {
-  res.setHeader('Set-Cookie', `${SESSION_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`);
+  appendCookie(res, `${SESSION_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`);
 }
 
-export async function exchangeCode({ code, redirectUri, clientId: postedClientId }) {
+export async function exchangeCode({ code, redirectUri, clientId: postedClientId, codeVerifier }) {
   const { clientId, clientSecret } = getRequiredGoogleEnv(postedClientId);
   const body = new URLSearchParams({
     code,
@@ -121,6 +182,7 @@ export async function exchangeCode({ code, redirectUri, clientId: postedClientId
     client_secret: clientSecret,
     redirect_uri: redirectUri,
     grant_type: 'authorization_code',
+    ...(codeVerifier ? { code_verifier: codeVerifier } : {}),
   });
 
   return googleTokenRequest(body);

@@ -1,5 +1,20 @@
 import test from 'node:test';
+import crypto from 'node:crypto';
 import assert from 'node:assert/strict';
+
+import { createOAuthTransaction, verifyOAuthTransaction } from './_auth.js';
+
+test('OAuth transaction binds state and PKCE verifier and may only be consumed once', () => {
+  const transaction = createOAuthTransaction({
+    redirectUri: 'https://scan-to-sheet-ten.vercel.app/',
+    randomBytes: (size) => Buffer.alloc(size, 7),
+  });
+  assert.equal(transaction.state.length > 20, true);
+  assert.match(transaction.codeVerifier, /^[A-Za-z0-9_-]{43,128}$/);
+  assert.equal(transaction.codeChallenge, crypto.createHash('sha256').update(transaction.codeVerifier).digest('base64url'));
+  assert.equal(verifyOAuthTransaction({ expectedState: transaction.state, receivedState: transaction.state }), true);
+  assert.equal(verifyOAuthTransaction({ expectedState: transaction.state, receivedState: 'attacker-state' }), false);
+});
 
 import { API_ERRORS, redactSecrets, sendError } from './_auth.js';
 

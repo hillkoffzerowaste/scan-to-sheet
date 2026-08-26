@@ -378,7 +378,7 @@ async function repairPlaceholderRows({ token, spreadsheetId, date, parsedRows, s
   });
   await apiFetch(`${SHEETS_API}/${spreadsheetId}/values:batchUpdate`, token, {
     method: 'POST',
-    body: JSON.stringify({ valueInputOption: 'USER_ENTERED', data }),
+    body: JSON.stringify({ valueInputOption: 'RAW', data }),
   });
   return stranded.length;
 }
@@ -968,7 +968,7 @@ async function updateDailyRow({ token, spreadsheetId, date, rowNumber, row }) {
     {
       method: 'POST',
       body: JSON.stringify({
-        valueInputOption: 'USER_ENTERED',
+        valueInputOption: 'RAW',
         data,
       }),
     },
@@ -1000,7 +1000,7 @@ export async function backfillMarketplaceOrdersGoogle({ token, config, groups })
   for (let index = 0; index < updates.length; index += 400) {
     await apiFetch(`${SHEETS_API}/${spreadsheetId}/values:batchUpdate`, token, {
       method: 'POST',
-      body: JSON.stringify({ valueInputOption: 'USER_ENTERED', data: updates.slice(index, index + 400) }),
+      body: JSON.stringify({ valueInputOption: 'RAW', data: updates.slice(index, index + 400) }),
     });
   }
   return { matchedRows, updatedCells: updates.length, updatedSheets };
@@ -1887,7 +1887,7 @@ export async function appendScanGoogle({
   // Write placeholder row using UPDATE (PUT) at the computed row — avoids append pitfalls
   const writeRange = `${escapeSheetName(date)}!A${appendedRowNumber}:${sheetEndColumn()}${appendedRowNumber}`;
   await apiFetch(
-    `${SHEETS_API}/${sheet.id}/values/${encodeURIComponent(writeRange)}?valueInputOption=USER_ENTERED`,
+    `${SHEETS_API}/${sheet.id}/values/${encodeURIComponent(writeRange)}?valueInputOption=RAW`,
     token,
     {
       method: 'PUT',
@@ -2159,7 +2159,7 @@ export async function appendAdminScanGoogle({
 
   const writeRange = `${escapeSheetName(date)}!A${appendedRowNumber}:${sheetEndColumn()}${appendedRowNumber}`;
   await apiFetch(
-    `${SHEETS_API}/${sheet.id}/values/${encodeURIComponent(writeRange)}?valueInputOption=USER_ENTERED`,
+    `${SHEETS_API}/${sheet.id}/values/${encodeURIComponent(writeRange)}?valueInputOption=RAW`,
     token,
     {
       method: 'PUT',
@@ -2805,7 +2805,7 @@ export async function batchAppendScanGoogle({ token, config, orders, repairExist
         const startRow = existingColA.length + 1;
         const writeRange = `${escapeSheetName(date)}!A${startRow}:${sheetEndColumn()}${startRow + placeholders.length - 1}`;
         await apiFetch(
-          `${SHEETS_API}/${sheet.id}/values/${encodeURIComponent(writeRange)}?valueInputOption=USER_ENTERED`,
+          `${SHEETS_API}/${sheet.id}/values/${encodeURIComponent(writeRange)}?valueInputOption=RAW`,
           token,
           { method: 'PUT', body: JSON.stringify({ values: placeholders }) },
         );
@@ -2888,7 +2888,7 @@ export async function batchAppendScanGoogle({ token, config, orders, repairExist
         await apiFetch(
           `${SHEETS_API}/${sheet.id}/values:batchUpdate`,
           token,
-          { method: 'POST', body: JSON.stringify({ valueInputOption: 'USER_ENTERED', data: batchData }) },
+          { method: 'POST', body: JSON.stringify({ valueInputOption: 'RAW', data: batchData }) },
         );
         didWriteSheet = true;
 

@@ -11,25 +11,36 @@ service firebase.storage {
         && firestore.exists(/databases/(default)/documents/adminUsers/$(request.auth.uid));
     }
 
+    function isOperationalStaff() {
+      return isSignedIn() && (
+        request.auth.token.operator == true
+        || firestore.exists(/databases/(default)/documents/adminUsers/$(request.auth.uid))
+      );
+    }
+
     // Packing videos. Every upload writes a new object (the file name carries a retry counter),
     // so updates can be denied outright and an interrupted upload can never half-overwrite a
     // good recording. 500 MB covers the 15-minute auto-stop ceiling at 1.5 Mbps with room to
     // spare; rejecting a legitimate clip here would lose it, so the limit is deliberately loose
     // and oversized clips are flagged for review in the app instead.
     //
-    // Business rules (who may record which parcel) live in Firestore and the audit log —
-    // firestore.exists() here would bill a read on every single upload.
     match /packing-videos/{dateFolder}/{fileName} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn()
+      allow read: if isOperationalStaff();
+      allow create: if isOperationalStaff()
         && request.resource.size < 500 * 1024 * 1024
-        && request.resource.contentType.matches('video/.*');
+        && request.resource.contentType.matches('video/.*')
+        && dateFolder.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && fileName.matches('^pv_[0-9]{8}_[A-Za-z0-9]+_[a-f0-9]{12}_r[0-9]+\\.(webm|mp4)$')
+        && request.resource.metadata.videoId is string
+        && firestore.exists(/databases/(default)/documents/packingVideos/$(request.resource.metadata.videoId))
+        && firestore.get(/databases/(default)/documents/packingVideos/$(request.resource.metadata.videoId)).data.createdByUid == request.auth.uid
+        && firestore.get(/databases/(default)/documents/packingVideos/$(request.resource.metadata.videoId)).data.storagePath == 'packing-videos/' + dateFolder + '/' + fileName;
       allow update: if false;
       allow delete: if isStaffAdmin();
     }
 
     match /staff-photos/{staffId}/{fileName} {
-      allow read: if isSignedIn();
+      allow read: if isOperationalStaff();
       allow create, update: if isStaffAdmin()
         && request.resource.size < 5 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');

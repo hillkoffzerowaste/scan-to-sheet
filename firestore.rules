@@ -15,6 +15,15 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/adminUsers/$(request.auth.uid));
     }
 
+    // This claim is minted only by trusted Firebase Admin tooling. A Firebase login alone is
+    // not warehouse membership: every operational collection below requires this boundary.
+    function isOperationalStaff() {
+      return isSignedIn() && (
+        request.auth.token.operator == true
+        || exists(/databases/$(database)/documents/adminUsers/$(request.auth.uid))
+      );
+    }
+
     function staffExists(staffId) {
       return exists(/databases/$(database)/documents/staffMembers/$(staffId));
     }
@@ -25,7 +34,7 @@ service cloud.firestore {
     }
 
     match /staffMembers/{staffId} {
-      allow read: if isSignedIn();
+      allow read: if isOperationalStaff();
       allow create, update: if isStaffAdmin()
         && request.resource.data.fullName is string
         && request.resource.data.employeeId is string
@@ -60,7 +69,7 @@ service cloud.firestore {
     }
 
     match /staffSettings/packingRoomNotice {
-      allow read: if isSignedIn();
+      allow read: if isOperationalStaff();
       allow create, update: if isStaffAdmin()
         && request.resource.data.keys().hasOnly(['content', 'updatedAt', 'updatedByUid'])
         && request.resource.data.content is string
@@ -72,7 +81,7 @@ service cloud.firestore {
     }
 
     match /staffDutyTypes/{dutyTypeId} {
-      allow read: if isSignedIn();
+      allow read: if isOperationalStaff();
       allow create, update: if isStaffAdmin()
         && request.resource.data.name is string
         && request.resource.data.active is bool;
@@ -81,7 +90,7 @@ service cloud.firestore {
 
     // เวรประจำสัปดาห์ — ตารางตายตัวที่ทุกวันในสัปดาห์ยึดตาม
     match /staffWeeklyDuties/{weeklyDutyId} {
-      allow read: if isSignedIn();
+      allow read: if isOperationalStaff();
       allow create, update: if isStaffAdmin()
         && request.resource.data.keys().hasOnly([
           'weekday', 'staffId', 'dutyTypeId', 'note', 'updatedAt', 'updatedBy'
@@ -100,7 +109,7 @@ service cloud.firestore {
     // การเปลี่ยนแปลงเฉพาะวัน — ผูกกับวันที่ ไม่แตะตารางเวรประจำ
     // staffId เป็นสตริงว่างได้ หมายถึงงดเวรนั้นเฉพาะวันนั้น
     match /staffDutyOverrides/{overrideId} {
-      allow read: if isSignedIn();
+      allow read: if isOperationalStaff();
       allow create, update: if isStaffAdmin()
         && request.resource.data.keys().hasOnly([
           'date', 'weeklyDutyId', 'staffId', 'note', 'updatedAt', 'updatedByUid'
@@ -121,7 +130,7 @@ service cloud.firestore {
     }
 
     match /staffDailyAssignments/{assignmentId} {
-      allow read: if isSignedIn();
+      allow read: if isOperationalStaff();
       allow create, update: if isStaffAdmin()
         && request.resource.data.date is string
         && request.resource.data.staffId is string
@@ -130,7 +139,7 @@ service cloud.firestore {
     }
 
     match /staffDailyStatuses/{statusId} {
-      allow read: if isSignedIn();
+      allow read: if isOperationalStaff();
       allow create, update: if isStaffAdmin()
         && request.resource.data.keys().hasOnly([
           'date', 'staffId', 'status', 'updatedAt', 'updatedByUid'
@@ -145,7 +154,7 @@ service cloud.firestore {
     }
 
     match /staffDailyLeads/{date} {
-      allow read: if isSignedIn();
+      allow read: if isOperationalStaff();
       allow create, update: if isStaffAdmin()
         && request.resource.data.keys().hasOnly([
           'date', 'staffId', 'updatedAt', 'updatedByUid'
@@ -166,8 +175,8 @@ service cloud.firestore {
     }
 
     match /scanEvents/{eventId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn()
+      allow read: if isOperationalStaff();
+      allow create: if isOperationalStaff()
         && request.resource.data.code is string
         && request.resource.data.courier is string
         && request.resource.data.type in ['packer', 'admin'];
@@ -175,8 +184,8 @@ service cloud.firestore {
     }
 
     match /orders/{orderId} {
-      allow read: if isSignedIn();
-      allow create, update: if isSignedIn()
+      allow read: if isOperationalStaff();
+      allow create, update: if isOperationalStaff()
         && request.resource.data.code is string
         && request.resource.data.normalizedCode is string
         && request.resource.data.courier is string
@@ -198,7 +207,7 @@ service cloud.firestore {
           'failed'
         ];
       allow delete: if false;
-      allow update: if isSignedIn()
+      allow update: if isOperationalStaff()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'marketplaceOrderId', 'marketplaceSkus', 'marketplaceItems'
         ])
@@ -213,8 +222,8 @@ service cloud.firestore {
     // the actor and timestamp at the same time as the order transaction, so diagnosis does
     // not depend on a mutable "latest status" field.
     match /orderAuditEvents/{eventId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn()
+      allow read: if isOperationalStaff();
+      allow create: if isOperationalStaff()
         && request.resource.data.keys().hasOnly([
           'orderId', 'type', 'code', 'courier', 'actor', 'detail', 'createdAt', 'createdAtIso'
         ])
@@ -235,8 +244,8 @@ service cloud.firestore {
     }
 
     match /marketplaceOrders/{orderId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn()
+      allow read: if isOperationalStaff();
+      allow create: if isStaffAdmin()
         && request.resource.data.keys().hasOnly([
           'platform', 'orderId', 'trackingNo', 'normalizedTrackingNo',
           'marketplaceSkus', 'items', 'sourceRowCount', 'sellerOrderStatus', 'expectedShipAt',
@@ -259,7 +268,7 @@ service cloud.firestore {
         && request.resource.data.importedAt is timestamp
         && request.resource.data.updatedAt is timestamp
         && request.resource.data.platform + '__' + request.resource.data.orderId == orderId;
-      allow update: if isSignedIn()
+      allow update: if isStaffAdmin()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'platform', 'orderId', 'trackingNo', 'normalizedTrackingNo',
           'marketplaceSkus', 'items', 'sourceRowCount', 'sellerOrderStatus', 'expectedShipAt',
@@ -302,8 +311,8 @@ service cloud.firestore {
     }
 
     match /packingVideos/{videoId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn()
+      allow read: if isOperationalStaff();
+      allow create: if isOperationalStaff()
         && request.resource.data.keys().hasOnly(packingVideoFields())
         && request.resource.data.videoId == videoId
         && request.resource.data.createdByUid == request.auth.uid
@@ -320,6 +329,8 @@ service cloud.firestore {
         && request.resource.data.sizeBytes <= 524288000
         && request.resource.data.bangkokDate is string
         && request.resource.data.bangkokDate.size() == 10
+        && request.resource.data.storagePath.matches('^packing-videos/' + request.resource.data.bangkokDate + '/' + videoId + '_r[0-9]+\\.(webm|mp4)$')
+        && request.resource.data.storageUrl == ''
         && request.resource.data.note is string
         && request.resource.data.note.size() <= 500
         && request.resource.data.status in ['pending_upload', 'cancelled', 'needs_review']
@@ -327,17 +338,19 @@ service cloud.firestore {
         && request.resource.data.driveStatus == 'pending';
 
       // Uploader lane: the packer who recorded the clip may only move it along the upload path.
-      allow update: if isSignedIn()
+      allow update: if isOperationalStaff()
         && resource.data.createdByUid == request.auth.uid
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'status', 'storageUrl', 'storagePath', 'uploadedAt', 'uploadAttempts',
+          'status', 'storageUrl', 'uploadedAt', 'uploadAttempts',
           'lastErrorCode', 'sizeBytes', 'sheetStatus', 'sheetRowNumber', 'updatedAt'
         ])
         && request.resource.data.status in [
           'pending_upload', 'uploaded', 'upload_failed', 'cancelled', 'needs_review'
         ]
         && request.resource.data.sizeBytes is int
-        && request.resource.data.sizeBytes <= 524288000;
+        && request.resource.data.sizeBytes <= 524288000
+        && request.resource.data.storagePath == resource.data.storagePath
+        && request.resource.data.storageUrl == resource.data.storageUrl;
 
       // Admin lane: fix a note or a status by hand, and record where the file ended up.
       allow update: if isStaffAdmin()
@@ -357,15 +370,15 @@ service cloud.firestore {
     // Reserves the attempt number for a tracking number. The +1 check is the server-side half
     // of the client transaction: even a buggy or racing client cannot skip or reuse a number.
     match /packingVideoTracking/{tracking} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn()
+      allow read: if isOperationalStaff();
+      allow create: if isOperationalStaff()
         && request.resource.data.keys().hasOnly([
           'normalizedTrackingNo', 'lastAttemptNo', 'lastVideoId', 'updatedAt'
         ])
         && request.resource.data.normalizedTrackingNo == tracking
         && request.resource.data.lastAttemptNo == 1
         && request.resource.data.lastVideoId is string;
-      allow update: if isSignedIn()
+      allow update: if isOperationalStaff()
         && request.resource.data.keys().hasOnly([
           'normalizedTrackingNo', 'lastAttemptNo', 'lastVideoId', 'updatedAt'
         ])
@@ -380,7 +393,7 @@ service cloud.firestore {
     // an Admin concern, and a writable audit trail would not be one.
     match /packingVideoAudit/{eventId} {
       allow read: if isStaffAdmin();
-      allow create: if isSignedIn()
+      allow create: if isOperationalStaff()
         && request.resource.data.keys().hasOnly([
           'videoId', 'action', 'actorUid', 'actorEmail', 'at', 'deviceId', 'detail'
         ])
@@ -395,13 +408,13 @@ service cloud.firestore {
     }
 
     match /syncStatus/{platform} {
-      allow read: if isSignedIn();
+      allow read: if isOperationalStaff();
       allow write: if false;
     }
 
     match /couriers/{courierId} {
-      allow read: if isSignedIn();
-      allow create, update: if isSignedIn()
+      allow read: if isOperationalStaff();
+      allow create, update: if isStaffAdmin()
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0
         && request.resource.data.name.size() <= 80;

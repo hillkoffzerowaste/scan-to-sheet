@@ -8,6 +8,7 @@ import {
   buildDriveFolderPath,
   buildDriveNameForDoc,
   extensionFromMimeType,
+  hasCanonicalStoragePath,
   isStorageDeletable,
   planDriveRetry,
   planStaleMoveReclaim,
@@ -29,6 +30,14 @@ const doc = (overrides = {}) => ({
 
 test('folders are nested by year, Bangkok date and platform', () => {
   assert.deepEqual(buildDriveFolderPath(doc()), ['Packing Videos', '2026', '2026-08-15', 'SHOPEE']);
+});
+
+test('the Drive worker rejects a path outside the document canonical Storage namespace', () => {
+  assert.equal(hasCanonicalStoragePath(doc({
+    videoId: 'pv_20260815_abc_0001',
+    storagePath: 'packing-videos/2026-08-15/pv_20260815_abc_0001_r0.webm',
+  })), true);
+  assert.equal(hasCanonicalStoragePath(doc({ storagePath: 'other-bucket/secret.pdf' })), false);
 });
 
 test('an unknown platform still gets a home', () => {

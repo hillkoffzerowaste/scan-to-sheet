@@ -5,6 +5,7 @@ import {
   MAX_FILE_NAME_LENGTH,
   buildDriveFileName,
   buildStoragePath,
+  isCanonicalStoragePath,
   newSessionId,
   newVideoId,
   resolveDeviceId,
@@ -65,6 +66,16 @@ test('buildStoragePath tags the retry so every upload is a fresh object', () => 
     extension: 'MP4',
   });
   assert.equal(path, 'packing-videos/2026-08-15/pv_1_r2.mp4');
+});
+
+test('a worker only accepts the deterministic Storage path for its own video and Bangkok date', () => {
+  const input = {
+    videoId: 'pv_20260815_abc_0001',
+    bangkokDate: '2026-08-15',
+  };
+  assert.equal(isCanonicalStoragePath({ ...input, storagePath: 'packing-videos/2026-08-15/pv_20260815_abc_0001_r2.webm' }), true);
+  assert.equal(isCanonicalStoragePath({ ...input, storagePath: 'packing-videos/2026-08-16/pv_20260815_abc_0001_r2.webm' }), false);
+  assert.equal(isCanonicalStoragePath({ ...input, storagePath: 'private/finance.pdf' }), false);
 });
 
 test('buildStoragePath refuses to build a path without an id', () => {

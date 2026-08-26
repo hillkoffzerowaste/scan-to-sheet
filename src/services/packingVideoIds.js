@@ -69,6 +69,17 @@ export function buildStoragePath({ videoId, startedAt, retryNo = 0, extension = 
   return `${STORAGE_ROOT}/${formatBangkokDate(startedAt)}/${id}_r${safeRetry}.${ext}`;
 }
 
+/**
+ * The Drive worker runs with bucket-wide credentials, so it must never treat a Firestore
+ * string as an arbitrary object name. This accepts only the object name the client builder
+ * can produce for this exact video and Bangkok start date.
+ */
+export function isCanonicalStoragePath({ storagePath, videoId, bangkokDate }) {
+  const id = String(videoId ?? '').trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const date = String(bangkokDate ?? '').trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return Boolean(id && date && new RegExp(`^${STORAGE_ROOT}/${date}/${id}_r\\d+\\.(webm|mp4)$`, 'i').test(String(storagePath ?? '')));
+}
+
 export function sanitizeFileNameSegment(value, fallback = '') {
   const cleaned = String(value ?? '')
     .trim()

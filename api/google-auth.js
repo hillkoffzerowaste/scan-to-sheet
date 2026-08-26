@@ -1,14 +1,17 @@
 import {
   API_ERRORS,
   createSessionId,
+  clearOAuthTransactionCookie,
   exchangeCode,
   fetchProfile,
   getStoredSheetConfig,
   redactSecrets,
+  readOAuthTransaction,
   sendError,
   sendJson,
   setSession,
   setSessionCookie,
+  verifyOAuthTransaction,
 } from './_auth.js';
 
 export function canPersistGoogleSession(tokenData) {
@@ -22,8 +25,10 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { code, redirectUri, clientId } = req.body ?? {};
-    if (!code || !redirectUri || !clientId) {
+    const { code, state } = req.body ?? {};
+    const transaction = readOAuthTransaction(req);
+    clearOAuthTransactionCookie(res);
+    if (!code || !transaction || !verifyOAuthTransaction({ expectedState: transaction.state, receivedState: state })) {
       sendError(res, {
         status: 400,
         code: 'AUTH_REQUEST_INVALID',
@@ -35,7 +40,11 @@ export default async function handler(req, res) {
     let tokenData;
     let profile;
     try {
-      tokenData = await exchangeCode({ code, redirectUri, clientId });
+      tokenData = await exchangeCode({
+        code,
+        redirectUri: transaction.redirectUri,
+        codeVerifier: transaction.codeVerifier,
+      });
       profile = await fetchProfile(tokenData.access_token);
     } catch (error) {
       // `detail` used to carry error.message here. It never reached the banner, but it did

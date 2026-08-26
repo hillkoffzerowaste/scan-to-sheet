@@ -270,7 +270,7 @@ function applyLabelUpdates_(spreadsheet, updates) {
       missed += rowNumbers.length;
       return;
     }
-    sheet.getRangeList(rowNumbers.map(function (rn) { return 'P' + rn; })).setValue(value);
+    sheet.getRangeList(rowNumbers.map(function (rn) { return 'P' + rn; })).setValue(literalizeSheetText_(value));
     written += rowNumbers.length;
   });
   return { written: written, missed: missed };
@@ -290,9 +290,17 @@ function ensureLogSheet_(spreadsheet, name) {
 
 function logRow_(file, platform, orderId, status, matchedRows, errorCode) {
   return [
-    new Date(), file.getId(), file.getName(), platform || '', orderId || '', status,
-    matchedRows || 0, errorCode || '',
+    new Date(), literalizeSheetText_(file.getId()), literalizeSheetText_(file.getName()),
+    literalizeSheetText_(platform || ''), literalizeSheetText_(orderId || ''), literalizeSheetText_(status),
+    matchedRows || 0, literalizeSheetText_(errorCode || ''),
   ];
+}
+
+// OCR and Drive filenames are external input. Sheets treats these leading characters as a
+// formula even when a human sees them as ordinary text, so preserve the literal value.
+function literalizeSheetText_(value) {
+  if (typeof value !== 'string') return value;
+  return /^[=+\-@\t\r]/.test(value) ? "'" + value : value;
 }
 
 function appendLogRows_(sheet, rows) {

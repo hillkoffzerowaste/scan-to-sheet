@@ -552,6 +552,7 @@ function App() {
 
     const params = new URLSearchParams(window.location.search);
     const code = params.get('code');
+    const oauthState = params.get('state');
     const error = params.get('error');
     const errorDescription = params.get('error_description');
 
@@ -573,7 +574,7 @@ function App() {
       });
       setBusy(false);
     } else {
-      completeGoogleSignIn(code);
+      completeGoogleSignIn(code, oauthState);
     }
 
     return () => {
@@ -903,19 +904,18 @@ function App() {
     }
 
     const redirectUri = `${window.location.origin}${window.location.pathname}`;
-    const params = new URLSearchParams({
-      client_id: GOOGLE_CLIENT_ID,
-      redirect_uri: redirectUri,
-      response_type: 'code',
-      scope: SCOPES,
-      include_granted_scopes: 'true',
-      access_type: 'offline',
-      prompt: 'consent',
-    });
-
     localStorage.removeItem(LOGGED_OUT_FLAG);
     setBusy(true);
-    window.location.assign(`https://accounts.google.com/o/oauth2/v2/auth?${params}`);
+    try {
+      const data = await apiJson('/api/google-oauth-start', {
+        method: 'POST',
+        body: JSON.stringify({ redirectUri }),
+      });
+      window.location.assign(data.authorizationUrl);
+    } catch (error) {
+      setStatus({ type: 'error', title: 'เริ่มเข้าสู่ระบบไม่สำเร็จ', message: error.message });
+      setBusy(false);
+    }
   }
 
   async function handleFirebaseRedirectOrRestore() {
@@ -961,13 +961,13 @@ function App() {
     await restoreGoogleSession();
   }
 
-  async function completeGoogleSignIn(code) {
+  async function completeGoogleSignIn(code, state) {
     try {
       setBusy(true);
       const redirectUri = `${window.location.origin}${window.location.pathname}`;
       const data = await apiJson('/api/google-auth', {
         method: 'POST',
-        body: JSON.stringify({ code, redirectUri, clientId: GOOGLE_CLIENT_ID }),
+        body: JSON.stringify({ code, state }),
       });
       const session = await activateGoogleSession(data);
       setStatus(session.firebaseSignInFailed

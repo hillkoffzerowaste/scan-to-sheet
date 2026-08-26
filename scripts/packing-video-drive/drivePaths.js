@@ -1,4 +1,4 @@
-import { buildDriveFileName } from '../../src/services/packingVideoIds.js';
+import { buildDriveFileName, isCanonicalStoragePath } from '../../src/services/packingVideoIds.js';
 import { formatBangkokDate } from '../../src/services/packingVideoFormat.js';
 
 /**
@@ -127,4 +127,8 @@ export function planStoragePurge(doc, now = Date.now()) {
   if (doc?.driveStatus !== 'moved') return 'skip';
   if (!doc?.storagePath) return 'retire';
   return isStorageDeletable(doc, now) ? 'delete' : 'wait';
+}
+
+export function hasCanonicalStoragePath(doc) {
+  return isCanonicalStoragePath(doc);
 }

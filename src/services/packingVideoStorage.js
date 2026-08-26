@@ -47,6 +47,14 @@ export function uploadPackingVideo({ storagePath, blob, mimeType, metadata = {},
   });
 }
 
+/** Resolve playback only for the current authorized viewer; never store this bearer-like URL. */
+export async function getPackingVideoPlaybackUrl(storagePath) {
+  if (!firebaseStorage || !storagePath) {
+    throw Object.assign(new Error('ยังเปิดวิดีโอไม่ได้'), { code: 'PACKING_VIDEO_PLAYBACK_UNAVAILABLE' });
+  }
+  return getDownloadURL(ref(firebaseStorage, storagePath));
+}
+
 const UPLOAD_ERROR_CODES = {
   'storage/unauthorized': 'PACKING_VIDEO_UPLOAD_FORBIDDEN',
   'storage/quota-exceeded': 'PACKING_VIDEO_UPLOAD_QUOTA',
