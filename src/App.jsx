@@ -89,7 +89,6 @@ import {
   getDriveRowsFirestore,
   getScanReportFirestore,
   getTodayRowsFirestore,
-  getUploadedMarketplaceOrders,
   markSheetSyncWriting,
   markSheetSyncResult,
   mirrorScanToFirestore,
@@ -107,7 +106,6 @@ import {
   groupMarketplaceRows,
   parseCsvText,
   parseMarketplaceRows,
-  shouldRunMarketplaceBackfill,
 } from './services/marketplaceImport.js';
 import { parseXlsxArrayBuffer } from './services/xlsxImport.js';
 import { loadHtml5Qrcode } from './services/cameraLoader.js';
@@ -137,7 +135,6 @@ const GOOGLE_SCOPES = [
   'https://www.googleapis.com/auth/spreadsheets',
 ];
 const SCOPES = GOOGLE_SCOPES.join(' ');
-const MARKETPLACE_BACKFILL_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 const MARKETPLACE_IMPORT_MAX_ORDERS = 100;
 const SHEET_RECOVERY_BATCH_SIZE = 20;
 const SHEET_RECOVERY_COOLDOWN_MS = 5 * 1000;
@@ -341,7 +338,6 @@ function App() {
   const [marketplaceUploadResult, setMarketplaceUploadResult] = useState(null);
   const [marketplaceFilterPlatform, setMarketplaceFilterPlatform] = useState('all');
   const marketplaceFileRef = useRef(null);
-  const marketplaceBackfillStartedRef = useRef(false);
   const inputRef = useRef(null);
   const audioContextRef = useRef(null);
   const cameraRef = useRef(null);
@@ -518,44 +514,6 @@ function App() {
       setMarketplaceUploadBusy(false);
     }
   }
-
-  useEffect(() => {
-    if (!shouldRunMarketplaceBackfill({
-      trigger: 'automatic',
-      sessionReady: Boolean(firebaseUser && token && config?.master?.id),
-    })) return;
-    if (!firebaseUser || !token || !config?.master?.id || marketplaceBackfillStartedRef.current) return;
-    const backfillKey = `scan-to-sheet:marketplace-backfill:${firebaseUser.uid}:${config.master.id}`;
-    const lastSuccessfulBackfill = Number(localStorage.getItem(backfillKey) ?? 0);
-    if (Date.now() - lastSuccessfulBackfill < MARKETPLACE_BACKFILL_COOLDOWN_MS) {
-      marketplaceBackfillStartedRef.current = true;
-      return;
-    }
-    marketplaceBackfillStartedRef.current = true;
-
-    void (async () => {
-      try {
-        const groups = await getUploadedMarketplaceOrders();
-        if (!groups.length) return;
-        const knownExistingOrderIds = groups.map((group) => `${group.platform}__${group.orderId}`);
-        const firebaseResult = await importMarketplaceOrders(groups, { knownExistingOrderIds });
-        const sheetResult = await runWithGoogleRetry((accessToken, googleConfig) => (
-          backfillMarketplaceOrdersGoogle({ token: accessToken, config: googleConfig, groups })
-        ));
-        const lateResult = await runWithGoogleRetry((accessToken, googleConfig) => (
-          syncLateOrdersGoogle({ token: accessToken, config: googleConfig, orders: firebaseResult.orderStates })
-        ));
-        localStorage.setItem(backfillKey, String(Date.now()));
-        setMarketplaceUploadResult({
-          type: 'success',
-          message: `เติมย้อนหลังอัตโนมัติแล้ว: อัปเดต Firebase ${firebaseResult.updatedScans} รายการ, Google Sheet ${sheetResult.matchedRows} แถว และ Late Orders ${lateResult.rows} ออเดอร์`,
-        });
-      } catch (error) {
-        marketplaceBackfillStartedRef.current = false;
-        setMarketplaceUploadResult({ type: 'warning', message: `เติมย้อนหลังยังไม่ครบ: ${error.message}` });
-      }
-    })();
-  }, [firebaseUser, token, config]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -1384,13 +1342,19 @@ function App() {
       }
       return { busy: false, claimed: 0, synced: 0, failed: 0 };
     }
+    // `showStatus` decides whether the packer sees a banner, never whether the quota gate
+    // applies. It used to guard the check itself, so all three background callers — the
+    // sign-in sweep, the 5-minute retry and the 10-minute integrity pass — ran with no
+    // cooldown at all, which is exactly the traffic this exists to space out.
     const waitMs = sheetRecoveryNextAllowedAtRef.current - Date.now();
-    if (showStatus && waitMs > 0) {
-      setStatus({
-        type: 'warning',
-        title: 'รอ Google Sheets quota',
-        message: `กรุณารออีกประมาณ ${Math.ceil(waitMs / 1000)} วินาทีก่อนอัปเดตรอบถัดไป`,
-      });
+    if (waitMs > 0) {
+      if (showStatus) {
+        setStatus({
+          type: 'warning',
+          title: 'รอ Google Sheets quota',
+          message: `กรุณารออีกประมาณ ${Math.ceil(waitMs / 1000)} วินาทีก่อนอัปเดตรอบถัดไป`,
+        });
+      }
       return { busy: false, claimed: 0, synced: 0, failed: 0 };
     }
     sheetRecoveryRunningRef.current = true;

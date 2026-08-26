@@ -10,20 +10,8 @@ import {
   parseMarketplaceRows,
   validateMarketplaceIdentifier,
 } from './marketplaceImport.js';
-import * as marketplaceImport from './marketplaceImport.js';
 import { parseXlsxArrayBuffer } from './xlsxImport.js';
 import { buildDailyRowUpdateData, marketplaceSkusText, validateScanCode } from './googleSheets.js';
-
-test('blocks automatic marketplace backfill unless an operator explicitly requests it', () => {
-  assert.equal(
-    marketplaceImport.shouldRunMarketplaceBackfill?.({ trigger: 'automatic', sessionReady: true }),
-    false,
-  );
-  assert.equal(
-    marketplaceImport.shouldRunMarketplaceBackfill?.({ trigger: 'manual', sessionReady: true }),
-    true,
-  );
-});
 
 test('accepts both KEX Lazada barcode prefixes and rejects near misses', () => {
   assert.equal(validateScanCode('KEX Lazada', 'KEXD0LM0003766710').ok, true);
