@@ -255,6 +255,9 @@ test('a disposed queue stops accepting work', async () => {
 test('the queue refuses to be built without its dependencies', () => {
   assert.throws(() => createPackingVideoQueue({ db: null, pipeline: () => {} }), TypeError);
   assert.throws(() => createPackingVideoQueue({ db: {}, pipeline: null }), TypeError);
+  // retry()'s transition guard reads db.get. Optional, it would degrade to a silent no-op.
+  assert.throws(() => createPackingVideoQueue({ db: { ...fakeDb(), get: undefined }, pipeline: () => {} }), TypeError);
+  assert.doesNotThrow(() => createPackingVideoQueue({ db: fakeDb(), pipeline: () => {} }));
 });
 
 test('re-queueing a clip the queue already finished is refused', async () => {

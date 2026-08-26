@@ -49,8 +49,10 @@ export function createPackingVideoQueue({
   leaseMs = DEFAULT_LEASE_MS,
   onChange = () => {},
 }) {
-  if (!db || typeof pipeline !== 'function') {
-    throw new TypeError('createPackingVideoQueue requires a db and a pipeline function');
+  // `get` is checked alongside the rest because retry()'s transition guard depends on it. Left
+  // optional it would degrade to a silent no-op, which is the failure this queue keeps meeting.
+  if (!db || typeof db.get !== 'function' || typeof pipeline !== 'function') {
+    throw new TypeError('createPackingVideoQueue requires a db (with get) and a pipeline function');
   }
 
   // Guards against this tab's own loop double-starting a job; `leaseUntil` guards other tabs.
@@ -148,7 +150,7 @@ export function createPackingVideoQueue({
       // and re-running the pipeline would rewrite its Firestore document.
       // `db.get`, not listPending: that one only returns rows that still hold a blob, so an
       // already-uploaded clip — the exact case worth refusing — would not be found at all.
-      const current = await db.get?.(videoId);
+      const current = await db.get(videoId);
       if (current && !canTransition(current.status, PACKING_VIDEO_STATUS.pendingUpload)) {
         throw Object.assign(
           new Error('วิดีโอนี้อยู่ในสถานะที่สั่งอัปโหลดซ้ำไม่ได้'),
