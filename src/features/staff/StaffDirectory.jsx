@@ -174,14 +174,19 @@ export default function StaffDirectory({
   const [savingOrder, setSavingOrder] = useState(false);
 
   // ชนเพดาน = Firestore ตัดข้อมูลที่เหลือทิ้งเงียบๆ หน้าจอจะดูเหมือนข้อมูลครบทั้งที่ไม่ครบ
+  // เตือนแบบสะสม ไม่ทับกัน: reloadBase กับ reloadDaily ทำงานพร้อมกัน อันที่เสร็จทีหลัง
+  // เคยเขียนทับคำเตือนของอันแรก ทำให้เห็นแค่ครึ่งเดียวว่าข้อมูลส่วนไหนไม่ครบ
   function warnIfTruncated(checks) {
     const hit = checks.filter(([count, cap]) => count >= cap);
     if (!hit.length) return;
-    setMessage(
-      `แสดงข้อมูลได้ไม่ครบ: ${hit
-        .map(([, cap, label]) => `${label} เกิน ${cap.toLocaleString("th-TH")} รายการ`)
-        .join(" และ ")} กรุณาแจ้ง Admin เพื่อจัดเก็บข้อมูลเก่า`
-    );
+    const detail = hit
+      .map(([, cap, label]) => `${label} เกิน ${cap.toLocaleString("th-TH")} รายการ`)
+      .join(" และ ");
+    setMessage((current) => {
+      const notice = `แสดงข้อมูลได้ไม่ครบ: ${detail} กรุณาแจ้ง Admin เพื่อจัดเก็บข้อมูลเก่า`;
+      if (!current) return notice;
+      return current.includes(detail) ? current : `${current} • ${detail}`;
+    });
   }
 
   async function reloadBase(includePrivate = isAdmin) {
@@ -196,7 +201,9 @@ export default function StaffDirectory({
       ]);
     const members = publicMembers.map((person) => ({
       ...person,
-      internalNote: privateNotes.get(person.id),
+      // '' not undefined: a non-Admin gets an empty map, and staffMissingFields treats a
+      // missing key differently from an empty one.
+      internalNote: privateNotes.get(person.id) ?? "",
       ...(privateContacts.has(person.id)
         ? {
             phone: privateContacts.get(person.id).phone ?? "",
@@ -327,12 +334,18 @@ export default function StaffDirectory({
       dutyLabelsByStaff,
     ]
   );
-  const groups = groupActiveStaff(
-    showInactive
-      ? visibleStaff.map((person) => ({ ...person, active: true }))
-      : visibleStaff
+  // Memoized like every other derived value here. Unmemoized these two rebuilt the whole
+  // grouped directory on every keystroke in the search box and on every unrelated state change.
+  const groups = useMemo(
+    () =>
+      groupActiveStaff(
+        showInactive
+          ? visibleStaff.map((person) => ({ ...person, active: true }))
+          : visibleStaff
+      ),
+    [visibleStaff, showInactive]
   );
-  const packingRoomTeam = buildPackingRoomTeam(groups);
+  const packingRoomTeam = useMemo(() => buildPackingRoomTeam(groups), [groups]);
   const workforceSummary = useMemo(
     () => buildWorkforceSummary(staff, dailyStatuses, dutyLabelsByStaff),
     [staff, dailyStatuses, dutyLabelsByStaff]
