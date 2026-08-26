@@ -9,7 +9,9 @@ const TEST_DIR = path.dirname(fileURLToPath(import.meta.url));
 const matchingPath = path.resolve(TEST_DIR, '../../apps-script/label-sync/Matching.gs');
 
 function loadMatching() {
-  if (!existsSync(matchingPath)) return {};
+  // Fail loudly rather than returning {}. A silent skip is what let a second, untested
+  // copy of Matching.gs sit in scripts/ and drift from the one that actually deploys.
+  if (!existsSync(matchingPath)) throw new Error(`Missing ${matchingPath}`);
   const context = {};
   vm.runInNewContext(readFileSync(matchingPath, 'utf8'), context, { filename: matchingPath });
   return context.LabelMatching ?? {};

@@ -11,7 +11,9 @@ const codePath = path.resolve(TEST_DIR, '../../apps-script/label-sync/Code.gs');
 // Code.gs only touches Apps Script services inside function bodies, so evaluating the file
 // in a bare context exposes the pure retry helpers without any of Drive/Properties.
 function loadCode() {
-  if (!existsSync(codePath)) return {};
+  // Fail loudly rather than returning {}. A silent skip is what let a second, untested
+  // copy of Code.gs sit in scripts/ and drift from the one that actually deploys.
+  if (!existsSync(codePath)) throw new Error(`Missing ${codePath}`);
   const context = {};
   vm.runInNewContext(readFileSync(codePath, 'utf8'), context, { filename: codePath });
   return context;
@@ -123,4 +125,39 @@ test('editing the file resets the attempt budget', () => {
 
   assert.equal(next.attempts, 1);
   assert.equal(next.status, 'retry');
+});
+
+test('the run budgets are small enough to finish inside an Apps Script execution', () => {
+  // State is persisted only after the file loop, so a run killed at the 6-minute ceiling threw
+  // away everything it had done and re-OCR'd every file next time. The budget has to stop the
+  // loop before Apps Script stops the script.
+  const { LABEL_SYNC } = loadCode();
+  const APPS_SCRIPT_LIMIT_MS = 6 * 60 * 1000;
+  assert.ok(
+    LABEL_SYNC.runBudgetMs < APPS_SCRIPT_LIMIT_MS,
+    'run budget must leave room to write state and logs before the hard limit',
+  );
+  assert.ok(APPS_SCRIPT_LIMIT_MS - LABEL_SYNC.runBudgetMs >= 60 * 1000, 'leave at least a minute');
+  assert.ok(LABEL_SYNC.maxFilesPerRun > 0);
+});
+
+test('the state cap covers more files than the candidate window can hold', () => {
+  // A file inside the lookback window with no state entry gets OCR'd from scratch, for ever.
+  // At 500 entries and warehouse volume that happened within days.
+  const { LABEL_SYNC } = loadCode();
+  const busyDayFiles = 500;
+  assert.ok(
+    LABEL_SYNC.maxStateEntries >= busyDayFiles * LABEL_SYNC.defaultFileLookbackDays / 3,
+    'state cap is too small for the default file lookback window',
+  );
+});
+
+test('the retry backoff never exceeds its declared ceiling', () => {
+  const { nextFileState_, LABEL_SYNC } = loadCode();
+  let entry = { modifiedAt: MODIFIED, status: 'retry', attempts: 0, nextRetryAt: 0 };
+  for (let index = 0; index < LABEL_SYNC.maxRetryAttempts; index += 1) {
+    entry = nextFileState_(entry, { modifiedAt: MODIFIED, outcome: 'retry', nowMs: NOW });
+    assert.ok(entry.nextRetryAt - NOW <= LABEL_SYNC.maxRetryMinutes * MINUTE);
+  }
+  assert.equal(entry.status, 'gave_up');
 });

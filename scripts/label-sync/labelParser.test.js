@@ -9,7 +9,9 @@ const TEST_DIR = path.dirname(fileURLToPath(import.meta.url));
 const parserPath = path.resolve(TEST_DIR, '../../apps-script/label-sync/LabelParser.gs');
 
 function loadParser() {
-  if (!existsSync(parserPath)) return {};
+  // Fail loudly rather than returning {}. A silent skip is what let a second, untested
+  // copy of LabelParser.gs sit in scripts/ and drift from the one that actually deploys.
+  if (!existsSync(parserPath)) throw new Error(`Missing ${parserPath}`);
   const context = {};
   vm.runInNewContext(readFileSync(parserPath, 'utf8'), context, { filename: parserPath });
   return context.LabelParser ?? {};

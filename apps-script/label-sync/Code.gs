@@ -10,6 +10,15 @@ var LABEL_SYNC = {
   maxRetryAttempts: 6,
   firstRetryMinutes: 15,
   maxRetryMinutes: 24 * 60,
+  // Apps Script kills a run at 6 minutes. State used to be written only after every file was
+  // processed, so a timeout threw the whole run away and every file was OCR'd again next time
+  // — the one cost this script must not repeat. Stop early and keep what was done.
+  runBudgetMs: 4 * 60 * 1000,
+  // Files handled per run. Bounds both the OCR spend and how much a lost run can cost.
+  maxFilesPerRun: 40,
+  // Entries kept in Script Properties. At warehouse volume the old 500 was reached within days,
+  // and a file that falls out of state is a file that gets OCR'd from scratch again.
+  maxStateEntries: 5000,
 };
 
 function setupLabelSync() {
@@ -31,9 +40,12 @@ function runLabelSync() {
     filesScanned: 0,
     filesSkipped: 0,
     filesRetryScheduled: 0,
+    filesDeferred: 0,
     labelsFound: 0,
     rowsUpdated: 0,
+    rowsMissed: 0,
     errors: 0,
+    stoppedEarly: '',
   };
   try {
     var config = getLabelSyncConfig_();
@@ -52,8 +64,25 @@ function runLabelSync() {
     var logRows = [];
 
     var nowMs = Date.now();
+    var runDeadline = nowMs + LABEL_SYNC.runBudgetMs;
 
     files.forEach(function (file) {
+      // Both budgets defer rather than drop: an unprocessed file keeps whatever state it had,
+      // so the next run picks it up instead of starting its OCR over.
+      if (summary.stoppedEarly) {
+        summary.filesDeferred += 1;
+        return;
+      }
+      if (Date.now() >= runDeadline) {
+        summary.stoppedEarly = 'time_budget';
+        summary.filesDeferred += 1;
+        return;
+      }
+      if (summary.filesScanned >= LABEL_SYNC.maxFilesPerRun) {
+        summary.stoppedEarly = 'file_budget';
+        summary.filesDeferred += 1;
+        return;
+      }
       var fileId = file.getId();
       var modifiedAt = file.getLastUpdated().toISOString();
       var entry = fileStateEntry_(state.files[fileId]);
@@ -75,7 +104,9 @@ function runLabelSync() {
         }
 
         var result = LabelMatching.matchLabels(sheetRows, labels);
-        summary.rowsUpdated += applyLabelUpdates_(spreadsheet, result.updates);
+        var applied = applyLabelUpdates_(spreadsheet, result.updates);
+        summary.rowsUpdated += applied.written;
+        summary.rowsMissed += applied.missed;
         // Pair outcomes back to labels by key. `matchLabels` dedupes and drops incomplete
         // labels, so its results array does not line up with `labels` positionally.
         var outcomes = LabelMatching.resultsByLabel(labels, result.results);
@@ -105,6 +136,16 @@ function runLabelSync() {
 
     appendLogRows_(logSheet, logRows);
     writeProcessedState_(state);
+    if (summary.stoppedEarly) {
+      // Silent truncation reads as "everything is done" when it is not.
+      Logger.log(
+        'Label Sync stopped early (' + summary.stoppedEarly + '); '
+        + summary.filesDeferred + ' file(s) deferred to the next run.',
+      );
+    }
+    if (summary.rowsMissed) {
+      Logger.log('Label Sync could not write ' + summary.rowsMissed + ' row(s): sheet missing.');
+    }
     return summary;
   } finally {
     lock.releaseLock();
@@ -187,29 +228,52 @@ function extractFileText_(file, ocrLanguage) {
   }
 }
 
+/**
+ * The most recent date tabs, hidden or not.
+ *
+ * Hidden tabs used to be excluded. A since-removed housekeeping pass in the web app hid every
+ * date sheet older than today, so on any spreadsheet it had touched this saw one tab and
+ * quietly matched nothing against the rest of the lookback window. Whether a tab is hidden is
+ * a display choice; it says nothing about whether its orders still need a recipient.
+ *
+ * Note this takes the newest N *tabs*, not N calendar days — a warehouse that does not ship
+ * every day still gets a full window of real data.
+ */
 function getTargetDateSheets_(spreadsheet, lookbackDays) {
   return spreadsheet.getSheets()
-    .filter(function (sheet) { return !sheet.isSheetHidden() && /^\d{4}-\d{2}-\d{2}$/.test(sheet.getName()); })
+    .filter(function (sheet) { return /^\d{4}-\d{2}-\d{2}$/.test(sheet.getName()); })
     .sort(function (left, right) { return right.getName().localeCompare(left.getName()); })
     .slice(0, lookbackDays);
 }
 
+/**
+ * Writes each recipient into column P (Buyer Name), the column the scan flow deliberately
+ * never touches. Returns what was actually written and what could not be — reporting
+ * `updates.length` regardless counted a missing sheet as a successful write, so the run
+ * summary claimed rows it had silently skipped.
+ */
 function applyLabelUpdates_(spreadsheet, updates) {
   var bySheetAndValue = {};
   updates.forEach(function (update) {
     var groupKey = update.sheetName + '\u0000' + update.value;
     (bySheetAndValue[groupKey] = bySheetAndValue[groupKey] || []).push(update.rowNumber);
   });
+  var written = 0;
+  var missed = 0;
   Object.keys(bySheetAndValue).forEach(function (groupKey) {
     var parts = groupKey.split('\u0000');
     var sheetName = parts[0];
     var value = parts.slice(1).join('\u0000');
     var rowNumbers = bySheetAndValue[groupKey];
     var sheet = spreadsheet.getSheetByName(sheetName);
-    if (!sheet) return;
+    if (!sheet) {
+      missed += rowNumbers.length;
+      return;
+    }
     sheet.getRangeList(rowNumbers.map(function (rn) { return 'P' + rn; })).setValue(value);
+    written += rowNumbers.length;
   });
-  return updates.length;
+  return { written: written, missed: missed };
 }
 
 function ensureLogSheet_(spreadsheet, name) {
@@ -309,12 +373,27 @@ function readProcessedState_() {
   }
 }
 
+/**
+ * Persist the per-file state, newest first.
+ *
+ * The entry cap is what stops a file being OCR'd twice. At 500 it was reached within days at
+ * warehouse volume, so the oldest entries fell out while their files were still inside the
+ * 30-day candidate window — and a file with no entry is a file OCR'd from scratch again, for
+ * ever. A truncation is now logged rather than silent.
+ */
 function writeProcessedState_(state) {
-  var entries = Object.entries(state.files || {}).sort(function (left, right) {
+  var all = Object.entries(state.files || {}).sort(function (left, right) {
     var leftEntry = fileStateEntry_(left[1]);
     var rightEntry = fileStateEntry_(right[1]);
     return String(rightEntry.modifiedAt).localeCompare(String(leftEntry.modifiedAt));
-  }).slice(0, 500);
+  });
+  var entries = all.slice(0, LABEL_SYNC.maxStateEntries);
+  if (all.length > entries.length) {
+    Logger.log(
+      'Label Sync state truncated to ' + entries.length + ' of ' + all.length
+      + ' files; the oldest will be OCR\'d again. Lower FILE_LOOKBACK_DAYS or archive old labels.',
+    );
+  }
   var files = {};
   entries.forEach(function (entry) { files[entry[0]] = entry[1]; });
   PropertiesService.getScriptProperties().setProperty(LABEL_SYNC.statePropertyKey, JSON.stringify({ files: files }));
