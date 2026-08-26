@@ -22,6 +22,7 @@ import {
   buildRecordingQuery,
   normalizePackingFilters,
 } from './logic/packingVideoFilters.js';
+import { retryCurrentPackingQueue } from './logic/queueRef.js';
 import { PACKING_STATIONS, packingStationLabel } from './packingVideoStations.js';
 
 const EMPTY_FORM = {
@@ -49,7 +50,7 @@ export default function PackingVideoDashboard({
   packerOptions,
   user,
   deviceId,
-  queue,
+  queueRef,
   localVideos = [],
   onLocalChange,
 }) {
@@ -131,7 +132,7 @@ export default function PackingVideoDashboard({
     setError('');
     setReleasing(null);
     try {
-      await queue?.retry(row.videoId);
+      await retryCurrentPackingQueue(queueRef, row.videoId);
       // The local list is the only view of a clip with no Firestore document yet, so it has to
       // be refreshed here; re-running the search would not show the change.
       await onLocalChange?.();

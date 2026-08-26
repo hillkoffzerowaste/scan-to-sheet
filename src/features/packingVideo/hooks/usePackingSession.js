@@ -21,6 +21,7 @@ import { newSessionId, newVideoId } from '../../../services/packingVideoIds.js';
 import { PACKING_VIDEO_STATUS } from '../../../services/packingVideoModel.js';
 import { allocatePackingAttempt, findPackingVideosByTracking } from '../../../services/packingVideos.js';
 import { buildDeviceCode } from '../logic/packingVideoIdentity.js';
+import { kickCurrentPackingQueue } from '../logic/queueRef.js';
 import {
   PACKING_STATE,
   RECORD_OUTCOME,
@@ -45,7 +46,7 @@ const OUTCOME_STATUS = {
  * await — that is what lets a packer scan the next label while the previous clip is still
  * being written.
  */
-export function usePackingSession({ deviceId, user, queue, notify, playTone, initialPrefs }) {
+export function usePackingSession({ deviceId, user, queueRef, notify, playTone, initialPrefs }) {
   const [state, dispatch] = useReducer(reducePackingSession, initialPackingState);
   const [cameraInfo, setCameraInfo] = useState({ ready: false, resolution: '', errorCode: '' });
   const [sessionId, setSessionId] = useState('');
@@ -243,7 +244,7 @@ export function usePackingSession({ deviceId, user, queue, notify, playTone, ini
         note: notes.join(' | '),
       });
       await discardRecordedChunks(pending.videoId);
-      void queue?.kick();
+      void kickCurrentPackingQueue(queueRef);
     } catch (error) {
       notify?.({
         type: 'error',
@@ -251,7 +252,7 @@ export function usePackingSession({ deviceId, user, queue, notify, playTone, ini
         message: error?.message ?? 'กรุณาแจ้งผู้ดูแลระบบ',
       });
     }
-  }, [deviceId, notify, queue, user]);
+  }, [deviceId, notify, queueRef, user]);
 
   // Effects are executed after the render that committed them.
   useEffect(() => {

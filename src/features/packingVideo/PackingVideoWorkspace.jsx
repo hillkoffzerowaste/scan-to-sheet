@@ -134,7 +134,7 @@ export default function PackingVideoWorkspace({
   const session = usePackingSession({
     deviceId,
     user: { uid: firebaseUser?.uid, email: user?.email },
-    queue: queueRef.current,
+    queueRef,
     notify,
     playTone,
     initialPrefs: { ...prefs, station, deviceSeq },
@@ -229,7 +229,7 @@ export default function PackingVideoWorkspace({
           packerOptions={packerOptions}
           user={{ uid: firebaseUser?.uid, email: user?.email }}
           deviceId={deviceId}
-          queue={queueRef.current}
+          queueRef={queueRef}
           localVideos={localVideos}
           onLocalChange={refreshLocalState}
         />
