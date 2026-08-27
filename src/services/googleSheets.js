@@ -432,6 +432,27 @@ function withMarketplaceCells(row, marketplaceOrder = null) {
   return [...baseRow, ...marketplaceCells(source), orderStatus, crossDay, ''].slice(0, TOTAL_COLUMNS);
 }
 
+function dailyCellsFromParsedRow(row) {
+  const cells = withMarketplaceCells([
+    row.no,
+    row.courierNo,
+    row.date,
+    row.time,
+    row.courier,
+    row.code,
+    row.email,
+    row.packer,
+    row.status,
+    row.note,
+    row.adminDate,
+    row.adminTime,
+    row.adminCode,
+  ], marketplaceOrderFromRow(row));
+  // Type repair must not clear the Firestore/Sheet sync marker that belongs to the existing row.
+  cells[22] = row.syncStatus ?? cells[22];
+  return cells;
+}
+
 export async function findDriveItem({ token, name, mimeType, parentId }) {
   const items = await listDriveItems({ token, name, mimeType, parentId, pageSize: 1 });
   return items[0] ?? null;
@@ -815,8 +836,10 @@ export function buildDailyRowDataTypeFormattingRequests(sheetId, rowNumbers) {
   const formats = [
     { columnIndex: 2, numberFormat: { type: 'DATE', pattern: 'yyyy-mm-dd' } },
     { columnIndex: 3, numberFormat: { type: 'TIME', pattern: 'h:mm:ss' } },
+    { columnIndex: 5, numberFormat: { type: 'TEXT', pattern: '@' } },
     { columnIndex: 10, numberFormat: { type: 'DATE', pattern: 'yyyy-mm-dd' } },
     { columnIndex: 11, numberFormat: { type: 'TIME', pattern: 'h:mm:ss' } },
+    { columnIndex: 12, numberFormat: { type: 'TEXT', pattern: '@' } },
   ];
 
   return formats.map(({ columnIndex, numberFormat }) => ({
@@ -1052,6 +1075,24 @@ async function readDailyRow({ token, spreadsheetId, date, rowNumber }) {
   return rowFromSheet(data.values?.[0] ?? [], rowNumber - 2);
 }
 
+async function verifyDailyRowNativeDataTypes({ token, spreadsheetId, date, rowNumber }) {
+  // The Values API renders both native numbers and legacy text identically when a date/time
+  // format is applied. Read the grid's userEnteredValue so a duplicate cannot be certified
+  // merely because its tracking number is present while its timestamps remain text.
+  const range = `${escapeSheetName(date)}!C${rowNumber}:L${rowNumber}`;
+  const params = new URLSearchParams({
+    includeGridData: 'true',
+    ranges: range,
+    fields: 'sheets(data(rowData(values(userEnteredValue))))',
+  });
+  const data = await apiFetch(`${SHEETS_API}/${spreadsheetId}?${params}`, token);
+  const values = data.sheets?.[0]?.data?.[0]?.rowData?.[0]?.values ?? [];
+  return [0, 1, 8, 9].every((index) => (
+    typeof values[index]?.userEnteredValue?.numberValue === 'number'
+    && Number.isFinite(values[index].userEnteredValue.numberValue)
+  ));
+}
+
 async function batchReadDailyRows({ token, spreadsheetId, sheetNames }) {
   const rowsBySheet = new Map();
   const chunkSize = 50;
@@ -1179,7 +1220,11 @@ async function updateDailyRow({ token, spreadsheetId, date, rowNumber, row }) {
   const spreadsheet = await getSpreadsheet(token, spreadsheetId);
   const sheetId = spreadsheet.sheets?.find((sheet) => sheet.properties.title === date)?.properties.sheetId;
   if (sheetId) await applyStatusCellColors({ token, spreadsheetId, date, sheetId, rowNumbers: [rowNumber] });
-  return readDailyRow({ token, spreadsheetId, date, rowNumber });
+  const [confirmedRow, nativeDataTypesVerified] = await Promise.all([
+    readDailyRow({ token, spreadsheetId, date, rowNumber }),
+    verifyDailyRowNativeDataTypes({ token, spreadsheetId, date, rowNumber }),
+  ]);
+  return { ...confirmedRow, nativeDataTypesVerified };
 }
 
 export async function backfillMarketplaceOrdersGoogle({ token, config, groups }) {
@@ -1915,6 +1960,13 @@ export async function appendScanGoogle({
       // Already scanned, just on an earlier sheet. Reporting it as a duplicate is the whole
       // point: appending here is what produced the second row.
       const currentRow = resolution.row;
+      const confirmedRow = await updateDailyRow({
+        token,
+        spreadsheetId: sheet.id,
+        date: packerMatch.date,
+        rowNumber: currentRow.sheetRowNumber,
+        row: dailyCellsFromParsedRow(currentRow),
+      });
       return {
         status: 'duplicate',
         courier: currentRow.courier,
@@ -1923,7 +1975,8 @@ export async function appendScanGoogle({
         time,
         code: normalizedCode,
         isPacker: true,
-        row: currentRow,
+        nativeDataTypesVerified: confirmedRow.nativeDataTypesVerified === true,
+        row: confirmedRow,
         rows: packerMatch.parsedRows
           .filter((row) => row.courier === currentRow.courier)
           .reverse()
@@ -2036,6 +2089,13 @@ export async function appendScanGoogle({
       cache: crossDayCache,
     });
     if (packerMatchAnyCourier) {
+      const confirmedRow = await updateDailyRow({
+        token,
+        spreadsheetId: sheet.id,
+        date: packerMatchAnyCourier.date,
+        rowNumber: packerMatchAnyCourier.row.sheetRowNumber,
+        row: dailyCellsFromParsedRow(packerMatchAnyCourier.row),
+      });
       return {
         status: 'duplicate',
         courier: packerMatchAnyCourier.row.courier,
@@ -2044,7 +2104,8 @@ export async function appendScanGoogle({
         time,
         code: normalizedCode,
         isPacker: true,
-        row: packerMatchAnyCourier.row,
+        nativeDataTypesVerified: confirmedRow.nativeDataTypesVerified === true,
+        row: confirmedRow,
         rows: packerMatchAnyCourier.parsedRows
           .filter((row) => row.courier === packerMatchAnyCourier.row.courier)
           .reverse()
@@ -2056,6 +2117,16 @@ export async function appendScanGoogle({
   }
 
   if (duplicate && !isIssueScan) {
+    const duplicateIndex = parsedRows.indexOf(duplicateRow);
+    const confirmedRow = duplicateIndex >= 0
+      ? await updateDailyRow({
+        token,
+        spreadsheetId: sheet.id,
+        date,
+        rowNumber: duplicateIndex + 2,
+        row: dailyCellsFromParsedRow(duplicateRow),
+      })
+      : duplicateRow;
     return {
       status: 'duplicate',
       courier,
@@ -2064,7 +2135,8 @@ export async function appendScanGoogle({
       code: normalizedCode,
       isPacker: true,
       count: courierRows.length,
-      row: duplicateRow,
+      nativeDataTypesVerified: confirmedRow.nativeDataTypesVerified === true,
+      row: confirmedRow,
       rows: courierRows.reverse().slice(0, 20),
       sheetUrl: sheet.webViewLink,
     };
@@ -2239,16 +2311,31 @@ export async function appendAdminScanGoogle({
     isPacker: false,
   });
   if (reconciliation.action === 'skip') {
+    const duplicateRow = reconciliation.row;
+    const duplicateIndex = parsedRows.indexOf(duplicateRow);
+    // A legacy client can leave a duplicate's tracking number present while storing its
+    // date/time cells as text. Re-write the existing row through the normalized path so a
+    // retry repairs the row before this result is certified.
+    const confirmedRow = duplicateIndex >= 0
+      ? await updateDailyRow({
+        token,
+        spreadsheetId: sheet.id,
+        date,
+        rowNumber: duplicateIndex + 2,
+        row: dailyCellsFromParsedRow(duplicateRow),
+      })
+      : duplicateRow;
     return {
       status: 'duplicate',
-      courier: reconciliation.row.courier,
+      courier: duplicateRow.courier,
       selectedCourier: courier,
       date,
       time,
       code: normalizedCode,
       isPacker: false,
-      row: reconciliation.row,
-      rows: parsedRows.filter((r) => r.courier === reconciliation.row.courier).reverse().slice(0, 20),
+      nativeDataTypesVerified: confirmedRow.nativeDataTypesVerified === true,
+      row: confirmedRow,
+      rows: parsedRows.filter((r) => r.courier === duplicateRow.courier).reverse().slice(0, 20),
       sheetUrl: sheet.webViewLink,
     };
   }
@@ -2312,6 +2399,13 @@ export async function appendAdminScanGoogle({
 
   const crossDayAdminMatch = await findRowsAcrossDays({ token, spreadsheetId: sheet.id, currentDate: date, code: effectiveAdminCode, field: 'adminCode', cache: crossDayCache });
   if (crossDayAdminMatch) {
+    const confirmedRow = await updateDailyRow({
+      token,
+      spreadsheetId: sheet.id,
+      date: crossDayAdminMatch.date,
+      rowNumber: crossDayAdminMatch.row.sheetRowNumber,
+      row: dailyCellsFromParsedRow(crossDayAdminMatch.row),
+    });
     return {
       status: 'duplicate',
       courier: crossDayAdminMatch.row.courier,
@@ -2320,7 +2414,8 @@ export async function appendAdminScanGoogle({
       time,
       code: normalizedCode,
       isPacker: false,
-      row: crossDayAdminMatch.row,
+      nativeDataTypesVerified: confirmedRow.nativeDataTypesVerified === true,
+      row: confirmedRow,
       rows: crossDayAdminMatch.parsedRows.filter((row) => row.courier === crossDayAdminMatch.row.courier).reverse().slice(0, 20),
       sheetUrl: sheet.webViewLink,
       crossDay: true,

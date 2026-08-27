@@ -117,9 +117,12 @@ export function isSheetSyncResultConfirmed(result) {
   const rowCode = isPacker ? row?.code : (row?.adminCode || row?.code);
   if (!row || normalizeCode(rowCode) !== normalizeCode(result.code)) return false;
 
-  // A duplicate performs no write. Its matching tracking value is enough to prove the
-  // original write exists, while every fresh write must also prove the resulting status.
-  if (result.status === 'duplicate') return true;
+  // A duplicate performs no logical write, but it may have been left by a legacy client with
+  // date/time values stored as text. The Google Sheets grid read must prove native types before
+  // the order is removed from recovery; append*Google repairs the row before returning this.
+  if (result.status === 'duplicate') {
+    return result.nativeDataTypesVerified === true || row.nativeDataTypesVerified === true;
+  }
 
   const rowStatus = String(row.status ?? '').trim();
   if (result.status === 'success') return rowStatus === 'Success';

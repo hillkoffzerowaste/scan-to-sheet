@@ -98,6 +98,11 @@ test('touched scan rows restore date and time formats without rewriting other co
         fields: 'userEnteredFormat.numberFormat',
       },
       {
+        range: { sheetId: 123, startRowIndex: 167, endRowIndex: 187, startColumnIndex: 5, endColumnIndex: 6 },
+        numberFormat: { type: 'TEXT', pattern: '@' },
+        fields: 'userEnteredFormat.numberFormat',
+      },
+      {
         range: { sheetId: 123, startRowIndex: 167, endRowIndex: 187, startColumnIndex: 10, endColumnIndex: 11 },
         numberFormat: { type: 'DATE', pattern: 'yyyy-mm-dd' },
         fields: 'userEnteredFormat.numberFormat',
@@ -105,6 +110,11 @@ test('touched scan rows restore date and time formats without rewriting other co
       {
         range: { sheetId: 123, startRowIndex: 167, endRowIndex: 187, startColumnIndex: 11, endColumnIndex: 12 },
         numberFormat: { type: 'TIME', pattern: 'h:mm:ss' },
+        fields: 'userEnteredFormat.numberFormat',
+      },
+      {
+        range: { sheetId: 123, startRowIndex: 167, endRowIndex: 187, startColumnIndex: 12, endColumnIndex: 13 },
+        numberFormat: { type: 'TEXT', pattern: '@' },
         fields: 'userEnteredFormat.numberFormat',
       },
     ],

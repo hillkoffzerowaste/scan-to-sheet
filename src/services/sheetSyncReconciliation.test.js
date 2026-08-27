@@ -82,9 +82,15 @@ test('treats a rescan as duplicate when no Packer name is selected', () => {
     action: 'skip',
     row,
   });
-  // ...and that duplicate must confirm, or the order is retried forever.
+  // A duplicate is only confirmed after the Sheet API also proves that the date/time
+  // cells are native values. A legacy client can leave the tracking number present while
+  // storing the timestamps as text, which must stay recoverable.
   assert.equal(isSheetSyncResultConfirmed({
     status: 'duplicate', code: 'TH123', isPacker: true, row,
+  }), false);
+  assert.equal(isSheetSyncResultConfirmed({
+    status: 'duplicate', code: 'TH123', isPacker: true,
+    row: { ...row, nativeDataTypesVerified: true },
   }), true);
 });
 
@@ -137,13 +143,13 @@ test('does not confirm a Packer duplicate without the Packer row', () => {
     status: 'duplicate',
     code: 'TH123',
     isPacker: true,
-    row: { code: 'TH123', packer: 'กิต' },
+    row: { code: 'TH123', packer: 'กิต', nativeDataTypesVerified: true },
   }), true);
   assert.equal(isSheetSyncResultConfirmed({
     status: 'duplicate',
     code: 'TH123',
     isPacker: false,
-    row: { code: '', adminCode: 'TH123' },
+    row: { code: '', adminCode: 'TH123', nativeDataTypesVerified: true },
   }), true);
 });
 
