@@ -12,6 +12,7 @@ import {
   buildDailyRowUpdateData,
   findCancellationRow,
   getDailySheetPropertiesForMarketplaceBackfill,
+  updateScanIssueGoogle,
   apiFetch,
 } from './googleSheets.js';
 
@@ -339,7 +340,7 @@ test('appendScanGoogle returns the newly written Packer row after placeholder re
   }
 });
 
-test('appendScanGoogle does not mark a row as cross-day when its saved Scan Date equals Admin Scan Date', async () => {
+test('appendScanGoogle preserves today as Scan Date when it merges into yesterday’s Admin row', async () => {
   const originalFetch = globalThis.fetch;
   const today = '2026-08-25';
   const yesterday = '2026-08-24';
@@ -400,9 +401,72 @@ test('appendScanGoogle does not mark a row as cross-day when its saved Scan Date
     assert.equal(result.status, 'success');
     assert.equal(result.crossDay, true);
     assert.equal(rowsByDate.get(today).length, 0);
-    assert.equal(rowsByDate.get(yesterday)[0][2], 46258);
+    assert.equal(rowsByDate.get(yesterday)[0][2], 46259);
     assert.equal(rowsByDate.get(yesterday)[0][10], 46258);
-    assert.equal(rowsByDate.get(yesterday)[0][9], '');
+    assert.equal(rowsByDate.get(yesterday)[0][9], `แพ็คข้ามวัน (สแกน ${today})`);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('updateScanIssueGoogle finds a cross-day row on its physical prior tab', async () => {
+  const originalFetch = globalThis.fetch;
+  const today = '2026-08-25';
+  const yesterday = '2026-08-24';
+  const spreadsheetId = 'sheet-cross-day-issue-test';
+  const code = 'TH264000000000A';
+  const sheetProperties = {
+    sheets: [
+      { properties: { sheetId: 127, title: yesterday, gridProperties: { rowCount: 1000, columnCount: 23 } } },
+      { properties: { sheetId: 128, title: today, gridProperties: { rowCount: 1000, columnCount: 23 } } },
+    ],
+  };
+  const rowsByDate = new Map([
+    [yesterday, [[
+      '1', '1', today, '10:20:30', 'Shopee', code, 'packer@example.com', 'เบ้น', 'Success',
+      `แพ็คข้ามวัน (สแกน ${today})`, yesterday, '09:00:00', code,
+    ]]],
+    [today, []],
+  ]);
+  let updateRange = '';
+
+  const jsonResponse = (payload) => new Response(JSON.stringify(payload), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  });
+
+  globalThis.fetch = async (url, options = {}) => {
+    const decodedUrl = decodeURIComponent(String(url));
+    const method = options.method ?? 'GET';
+    const body = options.body ? JSON.parse(options.body) : null;
+    const date = [today, yesterday].find((value) => decodedUrl.includes(value));
+
+    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A2:W') && method === 'GET') return jsonResponse({ values: rowsByDate.get(date) ?? [] });
+    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A2') && method === 'GET') return jsonResponse({ values: [rowsByDate.get(date)?.[0] ?? []] });
+    if (decodedUrl.includes('/values:batchUpdate')) {
+      const rowUpdate = body?.data?.find((item) => item.range.includes('!A2:O2'));
+      if (rowUpdate) {
+        updateRange = rowUpdate.range;
+        rowsByDate.set(yesterday, [rowUpdate.values[0]]);
+      }
+      return jsonResponse({});
+    }
+    if (decodedUrl.includes(':batchUpdate')) return jsonResponse({});
+    if (decodedUrl.includes('/spreadsheets/')) return jsonResponse(sheetProperties);
+    throw new Error(`Unexpected mock request: ${method} ${decodedUrl}`);
+  };
+
+  try {
+    await updateScanIssueGoogle({
+      token: 'token',
+      config: { master: { id: spreadsheetId, webViewLink: 'https://example.test/sheet' } },
+      row: { date: today, courier: 'Shopee', code },
+      issue: 'สินค้าเสียหาย',
+    });
+
+    assert.match(updateRange, new RegExp(`^'${yesterday}'!A2:O2$`));
+    assert.equal(rowsByDate.get(yesterday)[0][2], 46259);
+    assert.equal(rowsByDate.get(yesterday)[0][8], 'Damaged');
   } finally {
     globalThis.fetch = originalFetch;
   }

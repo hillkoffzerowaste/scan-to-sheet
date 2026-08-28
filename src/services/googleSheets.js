@@ -1605,6 +1605,7 @@ export async function searchScansGoogle({ token, config, query, couriers = COURI
       if (courierSet.has(item.courier) && (code.includes(normalizedQuery) || adminCode.includes(normalizedQuery))) {
         results.push({
           ...item,
+          sheetDate: date,
           sheetUrl: sheet.webViewLink,
         });
       }
@@ -1868,12 +1869,10 @@ export async function appendScanGoogle({
     const crossDayMatch = await findRowsAcrossDays({ token, spreadsheetId: sheet.id, currentDate: date, code: normalizedCode, field: 'adminCode', cache: crossDayCache });
     if (crossDayMatch) {
       const currentRow = crossDayMatch.row;
-      // Column C must name the sheet the row actually lives on: rowFromSheet reads
-      // row.date from it and updateScanIssueGoogle uses that to pick which sheet to
-      // search. Writing today's date onto a row kept on the admin's earlier sheet made
-      // every later issue update on it fail with "ไม่พบรายการใน Google Sheet".
+      // Keep the Packer event date even when the row remains on the Admin's earlier tab.
+      // The physical tab is resolved separately when a later Issue update needs this row.
       const mergedRow = withMarketplaceCells([
-        currentRow.no, currentRow.courierNo, crossDayMatch.date, time, currentRow.courier, normalizedCode, email, packer,
+        currentRow.no, currentRow.courierNo, date, time, currentRow.courier, normalizedCode, email, packer,
         'Success', note, currentRow.adminDate || effectiveAdminDate || crossDayMatch.date, currentRow.adminTime || effectiveAdminTime || '', currentRow.adminCode || effectiveAdminCode,
       ], marketplaceOrder ?? marketplaceOrderFromRow(currentRow));
       // `row` is the written-back row, not the pre-merge one: isSheetSyncResultConfirmed needs
@@ -1902,9 +1901,9 @@ export async function appendScanGoogle({
     if (adminMatchAnyCourier && adminMatchAnyCourier.row.courier !== courier) {
       const currentRow = adminMatchAnyCourier.row;
       const correctedNote = [currentRow.note, `แพ็คเกอร์เลือกขนส่งไม่ตรงกับแอดมิน (เลือก ${courier})`].filter(Boolean).join(' | ');
-      // Same invariant as the cross-day merge above: column C names the row's own sheet.
+      // This row stays on the prior tab, but its Scan Date is the Packer's event date.
       const mergedRow = withMarketplaceCells([
-        currentRow.no, currentRow.courierNo, adminMatchAnyCourier.date, time, currentRow.courier, normalizedCode, email, packer,
+        currentRow.no, currentRow.courierNo, date, time, currentRow.courier, normalizedCode, email, packer,
         'Success', correctedNote, currentRow.adminDate || effectiveAdminDate || adminMatchAnyCourier.date, currentRow.adminTime || effectiveAdminTime || '', currentRow.adminCode || effectiveAdminCode,
       ], marketplaceOrder ?? marketplaceOrderFromRow(currentRow));
       const confirmedRow = await updateDailyRow({ token, spreadsheetId: sheet.id, date: adminMatchAnyCourier.date, rowNumber: currentRow.sheetRowNumber, row: mergedRow });
@@ -2597,14 +2596,31 @@ export async function updateScanIssueGoogle({ token, config, row, issue }) {
     throw new Error('ไม่พบ Google Sheet Master');
   }
 
-  const currentRows = await readDailyRows({ token, spreadsheetId: sheet.id, date: row.date });
-  const currentParsed = currentRows.map(rowFromSheet);
-  const targetIdx = currentParsed.findIndex(
+  let targetDate = row.sheetDate || row.date;
+  let currentRows = await readDailyRows({ token, spreadsheetId: sheet.id, date: targetDate });
+  let currentParsed = currentRows.map(rowFromSheet);
+  let targetIdx = currentParsed.findIndex(
     (r) => normalizeScanCode(r.code) === normalizeScanCode(row.code) && r.courier === row.courier,
   );
 
   if (targetIdx === -1) {
-    throw new Error('ไม่พบรายการใน Google Sheet (อาจถูกลบหรือย้ายแล้ว)');
+    // A cross-day Packer merge keeps the historical row on the Admin tab while Scan Date
+    // records the Packer's actual event date. Search the physical tab instead of treating
+    // the event date as a worksheet name.
+    const crossDayMatch = await findRowsAcrossDays({
+      token,
+      spreadsheetId: sheet.id,
+      currentDate: row.date,
+      courier: row.courier,
+      code: row.code,
+      matcher: (candidateRows) => findHistoricalIssueRow(candidateRows, row),
+    });
+    if (!crossDayMatch) {
+      throw new Error('ไม่พบรายการใน Google Sheet (อาจถูกลบหรือย้ายแล้ว)');
+    }
+    targetDate = crossDayMatch.date;
+    currentParsed = crossDayMatch.parsedRows;
+    targetIdx = currentParsed.findIndex((candidate) => candidate.sheetRowNumber === crossDayMatch.row.sheetRowNumber);
   }
 
   const currentRow = currentParsed[targetIdx];
@@ -2630,13 +2646,14 @@ export async function updateScanIssueGoogle({ token, config, row, issue }) {
   await updateDailyRow({
     token,
     spreadsheetId: sheet.id,
-    date: row.date,
+    date: targetDate,
     rowNumber,
     row: updatedRow,
   });
 
   return {
     ...rowFromSheet(updatedRow),
+    sheetDate: targetDate,
     sheetUrl: sheet.webViewLink,
   };
 }
