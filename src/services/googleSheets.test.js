@@ -40,6 +40,18 @@ test('buildDailyRowUpdateData restores native RAW types after formatted-value re
   assert.equal(row[2], '2026-08-26');
   assert.equal(row[5], 66857226387700);
 
+  const serializedRow = Array(23).fill('');
+  serializedRow[2] = '46262';
+  serializedRow[3] = '0.3774768519';
+  serializedRow[10] = '46262';
+  serializedRow[11] = '0.3774768519';
+  const [serializedRange] = buildDailyRowUpdateData('2026-08-28', 29, serializedRow);
+  const serializedValues = serializedRange.values[0];
+  assert.equal(serializedValues[2], 46262);
+  assert.equal(serializedValues[3], 0.3774768519);
+  assert.equal(serializedValues[10], 46262);
+  assert.equal(serializedValues[11], 0.3774768519);
+
   const invalidRow = Array(23).fill('');
   invalidRow[0] = '_TEMP_scan-id';
   invalidRow[2] = '2026-02-30';

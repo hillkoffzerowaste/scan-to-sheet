@@ -1117,10 +1117,27 @@ async function batchReadDailyRows({ token, spreadsheetId, sheetNames }) {
 
 const GOOGLE_SHEETS_EPOCH_UTC = Date.UTC(1899, 11, 30);
 const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
+const GOOGLE_SHEETS_MAX_DATE_SERIAL = 2958465;
+
+function isGoogleSheetsDateSerial(value) {
+  return Number.isSafeInteger(value) && value >= 1 && value <= GOOGLE_SHEETS_MAX_DATE_SERIAL;
+}
+
+function isGoogleSheetsTimeSerial(value) {
+  return Number.isFinite(value) && value >= 0 && value < 1;
+}
 
 function googleSheetsDateSerial(value) {
+  if (typeof value === 'number') return isGoogleSheetsDateSerial(value) ? value : null;
   if (typeof value !== 'string') return null;
-  const match = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+
+  const trimmedValue = value.trim();
+  if (/^\d+$/.test(trimmedValue)) {
+    const serial = Number(trimmedValue);
+    return isGoogleSheetsDateSerial(serial) ? serial : null;
+  }
+
+  const match = trimmedValue.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!match) return null;
 
   const [, yearText, monthText, dayText] = match;
@@ -1139,8 +1156,16 @@ function googleSheetsDateSerial(value) {
 }
 
 function googleSheetsTimeSerial(value) {
+  if (typeof value === 'number') return isGoogleSheetsTimeSerial(value) ? value : null;
   if (typeof value !== 'string') return null;
-  const match = value.trim().match(/^(\d{1,2}):(\d{2}):(\d{2})$/);
+
+  const trimmedValue = value.trim();
+  if (/^(?:0(?:\.\d+)?|\.\d+)$/.test(trimmedValue)) {
+    const serial = Number(trimmedValue);
+    return isGoogleSheetsTimeSerial(serial) ? serial : null;
+  }
+
+  const match = trimmedValue.match(/^(\d{1,2}):(\d{2}):(\d{2})$/);
   if (!match) return null;
 
   const [, hourText, minuteText, secondText] = match;
