@@ -3072,6 +3072,16 @@ function App() {
           <Truck size={18} />
           <span>ระบบส่งของ</span>
         </a>
+        <a
+          data-testid="misdelivery-management-link"
+          className="tab-button"
+          href="https://script.google.com/a/macros/hillkoff.com/s/AKfycbxQENSgzP-0IzDX0J_pY2g9HoMlCKMaNQYJlnxPbudqELr79oKdwYpoNflqrSAfsgw2/exec"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <AlertTriangle size={18} />
+          <span>จัดการส่งของผิด</span>
+        </a>
         <button
           data-testid="staff-directory-tab"
           className={`tab-button ${activeTab === 'staff' ? 'active' : ''}`}
