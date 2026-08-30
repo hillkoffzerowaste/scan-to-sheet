@@ -1647,11 +1647,7 @@ function App() {
     if (managesBusy) setBusy(true);
     try {
       const nowParts = getBangkokParts();
-      const marketplaceOrderPromise = findMarketplaceOrderForScan(validation.code).catch(() => null);
-      const [firestoreUser, marketplaceOrder] = await Promise.all([
-        canUseFirestorePrimary() ? getFirebaseUserForPrimary() : null,
-        marketplaceOrderPromise,
-      ]);
+      const firestoreUser = canUseFirestorePrimary() ? await getFirebaseUserForPrimary() : null;
       const firestorePrimary = firestoreUser
         ? await recordPackerScanPrimary({
             code: validation.code,
@@ -1661,7 +1657,6 @@ function App() {
             user: firestoreUser,
             packer: scanPacker === PACKER_UNASSIGNED ? '' : scanPacker,
             note: scanNote,
-            marketplaceOrder,
           })
         : null;
 
@@ -1693,6 +1688,9 @@ function App() {
       const packerName = scanPacker === PACKER_UNASSIGNED ? '' : scanPacker;
       const scanUser = firebaseUser ?? user;
       const scanEmail = user.email;
+      // Sheet owns Marketplace metadata. Keep this network lookup off the Firestore-first
+      // confirmation path so a cold Sheet cache cannot delay scanner feedback.
+      const marketplaceOrderPromise = findMarketplaceOrderForScan(validation.code).catch(() => null);
       let result;
 
       if (firestorePrimary?.id) {
@@ -1945,11 +1943,7 @@ function App() {
     if (managesBusy) setBusy(true);
     try {
       const nowParts = getBangkokParts();
-      const marketplaceOrderPromise = findMarketplaceOrderForScan(validation.code).catch(() => null);
-      const [firestoreUser, marketplaceOrder] = await Promise.all([
-        canUseFirestorePrimary() ? getFirebaseUserForPrimary() : null,
-        marketplaceOrderPromise,
-      ]);
+      const firestoreUser = canUseFirestorePrimary() ? await getFirebaseUserForPrimary() : null;
       const firestorePrimary = firestoreUser
         ? await recordAdminScanPrimary({
             code: validation.code,
@@ -1957,7 +1951,6 @@ function App() {
             date: nowParts.date,
             time: nowParts.time,
             user: firestoreUser,
-            marketplaceOrder,
           })
         : null;
 
@@ -2103,6 +2096,8 @@ function App() {
 
       const scanUser = firebaseUser ?? user;
       const scanEmail = user.email;
+      // See Packer flow: the Marketplace lookup is only needed by the background Sheet write.
+      const marketplaceOrderPromise = findMarketplaceOrderForScan(validation.code).catch(() => null);
       let result;
 
       if (firestorePrimary?.id) {

@@ -13,7 +13,6 @@ import {
   where,
 } from 'firebase/firestore';
 import { firebaseAuth, firestoreDb, isFirebaseConfigured, serverTimestamp } from './firebase.js';
-import { marketplaceMetadata } from '../../scripts/marketplace-sync/normalize.js';
 import { nextCalendarDate } from './calendarDate.js';
 import {
   isSheetSyncClaimable,
@@ -571,36 +570,26 @@ export async function mirrorScanToFirestore({ type, result, courier, user, packe
   });
 }
 
-export async function recordPackerScanPrimary({ code, courier, date, time, user, packer = '', note = '', marketplaceOrder = null }) {
+export async function recordPackerScanPrimary({ code, courier, date, time, user, packer = '', note = '' }) {
   if (!canWriteFirestore()) {
     return null;
   }
 
   const normalizedCode = normalizeCode(code).toUpperCase();
-  // Marketplace Orders is held in Google Sheet. The caller supplies its already-cached lookup
-  // so a scan never issues an additional Firestore query against the legacy collection.
-  const marketplaceData = marketplaceMetadata(marketplaceOrder);
-
-  // Search broadly — older docs may only have `code` not `normalizedCode`
-  const byNormalized = await getRecentOrdersByCode(normalizedCode, 50);
-  const existingIds = new Set(byNormalized.map((o) => o.id));
-
-  // Also search by raw code field (backwards compat for orders created before normalizedCode existed)
-  let byRawCode = [];
-  try {
-    const rawSnap = await getDocs(query(
+  // These lookups do not depend on one another. Run them together so the scan confirmation
+  // waits for one Firestore round trip rather than serial reads before its transaction.
+  const [byNormalized, rawDocs, byScanEvents] = await Promise.all([
+    getRecentOrdersByCode(normalizedCode, 50),
+    getDocs(query(
       collection(firestoreDb, 'orders'),
       where('code', '==', code),
       limit(50),
-    ));
-    byRawCode = rawSnap.docs
-      .filter((d) => !existingIds.has(d.id))
-      .map((d) => ({ id: d.id, ...d.data() }));
-  } catch {
-    // Field may be missing on some documents — safe to ignore
-  }
-
-  const byScanEvents = await getScanEventCandidates(normalizedCode, code).catch(() => []);
+    )).then((rawSnap) => rawSnap.docs.map((item) => ({ id: item.id, ...item.data() }))).catch(() => []),
+    getScanEventCandidates(normalizedCode, code).catch(() => []),
+  ]);
+  const existingIds = new Set(byNormalized.map((order) => order.id));
+  // Older orders can have only `code`. De-duplicate after the parallel raw-code query returns.
+  const byRawCode = rawDocs.filter((order) => !existingIds.has(order.id));
   const allCandidates = [...byNormalized, ...byRawCode, ...byScanEvents];
 
   // Find best matching existing order — prioritize admin-scanned, then any packer
@@ -630,9 +619,6 @@ export async function recordPackerScanPrimary({ code, courier, date, time, user,
     const existing = snap.exists() ? snap.data() : null;
 
     if (existing?.packerScan?.scannedAt && note !== 'ลูกค้ายกเลิก') {
-      if (marketplaceData) {
-        transaction.set(ref, marketplaceData, { merge: true });
-      }
       const needsSheetRetry = shouldReconcileSheetOnRescan(existing, 'packerScan');
       if (needsSheetRetry) {
         transaction.set(ref, {
@@ -702,10 +688,6 @@ export async function recordPackerScanPrimary({ code, courier, date, time, user,
           createdAtIso: nowIso(),
         };
 
-    if (marketplaceData) {
-      Object.assign(payload, marketplaceData);
-    }
-
     transaction.set(ref, payload, { merge: true });
     addOrderAuditInTransaction(transaction, {
       orderId: ref.id,
@@ -734,17 +716,16 @@ export async function recordPackerScanPrimary({ code, courier, date, time, user,
   return result;
 }
 
-export async function recordAdminScanPrimary({ code, courier, date, time, user, marketplaceOrder = null }) {
+export async function recordAdminScanPrimary({ code, courier, date, time, user }) {
   if (!canWriteFirestore()) {
     return null;
   }
 
   const normalizedCode = normalizeCode(code).toUpperCase();
-  // See recordPackerScanPrimary: use the Google Sheet lookup passed by the caller rather
-  // than reading the legacy collection from Firestore for every scan.
-  const marketplaceData = marketplaceMetadata(marketplaceOrder);
-  const orderCandidates = await getRecentOrdersByCode(normalizedCode, 50);
-  const scanEventCandidates = await getScanEventCandidates(normalizedCode, code).catch(() => []);
+  const [orderCandidates, scanEventCandidates] = await Promise.all([
+    getRecentOrdersByCode(normalizedCode, 50),
+    getScanEventCandidates(normalizedCode, code).catch(() => []),
+  ]);
   const allCandidates = [...orderCandidates, ...scanEventCandidates];
   const recent = chooseCanonicalOrder(allCandidates, normalizedCode)
     ?? findRecentOrder(allCandidates, { courier, normalizedCode });
@@ -756,9 +737,6 @@ export async function recordAdminScanPrimary({ code, courier, date, time, user, 
     const existing = snap.exists() ? snap.data() : null;
 
     if (existing?.admin?.scannedAt) {
-      if (marketplaceData) {
-        transaction.set(ref, marketplaceData, { merge: true });
-      }
       // A manual rescan is an explicit request to reconcile the Sheet. Keep
       // the Firestore document as the source of truth, but issue a fresh
       // attempt for every unsynced state, including a recent pending attempt.
@@ -830,10 +808,6 @@ export async function recordAdminScanPrimary({ code, courier, date, time, user, 
           createdAt: serverTimestamp(),
           createdAtIso: nowIso(),
         };
-
-    if (marketplaceData) {
-      Object.assign(payload, marketplaceData);
-    }
 
     transaction.set(ref, payload, { merge: true });
     addOrderAuditInTransaction(transaction, {

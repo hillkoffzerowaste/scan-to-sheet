@@ -84,13 +84,22 @@ test('manual Sheet recovery includes synced orders when the selected scan exists
   }, 'admin'), true);
 });
 
-test('primary scans receive marketplace metadata from the caller without reading the legacy marketplace collection', async () => {
-  const source = await readFile(new URL('./firebaseScans.js', import.meta.url), 'utf8');
+test('primary scans confirm before their background Marketplace lookup', async () => {
+  const [source, appSource] = await Promise.all([
+    readFile(new URL('./firebaseScans.js', import.meta.url), 'utf8'),
+    readFile(new URL('../App.jsx', import.meta.url), 'utf8'),
+  ]);
 
-  assert.match(source, /recordPackerScanPrimary\([^)]*marketplaceOrder = null/);
-  assert.match(source, /recordAdminScanPrimary\([^)]*marketplaceOrder = null/);
-  assert.match(source, /marketplaceMetadata\(marketplaceOrder\)/);
+  assert.match(source, /recordPackerScanPrimary\(\{ code, courier, date, time, user, packer = '', note = '' \}\)/);
+  assert.match(source, /recordAdminScanPrimary\(\{ code, courier, date, time, user \}\)/);
+  assert.doesNotMatch(source, /marketplaceMetadata/);
   assert.doesNotMatch(source, /findMarketplaceOrderByTracking/);
   assert.doesNotMatch(source, /findMarketplaceMetadataByTracking/);
   assert.doesNotMatch(source, /collection\(firestoreDb, 'marketplaceOrders'\)/);
+  assert.doesNotMatch(appSource, /const \[firestoreUser, marketplaceOrder\] = await Promise\.all/);
+  assert.ok(
+    appSource.indexOf('const marketplaceOrderPromise = findMarketplaceOrderForScan(validation.code).catch(() => null);')
+      > appSource.indexOf('const firestorePrimary = firestoreUser'),
+    'Marketplace lookup must begin after Firestore primary confirmation starts',
+  );
 });
