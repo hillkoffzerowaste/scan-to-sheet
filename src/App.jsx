@@ -1647,7 +1647,11 @@ function App() {
     if (managesBusy) setBusy(true);
     try {
       const nowParts = getBangkokParts();
-      const firestoreUser = canUseFirestorePrimary() ? await getFirebaseUserForPrimary() : null;
+      const marketplaceOrderPromise = findMarketplaceOrderForScan(validation.code).catch(() => null);
+      const [firestoreUser, marketplaceOrder] = await Promise.all([
+        canUseFirestorePrimary() ? getFirebaseUserForPrimary() : null,
+        marketplaceOrderPromise,
+      ]);
       const firestorePrimary = firestoreUser
         ? await recordPackerScanPrimary({
             code: validation.code,
@@ -1657,6 +1661,7 @@ function App() {
             user: firestoreUser,
             packer: scanPacker === PACKER_UNASSIGNED ? '' : scanPacker,
             note: scanNote,
+            marketplaceOrder,
           })
         : null;
 
@@ -1688,7 +1693,6 @@ function App() {
       const packerName = scanPacker === PACKER_UNASSIGNED ? '' : scanPacker;
       const scanUser = firebaseUser ?? user;
       const scanEmail = user.email;
-      const marketplaceOrderPromise = findMarketplaceOrderForScan(validation.code).catch(() => null);
       let result;
 
       if (firestorePrimary?.id) {
@@ -1941,7 +1945,11 @@ function App() {
     if (managesBusy) setBusy(true);
     try {
       const nowParts = getBangkokParts();
-      const firestoreUser = canUseFirestorePrimary() ? await getFirebaseUserForPrimary() : null;
+      const marketplaceOrderPromise = findMarketplaceOrderForScan(validation.code).catch(() => null);
+      const [firestoreUser, marketplaceOrder] = await Promise.all([
+        canUseFirestorePrimary() ? getFirebaseUserForPrimary() : null,
+        marketplaceOrderPromise,
+      ]);
       const firestorePrimary = firestoreUser
         ? await recordAdminScanPrimary({
             code: validation.code,
@@ -1949,6 +1957,7 @@ function App() {
             date: nowParts.date,
             time: nowParts.time,
             user: firestoreUser,
+            marketplaceOrder,
           })
         : null;
 
@@ -2094,7 +2103,6 @@ function App() {
 
       const scanUser = firebaseUser ?? user;
       const scanEmail = user.email;
-      const marketplaceOrderPromise = findMarketplaceOrderForScan(validation.code).catch(() => null);
       let result;
 
       if (firestorePrimary?.id) {

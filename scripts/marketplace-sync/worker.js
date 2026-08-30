@@ -570,8 +570,8 @@ async function main() {
 // Only run when executed directly, so tests can import the pure helpers without starting a
 // browser and a Firestore connection.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  main().catch((error) => {
-    console.error(error.stack || error.message);
-    process.exitCode = 1;
-  });
+  // Marketplace imports now go through the web upload and Apps Script into Master Sheet.
+  // Do not let a legacy scheduled command silently revive Firestore marketplaceOrders usage.
+  console.error('Marketplace sync worker ถูกยกเลิกแล้ว: ให้นำเข้า Marketplace ผ่านหน้าเว็บเพื่อส่งข้อมูลไป Master Sheet');
+  process.exitCode = 1;
 }

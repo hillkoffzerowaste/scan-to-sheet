@@ -11,11 +11,9 @@ import {
   startAfter,
   setDoc,
   where,
-  writeBatch,
 } from 'firebase/firestore';
 import { firebaseAuth, firestoreDb, isFirebaseConfigured, serverTimestamp } from './firebase.js';
 import { marketplaceMetadata } from '../../scripts/marketplace-sync/normalize.js';
-import { isCompleteScanOrder, marketplaceMetadataChanged } from './marketplaceImport.js';
 import { nextCalendarDate } from './calendarDate.js';
 import {
   isSheetSyncClaimable,
@@ -50,16 +48,6 @@ const PENDING_BADGE_SCAN_LIMIT = 500;
 // warehouse ships, and the daily reads run on a timer. Paging to a declared ceiling keeps
 // the cost knowable, and hitting it is logged rather than silently truncated.
 const DAILY_ORDER_SCAN_LIMIT = 3000;
-
-// A tracking number identifies one parcel, so a marketplace lookup should find one document.
-// The cap is above one on purpose: split shipments and re-imports can legitimately leave a
-// couple, and reading a few is how we notice. Anything beyond that is a data problem.
-const MARKETPLACE_TRACKING_MATCH_LIMIT = 10;
-
-// Orders matching one 30-code `in` chunk during a marketplace import. Ten rows per code is
-// far above the real ratio (a code appears once per day it was scanned) and still bounds the
-// read if a code has been re-scanned for months.
-const MARKETPLACE_MATCH_SCAN_LIMIT = 300;
 
 // Custom couriers are added by hand from the UI; a few dozen is the realistic ceiling.
 const COURIER_SCAN_LIMIT = 200;
@@ -542,262 +530,6 @@ export function canUseFirestorePrimary() {
   return canWriteFirestore();
 }
 
-export async function findMarketplaceOrderByTracking({ trackingNo }) {
-  if (!canWriteFirestore() || !trackingNo) {
-    return null;
-  }
-
-  const normalizedTrackingNo = normalizeCode(trackingNo).replace(/[^A-Z0-9]/g, '');
-  const ordersRef = collection(firestoreDb, 'marketplaceOrders');
-  const normalizedSnap = await getDocs(query(
-    ordersRef,
-    where('normalizedTrackingNo', '==', normalizedTrackingNo),
-    limit(MARKETPLACE_TRACKING_MATCH_LIMIT),
-  ));
-  if (normalizedSnap.size > 1) {
-    // Two marketplace orders claiming one tracking number means the import produced a
-    // duplicate; the sort below still picks the richest, but the data needs fixing.
-    console.warn(`Tracking ${normalizedTrackingNo} matches ${normalizedSnap.size} marketplace orders.`);
-  }
-  const normalizedDoc = [...normalizedSnap.docs].sort((left, right) => {
-    const score = (item) => {
-      const data = item.data();
-      return (data.orderId ? 2 : 0) + (Array.isArray(data.marketplaceSkus) && data.marketplaceSkus.length ? 1 : 0);
-    };
-    return score(right) - score(left);
-  })[0];
-  if (normalizedDoc) {
-    return { id: normalizedDoc.id, ...normalizedDoc.data() };
-  }
-
-  const exactSnap = await getDocs(query(
-    ordersRef,
-    where('trackingNo', '==', String(trackingNo).trim()),
-    limit(MARKETPLACE_TRACKING_MATCH_LIMIT),
-  ));
-  const exactDoc = [...exactSnap.docs].sort((left, right) => {
-    const score = (item) => {
-      const data = item.data();
-      return (data.orderId ? 2 : 0) + (Array.isArray(data.marketplaceSkus) && data.marketplaceSkus.length ? 1 : 0);
-    };
-    return score(right) - score(left);
-  })[0];
-  return exactDoc ? { id: exactDoc.id, ...exactDoc.data() } : null;
-}
-
-function sameStringList(left, right) {
-  if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) return false;
-  return left.every((value, index) => value === right[index]);
-}
-
-async function commitMarketplaceWrites(writes) {
-  for (let index = 0; index < writes.length; index += 400) {
-    const batch = writeBatch(firestoreDb);
-    writes.slice(index, index + 400).forEach((write) => {
-      batch.set(write.ref, write.data, write.options);
-    });
-    await batch.commit();
-  }
-}
-
-// Returns a Map of docId -> document data. The data is required (not just the ids) so
-// callers can hand it back via `knownExistingOrders` and skip a second existence read
-// without silently disabling metadata comparison.
-export async function findExistingMarketplaceOrders(orderIds) {
-  if (!canWriteFirestore()) throw new Error('Firebase ยังไม่พร้อมใช้งาน');
-  const marketplaceCollection = collection(firestoreDb, 'marketplaceOrders');
-  const uniqueIds = [...new Set(orderIds)].filter(Boolean);
-  const existing = new Map();
-  for (let index = 0; index < uniqueIds.length; index += 30) {
-    const snap = await getDocs(query(
-      marketplaceCollection,
-      where(documentId(), 'in', uniqueIds.slice(index, index + 30)),
-    ));
-    snap.docs.forEach((item) => existing.set(item.id, item.data()));
-  }
-  return existing;
-}
-
-export async function importMarketplaceOrders(groups, {
-  knownExistingOrderIds = null,
-  knownExistingOrders = null,
-} = {}) {
-  if (!canWriteFirestore()) throw new Error('Firebase ยังไม่พร้อมใช้งาน');
-  const marketplaceCollection = collection(firestoreDb, 'marketplaceOrders');
-  // Seeded with document data, not just ids, so pre-fetched existence never disables
-  // the metadata comparison below (which needs `existing` to be present).
-  const existingOrders = new Map(knownExistingOrders ?? []);
-  const existingOrderIds = new Set([...existingOrders.keys(), ...(knownExistingOrderIds ?? [])]);
-  // Index scans under both normalization schemes: marketplace tracking strips every
-  // non-alphanumeric, while orders.normalizedCode only trims/uppercases. A scanned code
-  // like "TH-1234" is stored unstripped and would never match the stripped group key.
-  const groupByTracking = new Map();
-  groups.forEach((group) => {
-    [group.normalizedTrackingNo, normalizeCode(group.trackingNo)]
-      .filter(Boolean)
-      .forEach((key) => { if (!groupByTracking.has(key)) groupByTracking.set(key, group); });
-  });
-  const groupIds = groups.map((group) => `${group.platform}__${group.orderId}`);
-  const idsToCheck = [...new Set(groupIds.filter((id) => !existingOrderIds.has(id)))];
-  let readQueries = 0;
-
-  for (let index = 0; index < idsToCheck.length; index += 30) {
-    const snap = await getDocs(query(
-      marketplaceCollection,
-      where(documentId(), 'in', idsToCheck.slice(index, index + 30)),
-    ));
-    readQueries += 1;
-    snap.docs.forEach((item) => {
-      existingOrderIds.add(item.id);
-      existingOrders.set(item.id, item.data());
-    });
-  }
-
-  const writes = [];
-  let metadataUpdated = 0;
-  // Groups are keyed by platform+orderId+tracking but documents only by platform+orderId,
-  // so a split shipment yields two groups for one document. Without this guard both queue
-  // a write to the same ref in one batch: the second silently replaces the first (losing a
-  // tracking number) and `imported` counts two documents where one was created.
-  let collisions = 0;
-  const queuedIds = new Set();
-  const imported = groups.filter((group, index) => {
-    const id = groupIds[index];
-    if (queuedIds.has(id)) {
-      collisions += 1;
-      return false;
-    }
-    queuedIds.add(id);
-    if (existingOrderIds.has(id)) {
-      const existing = existingOrders.get(id);
-      const canonicalMetadata = {
-        trackingNo: group.trackingNo,
-        normalizedTrackingNo: group.normalizedTrackingNo,
-        marketplaceSkus: group.marketplaceSkus,
-        items: Array.isArray(group.items) ? group.items : [],
-        sourceRowCount: Number(group.sourceRowCount) || 0,
-        sellerOrderStatus: group.sellerOrderStatus ?? '',
-        expectedShipAt: group.expectedShipAt ?? '',
-        importSource: 'web_upload',
-      };
-      if (existing && marketplaceMetadataChanged(existing, canonicalMetadata)) {
-        writes.push({
-          ref: doc(marketplaceCollection, id),
-          data: {
-            ...canonicalMetadata,
-            // Docs created by the Playwright sync worker (admin SDK, rules bypassed) have
-            // no importedAt, but the marketplaceOrders update rule requires it. Without
-            // this the merge is rejected and takes its whole 400-write batch down.
-            ...(existing.importedAt ? {} : { importedAt: serverTimestamp() }),
-            updatedAt: serverTimestamp(),
-          },
-          options: { merge: true },
-        });
-        metadataUpdated += 1;
-      }
-      return false;
-    }
-    writes.push({
-      ref: doc(marketplaceCollection, id),
-      data: {
-        platform: group.platform,
-        orderId: group.orderId,
-        trackingNo: group.trackingNo,
-        normalizedTrackingNo: group.normalizedTrackingNo,
-        marketplaceSkus: group.marketplaceSkus,
-        items: Array.isArray(group.items) ? group.items : [],
-        sourceRowCount: Number(group.sourceRowCount) || 0,
-        sellerOrderStatus: group.sellerOrderStatus ?? '',
-        expectedShipAt: group.expectedShipAt ?? '',
-        importSource: 'web_upload',
-        importedAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      },
-    });
-    return true;
-  }).length;
-  const duplicates = groups.length - imported - collisions;
-  let matchedScans = 0;
-  let updatedScans = 0;
-  const scannedTrackingCodes = new Set();
-  const trackingCodes = [...groupByTracking.keys()].filter(Boolean);
-  for (let index = 0; index < trackingCodes.length; index += 30) {
-    const matches = await getDocs(query(
-      collection(firestoreDb, 'orders'),
-      where('normalizedCode', 'in', trackingCodes.slice(index, index + 30)),
-      limit(MARKETPLACE_MATCH_SCAN_LIMIT),
-    ));
-    readQueries += 1;
-    warnIfCapped('marketplace import scan match', matches.size, MARKETPLACE_MATCH_SCAN_LIMIT);
-    for (const match of matches.docs) {
-      matchedScans += 1;
-      const current = match.data();
-      if (isCompleteScanOrder(current)) {
-        scannedTrackingCodes.add(normalizeCode(current.normalizedCode || current.code).replace(/[^A-Z0-9]/g, ''));
-      }
-      const group = groupByTracking.get(current.normalizedCode);
-      if (!group || (
-        current.marketplaceOrderId === group.orderId
-        && sameStringList(current.marketplaceSkus, group.marketplaceSkus)
-        && JSON.stringify(Array.isArray(current.marketplaceItems) ? current.marketplaceItems : [])
-          === JSON.stringify(Array.isArray(group.items) ? group.items : [])
-      )) continue;
-      writes.push({ ref: match.ref, data: {
-        marketplaceOrderId: group.orderId,
-        marketplaceSkus: group.marketplaceSkus,
-        marketplaceItems: Array.isArray(group.items) ? group.items : [],
-      }, options: { merge: true } });
-      updatedScans += 1;
-    }
-  }
-
-  await commitMarketplaceWrites(writes);
-  const orderStates = groups.map((group) => ({
-    ...group,
-    scanned: scannedTrackingCodes.has(group.normalizedTrackingNo),
-  }));
-  return {
-    imported, duplicates, collisions, metadataUpdated, matchedScans, updatedScans,
-    readQueries, writes: writes.length, orderStates,
-  };
-}
-
-export async function getUploadedMarketplaceOrders({ max = 500 } = {}) {
-  if (!canWriteFirestore()) return [];
-  // Bounded on purpose: this reads one document per uploaded order, so an unlimited query
-  // would grow without ceiling and is the single largest Firestore read cost in the app.
-  const snap = await getDocs(query(
-    collection(firestoreDb, 'marketplaceOrders'),
-    where('importSource', '==', 'web_upload'),
-    limit(max),
-  ));
-  return snap.docs.map((item) => {
-    const data = item.data();
-    return {
-      platform: data.platform ?? '', orderId: data.orderId ?? '', trackingNo: data.trackingNo ?? '',
-      normalizedTrackingNo: data.normalizedTrackingNo ?? '',
-      marketplaceSkus: Array.isArray(data.marketplaceSkus) ? data.marketplaceSkus : [],
-      items: Array.isArray(data.items) ? data.items : [],
-      sourceRowCount: Number(data.sourceRowCount) || 0,
-      sellerOrderStatus: data.sellerOrderStatus ?? '',
-      expectedShipAt: data.expectedShipAt ?? '',
-    };
-  }).filter((item) => item.orderId && (item.normalizedTrackingNo || item.marketplaceSkus.length));
-}
-
-async function findMarketplaceMetadataByTracking(trackingNo) {
-  const order = await findMarketplaceOrderByTracking({ trackingNo });
-  return marketplaceMetadata(order);
-}
-
-async function backfillLateMarketplaceMetadata(id, trackingNo, existingMetadata) {
-  if (existingMetadata || !id) return;
-  const metadata = await findMarketplaceMetadataByTracking(trackingNo);
-  if (metadata) {
-    await setDoc(doc(firestoreDb, 'orders', id), metadata, { merge: true });
-  }
-}
-
 export async function upsertFirebaseUser(user) {
   if (!canWriteFirestore() || !user?.uid) {
     return;
@@ -839,13 +571,15 @@ export async function mirrorScanToFirestore({ type, result, courier, user, packe
   });
 }
 
-export async function recordPackerScanPrimary({ code, courier, date, time, user, packer = '', note = '' }) {
+export async function recordPackerScanPrimary({ code, courier, date, time, user, packer = '', note = '', marketplaceOrder = null }) {
   if (!canWriteFirestore()) {
     return null;
   }
 
   const normalizedCode = normalizeCode(code).toUpperCase();
-  const marketplaceData = await findMarketplaceMetadataByTracking(normalizedCode);
+  // Marketplace Orders is held in Google Sheet. The caller supplies its already-cached lookup
+  // so a scan never issues an additional Firestore query against the legacy collection.
+  const marketplaceData = marketplaceMetadata(marketplaceOrder);
 
   // Search broadly — older docs may only have `code` not `normalizedCode`
   const byNormalized = await getRecentOrdersByCode(normalizedCode, 50);
@@ -997,17 +731,18 @@ export async function recordPackerScanPrimary({ code, courier, date, time, user,
     };
   });
 
-  await backfillLateMarketplaceMetadata(result?.id, normalizedCode, marketplaceData);
   return result;
 }
 
-export async function recordAdminScanPrimary({ code, courier, date, time, user }) {
+export async function recordAdminScanPrimary({ code, courier, date, time, user, marketplaceOrder = null }) {
   if (!canWriteFirestore()) {
     return null;
   }
 
   const normalizedCode = normalizeCode(code).toUpperCase();
-  const marketplaceData = await findMarketplaceMetadataByTracking(normalizedCode);
+  // See recordPackerScanPrimary: use the Google Sheet lookup passed by the caller rather
+  // than reading the legacy collection from Firestore for every scan.
+  const marketplaceData = marketplaceMetadata(marketplaceOrder);
   const orderCandidates = await getRecentOrdersByCode(normalizedCode, 50);
   const scanEventCandidates = await getScanEventCandidates(normalizedCode, code).catch(() => []);
   const allCandidates = [...orderCandidates, ...scanEventCandidates];
@@ -1117,7 +852,6 @@ export async function recordAdminScanPrimary({ code, courier, date, time, user }
     };
   });
 
-  await backfillLateMarketplaceMetadata(result?.id, normalizedCode, marketplaceData);
   return result;
 }
 

@@ -69,7 +69,7 @@ test("operational data requires an approved staff claim, not merely Firebase sig
   assert.match(rules, /function isOperationalStaff\(\)/);
   assert.match(rules, /request\.auth\.token\.operator == true/);
   assert.match(storageRules, /function isOperationalStaff\(\)/);
-  for (const collection of ['staffMembers', 'staffDutyTypes', 'staffWeeklyDuties', 'staffDutyOverrides', 'staffDailyAssignments', 'staffDailyStatuses', 'staffDailyLeads', 'scanEvents', 'orders', 'marketplaceOrders', 'couriers']) {
+  for (const collection of ['staffMembers', 'staffDutyTypes', 'staffWeeklyDuties', 'staffDutyOverrides', 'staffDailyAssignments', 'staffDailyStatuses', 'staffDailyLeads', 'scanEvents', 'orders', 'couriers']) {
     const block = rules.match(new RegExp(`match /${collection}/\\{[^}]+\\} \\{([\\s\\S]*?)\\n    \\}`));
     assert.ok(block, `${collection} rules must exist`);
     assert.doesNotMatch(block[1], /allow (?:read|create|update|write)[^\n]*isSignedIn\(\)/);

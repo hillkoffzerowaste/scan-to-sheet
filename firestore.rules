@@ -243,57 +243,6 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
-    match /marketplaceOrders/{orderId} {
-      allow read: if isOperationalStaff();
-      allow create: if isStaffAdmin()
-        && request.resource.data.keys().hasOnly([
-          'platform', 'orderId', 'trackingNo', 'normalizedTrackingNo',
-          'marketplaceSkus', 'items', 'sourceRowCount', 'sellerOrderStatus', 'expectedShipAt',
-          'importSource', 'importedAt', 'updatedAt'
-        ])
-        && request.resource.data.platform in ['shopee', 'lazada', 'tiktok']
-        && request.resource.data.orderId is string
-        && request.resource.data.trackingNo is string
-        && request.resource.data.normalizedTrackingNo is string
-        && request.resource.data.marketplaceSkus is list
-        && request.resource.data.marketplaceSkus.size() <= 100
-        && request.resource.data.items is list
-        && request.resource.data.items.size() <= 100
-        && request.resource.data.sourceRowCount is int
-        && request.resource.data.sourceRowCount >= 0
-        && request.resource.data.sourceRowCount <= 10000
-        && request.resource.data.sellerOrderStatus is string
-        && request.resource.data.expectedShipAt is string
-        && request.resource.data.importSource == 'web_upload'
-        && request.resource.data.importedAt is timestamp
-        && request.resource.data.updatedAt is timestamp
-        && request.resource.data.platform + '__' + request.resource.data.orderId == orderId;
-      allow update: if isStaffAdmin()
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'platform', 'orderId', 'trackingNo', 'normalizedTrackingNo',
-          'marketplaceSkus', 'items', 'sourceRowCount', 'sellerOrderStatus', 'expectedShipAt',
-          'importSource', 'importedAt', 'updatedAt'
-        ])
-        && request.resource.data.platform in ['shopee', 'lazada', 'tiktok']
-        && request.resource.data.orderId is string
-        && request.resource.data.trackingNo is string
-        && request.resource.data.normalizedTrackingNo is string
-        && request.resource.data.marketplaceSkus is list
-        && request.resource.data.marketplaceSkus.size() <= 100
-        && request.resource.data.items is list
-        && request.resource.data.items.size() <= 100
-        && request.resource.data.sourceRowCount is int
-        && request.resource.data.sourceRowCount >= 0
-        && request.resource.data.sourceRowCount <= 10000
-        && request.resource.data.sellerOrderStatus is string
-        && request.resource.data.expectedShipAt is string
-        && request.resource.data.importSource == 'web_upload'
-        && request.resource.data.importedAt is timestamp
-        && request.resource.data.updatedAt is timestamp
-        && request.resource.data.platform + '__' + request.resource.data.orderId == orderId;
-      allow delete: if false;
-    }
-
     match /syncStatus/{platform} {
       allow read: if isOperationalStaff();
       allow write: if false;

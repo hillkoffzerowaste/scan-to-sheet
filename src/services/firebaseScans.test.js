@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 
 import { nextCalendarDate } from './calendarDate.js';
 import { getScanEventDate } from './scanRow.js';
@@ -81,4 +82,15 @@ test('manual Sheet recovery includes synced orders when the selected scan exists
     sheetSyncStatus: 'synced',
     admin: { scannedAt: '2026-07-25T10:00:00' },
   }, 'admin'), true);
+});
+
+test('primary scans receive marketplace metadata from the caller without reading the legacy marketplace collection', async () => {
+  const source = await readFile(new URL('./firebaseScans.js', import.meta.url), 'utf8');
+
+  assert.match(source, /recordPackerScanPrimary\([^)]*marketplaceOrder = null/);
+  assert.match(source, /recordAdminScanPrimary\([^)]*marketplaceOrder = null/);
+  assert.match(source, /marketplaceMetadata\(marketplaceOrder\)/);
+  assert.doesNotMatch(source, /findMarketplaceOrderByTracking/);
+  assert.doesNotMatch(source, /findMarketplaceMetadataByTracking/);
+  assert.doesNotMatch(source, /collection\(firestoreDb, 'marketplaceOrders'\)/);
 });
