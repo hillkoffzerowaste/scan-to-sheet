@@ -450,24 +450,22 @@ function App() {
       if (!trackableGroups.length) {
         throw new Error(`ไฟล์นี้มี ${groups.length} ออเดอร์ แต่ยังไม่มีเลขพัสดุสักรายการ กรุณาดาวน์โหลดไฟล์ใหม่หลังออกเลขพัสดุแล้ว`);
       }
-      const orderSortKey = (group) => String(group.orderedAt || group.expectedShipAt || '');
-      const byLatestFirst = (a, b) => {
-        const left = orderSortKey(a);
-        const right = orderSortKey(b);
-        if (left === right) return 0;
-        return left < right ? 1 : -1;
-      };
-      const limitedGroups = [...trackableGroups].sort(byLatestFirst).slice(0, MARKETPLACE_IMPORT_MAX_ORDERS);
-      const skippedCount = trackableGroups.length - limitedGroups.length;
-      const missingOrderDateCount = limitedGroups.filter((group) => !group.orderedAt).length;
       const result = await runWithGoogleRetry((accessToken, googleConfig) => (
-        upsertMarketplaceOrdersGoogle({ token: accessToken, config: googleConfig, groups: limitedGroups })
+        upsertMarketplaceOrdersGoogle({
+          token: accessToken,
+          config: googleConfig,
+          groups: trackableGroups,
+          max: MARKETPLACE_IMPORT_MAX_ORDERS,
+        })
       ), { sheetWrite: true });
+      const limitedGroups = result.groups;
+      const skippedCount = result.skipped;
+      const missingOrderDateCount = limitedGroups.filter((group) => !group.orderedAt).length;
       const untrackedNote = untrackedCount > 0
         ? ` (ข้าม ${untrackedCount} ออเดอร์ที่ยังไม่มีเลขพัสดุ)`
         : '';
       const skippedNote = skippedCount > 0
-        ? ` (นำเข้าเฉพาะ ${MARKETPLACE_IMPORT_MAX_ORDERS} ออเดอร์ล่าสุดตามวันที่/เวลาในไฟล์ ข้าม ${skippedCount} ออเดอร์ที่เก่ากว่า กรุณานำเข้าไฟล์นี้ซ้ำเพื่อทำรอบถัดไป)`
+        ? ` (นำเข้า ${MARKETPLACE_IMPORT_MAX_ORDERS} ออเดอร์ในรอบนี้ โดยให้ออเดอร์ใหม่ก่อน ข้าม ${skippedCount} ออเดอร์ที่เหลือ กรุณานำเข้าไฟล์นี้ซ้ำเพื่อทำรอบถัดไป)`
         : '';
       const missingDateNote = missingOrderDateCount > 0
         ? ` (พบ ${missingOrderDateCount} ออเดอร์ที่ไม่พบวันที่สั่งซื้อในไฟล์ อาจเรียงลำดับผิดพลาด กรุณาตรวจสอบภาษา/รูปแบบไฟล์ export)`

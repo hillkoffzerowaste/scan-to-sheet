@@ -731,7 +731,7 @@ export async function findMarketplaceOrderGoogle({ token, config, trackingNo }) 
   return matches[0];
 }
 
-export async function upsertMarketplaceOrdersGoogle({ token, config, groups }) {
+export async function upsertMarketplaceOrdersGoogle({ token, config, groups, max = Infinity }) {
   const spreadsheetId = config?.master?.id;
   if (!spreadsheetId) throw new Error('ไม่พบ Google Sheet Master');
   const orders = await readMarketplaceOrdersGoogle({ token, spreadsheetId, force: true });
@@ -744,6 +744,7 @@ export async function upsertMarketplaceOrdersGoogle({ token, config, groups }) {
   let unchanged = 0;
   let collisions = 0;
   const updatedAt = new Date().toISOString();
+  const uniqueGroups = [];
 
   for (const group of groups) {
     const key = marketplaceOrderKey(group);
@@ -752,6 +753,21 @@ export async function upsertMarketplaceOrdersGoogle({ token, config, groups }) {
       continue;
     }
     seenKeys.add(key);
+    uniqueGroups.push(group);
+  }
+
+  const orderSortKey = (group) => String(group.orderedAt || group.expectedShipAt || '');
+  const byLatestFirst = (left, right) => orderSortKey(right).localeCompare(orderSortKey(left));
+  // A re-upload must eventually reach old, still-new orders. If we selected only the latest
+  // rows first, an unchanged newest export could permanently starve them past the import cap.
+  const selectedGroups = [
+    ...uniqueGroups.filter((group) => !byKey.has(marketplaceOrderKey(group))).sort(byLatestFirst),
+    ...uniqueGroups.filter((group) => byKey.has(marketplaceOrderKey(group))).sort(byLatestFirst),
+  ].slice(0, max);
+  const skipped = uniqueGroups.length - selectedGroups.length;
+
+  for (const group of selectedGroups) {
+    const key = marketplaceOrderKey(group);
     const nextRow = marketplaceOrderToStoredRow(group, updatedAt);
     const existing = byKey.get(key);
     if (!existing) {
@@ -784,7 +800,10 @@ export async function upsertMarketplaceOrdersGoogle({ token, config, groups }) {
     );
   }
   marketplaceOrdersCache.delete(spreadsheetId);
-  return { imported, updated, unchanged, collisions, stored: imported + updated + unchanged };
+  return {
+    imported, updated, unchanged, collisions, skipped,
+    stored: imported + updated + unchanged, groups: selectedGroups,
+  };
 }
 
 async function ensureDailyWorksheet({ token, spreadsheetId, date }) {

@@ -62,9 +62,61 @@ test('Marketplace Orders upsert keeps unchanged rows and appends only new order 
       ],
     });
 
-    assert.deepEqual(result, { imported: 1, updated: 0, unchanged: 1, collisions: 0, stored: 2 });
+    assert.deepEqual(
+      {
+        imported: result.imported,
+        updated: result.updated,
+        unchanged: result.unchanged,
+        collisions: result.collisions,
+        skipped: result.skipped,
+        stored: result.stored,
+      },
+      { imported: 1, updated: 0, unchanged: 1, collisions: 0, skipped: 0, stored: 2 },
+    );
     assert.equal(appended.length, 1);
     assert.equal(appended[0][0], 'lazada__ORDER-2');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('Marketplace Orders gives still-new rows priority when the import cap is reached', async () => {
+  const originalFetch = globalThis.fetch;
+  const spreadsheetId = 'marketplace-orders-new-priority-test';
+  const appended = [];
+  const jsonResponse = (payload) => new Response(JSON.stringify(payload), {
+    status: 200, headers: { 'Content-Type': 'application/json' },
+  });
+  globalThis.fetch = async (url, options = {}) => {
+    const decodedUrl = decodeURIComponent(String(url));
+    const method = options.method ?? 'GET';
+    const body = options.body ? JSON.parse(options.body) : null;
+    if (decodedUrl.includes(`/spreadsheets/${spreadsheetId}?fields=`)) {
+      return jsonResponse({ sheets: [{ properties: { sheetId: 703, title: 'Marketplace Orders', gridProperties: { rowCount: 1000, columnCount: 12 } } }] });
+    }
+    if (decodedUrl.includes("'Marketplace Orders'!A1:L1") && method === 'PUT') return jsonResponse({});
+    if (decodedUrl.includes("'Marketplace Orders'!A2:L") && method === 'GET') {
+      return jsonResponse({ values: [[
+        'shopee__EXISTING', 'TH100', 'TH100', 'shopee', 'EXISTING', '[]', '[]', '1', '', '', '2026-08-30 12:00:00', '',
+      ]] });
+    }
+    if (decodedUrl.includes("'Marketplace Orders'!A:L:append") && method === 'POST') {
+      appended.push(...body.values);
+      return jsonResponse({});
+    }
+    throw new Error(`Unexpected request: ${method} ${decodedUrl}`);
+  };
+  try {
+    const result = await upsertMarketplaceOrdersGoogle({
+      token: 'token', config: { master: { id: spreadsheetId } }, max: 1, groups: [
+        { platform: 'shopee', orderId: 'EXISTING', trackingNo: 'TH100', normalizedTrackingNo: 'TH100', orderedAt: '2026-08-30 12:00:00' },
+        { platform: 'shopee', orderId: 'NEW-OLDER', trackingNo: 'TH101', normalizedTrackingNo: 'TH101', orderedAt: '2026-08-29 08:00:00' },
+      ],
+    });
+    assert.equal(result.imported, 1);
+    assert.equal(result.skipped, 1);
+    assert.equal(result.groups[0].orderId, 'NEW-OLDER');
+    assert.equal(appended[0][0], 'shopee__NEW-OLDER');
   } finally {
     globalThis.fetch = originalFetch;
   }
