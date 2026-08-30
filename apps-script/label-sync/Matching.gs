@@ -129,7 +129,7 @@ var LabelMatching = (function () {
       record(
         orderResult.status === 'ambiguous' ? 'ambiguous' : 'unmatched',
         0,
-        orderResult.errorCode || 'order_not_found',
+        orderResult.errorCode || 'order_not_found'
       );
     });
     return { updates: updates, results: results };

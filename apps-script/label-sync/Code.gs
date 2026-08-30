@@ -117,7 +117,7 @@ function runLabelSync() {
             outcome.label.orderId,
             outcome.status,
             outcome.matchedRows,
-            outcome.errorCode,
+            outcome.errorCode
           ));
         });
 
@@ -140,7 +140,7 @@ function runLabelSync() {
       // Silent truncation reads as "everything is done" when it is not.
       Logger.log(
         'Label Sync stopped early (' + summary.stoppedEarly + '); '
-        + summary.filesDeferred + ' file(s) deferred to the next run.',
+        + summary.filesDeferred + ' file(s) deferred to the next run.'
       );
     }
     if (summary.rowsMissed) {
@@ -208,7 +208,7 @@ function extractFileText_(file, ocrLanguage) {
       mimeType: MimeType.GOOGLE_DOCS,
     },
     file.getBlob(),
-    { ocrLanguage: ocrLanguage, fields: 'id', supportsAllDrives: true },
+    { ocrLanguage: ocrLanguage, fields: 'id', supportsAllDrives: true }
   );
   try {
     var lastError = null;
@@ -361,7 +361,7 @@ function nextFileState_(entry, options) {
   var attempts = (sameFile ? previous.attempts : 0) + 1;
   var backoffMinutes = Math.min(
     LABEL_SYNC.firstRetryMinutes * Math.pow(2, attempts - 1),
-    LABEL_SYNC.maxRetryMinutes,
+    LABEL_SYNC.maxRetryMinutes
   );
   return {
     modifiedAt: options.modifiedAt,
@@ -399,7 +399,7 @@ function writeProcessedState_(state) {
   if (all.length > entries.length) {
     Logger.log(
       'Label Sync state truncated to ' + entries.length + ' of ' + all.length
-      + ' files; the oldest will be OCR\'d again. Lower FILE_LOOKBACK_DAYS or archive old labels.',
+      + ' files; the oldest will be OCR\'d again. Lower FILE_LOOKBACK_DAYS or archive old labels.'
     );
   }
   var files = {};
