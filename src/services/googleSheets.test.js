@@ -155,6 +155,49 @@ test('Marketplace Orders lookup returns one exact normalized tracking match', as
   }
 });
 
+test('Marketplace Orders shares one cold-cache request across concurrent scan lookups', async () => {
+  const originalFetch = globalThis.fetch;
+  const spreadsheetId = 'marketplace-orders-concurrent-lookup-test';
+  let spreadsheetReads = 0;
+  let catalogReads = 0;
+  let headerWrites = 0;
+  const jsonResponse = (payload) => new Response(JSON.stringify(payload), {
+    status: 200, headers: { 'Content-Type': 'application/json' },
+  });
+  globalThis.fetch = async (url, options = {}) => {
+    const decodedUrl = decodeURIComponent(String(url));
+    const method = options.method ?? 'GET';
+    if (decodedUrl.includes(`/spreadsheets/${spreadsheetId}?fields=`)) {
+      spreadsheetReads += 1;
+      return jsonResponse({ sheets: [{ properties: { sheetId: 704, title: 'Marketplace Orders', gridProperties: { rowCount: 1000, columnCount: 12 } } }] });
+    }
+    if (decodedUrl.includes("'Marketplace Orders'!A1:L1") && method === 'PUT') {
+      headerWrites += 1;
+      return jsonResponse({});
+    }
+    if (decodedUrl.includes("'Marketplace Orders'!A2:L") && method === 'GET') {
+      catalogReads += 1;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      return jsonResponse({ values: [[
+        'shopee__ORDER-4', 'TH456', 'TH456', 'shopee', 'ORDER-4', '[]', '[]', '1', 'READY', '', '', '',
+      ]] });
+    }
+    throw new Error(`Unexpected request: ${method} ${decodedUrl}`);
+  };
+  try {
+    const lookups = await Promise.all(Array.from({ length: 20 }, () => findMarketplaceOrderGoogle({
+      token: 'token', config: { master: { id: spreadsheetId } }, trackingNo: 'TH456',
+    })));
+    assert.equal(lookups.length, 20);
+    assert.ok(lookups.every((order) => order?.orderId === 'ORDER-4'));
+    assert.equal(spreadsheetReads, 1);
+    assert.equal(catalogReads, 1);
+    assert.equal(headerWrites, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('buildDailyRowUpdateData restores native RAW types after formatted-value reads', () => {
   const row = Array(23).fill('');
   row[0] = '117';

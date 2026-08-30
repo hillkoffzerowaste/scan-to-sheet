@@ -613,6 +613,8 @@ const MARKETPLACE_ORDERS_HEADERS = [
 ];
 const MARKETPLACE_LOOKUP_CACHE_TTL_MS = 2 * 60 * 1000;
 const marketplaceOrdersCache = new Map();
+const marketplaceOrdersLoads = new Map();
+const marketplaceOrdersSheets = new Map();
 
 async function ensureManagementSheets({ token, spreadsheetId }) {
   const spreadsheet = await getSpreadsheet(token, spreadsheetId);
@@ -678,35 +680,62 @@ function marketplaceOrderToStoredRow(group, updatedAt) {
 }
 
 async function ensureMarketplaceOrdersSheet({ token, spreadsheetId }) {
-  let spreadsheet = await getSpreadsheet(token, spreadsheetId);
-  let properties = spreadsheet.sheets?.find((sheet) => sheet.properties.title === MARKETPLACE_ORDERS_SHEET)?.properties;
-  if (!properties) {
-    try {
-      await apiFetch(`${SHEETS_API}/${spreadsheetId}:batchUpdate`, token, {
-        method: 'POST',
-        body: JSON.stringify({ requests: [{ addSheet: {
-          properties: { title: MARKETPLACE_ORDERS_SHEET, index: 0, gridProperties: { rowCount: 1000, columnCount: MARKETPLACE_ORDERS_HEADERS.length } },
-        } }] }),
-      });
-    } catch (error) {
-      if (!String(error).includes('already exists') && !String(error).includes('duplicate')) throw error;
-    }
-    spreadsheet = await getSpreadsheet(token, spreadsheetId);
-    properties = spreadsheet.sheets?.find((sheet) => sheet.properties.title === MARKETPLACE_ORDERS_SHEET)?.properties;
-  }
-  if (!properties) throw new Error('สร้างชีต Marketplace Orders ไม่สำเร็จ');
+  const existing = marketplaceOrdersSheets.get(spreadsheetId);
+  if (existing) return existing;
 
-  await apiFetch(
-    `${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent(`${escapeSheetName(MARKETPLACE_ORDERS_SHEET)}!A1:L1`)}?valueInputOption=RAW`,
-    token,
-    { method: 'PUT', body: JSON.stringify({ values: [MARKETPLACE_ORDERS_HEADERS] }) },
-  );
-  return properties;
+  const ready = (async () => {
+    let spreadsheet = await getSpreadsheet(token, spreadsheetId);
+    let properties = spreadsheet.sheets?.find((sheet) => sheet.properties.title === MARKETPLACE_ORDERS_SHEET)?.properties;
+    let created = false;
+    if (!properties) {
+      try {
+        await apiFetch(`${SHEETS_API}/${spreadsheetId}:batchUpdate`, token, {
+          method: 'POST',
+          body: JSON.stringify({ requests: [{ addSheet: {
+            properties: { title: MARKETPLACE_ORDERS_SHEET, index: 0, gridProperties: { rowCount: 1000, columnCount: MARKETPLACE_ORDERS_HEADERS.length } },
+          } }] }),
+        });
+        created = true;
+      } catch (error) {
+        if (!String(error).includes('already exists') && !String(error).includes('duplicate')) throw error;
+      }
+      spreadsheet = await getSpreadsheet(token, spreadsheetId);
+      properties = spreadsheet.sheets?.find((sheet) => sheet.properties.title === MARKETPLACE_ORDERS_SHEET)?.properties;
+    }
+    if (!properties) throw new Error('สร้างชีต Marketplace Orders ไม่สำเร็จ');
+
+    // Existing sheets are already initialized. Rewriting this header for every scan wastes
+    // write quota and can overwrite a manual header repair, so initialize only a new tab.
+    if (created) {
+      await apiFetch(
+        `${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent(`${escapeSheetName(MARKETPLACE_ORDERS_SHEET)}!A1:L1`)}?valueInputOption=RAW`,
+        token,
+        { method: 'PUT', body: JSON.stringify({ values: [MARKETPLACE_ORDERS_HEADERS] }) },
+      );
+    }
+    return properties;
+  })();
+  marketplaceOrdersSheets.set(spreadsheetId, ready);
+  try {
+    return await ready;
+  } catch (error) {
+    marketplaceOrdersSheets.delete(spreadsheetId);
+    throw error;
+  }
 }
 
-async function readMarketplaceOrdersGoogle({ token, spreadsheetId, force = false }) {
-  const cached = marketplaceOrdersCache.get(spreadsheetId);
-  if (!force && cached && Date.now() - cached.loadedAt < MARKETPLACE_LOOKUP_CACHE_TTL_MS) return cached.orders;
+function marketplaceOrdersCacheEntry(rows) {
+  const byTracking = new Map();
+  rows.forEach((order) => {
+    const key = order.normalizedTrackingNo;
+    if (!key) return;
+    // Preserve the previous "exactly one match" behavior without rescanning every row.
+    byTracking.set(key, byTracking.has(key) ? null : order);
+  });
+  return { loadedAt: Date.now(), orders: rows, byTracking };
+}
+
+async function loadMarketplaceOrdersGoogle({ token, spreadsheetId }) {
   await ensureMarketplaceOrdersSheet({ token, spreadsheetId });
   const range = `${escapeSheetName(MARKETPLACE_ORDERS_SHEET)}!A2:L`;
   const data = await apiFetch(
@@ -716,8 +745,28 @@ async function readMarketplaceOrdersGoogle({ token, spreadsheetId, force = false
   const orders = (data.values ?? [])
     .map((row, index) => ({ ...marketplaceOrderFromStoredRow(row), rowNumber: index + 2 }))
     .filter((order) => order.key && order.orderId);
-  marketplaceOrdersCache.set(spreadsheetId, { loadedAt: Date.now(), orders });
-  return orders;
+  const entry = marketplaceOrdersCacheEntry(orders);
+  marketplaceOrdersCache.set(spreadsheetId, entry);
+  return entry;
+}
+
+async function readMarketplaceOrdersGoogle({ token, spreadsheetId, force = false }) {
+  const cached = marketplaceOrdersCache.get(spreadsheetId);
+  if (!force && cached && Date.now() - cached.loadedAt < MARKETPLACE_LOOKUP_CACHE_TTL_MS) return cached;
+
+  const pending = marketplaceOrdersLoads.get(spreadsheetId);
+  if (pending) {
+    const loaded = await pending;
+    if (!force) return loaded;
+  }
+
+  const load = loadMarketplaceOrdersGoogle({ token, spreadsheetId });
+  marketplaceOrdersLoads.set(spreadsheetId, load);
+  try {
+    return await load;
+  } finally {
+    if (marketplaceOrdersLoads.get(spreadsheetId) === load) marketplaceOrdersLoads.delete(spreadsheetId);
+  }
 }
 
 export async function findMarketplaceOrderGoogle({ token, config, trackingNo }) {
@@ -725,16 +774,15 @@ export async function findMarketplaceOrderGoogle({ token, config, trackingNo }) 
   if (!spreadsheetId || !trackingNo) return null;
   const normalizedTrackingNo = normalizeMarketplaceTracking(trackingNo);
   if (!normalizedTrackingNo) return null;
-  const orders = await readMarketplaceOrdersGoogle({ token, spreadsheetId });
-  const matches = orders.filter((order) => order.normalizedTrackingNo === normalizedTrackingNo);
-  if (matches.length !== 1) return null;
-  return matches[0];
+  const catalog = await readMarketplaceOrdersGoogle({ token, spreadsheetId });
+  return catalog.byTracking.get(normalizedTrackingNo) ?? null;
 }
 
 export async function upsertMarketplaceOrdersGoogle({ token, config, groups, max = Infinity }) {
   const spreadsheetId = config?.master?.id;
   if (!spreadsheetId) throw new Error('ไม่พบ Google Sheet Master');
-  const orders = await readMarketplaceOrdersGoogle({ token, spreadsheetId, force: true });
+  const catalog = await readMarketplaceOrdersGoogle({ token, spreadsheetId, force: true });
+  const orders = catalog.orders;
   const byKey = new Map(orders.map((order) => [order.key, order]));
   const seenKeys = new Set();
   const writes = [];
