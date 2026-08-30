@@ -6,7 +6,7 @@
 
 - Frontend: React 19 + Vite 6, `html5-qrcode` สำหรับสแกนด้วยกล้อง
 - Backend/API: Vercel Serverless Functions (`api/`) สำหรับ Google OAuth และ sheet lock
-- ข้อมูล: Google Sheets (Master sheet) + Firebase/Firestore (สแกนล่าสุด, marketplace orders, sync status)
+- ข้อมูล: Google Sheets (Master sheet และ `Marketplace Orders`) + Firebase/Firestore (สแกนล่าสุด, sync status)
 - Session/lock storage: Vercel KV หรือ Upstash Redis (REST API)
 - Mobile: Capacitor (Android)
 - Marketplace sync: Playwright worker (Node.js) สำหรับ TikTok Shop, Shopee, Lazada Seller Center
@@ -242,7 +242,7 @@ npm run marketplace:sync              # sync ต่อเนื่องทุ�
 npm run marketplace:dashboard         # เปิด dashboard ที่ http://127.0.0.1:8787
 ```
 
-ออเดอร์ถูก upsert เข้า collection `marketplaceOrders` และจับคู่กับเลขพัสดุที่สแกนแล้วโดยอัตโนมัติ (`normalizedTrackingNo` กับ `orders.normalizedCode`)
+การอัปโหลดไฟล์ Seller Center จากหน้าเว็บจะ upsert ลงแท็บ `Marketplace Orders` ใน Google Sheet และจับคู่กับเลขพัสดุที่สแกนแล้วโดยอัตโนมัติผ่าน `normalizedTrackingNo` โดยไม่ใช้ Firestore quota สำหรับคลังออเดอร์นั้น ส่วน Playwright worker เก่ายังคงเป็นเส้นทางแยกที่เขียน Firestore ตามการตั้งค่าเดิม
 
 ## Label-address sync (Google Apps Script companion)
 

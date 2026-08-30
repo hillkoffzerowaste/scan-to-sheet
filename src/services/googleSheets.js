@@ -1,4 +1,4 @@
-import { buildSheetBackfillUpdates, classifyLateOrder } from './marketplaceImport.js';
+import { buildSheetBackfillUpdates, classifyLateOrder, normalizeMarketplaceTracking } from './marketplaceImport.js';
 import { findHistoricalIssueRow, findScanReconciliation, getScanIssueMeta, resolveCrossDayPackerRow } from './sheetSyncReconciliation.js';
 
 const DRIVE_API = 'https://www.googleapis.com/drive/v3';
@@ -605,6 +605,14 @@ async function getSheetConditionalFormats({ token, spreadsheetId, date, sheetId 
  * drifted out of step with the live row layout, so it is gone rather than dormant.
  */
 const LEGACY_MANAGEMENT_SHEETS = ['Dashboard', 'Audit Log', 'All Orders'];
+const MARKETPLACE_ORDERS_SHEET = 'Marketplace Orders';
+const MARKETPLACE_ORDERS_HEADERS = [
+  'Order Key', 'Normalized Tracking', 'Tracking', 'Platform', 'Order ID',
+  'SKUs JSON', 'Items JSON', 'Source Rows', 'Seller Status', 'Expected Ship At',
+  'Ordered At', 'Updated At',
+];
+const MARKETPLACE_LOOKUP_CACHE_TTL_MS = 2 * 60 * 1000;
+const marketplaceOrdersCache = new Map();
 
 async function ensureManagementSheets({ token, spreadsheetId }) {
   const spreadsheet = await getSpreadsheet(token, spreadsheetId);
@@ -621,6 +629,162 @@ async function ensureManagementSheets({ token, spreadsheetId }) {
 
 export async function ensureGoogleSheetOrganization({ token, config }) {
   if (config?.master?.id) await ensureManagementSheets({ token, spreadsheetId: config.master.id });
+}
+
+function marketplaceOrderKey(group) {
+  return `${String(group.platform ?? '').trim().toLowerCase()}__${String(group.orderId ?? '').trim()}`;
+}
+
+function marketplaceOrderFromStoredRow(row) {
+  const parseList = (value) => {
+    try {
+      const parsed = JSON.parse(String(value ?? ''));
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  };
+  return {
+    key: String(row[0] ?? ''),
+    normalizedTrackingNo: normalizeMarketplaceTracking(row[1] ?? ''),
+    trackingNo: String(row[2] ?? ''),
+    platform: String(row[3] ?? ''),
+    orderId: String(row[4] ?? ''),
+    marketplaceSkus: parseList(row[5]),
+    items: parseList(row[6]),
+    sourceRowCount: Number(row[7]) || 0,
+    sellerOrderStatus: String(row[8] ?? ''),
+    expectedShipAt: String(row[9] ?? ''),
+    orderedAt: String(row[10] ?? ''),
+    status: String(row[8] ?? ''),
+  };
+}
+
+function marketplaceOrderToStoredRow(group, updatedAt) {
+  return [
+    marketplaceOrderKey(group),
+    normalizeMarketplaceTracking(group.normalizedTrackingNo ?? group.trackingNo),
+    String(group.trackingNo ?? ''),
+    String(group.platform ?? ''),
+    String(group.orderId ?? ''),
+    JSON.stringify(Array.isArray(group.marketplaceSkus) ? group.marketplaceSkus : []),
+    JSON.stringify(Array.isArray(group.items) ? group.items : []),
+    Number(group.sourceRowCount) || 0,
+    String(group.sellerOrderStatus ?? ''),
+    String(group.expectedShipAt ?? ''),
+    String(group.orderedAt ?? ''),
+    updatedAt,
+  ];
+}
+
+async function ensureMarketplaceOrdersSheet({ token, spreadsheetId }) {
+  let spreadsheet = await getSpreadsheet(token, spreadsheetId);
+  let properties = spreadsheet.sheets?.find((sheet) => sheet.properties.title === MARKETPLACE_ORDERS_SHEET)?.properties;
+  if (!properties) {
+    try {
+      await apiFetch(`${SHEETS_API}/${spreadsheetId}:batchUpdate`, token, {
+        method: 'POST',
+        body: JSON.stringify({ requests: [{ addSheet: {
+          properties: { title: MARKETPLACE_ORDERS_SHEET, index: 0, gridProperties: { rowCount: 1000, columnCount: MARKETPLACE_ORDERS_HEADERS.length } },
+        } }] }),
+      });
+    } catch (error) {
+      if (!String(error).includes('already exists') && !String(error).includes('duplicate')) throw error;
+    }
+    spreadsheet = await getSpreadsheet(token, spreadsheetId);
+    properties = spreadsheet.sheets?.find((sheet) => sheet.properties.title === MARKETPLACE_ORDERS_SHEET)?.properties;
+  }
+  if (!properties) throw new Error('สร้างชีต Marketplace Orders ไม่สำเร็จ');
+
+  await apiFetch(
+    `${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent(`${escapeSheetName(MARKETPLACE_ORDERS_SHEET)}!A1:L1`)}?valueInputOption=RAW`,
+    token,
+    { method: 'PUT', body: JSON.stringify({ values: [MARKETPLACE_ORDERS_HEADERS] }) },
+  );
+  return properties;
+}
+
+async function readMarketplaceOrdersGoogle({ token, spreadsheetId, force = false }) {
+  const cached = marketplaceOrdersCache.get(spreadsheetId);
+  if (!force && cached && Date.now() - cached.loadedAt < MARKETPLACE_LOOKUP_CACHE_TTL_MS) return cached.orders;
+  await ensureMarketplaceOrdersSheet({ token, spreadsheetId });
+  const range = `${escapeSheetName(MARKETPLACE_ORDERS_SHEET)}!A2:L`;
+  const data = await apiFetch(
+    `${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent(range)}?majorDimension=ROWS`,
+    token,
+  );
+  const orders = (data.values ?? [])
+    .map((row, index) => ({ ...marketplaceOrderFromStoredRow(row), rowNumber: index + 2 }))
+    .filter((order) => order.key && order.orderId);
+  marketplaceOrdersCache.set(spreadsheetId, { loadedAt: Date.now(), orders });
+  return orders;
+}
+
+export async function findMarketplaceOrderGoogle({ token, config, trackingNo }) {
+  const spreadsheetId = config?.master?.id;
+  if (!spreadsheetId || !trackingNo) return null;
+  const normalizedTrackingNo = normalizeMarketplaceTracking(trackingNo);
+  if (!normalizedTrackingNo) return null;
+  const orders = await readMarketplaceOrdersGoogle({ token, spreadsheetId });
+  const matches = orders.filter((order) => order.normalizedTrackingNo === normalizedTrackingNo);
+  if (matches.length !== 1) return null;
+  return matches[0];
+}
+
+export async function upsertMarketplaceOrdersGoogle({ token, config, groups }) {
+  const spreadsheetId = config?.master?.id;
+  if (!spreadsheetId) throw new Error('ไม่พบ Google Sheet Master');
+  const orders = await readMarketplaceOrdersGoogle({ token, spreadsheetId, force: true });
+  const byKey = new Map(orders.map((order) => [order.key, order]));
+  const seenKeys = new Set();
+  const writes = [];
+  const newOrders = [];
+  let imported = 0;
+  let updated = 0;
+  let unchanged = 0;
+  let collisions = 0;
+  const updatedAt = new Date().toISOString();
+
+  for (const group of groups) {
+    const key = marketplaceOrderKey(group);
+    if (!key || key === '__' || seenKeys.has(key)) {
+      collisions += 1;
+      continue;
+    }
+    seenKeys.add(key);
+    const nextRow = marketplaceOrderToStoredRow(group, updatedAt);
+    const existing = byKey.get(key);
+    if (!existing) {
+      newOrders.push(nextRow);
+      imported += 1;
+      continue;
+    }
+    const comparableExisting = marketplaceOrderToStoredRow(existing, '').slice(0, 11);
+    if (JSON.stringify(comparableExisting) === JSON.stringify(nextRow.slice(0, 11))) {
+      unchanged += 1;
+      continue;
+    }
+    writes.push({
+      range: `${escapeSheetName(MARKETPLACE_ORDERS_SHEET)}!A${existing.rowNumber}:L${existing.rowNumber}`,
+      values: [nextRow],
+    });
+    updated += 1;
+  }
+
+  if (writes.length) {
+    await apiFetch(`${SHEETS_API}/${spreadsheetId}/values:batchUpdate`, token, {
+      method: 'POST', body: JSON.stringify({ valueInputOption: 'RAW', data: writes }),
+    });
+  }
+  if (newOrders.length) {
+    await apiFetch(
+      `${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent(`${escapeSheetName(MARKETPLACE_ORDERS_SHEET)}!A:L`)}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,
+      token,
+      { method: 'POST', body: JSON.stringify({ values: newOrders }) },
+    );
+  }
+  marketplaceOrdersCache.delete(spreadsheetId);
+  return { imported, updated, unchanged, collisions, stored: imported + updated + unchanged };
 }
 
 async function ensureDailyWorksheet({ token, spreadsheetId, date }) {
@@ -1261,10 +1425,19 @@ export async function backfillMarketplaceOrdersGoogle({ token, config, groups })
     .filter((title) => /^\d{4}-\d{2}-\d{2}(?:_conflict\d+)?$/.test(title));
   const rowsBySheet = await batchReadDailyRows({ token, spreadsheetId, sheetNames: dateSheets });
   const updates = [];
+  const scannedTrackingNos = new Set();
   let matchedRows = 0;
   let updatedSheets = 0;
   for (const sheetName of dateSheets) {
     const rows = rowsBySheet.get(sheetName) ?? [];
+    rows.forEach((row) => {
+      // A Packer scan is the only state that clears a late-order alert. Admin-only rows
+      // keep column F empty, so they must remain unscanned here.
+      if (String(row[5] ?? '').trim()) {
+        const normalized = normalizeMarketplaceTracking(row[5]);
+        if (normalized) scannedTrackingNos.add(normalized);
+      }
+    });
     const result = buildSheetBackfillUpdates(sheetName, rows, groups);
     if (result.matchedRows > 0) updatedSheets += 1;
     matchedRows += result.matchedRows;
@@ -1276,7 +1449,7 @@ export async function backfillMarketplaceOrdersGoogle({ token, config, groups })
       body: JSON.stringify({ valueInputOption: 'RAW', data: updates.slice(index, index + 400) }),
     });
   }
-  return { matchedRows, updatedCells: updates.length, updatedSheets };
+  return { matchedRows, updatedCells: updates.length, updatedSheets, scannedTrackingNos: [...scannedTrackingNos] };
 }
 
 export async function syncLateOrdersGoogle({ token, config, orders, now = new Date() }) {

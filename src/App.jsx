@@ -51,12 +51,14 @@ import {
   getRowsForFirestoreBackfillGoogle,
   getScanReportGoogle,
   getTodayRowsGoogle,
+  findMarketplaceOrderGoogle,
   listDatesBetween,
   listDatesInMonth,
   loadGoogleConfig,
   prepareGoogleSheets,
   searchScansGoogle,
   syncLateOrdersGoogle,
+  upsertMarketplaceOrdersGoogle,
   updateScanIssueGoogle,
   validateScanCode,
 } from './services/googleSheets.js';
@@ -82,7 +84,6 @@ import {
   canUseFirestorePrimary,
   checkMissingOrdersFirestore,
   fetchTodaySummaryFirestore,
-  findMarketplaceOrderByTracking,
   getDriveRowsFirestore,
   getScanReportFirestore,
   getTodayRowsFirestore,
@@ -93,8 +94,6 @@ import {
   recordPackerScanPrimary,
   searchScansFirestore,
   upsertFirebaseUser,
-  importMarketplaceOrders,
-  findExistingMarketplaceOrders,
   addCourier,
   claimRecoverableSheetSyncs,
   subscribeCouriers,
@@ -451,7 +450,6 @@ function App() {
       if (!trackableGroups.length) {
         throw new Error(`ไฟล์นี้มี ${groups.length} ออเดอร์ แต่ยังไม่มีเลขพัสดุสักรายการ กรุณาดาวน์โหลดไฟล์ใหม่หลังออกเลขพัสดุแล้ว`);
       }
-      const marketplaceGroupId = (group) => `${group.platform}__${group.orderId}`;
       const orderSortKey = (group) => String(group.orderedAt || group.expectedShipAt || '');
       const byLatestFirst = (a, b) => {
         const left = orderSortKey(a);
@@ -459,22 +457,12 @@ function App() {
         if (left === right) return 0;
         return left < right ? 1 : -1;
       };
-      // Probe existence once for the whole file and hand the documents to the import, so
-      // it never repeats the same reads. Scales with file size, unlike the writes and
-      // per-tracking `orders` queries that the cap below bounds.
-      const knownExistingOrders = await findExistingMarketplaceOrders(
-        trackableGroups.map(marketplaceGroupId),
-      );
-      // New orders claim the budget first: capping the combined set by date alone would
-      // hand every round to the same newest-100 (now already imported), so orders past
-      // the cap could never be reached no matter how many times the file is re-uploaded.
-      const isNewGroup = (group) => !knownExistingOrders.has(marketplaceGroupId(group));
-      const newGroups = trackableGroups.filter(isNewGroup).sort(byLatestFirst);
-      const existingGroups = trackableGroups.filter((group) => !isNewGroup(group)).sort(byLatestFirst);
-      const limitedGroups = [...newGroups, ...existingGroups].slice(0, MARKETPLACE_IMPORT_MAX_ORDERS);
+      const limitedGroups = [...trackableGroups].sort(byLatestFirst).slice(0, MARKETPLACE_IMPORT_MAX_ORDERS);
       const skippedCount = trackableGroups.length - limitedGroups.length;
       const missingOrderDateCount = limitedGroups.filter((group) => !group.orderedAt).length;
-      const result = await importMarketplaceOrders(limitedGroups, { knownExistingOrders });
+      const result = await runWithGoogleRetry((accessToken, googleConfig) => (
+        upsertMarketplaceOrdersGoogle({ token: accessToken, config: googleConfig, groups: limitedGroups })
+      ), { sheetWrite: true });
       const untrackedNote = untrackedCount > 0
         ? ` (ข้าม ${untrackedCount} ออเดอร์ที่ยังไม่มีเลขพัสดุ)`
         : '';
@@ -484,28 +472,31 @@ function App() {
       const missingDateNote = missingOrderDateCount > 0
         ? ` (พบ ${missingOrderDateCount} ออเดอร์ที่ไม่พบวันที่สั่งซื้อในไฟล์ อาจเรียงลำดับผิดพลาด กรุณาตรวจสอบภาษา/รูปแบบไฟล์ export)`
         : '';
-      // `duplicates` already contains the metadata-refreshed rows, so reporting both raw
-      // double-counts them. `collisions` are orders dropped entirely (two tracking numbers
-      // sharing one order id) and were previously reported nowhere at all.
-      const unchangedCount = Math.max(0, result.duplicates - result.metadataUpdated);
       const collisionNote = result.collisions > 0
         ? ` (ข้าม ${result.collisions} ออเดอร์ที่มีเลขพัสดุซ้อนกันในเลขคำสั่งซื้อเดียว)`
         : '';
       try {
         const sheetResult = await runWithGoogleRetry((accessToken, googleConfig) => (
           backfillMarketplaceOrdersGoogle({ token: accessToken, config: googleConfig, groups: limitedGroups })
-        ));
+        ), { sheetWrite: true });
         const lateResult = await runWithGoogleRetry((accessToken, googleConfig) => (
-          syncLateOrdersGoogle({ token: accessToken, config: googleConfig, orders: result.orderStates })
-        ));
+          syncLateOrdersGoogle({
+            token: accessToken,
+            config: googleConfig,
+            orders: limitedGroups.map((group) => ({
+              ...group,
+              scanned: sheetResult.scannedTrackingNos.includes(group.normalizedTrackingNo),
+            })),
+          })
+        ), { sheetWrite: true });
         setMarketplaceUploadResult({
           type: (skippedCount > 0 || untrackedCount > 0 || missingOrderDateCount > 0 || result.collisions > 0) ? 'warning' : 'success',
-          message: `เพิ่มใหม่ ${result.imported} ออเดอร์ ไม่มีการเปลี่ยนแปลง ${unchangedCount} ออเดอร์ อัปเดตข้อมูลออเดอร์เดิม ${result.metadataUpdated} ออเดอร์ อัปเดต Firebase ${result.updatedScans} รายการ, Google Sheet ${sheetResult.matchedRows} แถว และ Late Orders ${lateResult.rows} ออเดอร์ (ล่าช้า ${lateResult.counts.overdue ?? 0})${skippedNote}${untrackedNote}${missingDateNote}${collisionNote}`,
+          message: `บันทึกใหม่ ${result.imported} ออเดอร์ ไม่มีการเปลี่ยนแปลง ${result.unchanged} ออเดอร์ อัปเดตข้อมูลเดิม ${result.updated} ออเดอร์ ใน Marketplace Orders, อัปเดต Google Sheet ${sheetResult.matchedRows} แถว และ Late Orders ${lateResult.rows} ออเดอร์ (ล่าช้า ${lateResult.counts.overdue ?? 0})${skippedNote}${untrackedNote}${missingDateNote}${collisionNote}`,
         });
       } catch (sheetError) {
         setMarketplaceUploadResult({
           type: 'warning',
-          message: `Firebase เพิ่มใหม่ ${result.imported} ออเดอร์ อัปเดตออเดอร์เดิม ${result.metadataUpdated} ออเดอร์ แต่ Google Sheet ยังไม่สำเร็จ: ${sheetError.message}${skippedNote}${untrackedNote}${missingDateNote}${collisionNote}`,
+          message: `บันทึก Marketplace Orders ใหม่ ${result.imported} ออเดอร์ อัปเดตข้อมูลเดิม ${result.updated} ออเดอร์แล้ว แต่การ backfill Google Sheet ยังไม่สำเร็จ: ${sheetError.message}${skippedNote}${untrackedNote}${missingDateNote}${collisionNote}`,
         });
       }
     } catch (error) {
@@ -1198,6 +1189,12 @@ function App() {
     }
   }
 
+  function findMarketplaceOrderForScan(trackingNo) {
+    return runWithGoogleRetry((accessToken, googleConfig) => (
+      findMarketplaceOrderGoogle({ token: accessToken, config: googleConfig, trackingNo })
+    ));
+  }
+
   function isGoogleAuthError(error) {
     const message = String(error?.message ?? '').toLowerCase();
     return (
@@ -1450,7 +1447,7 @@ function App() {
 
       // Pre-fetch marketplace metadata if possible (best effort, non-blocking)
       const marketplaceResults = await Promise.all(
-        batchOrders.map((bo) => findMarketplaceOrderByTracking({ trackingNo: bo.code }).catch(() => null)),
+        batchOrders.map((bo) => findMarketplaceOrderForScan(bo.code).catch(() => null)),
       );
       batchOrders.forEach((bo, i) => {
         if (marketplaceResults[i]) bo.marketplaceOrder = marketplaceResults[i];
@@ -1693,7 +1690,7 @@ function App() {
       const packerName = scanPacker === PACKER_UNASSIGNED ? '' : scanPacker;
       const scanUser = firebaseUser ?? user;
       const scanEmail = user.email;
-      const marketplaceOrderPromise = findMarketplaceOrderByTracking({ trackingNo: validation.code }).catch(() => null);
+      const marketplaceOrderPromise = findMarketplaceOrderForScan(validation.code).catch(() => null);
       let result;
 
       if (firestorePrimary?.id) {
@@ -2043,7 +2040,7 @@ function App() {
               orderId: order.id,
               attemptId: order.sheetSyncAttemptId || '',
             }).catch(() => false);
-            const marketplaceOrder = await findMarketplaceOrderByTracking({ trackingNo: validation.code }).catch(() => null);
+            const marketplaceOrder = await findMarketplaceOrderForScan(validation.code).catch(() => null);
             const sheetResult = await runWithGoogleRetry((accessToken, googleConfig) =>
               appendAdminScanGoogle({
                 token: accessToken,
@@ -2099,7 +2096,7 @@ function App() {
 
       const scanUser = firebaseUser ?? user;
       const scanEmail = user.email;
-      const marketplaceOrderPromise = findMarketplaceOrderByTracking({ trackingNo: validation.code }).catch(() => null);
+      const marketplaceOrderPromise = findMarketplaceOrderForScan(validation.code).catch(() => null);
       let result;
 
       if (firestorePrimary?.id) {

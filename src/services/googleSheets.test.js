@@ -11,10 +11,97 @@ import {
   buildDailyRowDataTypeFormattingRequests,
   buildDailyRowUpdateData,
   findCancellationRow,
+  findMarketplaceOrderGoogle,
   getDailySheetPropertiesForMarketplaceBackfill,
+  upsertMarketplaceOrdersGoogle,
   updateScanIssueGoogle,
   apiFetch,
 } from './googleSheets.js';
+
+test('Marketplace Orders upsert keeps unchanged rows and appends only new order keys', async () => {
+  const originalFetch = globalThis.fetch;
+  const spreadsheetId = 'marketplace-orders-upsert-test';
+  const existingRows = [[
+    'shopee__ORDER-1', 'TH123', 'TH123', 'shopee', 'ORDER-1', '["SKU-1"]',
+    '[{"name":"Coffee","quantity":1}]', '1', 'READY', '', '2026-08-30 09:00:00', '2026-08-30T02:00:00.000Z',
+  ]];
+  const appended = [];
+  const jsonResponse = (payload) => new Response(JSON.stringify(payload), {
+    status: 200, headers: { 'Content-Type': 'application/json' },
+  });
+
+  globalThis.fetch = async (url, options = {}) => {
+    const decodedUrl = decodeURIComponent(String(url));
+    const method = options.method ?? 'GET';
+    const body = options.body ? JSON.parse(options.body) : null;
+    if (decodedUrl.includes(`/spreadsheets/${spreadsheetId}?fields=`)) {
+      return jsonResponse({ sheets: [{ properties: { sheetId: 701, title: 'Marketplace Orders', gridProperties: { rowCount: 1000, columnCount: 12 } } }] });
+    }
+    if (decodedUrl.includes("'Marketplace Orders'!A1:L1") && method === 'PUT') return jsonResponse({});
+    if (decodedUrl.includes("'Marketplace Orders'!A2:L") && method === 'GET') return jsonResponse({ values: existingRows });
+    if (decodedUrl.includes("'Marketplace Orders'!A:L:append") && method === 'POST') {
+      appended.push(...body.values);
+      return jsonResponse({});
+    }
+    throw new Error(`Unexpected request: ${method} ${decodedUrl}`);
+  };
+
+  try {
+    const result = await upsertMarketplaceOrdersGoogle({
+      token: 'token', config: { master: { id: spreadsheetId } }, groups: [
+        {
+          platform: 'shopee', orderId: 'ORDER-1', trackingNo: 'TH123', normalizedTrackingNo: 'TH123',
+          marketplaceSkus: ['SKU-1'], items: [{ name: 'Coffee', quantity: 1 }], sourceRowCount: 1,
+          sellerOrderStatus: 'READY', expectedShipAt: '', orderedAt: '2026-08-30 09:00:00',
+        },
+        {
+          platform: 'lazada', orderId: 'ORDER-2', trackingNo: 'TH456', normalizedTrackingNo: 'TH456',
+          marketplaceSkus: ['SKU-2'], items: [{ name: 'Tea', quantity: 2 }], sourceRowCount: 1,
+          sellerOrderStatus: 'READY', expectedShipAt: '', orderedAt: '2026-08-30 10:00:00',
+        },
+      ],
+    });
+
+    assert.deepEqual(result, { imported: 1, updated: 0, unchanged: 1, collisions: 0, stored: 2 });
+    assert.equal(appended.length, 1);
+    assert.equal(appended[0][0], 'lazada__ORDER-2');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('Marketplace Orders lookup returns one exact normalized tracking match', async () => {
+  const originalFetch = globalThis.fetch;
+  const spreadsheetId = 'marketplace-orders-lookup-test';
+  const jsonResponse = (payload) => new Response(JSON.stringify(payload), {
+    status: 200, headers: { 'Content-Type': 'application/json' },
+  });
+  globalThis.fetch = async (url, options = {}) => {
+    const decodedUrl = decodeURIComponent(String(url));
+    const method = options.method ?? 'GET';
+    if (decodedUrl.includes(`/spreadsheets/${spreadsheetId}?fields=`)) {
+      return jsonResponse({ sheets: [{ properties: { sheetId: 702, title: 'Marketplace Orders', gridProperties: { rowCount: 1000, columnCount: 12 } } }] });
+    }
+    if (decodedUrl.includes("'Marketplace Orders'!A1:L1") && method === 'PUT') return jsonResponse({});
+    if (decodedUrl.includes("'Marketplace Orders'!A2:L") && method === 'GET') {
+      return jsonResponse({ values: [[
+        'tiktok__ORDER-3', 'THT-123', 'THT-123', 'tiktok', 'ORDER-3', '["SKU-3"]',
+        '[{"name":"Drip","quantity":1}]', '1', 'READY', '', '', '2026-08-30T02:00:00.000Z',
+      ]] });
+    }
+    throw new Error(`Unexpected request: ${method} ${decodedUrl}`);
+  };
+  try {
+    const order = await findMarketplaceOrderGoogle({
+      token: 'token', config: { master: { id: spreadsheetId } }, trackingNo: 'THT123',
+    });
+    assert.equal(order.orderId, 'ORDER-3');
+    assert.deepEqual(order.marketplaceSkus, ['SKU-3']);
+    assert.equal(order.status, 'READY');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
 
 test('buildDailyRowUpdateData restores native RAW types after formatted-value reads', () => {
   const row = Array(23).fill('');
