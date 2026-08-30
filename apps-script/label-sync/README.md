@@ -37,8 +37,8 @@ The script writes no recipient address to its `Label Sync Log` audit tab.
 
 1. Keep the same `SPREADSHEET_ID` Script Property used by Label Sync.
 2. Upload one Seller Center CSV/XLSX from the web app. It creates the `Marketplace Orders` tab automatically.
-3. Run `setupMarketplaceOrderMaintenance` once and approve permissions. The hourly trigger is intentionally low-frequency because ordinary imports are already idempotent and happen through the signed-in web app.
-4. Optionally run `runMarketplaceOrderMaintenance` manually; it only removes duplicate rows with the same Order Key, retaining the newest `Updated At` value.
+3. Run `setupMarketplaceOrderMaintenance` once and approve permissions. The five-minute trigger removes duplicate catalogue rows and orders already matched by an Admin or Packer scan.
+4. Optionally run `runMarketplaceOrderMaintenance` manually. It examines the two newest date tabs only, so the recurring job stays bounded as history grows.
 
 ## Behaviour and safeguards
 
