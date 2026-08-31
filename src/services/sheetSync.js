@@ -1,3 +1,5 @@
+import { userErrorMessage } from './authErrors.js';
+
 export const SHEET_SYNC_STALE_MS = 2 * 60 * 1000;
 
 // `synced` is retained only for documents written before the outbox rollout.
@@ -33,7 +35,7 @@ export function prioritizeSheetSyncCandidates({ failed = [], pending = [], maxRo
 }
 
 export function buildSheetSyncFailureUpdates(orders = [], error = null) {
-  const message = String(error?.message ?? error ?? 'Unknown sync error');
+  const message = userErrorMessage(error, 'ซิงก์ Google Sheet ไม่สำเร็จ');
   return orders.map((order) => ({
     orderId: order.id,
     attemptId: order.sheetSyncAttemptId ?? '',

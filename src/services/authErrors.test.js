@@ -6,9 +6,12 @@ import {
   FIREBASE_AUTH_REQUIRED,
   FIREBASE_AUTH_REQUIRED_MESSAGE,
   FIRESTORE_PERMISSION_DENIED_MESSAGE,
+  apiResponseErrorMessage,
   createFirebaseAuthRequiredError,
   isAuthExpiredError,
+  oauthCallbackErrorMessage,
   scanErrorMessage,
+  userErrorMessage,
 } from './authErrors.js';
 
 test('an expired session is recognised however the backend words it', () => {
@@ -51,4 +54,29 @@ test('a missing Firebase session has a safe, actionable error code and message',
 test('every other error keeps its own Thai message', () => {
   assert.equal(scanErrorMessage({ code: 'GOOGLE_TIMEOUT', message: 'เชื่อมต่อ Google ไม่สำเร็จ' }), 'เชื่อมต่อ Google ไม่สำเร็จ');
   assert.equal(scanErrorMessage({}), 'บันทึกไม่สำเร็จ กรุณาลองใหม่');
+});
+
+test('a malformed API error response still produces a Thai status-banner message', () => {
+  assert.equal(
+    apiResponseErrorMessage({}, 502),
+    'ระบบตอบกลับไม่สำเร็จ (รหัส 502) กรุณาลองใหม่',
+  );
+  assert.equal(
+    apiResponseErrorMessage({ error: 'ไม่พบเซสชัน Google' }, 401),
+    'ไม่พบเซสชัน Google',
+  );
+});
+
+test('OAuth callback errors never echo query-string details into the UI', () => {
+  assert.equal(oauthCallbackErrorMessage('access_denied'), 'ยกเลิกการเข้าสู่ระบบ Google แล้ว');
+  assert.equal(
+    oauthCallbackErrorMessage('server_error', 'client_secret=should-not-appear'),
+    'Google ไม่อนุมัติการเข้าสู่ระบบ กรุณาลองใหม่',
+  );
+});
+
+test('unexpected SDK errors do not leak English or internal details into Thai UI', () => {
+  assert.equal(userErrorMessage(new Error('Missing or insufficient permissions.')), 'ดำเนินการไม่สำเร็จ กรุณาลองใหม่');
+  assert.equal(userErrorMessage(new Error('Google ตอบสนองช้าเกินกำหนด')), 'Google ตอบสนองช้าเกินกำหนด');
+  assert.equal(scanErrorMessage(new Error('Firestore unavailable')), 'บันทึกไม่สำเร็จ กรุณาลองใหม่');
 });

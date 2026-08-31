@@ -14,6 +14,7 @@ import {
 } from 'firebase/firestore';
 import { firebaseAuth, firestoreDb, isFirebaseConfigured, serverTimestamp } from './firebase.js';
 import { nextCalendarDate } from './calendarDate.js';
+import { userErrorMessage } from './authErrors.js';
 import {
   isSheetSyncClaimable,
   prioritizeSheetSyncCandidates,
@@ -360,12 +361,14 @@ async function getPendingOrdersForMissingCheck(pageSize = 500) {
     });
   } catch (error) {
     // Newest-first needs the (status, admin.scannedAt) composite index. While that index is
-    // still building, sweep unordered instead of blanking the badge. The fallback stays
-    // uncapped on purpose: without an order, Firestore returns documents by id — that is
-    // `date__courier__code`, so a cap there would keep the oldest stale orders and drop
-    // exactly the recent ones the badge is meant to count.
+    // still building, sweep unordered instead of blanking the badge. This order is less
+    // useful than newest-first, but the periodic badge must never turn an index rollout
+    // into an unbounded read of every pending order.
     console.warn('Pending badge query failed; using unordered fallback:', error);
-    return collectFirestorePages(fetchPage(false), { pageSize });
+    return collectFirestorePages(fetchPage(false), {
+      pageSize,
+      maxItems: PENDING_BADGE_SCAN_LIMIT,
+    });
   }
 }
 
@@ -870,9 +873,10 @@ export async function markSheetSyncResult({ orderId: id, attemptId = '', ok, res
     const current = snap.data();
     if (attemptId && current.sheetSyncAttemptId !== attemptId) return false;
     const nextStatus = ok ? 'verified' : 'failed';
+    const safeError = ok ? '' : userErrorMessage(error, 'ซิงก์ Google Sheet ไม่สำเร็จ');
     transaction.update(ref, {
       sheetSyncStatus: nextStatus,
-      sheetSyncError: ok ? '' : String(error?.message ?? error ?? 'Unknown sync error'),
+      sheetSyncError: safeError,
       sheetSyncedAt: ok ? serverTimestamp() : null,
       sheetVerifiedAt: ok ? serverTimestamp() : null,
       sheetVerifiedAtIso: ok ? nowIso() : '',
@@ -897,7 +901,7 @@ export async function markSheetSyncResult({ orderId: id, attemptId = '', ok, res
         type,
         detail: ok
           ? { attemptId: current.sheetSyncAttemptId ?? '', sheetStatus: result?.status ?? '' }
-          : { attemptId: current.sheetSyncAttemptId ?? '', error: String(error?.message ?? error ?? 'Unknown sync error').slice(0, 500) },
+          : { attemptId: current.sheetSyncAttemptId ?? '', error: safeError.slice(0, 500) },
       });
     }
     return true;

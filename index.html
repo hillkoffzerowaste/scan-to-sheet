@@ -8,6 +8,18 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" type="image/svg+xml" href="/icons/icon.svg" />
     <link rel="apple-touch-icon" href="/icons/icon.svg" />
+    <script>
+      (() => {
+        let theme = 'light';
+        try {
+          theme = localStorage.getItem('scan-to-sheet-theme') === 'dark' ? 'dark' : 'light';
+        } catch {
+          // Storage can be unavailable in privacy-restricted browser contexts.
+        }
+        document.documentElement.dataset.theme = theme;
+        document.documentElement.style.colorScheme = theme;
+      })();
+    </script>
     <title>HILLKOFF Scan to Sheet</title>
   </head>
   <body>

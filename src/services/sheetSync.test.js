@@ -14,7 +14,15 @@ test('builds failure updates for every claimed Sheet sync', () => {
     attemptId,
     error: error.message,
   })), [
-    { orderId: 'order-1', attemptId: 'attempt-1', error: 'Google API request timed out' },
-    { orderId: 'order-2', attemptId: 'attempt-2', error: 'Google API request timed out' },
+    { orderId: 'order-1', attemptId: 'attempt-1', error: 'ซิงก์ Google Sheet ไม่สำเร็จ' },
+    { orderId: 'order-2', attemptId: 'attempt-2', error: 'ซิงก์ Google Sheet ไม่สำเร็จ' },
   ]);
+});
+
+test('keeps an actionable Thai Sheet error for recovery diagnostics', () => {
+  const [update] = buildSheetSyncFailureUpdates(
+    [{ id: 'order-1' }],
+    new Error('Google ตอบสนองช้าเกินกำหนด กรุณาลองใหม่'),
+  );
+  assert.equal(update.error.message, 'Google ตอบสนองช้าเกินกำหนด กรุณาลองใหม่');
 });

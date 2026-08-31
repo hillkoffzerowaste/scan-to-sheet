@@ -111,7 +111,13 @@ import { hasDeploymentUpdate } from './services/deploymentUpdate.js';
 import { getScanPopupCourierOptions, getScanPopupStatusMeta } from './services/scanPopup.js';
 import { DEFAULT_SCAN_METHOD } from './services/scanPreferences.js';
 import { barcodeCharacterFromKeyEvent } from './services/barcodeKeyboard.js';
-import { createFirebaseAuthRequiredError, scanErrorMessage } from './services/authErrors.js';
+import {
+  apiResponseErrorMessage,
+  createFirebaseAuthRequiredError,
+  oauthCallbackErrorMessage,
+  scanErrorMessage,
+  userErrorMessage,
+} from './services/authErrors.js';
 import { shouldPollMissingOrders } from './services/missingCheckPolicy.js';
 import { getSheetRecoveryDates } from './services/sheetRecoveryDates.js';
 import { buildSheetSyncFailureUpdates, isSheetSyncVerified } from './services/sheetSync.js';
@@ -192,7 +198,7 @@ async function apiJson(url, options = {}) {
     clearTimeout(t);
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
-      throw new Error(data.error || `API error ${response.status}`);
+      throw new Error(apiResponseErrorMessage(data, response.status));
     }
     return data;
   } catch (error) {
@@ -301,7 +307,9 @@ function App() {
   const [scanFlash, setScanFlash] = useState(false);
   const [scanPopupOpen, setScanPopupOpen] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
-  const [theme, setTheme] = useState(() => localStorage.getItem(THEME_KEY) || 'light');
+  const [theme, setTheme] = useState(() => (
+    document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light'
+  ));
   const [scanMethod, setScanMethod] = useState(DEFAULT_SCAN_METHOD);
   const [allowAnyTrackingFormat, setAllowAnyTrackingFormat] = useState(false);
   const [cameraActive, setCameraActive] = useState(false);
@@ -494,11 +502,11 @@ function App() {
       } catch (sheetError) {
         setMarketplaceUploadResult({
           type: 'warning',
-          message: `บันทึก Marketplace Orders ใหม่ ${result.imported} ออเดอร์ อัปเดตข้อมูลเดิม ${result.updated} ออเดอร์แล้ว แต่การ backfill Google Sheet ยังไม่สำเร็จ: ${sheetError.message}${skippedNote}${untrackedNote}${missingDateNote}${collisionNote}`,
+          message: `บันทึก Marketplace Orders ใหม่ ${result.imported} ออเดอร์ อัปเดตข้อมูลเดิม ${result.updated} ออเดอร์แล้ว แต่การ backfill Google Sheet ยังไม่สำเร็จ: ${userErrorMessage(sheetError)}${skippedNote}${untrackedNote}${missingDateNote}${collisionNote}`,
         });
       }
     } catch (error) {
-      setMarketplaceUploadResult({ type: 'error', message: error.message });
+      setMarketplaceUploadResult({ type: 'error', message: userErrorMessage(error, 'นำเข้าไฟล์ไม่สำเร็จ กรุณาตรวจสอบไฟล์แล้วลองใหม่') });
     } finally {
       setMarketplaceUploadBusy(false);
     }
@@ -543,7 +551,6 @@ function App() {
     const code = params.get('code');
     const oauthState = params.get('state');
     const error = params.get('error');
-    const errorDescription = params.get('error_description');
 
     if (!code && !error) {
       handleFirebaseRedirectOrRestore();
@@ -559,7 +566,7 @@ function App() {
       setStatus({
         type: 'error',
         title: 'เข้าสู่ระบบไม่สำเร็จ',
-        message: errorDescription || error,
+        message: oauthCallbackErrorMessage(error),
       });
       setBusy(false);
     } else {
@@ -941,7 +948,7 @@ function App() {
       });
       window.location.assign(data.authorizationUrl);
     } catch (error) {
-      setStatus({ type: 'error', title: 'เริ่มเข้าสู่ระบบไม่สำเร็จ', message: error.message });
+      setStatus({ type: 'error', title: 'เริ่มเข้าสู่ระบบไม่สำเร็จ', message: userErrorMessage(error, 'เริ่มเชื่อมต่อ Google ไม่สำเร็จ กรุณาลองใหม่') });
       setBusy(false);
     }
   }
@@ -980,7 +987,7 @@ function App() {
       setStatus({
         type: 'error',
         title: 'Firebase Login ไม่สำเร็จ',
-        message: error.message,
+        message: userErrorMessage(error, 'Firebase ยืนยันตัวตนไม่สำเร็จ กรุณาลองใหม่หรือแจ้งผู้ดูแลระบบ'),
       });
       setBusy(false);
       return;
@@ -1019,7 +1026,7 @@ function App() {
       setStatus({
         type: 'error',
         title: 'เชื่อม Google ไม่สำเร็จ',
-        message: error.message,
+        message: userErrorMessage(error, 'เชื่อมต่อ Google ไม่สำเร็จ กรุณาลองใหม่'),
       });
     } finally {
       setBusy(false);
@@ -1326,7 +1333,7 @@ function App() {
       setStatus({
         type: 'error',
         title: 'โหลดรายการไม่สำเร็จ',
-        message: error.message,
+        message: userErrorMessage(error, 'โหลดรายการไม่สำเร็จ กรุณาลองใหม่'),
       });
     }
   }
@@ -1352,7 +1359,7 @@ function App() {
       setStatus({
         type: 'error',
         title: 'โหลดรายการลง Drive ไม่สำเร็จ',
-        message: error.message,
+        message: userErrorMessage(error, 'โหลดรายการลง Drive ไม่สำเร็จ กรุณาลองใหม่'),
       });
     }
   }
@@ -1527,7 +1534,7 @@ function App() {
       )));
       failed = Math.max(failed, failureUpdates.length);
       if (showStatus) {
-        setStatus({ type: 'error', title: 'อัปเดต Sheet ไม่สำเร็จ', message: error.message });
+        setStatus({ type: 'error', title: 'อัปเดต Sheet ไม่สำเร็จ', message: userErrorMessage(error, 'อัปเดต Google Sheet ไม่สำเร็จ กรุณาลองใหม่') });
       }
       return {
         busy: false,
@@ -1576,7 +1583,7 @@ function App() {
       setNewCourierName('');
       setStatus({ type: 'success', title: 'เพิ่มขนส่งแล้ว', message: `${courier} ใช้ได้ทั้งหน้าแพ็กและรับเข้า Drive` });
     } catch (error) {
-      setStatus({ type: 'error', title: 'เพิ่มขนส่งไม่สำเร็จ', message: error.message });
+      setStatus({ type: 'error', title: 'เพิ่มขนส่งไม่สำเร็จ', message: userErrorMessage(error, 'เพิ่มขนส่งไม่สำเร็จ กรุณาลองใหม่') });
     } finally {
       setAddingCourier(false);
     }
@@ -1765,7 +1772,7 @@ function App() {
             setStatus({
               type: 'warning',
               title: 'บันทึก Firestore แล้ว แต่ Sheet ยังไม่สำเร็จ',
-              message: `${validation.code} ถูกเก็บไว้ในคิวกู้คืนอัตโนมัติ: ${sheetError.message}`,
+              message: `${validation.code} ถูกเก็บไว้ในคิวกู้คืนอัตโนมัติ: ${userErrorMessage(sheetError, 'ซิงก์ Google Sheet ไม่สำเร็จ กรุณารอระบบลองใหม่')}`,
             });
             showCameraMessage(`${validation.code} รอซิงก์ Sheet`, 'warning');
             backgroundResult = {
@@ -2076,7 +2083,7 @@ function App() {
             setStatus({
               type: 'warning',
               title: 'บันทึก Firestore แล้ว แต่ Sheet ยังไม่สำเร็จ',
-              message: `${validation.code} ถูกเก็บไว้ในคิวกู้คืนอัตโนมัติ: ${sheetError.message}`,
+              message: `${validation.code} ถูกเก็บไว้ในคิวกู้คืนอัตโนมัติ: ${userErrorMessage(sheetError, 'ซิงก์ Google Sheet ไม่สำเร็จ กรุณารอระบบลองใหม่')}`,
             });
             showCameraMessage(`${validation.code} รอซิงก์ Sheet`, 'warning');
           }
@@ -2467,11 +2474,12 @@ function App() {
     } catch (error) {
       cameraRef.current = null;
       setCameraActive(false);
-      showCameraMessage(error.message, 'error');
+      const message = userErrorMessage(error, 'เปิดกล้องไม่สำเร็จ กรุณาตรวจสอบสิทธิ์กล้อง');
+      showCameraMessage(message, 'error');
       setStatus({
         type: 'error',
         title: 'เปิดกล้องไม่สำเร็จ',
-        message: error.message,
+        message,
       });
       playTone('error');
     }
@@ -2544,7 +2552,7 @@ function App() {
       setStatus({
         type: 'error',
         title: 'ตรวจสอบไม่สำเร็จ',
-        message: error.message,
+        message: userErrorMessage(error, 'ตรวจสอบออเดอร์ตกหล่นไม่สำเร็จ กรุณาลองใหม่'),
       });
     } finally {
       setMissingBusy(false);
@@ -2682,7 +2690,7 @@ function App() {
       setStatus({
         type: 'error',
         title: 'ค้นหาไม่สำเร็จ',
-        message: error.message,
+        message: userErrorMessage(error, 'ค้นหารายการไม่สำเร็จ กรุณาลองใหม่'),
       });
     } finally {
       setSearchBusy(false);
@@ -2727,7 +2735,7 @@ function App() {
       setStatus({
         type: 'error',
         title: 'บันทึกสินค้าเสียหายไม่สำเร็จ',
-        message: error.message,
+        message: userErrorMessage(error, 'บันทึกสินค้าเสียหายไม่สำเร็จ กรุณาลองใหม่'),
       });
       playTone('error');
     } finally {
@@ -2783,7 +2791,7 @@ function App() {
       setStatus({
         type: 'error',
         title: 'สร้างรายงานไม่สำเร็จ',
-        message: error.message,
+        message: userErrorMessage(error, 'สร้างรายงานไม่สำเร็จ กรุณาลองใหม่'),
       });
     } finally {
       setReportBusy(false);
@@ -2832,7 +2840,7 @@ function App() {
       setStatus({
         type: 'error',
         title: 'ดึงข้อมูลย้อนหลังไม่สำเร็จ',
-        message: error.message,
+        message: userErrorMessage(error, 'ดึงข้อมูลย้อนหลังไม่สำเร็จ กรุณาลองใหม่'),
       });
     } finally {
       setBackfillBusy(false);

@@ -2,7 +2,7 @@ import test from 'node:test';
 import crypto from 'node:crypto';
 import assert from 'node:assert/strict';
 
-import { createOAuthTransaction, verifyOAuthTransaction } from './_auth.js';
+import { createOAuthTransaction, fetchWithTimeout, verifyOAuthTransaction } from './_auth.js';
 
 test('OAuth transaction binds state and PKCE verifier and may only be consumed once', () => {
   const transaction = createOAuthTransaction({
@@ -14,6 +14,21 @@ test('OAuth transaction binds state and PKCE verifier and may only be consumed o
   assert.equal(transaction.codeChallenge, crypto.createHash('sha256').update(transaction.codeVerifier).digest('base64url'));
   assert.equal(verifyOAuthTransaction({ expectedState: transaction.state, receivedState: transaction.state }), true);
   assert.equal(verifyOAuthTransaction({ expectedState: transaction.state, receivedState: 'attacker-state' }), false);
+});
+
+test('upstream API calls stop instead of hanging until the serverless platform kills them', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (_url, { signal }) => new Promise((_resolve, reject) => {
+    signal.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })));
+  });
+  try {
+    await assert.rejects(
+      fetchWithTimeout('https://upstream.invalid', {}, 5),
+      (error) => error.code === 'UPSTREAM_TIMEOUT',
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 import { API_ERRORS, redactSecrets, sendError } from './_auth.js';

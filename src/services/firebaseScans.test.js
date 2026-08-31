@@ -103,3 +103,12 @@ test('primary scans confirm before their background Marketplace lookup', async (
     'Marketplace lookup must begin after Firestore primary confirmation starts',
   );
 });
+
+test('pending badge fallback remains capped while the composite index is unavailable', async () => {
+  const source = await readFile(new URL('./firebaseScans.js', import.meta.url), 'utf8');
+  const fallback = source.match(
+    /console\.warn\('Pending badge query failed; using unordered fallback:', error\);([\s\S]*?)\n  }\n}/,
+  )?.[1] ?? '';
+
+  assert.match(fallback, /collectFirestorePages\(fetchPage\(false\), \{[\s\S]*maxItems: PENDING_BADGE_SCAN_LIMIT,/);
+});

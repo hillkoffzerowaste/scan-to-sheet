@@ -6,6 +6,22 @@ const SESSION_COOKIE = 'scan_to_sheet_session';
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30;
 const OAUTH_TRANSACTION_COOKIE = 'scan_to_sheet_oauth_transaction';
 const OAUTH_TRANSACTION_TTL_SECONDS = 10 * 60;
+export const UPSTREAM_TIMEOUT_MS = 8_000;
+
+export async function fetchWithTimeout(url, options = {}, timeoutMs = UPSTREAM_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      throw Object.assign(new Error('Upstream request timed out'), { code: 'UPSTREAM_TIMEOUT' });
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 function getRedisConfig() {
   const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
@@ -38,7 +54,7 @@ export async function redisCommand(command) {
     throw new Error('Missing Vercel KV REST environment variables');
   }
 
-  const response = await fetch(`${url}/pipeline`, {
+  const response = await fetchWithTimeout(`${url}/pipeline`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,
@@ -201,7 +217,7 @@ export async function refreshAccessToken(refreshToken) {
 }
 
 export async function fetchProfile(accessToken) {
-  const response = await fetch(GOOGLE_USERINFO_URL, {
+  const response = await fetchWithTimeout(GOOGLE_USERINFO_URL, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
     },
@@ -275,7 +291,7 @@ function readCookie(req, name) {
 }
 
 async function googleTokenRequest(body) {
-  const response = await fetch(GOOGLE_TOKEN_URL, {
+  const response = await fetchWithTimeout(GOOGLE_TOKEN_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',

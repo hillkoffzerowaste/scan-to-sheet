@@ -38,6 +38,26 @@ export function createFirebaseAuthRequiredError() {
 }
 
 /**
+ * API endpoints normally return their own Thai message. A proxy, timeout page, or malformed
+ * response has no such payload, so keep the fallback safe for the status banner as well.
+ */
+export function apiResponseErrorMessage(payload, status) {
+  const message = typeof payload?.error === 'string' ? payload.error.trim() : '';
+  return message || `ระบบตอบกลับไม่สำเร็จ (รหัส ${status}) กรุณาลองใหม่`;
+}
+
+export function oauthCallbackErrorMessage(code) {
+  return code === 'access_denied'
+    ? 'ยกเลิกการเข้าสู่ระบบ Google แล้ว'
+    : 'Google ไม่อนุมัติการเข้าสู่ระบบ กรุณาลองใหม่';
+}
+
+export function userErrorMessage(error, fallback = 'ดำเนินการไม่สำเร็จ กรุณาลองใหม่') {
+  const message = String(error?.message ?? '').trim();
+  return /[ก-๙]/.test(message) ? message : fallback;
+}
+
+/**
  * Message for a failed scan. Anything that is not an expired session keeps the error's own
  * message, which is where the existing Thai `throw new Error(...)` texts live.
  */
@@ -47,5 +67,5 @@ export function scanErrorMessage(error) {
   if (String(error?.code ?? '').toLowerCase().includes('permission-denied')) {
     return FIRESTORE_PERMISSION_DENIED_MESSAGE;
   }
-  return error?.message || 'บันทึกไม่สำเร็จ กรุณาลองใหม่';
+  return userErrorMessage(error, 'บันทึกไม่สำเร็จ กรุณาลองใหม่');
 }
