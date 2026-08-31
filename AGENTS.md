@@ -164,6 +164,11 @@ firestore.rules              ต้องแก้ตามเมื่อเพ
 - `scripts/marketplace-sync/` ใช้ **firebase-admin ซึ่งข้าม security rules** เอกสารที่ worker สร้างอาจมี field ไม่ครบตามที่ `firestore.rules` บังคับ ทำให้ client เขียนทับไม่ผ่านและ batch ล้มทั้งชุด
 - เพิ่ม field ใหม่ต้องแก้ `firestore.rules` ด้วย
 
+**Build / JSX**
+
+- **โปรเจกต์นี้ไม่มี `vite.config.js`** JSX จึงถูกแปลงด้วย esbuild แบบ classic ไม่ใช่ automatic runtime → **ทุกไฟล์ `.jsx` ต้อง `import React from 'react'` เอง** ไม่งั้นพังเป็น `ReferenceError: React is not defined` ตอน render **ไม่ใช่ตอน build** (`npm run build` ผ่านเฉยเลย) — เจอครั้งแรกตอนแยก `ReportsView` ออกจาก `App.jsx`
+- ผลที่ตามมา: **`npm run build` ผ่าน ไม่ได้แปลว่า component ใหม่ render ได้** ต้องเปิดหน้าจริงด้วย preview tool แล้วกดเข้าไปในหน้านั้นเสมอ
+
 **เวลา**
 
 - แอปทำงานตามเวลา **Asia/Bangkok (UTC+7)** ค่าวันเวลาในชีตเป็นเวลาท้องถิ่น ถ้าจะแปลงเป็น instant ต้องหักออฟเซ็ต — เคยมีบั๊กที่คลาดไป 7 ชั่วโมงเพราะใช้ `Date.UTC` ตรงๆ
