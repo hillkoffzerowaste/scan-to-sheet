@@ -337,11 +337,12 @@ async function getPendingOrdersForMissingCheck(pageSize = 500) {
   }
 
   const filter = getMissingOrderQueryFilters({ summaryOnly: true });
-  const fetchPage = (newestFirst) => async (cursor, size) => {
+  const fetchPage = (ordering) => async (cursor, size) => {
     const constraints = [
       collection(firestoreDb, 'orders'),
       where(filter.field, filter.operator, filter.value),
-      ...(newestFirst ? [orderBy('admin.scannedAt', 'desc')] : []),
+      ...(ordering === 'scannedAt' ? [orderBy('admin.scannedAt', 'desc')] : []),
+      ...(ordering === 'docId' ? [orderBy(documentId(), 'desc')] : []),
       limit(size),
     ];
     if (cursor) {
@@ -355,17 +356,22 @@ async function getPendingOrdersForMissingCheck(pageSize = 500) {
   };
 
   try {
-    return await collectFirestorePages(fetchPage(true), {
+    return await collectFirestorePages(fetchPage('scannedAt'), {
       pageSize,
       maxItems: PENDING_BADGE_SCAN_LIMIT,
     });
   } catch (error) {
     // Newest-first needs the (status, admin.scannedAt) composite index. While that index is
-    // still building, sweep unordered instead of blanking the badge. This order is less
-    // useful than newest-first, but the periodic badge must never turn an index rollout
-    // into an unbounded read of every pending order.
-    console.warn('Pending badge query failed; using unordered fallback:', error);
-    return collectFirestorePages(fetchPage(false), {
+    // still building, fall back to ordering by document id descending: the id is
+    // `date__courier__code`, so that still reads the most recent days first — and an equality
+    // filter combined with `__name__` ordering is served by Firestore's automatic single-field
+    // index, so it needs no composite index, which is the whole reason this branch exists.
+    //
+    // An earlier version swept unordered and had to choose between an unbounded read and a cap
+    // that keeps the oldest documents while dropping exactly the recent ones the badge counts.
+    // Ordering by id removes that choice: the read stays capped and the cap keeps the newest.
+    console.warn('Pending badge query failed; falling back to document-id order:', error);
+    return collectFirestorePages(fetchPage('docId'), {
       pageSize,
       maxItems: PENDING_BADGE_SCAN_LIMIT,
     });

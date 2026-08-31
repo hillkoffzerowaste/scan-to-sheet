@@ -104,11 +104,14 @@ test('primary scans confirm before their background Marketplace lookup', async (
   );
 });
 
-test('pending badge fallback remains capped while the composite index is unavailable', async () => {
+test('pending badge fallback stays capped and still reads the newest orders first', async () => {
   const source = await readFile(new URL('./firebaseScans.js', import.meta.url), 'utf8');
-  const fallback = source.match(
-    /console\.warn\('Pending badge query failed; using unordered fallback:', error\);([\s\S]*?)\n  }\n}/,
-  )?.[1] ?? '';
+  const marker = "console.warn('Pending badge query failed; falling back to document-id order:', error);";
+  const fallback = source.slice(source.indexOf(marker));
 
-  assert.match(fallback, /collectFirestorePages\(fetchPage\(false\), \{[\s\S]*maxItems: PENDING_BADGE_SCAN_LIMIT,/);
+  // ต้องมีทั้งสองอย่าง: cap กัน quota และลำดับที่ทำให้ cap เก็บของใหม่ ไม่ใช่ของเก่า
+  assert.ok(source.includes(marker), 'fallback marker missing');
+  assert.match(fallback, /collectFirestorePages\(fetchPage\('docId'\)/);
+  assert.match(fallback, /maxItems: PENDING_BADGE_SCAN_LIMIT/);
+  assert.ok(source.includes("ordering === 'docId' ? [orderBy(documentId(), 'desc')]"), 'doc-id ordering missing');
 });
