@@ -12,17 +12,25 @@
   --muted: #5c6b69;
   --line: #dde3e2;
   --line-strong: #c7d0ce;
-  /* Brand teal, nudged from #058581 to clear the 4.5 AA floor against white — the original
-     measures 4.489, so every white-on-primary fill in the app failed by a hair. */
-  --primary: #04817d;
-  --primary-strong: #046662;
-  --primary-soft: rgba(5,133,129,0.1);
-  /* Fill for surfaces that carry white text. Separate from --primary because in dark mode
-     --primary must stay light enough to read AS text on a dark surface, which makes it far
-     too light to sit behind white. */
-  --primary-fill: #04817d;
-  --on-primary: #ffffff;
-  --focus-ring: rgba(5,133,129,0.24);
+  /* teal ของ Flip7 (#2BA8A2) ทั้งเฉด: --primary-fill ใช้ค่าตรงสเปก ส่วนค่าที่ต้องอ่านเป็น
+     "ตัวหนังสือ" ต้องไล่ให้เข้มลงในเฉดเดิม เพราะ #2BA8A2 บนขาววัดได้ 2.906 และ Primary Dark
+     #1E8C86 ของ Flip7 เองก็ได้เพียง 4.077 (ผ่านเฉพาะตัวใหญ่)
+     --primary #1e7671 วัดได้ 5.429 (ขาว) / 5.127 (ครีม) / 4.843 (page) / 5.062 (surface-soft) */
+  --primary: #1e7671;
+  --primary-strong: #1a6561;
+  /* Flip7 Primary BG ตรงสเปก เป็นสีทึบไม่ใช่ tint โปร่ง */
+  --primary-soft: #E8F6F5;
+  /* พื้นตรงสเปก Flip7 + ตัวหนังสือเข้ม เพราะตัวขาวบน #2BA8A2 ได้ 2.906 ไม่ผ่าน
+     ตัวเข้ม #0a2320 บนพื้นนี้ได้ 5.671 — หลักเดียวกับ gold/coral/sky ในระบบนี้ */
+  --primary-fill: #2BA8A2;
+  --on-primary: #0a2320;
+  /* ตัวหนังสือบนพื้นแดง ยังเป็นขาว (6.53 light / 4.629 dark) แยกจาก --on-primary
+     ที่กลายเป็นตัวเข้มไปแล้ว ไม่งั้นป้ายนับงานค้างจะได้ตัวเข้มบนแดง */
+  --on-danger: #ffffff;
+  /* ตัวหนังสือบน --topbar-bg ซึ่งเข้มทั้งสองธีม แยกเป็น token เพราะการฝังขาวไว้ตรงๆ คือ
+     ต้นเหตุที่ตัวหนังสือในแท็บ active อ่านไม่ออกตอนพื้นเปลี่ยนเป็น teal สดของ Flip7 (2.906) */
+  --on-topbar: #ffffff;
+  --focus-ring: rgba(43,168,162,0.28);
   --brand-gold: #c89b3c;
   /* ── สำเนียง Flip7: gold / coral / sky ──
      กฎเดียวกับ --primary vs --primary-fill: สีที่อ่านออกเป็น "ตัวหนังสือ" กับสีที่เอาอะไร
@@ -55,10 +63,9 @@
   /* control ที่นั่งบน --topbar-bg ต้องใช้ขอบสว่าง ค่า 0.34 เดิมได้ 2.109 (light) / 2.963 (dark)
      ตกเกณฑ์ 3:1 ทั้งสองธีม ค่านี้ได้ 3.206 / 5.418 — ไม่ต้องพลิกตามธีมเพราะ topbar เข้มทั้งคู่ */
   --topbar-control-line: rgba(255,255,255,0.55);
-  /* Brand chrome that carries white text (topbar). Deliberately darker than --primary:
-     white on #058581 measures 4.49, just under the 4.5 AA floor. Dark in both themes, so
-     anything sitting on it — including the theme toggle's active pill — stays readable. */
-  --topbar-bg: #046662;
+  /* topbar มีตัวขาวทับ จึงต้องเข้มกว่า --primary-fill มาก ขาวบนค่านี้ได้ 6.823
+     เข้มทั้งสองธีมเพื่อให้ทุกอย่างที่นั่งบนมัน รวม pill ของ theme toggle อ่านออก */
+  --topbar-bg: #1a6561;
   /* Darkened from #b45f06, which measured 4.03 against its own 10% tint — the pairing used
      by every warning banner, badge and camera message, so it failed AA systemically. */
   --warning: #9c5205;
@@ -80,10 +87,10 @@
   --shadow-md: 0 1px 3px rgba(16,24,32,0.08);
   --shadow-modal: 0 12px 32px rgba(16,24,32,0.18);
   /* shadow-card ของ Flip7: เงาเป็นสีแบรนด์ ไม่ใช่สีดำ ("don't use plain black shadows") */
-  --shadow-card: 0 2px 10px rgba(4,129,125,0.12);
+  --shadow-card: 0 2px 10px rgba(43,168,162,0.14);
   /* glow เงาสีของ Flip7 ใช้ได้เฉพาะ element ที่กดได้ ตอน hover/focus/active
      การ์ดนิ่งห้ามมี glow ค้าง เพราะจอนี้เปิดทิ้งไว้ทั้งวันและ glow ทุกใบคือ noise */
-  --glow-primary: 0 2px 12px rgba(4,129,125,0.30);
+  --glow-primary: 0 2px 12px rgba(43,168,162,0.34);
   --glow-accent: 0 2px 12px rgba(201,155,60,0.40);
   --glow-coral: 0 2px 12px rgba(239,108,74,0.32);
   --glow-info: 0 2px 12px rgba(93,173,226,0.30);
@@ -106,9 +113,10 @@
   --print-line: #8a949e;
   /* Section hues for the printed roster: one ink and one tint, so the sheet is readable at
      arm's length on the wall and the ink clears 4.5 on its own tint. */
-  --print-accent: #04635f;
-  --print-accent-soft: #e3f0ef;
-  --print-accent-line: #79aeab;
+  --print-accent: #1a6561;
+  --print-accent-soft: #E8F6F5;
+  /* เส้นตารางบนกระดาษ เป็นเส้นตกแต่งไม่ใช่ขอบ control จึงไม่อยู่ใต้เกณฑ์ 3:1 ของ WCAG 1.4.11 */
+  --print-accent-line: #5f9d99;
   /* สีประจำวันแบบไทย (จันทร์เหลือง อังคารชมพู พุธเขียว พฤหัสส้ม ศุกร์ฟ้า เสาร์ม่วง อาทิตย์แดง)
      พนักงานอ่านออกทันทีว่าคอลัมน์ไหนคือวันไหนโดยไม่ต้องไล่หัวตาราง */
   --print-mon: #7a5c00; --print-mon-soft: #fdf6dd;
@@ -132,12 +140,15 @@
   --muted: #9aa5a3;
   --line: #223330;
   --line-strong: #2f4642;
-  --primary: #1aa39d;
-  --primary-strong: #51ddd7;
-  --primary-soft: rgba(26,163,157,0.16);
-  --primary-fill: #0f6f6a;
-  --on-primary: #ffffff;
-  --focus-ring: rgba(81,221,215,0.3);
+  /* Flip7 Primary Light ตรงสเปก อ่านเป็นตัวหนังสือบนพื้นเข้มได้ 7.820 (surface) */
+  --primary: #3CC4BD;
+  --primary-strong: #3ae3db;
+  --primary-soft: rgba(60,196,189,0.16);
+  /* พื้นเดียวกับธีมสว่าง เพราะเป็นพื้นสีสดที่มีตัวหนังสือเข้มทับ จึงไม่ขึ้นกับธีม */
+  --primary-fill: #2BA8A2;
+  --on-primary: #0a2320;
+  --on-danger: #ffffff;
+  --focus-ring: rgba(60,196,189,0.32);
   --brand-gold: #e1ba63;
   /* gold/coral/sky สว่างขึ้นเพื่ออ่านเป็นตัวหนังสือบนพื้นเข้ม แต่ token ที่เป็น "พื้น"
      (-fill) และตัวหนังสือบนพื้นนั้น (--on-*) คงค่าเดิมทั้งสองธีม เพราะมันคือพื้นสีสดที่มี
@@ -152,7 +163,7 @@
   --info-line: rgba(124,192,234,0.35);
   --field: #1d2320;
   --control-line: #637d78;
-  --topbar-bg: #0a2e2c;
+  --topbar-bg: #0d3231;
   --warning: #e8942f;
   --warning-bg: rgba(232,148,47,0.16);
   --warning-line: rgba(232,148,47,0.35);
@@ -169,9 +180,9 @@
   --shadow-sm: 0 1px 2px rgba(0,0,0,0.5);
   --shadow-md: 0 1px 3px rgba(0,0,0,0.55);
   --shadow-modal: 0 12px 32px rgba(0,0,0,0.6);
-  --shadow-card: 0 2px 12px rgba(26,163,157,0.18);
+  --shadow-card: 0 2px 12px rgba(60,196,189,0.18);
   /* glow แรงขึ้นในธีมมืด: เงาสีบนพื้นเข้มถูกกลืนไปมาก ค่าเดียวกับธีมสว่างจะแทบมองไม่เห็น */
-  --glow-primary: 0 2px 14px rgba(26,163,157,0.45);
+  --glow-primary: 0 2px 14px rgba(60,196,189,0.45);
   --glow-accent: 0 2px 14px rgba(255,210,63,0.35);
   --glow-coral: 0 2px 14px rgba(239,108,74,0.42);
   --glow-info: 0 2px 14px rgba(93,173,226,0.38);
@@ -841,7 +852,7 @@ select:hover {
 .schedule-toolbar label, .duty-type-form label { display: flex; align-items: center; gap: 8px; }
 .schedule-toolbar > div { display: flex; gap: 7px; flex-wrap: wrap; }
 .schedule-toolbar button, .duty-type-form button { display: inline-flex; align-items: center; gap: 6px; padding: 8px 10px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--surface-soft); color: var(--text); }
-.schedule-toolbar .primary-action { background: var(--primary-fill); color: var(--on-primary); border-color: var(--primary-fill); }
+.schedule-toolbar .primary-action { background: var(--primary-fill); color: var(--on-primary); border-color: var(--primary); }
 .duty-type-form { display: flex; align-items: end; gap: 8px; padding: 10px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); }
 .duty-type-form label { flex: 1; align-items: stretch; flex-direction: column; }
 .duty-type-list { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -870,7 +881,7 @@ select:hover {
 .staff-form-grid textarea, .staff-modal.compact textarea { min-height: 80px; resize: vertical; }
 .staff-modal footer { justify-content: flex-end; gap: 8px; margin-top: 18px; }
 .staff-modal footer button { padding: 8px 13px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--surface-soft); color: var(--text); }
-.staff-modal footer .primary-action { background: var(--primary-fill); color: var(--on-primary); border-color: var(--primary-fill); }
+.staff-modal footer .primary-action { background: var(--primary-fill); color: var(--on-primary); border-color: var(--primary); }
 .staff-modal-hint { margin: 0; padding: 8px 10px; border-inline-start: 3px solid var(--primary); border-radius: var(--radius-sm); background: var(--surface-soft); color: var(--muted); font-size: .84rem; line-height: 1.6; }
 .duty-entry-badges { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; }
 .duty-badge { padding: 2px 7px; border: 1px solid var(--line-strong); border-radius: var(--radius-full); font-size: .74rem; font-weight: 700; }
@@ -1257,9 +1268,11 @@ select:hover {
   font-weight: 900;
 }
 
+/* ป้ายนับที่อยู่ในปุ่มที่ถมสี teal แล้ว ถ้าใช้พื้น teal เดียวกันจะกลืนหายไป (1.86)
+   สลับเป็นพื้นเข้มกับตัวเลข teal ได้ 5.671 ทั้งตัวหนังสือและขอบเขตของป้าย */
 .courier-button.active strong {
-  background: var(--primary-fill);
-  color: var(--on-primary);
+  background: var(--on-primary);
+  color: var(--primary-fill);
   box-shadow: var(--shadow-sm);
 }
 
@@ -1382,7 +1395,7 @@ select:hover {
 
 .secondary-button {
   background: var(--primary-fill);
-  color: #ffffff;
+  color: var(--on-primary);
   border: 0;
   box-shadow: var(--shadow-sm);
   transform: translateY(0);
@@ -1823,7 +1836,7 @@ select:hover {
   border: 0;
   border-radius: var(--radius-md);
   background: var(--primary-fill);
-  color: #fff;
+  color: var(--on-primary);
   font-weight: 800;
   font-size: 1.05rem;
   box-shadow: var(--shadow-sm);
@@ -2358,7 +2371,7 @@ tbody tr:hover {
   padding: 0 6px;
   border-radius: var(--radius-full);
   background: var(--danger-fill);
-  color: var(--on-primary);
+  color: var(--on-danger);
   font-size: 0.72rem;
   font-weight: 900;
 }
@@ -2435,7 +2448,7 @@ tbody tr:hover {
 }
 
 .side-panel.workflow-packer .courier-button.active {
-  border-color: var(--primary-fill);
+  border-color: var(--primary);
   background: var(--primary-fill);
   color: var(--on-primary);
 }
@@ -2846,7 +2859,7 @@ tbody tr:hover {
 .enterprise-shell .tab-button:first-child.active,
 .enterprise-shell .tab-button:last-child.active {
   background: var(--primary-fill);
-  color: #fff;
+  color: var(--on-primary);
   box-shadow: none;
 }
 
@@ -3032,16 +3045,21 @@ tbody tr:hover {
    วัดแล้ว: ขาวบน --primary-fill = 4.728 (light) / 5.996 (dark) */
 .enterprise-shell .side-panel .courier-button.active {
   background: var(--primary-fill);
-  border-color: var(--primary-fill);
+  border-color: var(--primary);
   color: var(--on-primary);
   box-shadow: none;
 }
 
-.enterprise-shell .side-panel .courier-button.active strong,
 .enterprise-shell .side-panel .courier-button.active span {
   background: transparent;
   color: var(--on-primary);
   box-shadow: none;
+}
+
+/* ป้ายนับเป็นชิปเข้มบนปุ่มที่ถมสี teal เพื่อให้ตัวเลขแยกออกจากชื่อขนส่ง */
+.enterprise-shell .side-panel .courier-button.active strong {
+  background: var(--on-primary);
+  color: var(--primary-fill);
 }
 
 /* โหมด Drive ใช้ sky ตัวหนังสือต้องเข้ม (--on-info) เพราะขาวบน sky วัดได้ 2.459 */
@@ -3364,8 +3382,8 @@ tbody tr:hover {
 
 .enterprise-shell .tab-button.active {
   background: var(--primary-fill) !important;
-  color: #fff !important;
-  border-color: var(--primary-fill) !important;
+  color: var(--on-primary) !important;
+  border-color: var(--primary) !important;
 }
 
 /* Hillkoff brand shell: teal header, white wordmark, and restrained controls. */
@@ -3374,7 +3392,7 @@ tbody tr:hover {
   padding: 20px 24px;
   border-bottom: 3px solid var(--brand-gold);
   background: var(--topbar-bg) !important;
-  color: #fff;
+  color: var(--on-topbar);
   box-shadow: none;
 }
 
@@ -3383,12 +3401,12 @@ tbody tr:hover {
   border: 0;
   border-radius: 0;
   background: transparent !important;
-  color: #fff !important;
+  color: var(--on-topbar) !important;
   box-shadow: none !important;
 }
 
 .enterprise-shell .topbar h1 {
-  color: #fff !important;
+  color: var(--on-topbar) !important;
 }
 
 .enterprise-shell .topbar .title-badge {
@@ -3397,11 +3415,11 @@ tbody tr:hover {
   gap: 9px;
   padding: 0;
   background: transparent !important;
-  color: #fff !important;
+  color: var(--on-topbar) !important;
 }
 
 .enterprise-shell .topbar .title-badge svg {
-  color: #fff !important;
+  color: var(--on-topbar) !important;
 }
 
 .enterprise-shell .brand-wordmark {
@@ -3430,7 +3448,7 @@ tbody tr:hover {
 .enterprise-shell .topbar .ghost-button {
   border-color: var(--topbar-control-line) !important;
   background: rgba(0, 0, 0, 0.12) !important;
-  color: #fff !important;
+  color: var(--on-topbar) !important;
   box-shadow: none !important;
 }
 
@@ -3523,8 +3541,8 @@ tbody tr:hover {
 }
 
 .enterprise-shell .side-panel .courier-button.active:disabled {
-  color: #fff !important;
-  border-color: var(--primary-fill) !important;
+  color: var(--on-primary) !important;
+  border-color: var(--primary) !important;
   background: var(--primary-fill) !important;
 }
 
@@ -3826,6 +3844,36 @@ tbody tr:hover {
 
 .enterprise-shell .popup-cancel-btn.active:not(:disabled) {
   box-shadow: var(--glow-coral);
+}
+
+/* ── ขอบของปุ่มที่ถมสีทึบ ──
+   WCAG 1.4.11 ต้องการให้ "รูปร่าง" ของ control แยกจากพื้นรอบข้างได้ที่ 3:1 ซึ่งปุ่มที่ถมสี
+   สดของ Flip7 ไม่ผ่านด้วยตัวสีเอง: teal #2BA8A2 เทียบพื้นขาวได้ 2.906 และ gold #FFD23F
+   ได้เพียง 1.444 การใส่ขอบเฉดเข้มของสีเดียวกันทำให้ขอบเขตปุ่มอ่านได้โดยไม่ต้องเปลี่ยนสีพื้น
+   ที่ตรงสเปก (--primary 5.429 · --accent 6.648 · --info 7.873 · --coral 6.535 บนพื้นขาว) */
+.enterprise-shell .primary-action,
+.enterprise-shell .secondary-button,
+.enterprise-shell .side-panel .courier-button.active,
+.enterprise-shell .tab-button.active,
+.enterprise-shell .courier-button.active strong,
+.enterprise-shell .marketplace-file-input::file-selector-button {
+  border: 1px solid var(--primary);
+}
+
+.enterprise-shell .scan-input-row button {
+  border: 1px solid var(--accent);
+}
+
+.enterprise-shell .side-panel.workflow-drive .courier-button.active,
+.enterprise-shell .workflow-drive.scan-form .scan-input-row button {
+  border: 1px solid var(--info);
+}
+
+/* ตัวเลือกที่ active ใน segmented control เป็นพื้นขาวบนรางสีอ่อน ขอบเขตวัดได้เพียง 1.072
+   คือแยก "อันที่เลือกอยู่" ออกจากอันอื่นด้วยสีพื้นแทบไม่ได้ ใส่ขอบเฉดเข้มให้รูปร่างอ่านได้ (5.405) */
+.enterprise-shell .segmented-control button.active,
+.enterprise-shell .staff-section-tabs button.active {
+  border: 1px solid var(--primary);
 }
 
 /* ── ปุ่มเพิ่ม/ลบทรงสี่เหลี่ยมมน ──
