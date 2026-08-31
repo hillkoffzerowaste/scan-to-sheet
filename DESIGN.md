@@ -24,13 +24,25 @@
 
 - **จานสีอุ่นสามสี**: gold เป็น CTA/celebration, coral เป็นภาวะเสียหาย/ต้องรีบ, sky เป็นข้อมูลแจ้งให้ทราบ — สื่อสาร "สถานะ" ด้วยสีที่แยกจากกันชัดแทนที่จะเป็น teal ล้วนทั้งจอ
 - **ปุ่มทรง pill** สำหรับ action button และ badge (การ์ด/พาเนล/ตารางยังเป็นสี่เหลี่ยมมุมมน)
-- **มุมโค้งมากขึ้น** ตามสเกล Flip7 ที่แปลงหน่วยแล้ว
-- **glow เงาสี** เฉพาะ element ที่กดได้ตอน hover/focus/active — ไม่ใช่บนการ์ดนิ่ง
+- **มุมโค้งตรงสเกล Flip7** (8/16/24/32rpx → 4/8/12/16px)
+- **glow เงาสีติดค้าง** บน element ที่กดได้ (ปุ่มหลัก, CTA, สถานะที่เลือกอยู่) — ไม่ใช่บนการ์ดหรือพาเนล
+- **เงาการ์ดเป็นสีแบรนด์** (`--shadow-card`) ไม่ใช่เงาดำ ตาม Flip7 shadow-card
+- **ปุ่มเพิ่ม/ลบทรงสี่เหลี่ยมมน 40px** ตาม Flip7 counter button (80rpx)
 - **แถบสีขอบซ้ายการ์ด** บอกสถานะ (Flip7: "use left-border color accents on cards for state communication") — ตรงกับที่โปรเจกต์นี้ทำอยู่แล้วบางจุด ให้ทำให้ครบ
 - **หัวข้อ section เส้นประ** ใต้หัวข้อ
 - **press feedback** `scale(0.96)` + ease แบบ bounce
-- **input พื้นครีม** แยกพื้นที่กรอกออกจากพื้นที่อ่าน
+- **input พื้นครีม `#FFF8E7`** ตรงสเปก แยกพื้นที่กรอกออกจากพื้นที่อ่าน
 - **หัวข้อหนา 800** พร้อม letter-spacing
+
+**สีแบรนด์ไม่เปลี่ยน**
+
+`--primary` ยังเป็น teal ของ Hillkoff (`#04817d` ปรับจาก `#058581` ตามที่วัด) ไม่ใช่ `#2BA8A2` ของ Flip7 เพราะการเปลี่ยนสีแบรนด์เป็นการตัดสินใจเรื่องแบรนด์ ไม่ใช่เรื่องระบบดีไซน์ และ DESIGN.md ระดับ global (มาตรฐานองค์กร) ระบุสีแบรนด์ไว้ชัด ส่วนสี Flip7 ที่เหลือ — gold, coral, sky, cream — ใช้ตรงตามสเปกในฐานะ **สีพื้น** ทั้งหมด
+
+> teal ของ Flip7 เองใช้เป็นตัวหนังสือไม่ได้อยู่แล้ว: `#2BA8A2` บนขาววัดได้ 2.906 และ `#1E8C86` ได้ 4.077 (ผ่านเฉพาะตัวใหญ่) ถ้าจะสลับมาใช้จริงต้องคิดสีตัวหนังสือขึ้นใหม่อยู่ดี
+
+**ข้อควรรู้: จานสี Flip7 ทั้ง 12 สี ไม่มีสีใดใช้เป็นตัวหนังสือปกติบนพื้นสว่างของ Flip7 ได้**
+
+วัดครบทุกคู่แล้ว: ดีที่สุดคือ primary-dark `#1E8C86` = 4.077 (ผ่านเฉพาะตัวใหญ่) · teal 2.906 · coral 3.037 · sky 2.459 · gold 1.444 และ **ตัวหนังสือขาวบนพื้นสี Flip7 ก็ไม่ผ่านสักสีเดียว** (สูงสุด 4.155) ส่วนตัวหนังสือ**เข้ม**บนพื้นสีเดียวกันผ่าน 9 จาก 12 — นี่คือเหตุผลที่ทุก token สีสดในระบบนี้ต้องมี `--on-*` เป็นตัวหนังสือเข้ม สเปก Flip7 เองไม่ได้กำหนดสีตัวหนังสือไว้เลย เพราะบนมินิโปรแกรม WeChat ค่านั้นมาจาก default ของแพลตฟอร์ม
 
 **สิ่งที่ Flip7 มีแต่ตัดออก พร้อมเหตุผล**
 
@@ -39,7 +51,6 @@
 | หน่วย `rpx` | ไม่มีใน CSS ของเว็บ (เป็นของ WeChat mini-program) แปลงเป็น px ที่ 1rpx = 0.5px แล้วปัดเข้าสเกล 4px |
 | confetti, crown bounce, glow pulse, BOOM pulse | animation วนไม่สิ้นสุดบนหน้าจอที่เปิดทิ้งไว้ทั้งวัน — กินแบตแท็บเล็ตหน้างานและดึงสายตาออกจากช่องสแกน |
 | โลโก้การ์ดกางพัด / ribbon banner พับ | เป็นภาษาของกล่องบอร์ดเกม ไม่ใช่ของ topbar เครื่องมือทำงาน |
-| cream `#FFF8E7` ตรงๆ | **วัดได้ 4.465** เมื่อวาง `--primary` ทับ ตกเกณฑ์ 4.5 → ใช้ `#fffdf6` แทน (4.646) |
 | gold `#FFD23F` เป็นสีตัวหนังสือ | 1.44–2.56 บนพื้นขาว อ่านไม่ออกสิ้นเชิง → gold เป็น **พื้น** เท่านั้น ส่วนตัวหนังสือใช้ `--accent` ที่เข้มลงมา |
 | ตัวหนังสือขาวบน coral | ขาวบน `#EF6C4A` = 3.037 ตก → coral เป็นพื้นต้องใช้ **ตัวหนังสือเข้ม** `--on-coral` |
 | medal/podium tier (silver/bronze) | ไม่มี concept การจัดอันดับในแอปนี้ |
@@ -92,7 +103,9 @@
 | `--on-info` | `#0a2433` | `#0a2433` | ตัวหนังสือบน `--info-fill` |
 | `--info-soft` | `rgba(93,173,226,0.14)` | `rgba(93,173,226,0.14)` | tint อ่อน |
 | `--info-line` | `rgba(93,173,226,0.38)` | `rgba(124,192,234,0.35)` | ขอบ |
-| `--field` | `#fffdf6` | `#1d2320` | **พื้น input** (ครีม Flip7 ที่แก้ค่าให้ผ่านเกณฑ์) |
+| `--field` | `#FFF8E7` | `#1d2320` | **พื้น input** ครีมตรงสเปก Flip7 ใช้ได้เพราะไม่มี `--primary` เป็นตัวหนังสือทับแล้ว |
+| `--control-line` | `#788784` | `#637d78` | **ขอบของ control** ต้องได้ 3:1 ตาม WCAG 1.4.11 |
+| `--topbar-control-line` | `rgba(255,255,255,0.55)` | (ค่าเดียวกัน) | ขอบของ control ที่นั่งบน `--topbar-bg` ซึ่งเข้มทั้งสองธีม |
 
 ### สถานะ (Hillkoff เดิม ไม่เปลี่ยน)
 
@@ -105,10 +118,10 @@
 
 | Token | ค่า | ที่มา Flip7 | ใช้กับ |
 |---|---|---|---|
-| `--radius-sm` | `8px` | 16rpx | tag, input เล็ก, ไอคอนปุ่ม |
-| `--radius-md` | `12px` | 24rpx | การ์ด, พาเนล, input |
-| `--radius-lg` | `16px` | 32rpx | การ์ดหลัก, พาเนลใหญ่ |
-| `--radius-xl` | `20px` | — | modal |
+| `--radius-sm` | `4px` | 8rpx | tag, ป้ายเล็ก, `.code-cell` |
+| `--radius-md` | `8px` | 16rpx | ปุ่มทั่วไป, ช่องกรอก |
+| `--radius-lg` | `12px` | 24rpx | การ์ด, พาเนล |
+| `--radius-xl` | `16px` | 32rpx | modal, การ์ดหลัก |
 | `--radius-full` | `999px` | round | **ปุ่ม action ทุกตัว, badge, chip, avatar** |
 
 ### เงาและ glow
@@ -118,13 +131,21 @@
 | `--shadow-sm` | `0 1px 2px rgba(16,24,32,0.06)` | การ์ดปกติ |
 | `--shadow-md` | `0 1px 3px rgba(16,24,32,0.08)` | การ์ดที่ลอยกว่าเล็กน้อย |
 | `--shadow-modal` | `0 12px 32px rgba(16,24,32,0.18)` | modal เท่านั้น |
+| `--shadow-card` | `0 2px 10px rgba(4,129,125,0.12)` | **การ์ดและพาเนล** — เงาเป็นสีแบรนด์ ไม่ใช่ดำ ตาม Flip7 shadow-card |
 | `--glow-primary` | `0 2px 12px rgba(4,129,125,0.30)` | ปุ่มหลักตอน hover/focus |
 | `--glow-accent` | `0 2px 12px rgba(201,155,60,0.40)` | CTA gold |
 | `--glow-coral` | `0 2px 12px rgba(239,108,74,0.32)` | ปุ่ม/การ์ดภาวะเร่งด่วน |
 | `--glow-info` | `0 2px 12px rgba(93,173,226,0.30)` | element ข้อมูล |
 | `--shadow-focus` | `0 0 0 4px var(--focus-ring)` | ring ตอน focus |
 
-glow ใช้ได้ **เฉพาะ element ที่กดได้ ตอน hover/focus/active** ห้ามใส่ค้างบนการ์ดนิ่ง (Flip7 "don't use plain black shadows on interactive elements" ยังใช้ — แต่ในทางกลับกัน การ์ดที่กดไม่ได้ก็ห้ามมี glow)
+glow ใช้ได้ **เฉพาะ element ที่กดได้** และตาม Flip7 ("Do use colored glow shadows for interactive elements") จะ **ติดค้างอยู่ตลอด** ไม่ใช่เฉพาะตอน hover สำหรับ:
+
+- ปุ่มบันทึกการสแกน (`--glow-accent`)
+- `.primary-action` และ `.secondary-button` (`--glow-primary`)
+- สถานะที่เลือกอยู่: tab active, ปุ่มขนส่งที่เลือก (`--glow-primary` หรือ `--glow-info` ในโหมด Drive)
+- ปุ่มแจ้งปัญหาที่กดค้างไว้ (`--glow-coral`)
+
+**ห้ามใส่ glow บนการ์ดหรือพาเนลที่กดไม่ได้** — การ์ดข้อมูลที่วางเรียงกันหลายใบพร้อม glow ทุกใบจะกลบกันเองจนไม่เหลือความหมาย การ์ดใช้ `--shadow-card` ซึ่งเป็นเงาสีแบรนด์แบบจาง
 
 ### จังหวะการเคลื่อนไหว
 
@@ -137,6 +158,7 @@ glow ใช้ได้ **เฉพาะ element ที่กดได้ ต�
 - transition ใส่ **เฉพาะ property ที่ต้องการ feedback** (`background-color`, `border-color`, `box-shadow`, `transform`) ห้าม `transition: all`
 - press: `transform: scale(0.96)` (Flip7 ใช้ 0.95, ขยับเป็น 0.96 เพราะปุ่มที่นี่เล็กกว่าปุ่มเกมบนมือถือ)
 - ห้าม animation ที่วนไม่จบ ยกเว้น `.spin` ของ loading ซึ่งเป็น feedback จริง
+- micro-interaction **ห้ามเกิน 500ms** (กฎของ Flip7 เอง) — `flash-success` ตอนสแกนติดใช้ 0.45s
 - ต้องเคารพ `prefers-reduced-motion: reduce`
 
 ### ระยะห่าง
@@ -177,7 +199,11 @@ glow ใช้ได้ **เฉพาะ element ที่กดได้ ต�
 | `--on-info` บน `--info-fill` | 6.505 | ผ่าน |
 | `--text` บน `--field` | 16.717 | ผ่าน |
 | `--muted` บน `--field` | 5.484 | ผ่าน |
-| `--primary` บน `--field` | 4.646 | ผ่าน |
+| `--primary` บน `--field` `#FFF8E7` | 4.465 | **ตก — ห้ามใช้** ใช้ `--primary-strong` (6.435) |
+| `--primary-strong` บน `--field` | 6.435 | ผ่าน |
+| `--control-line` เป็นขอบบน `--field` | 3.543 | ผ่าน (เกณฑ์ control 3:1) |
+| `--control-line` เป็นขอบบน `--surface` | 3.752 | ผ่าน |
+| `--topbar-control-line` เป็นขอบบน `--topbar-bg` | 3.206 | ผ่าน |
 
 ### Dark
 
@@ -193,6 +219,9 @@ glow ใช้ได้ **เฉพาะ element ที่กดได้ ต�
 | `--text` บน `--field` `#1d2320` | 14.683 | ผ่าน |
 | `--muted` บน `--field` | 6.307 | ผ่าน |
 | `--primary` บน `--field` | 5.154 | ผ่าน |
+| `--control-line` เป็นขอบบน `--field` | 3.605 | ผ่าน |
+| `--control-line` เป็นขอบบน `--surface` | 3.770 | ผ่าน |
+| `--topbar-control-line` เป็นขอบบน `--topbar-bg` | 5.418 | ผ่าน |
 | `--accent` บน `--field` | 11.071 | ผ่าน |
 
 ### ค่าที่วัดแล้ว **ไม่ผ่าน** จึงห้ามใช้
@@ -209,7 +238,9 @@ glow ใช้ได้ **เฉพาะ element ที่กดได้ ต�
 | sky `#5DADE2` เป็นตัวหนังสือบนพื้นขาว | 2.459 | `--info` `#14567f` |
 | sky `#2E86C1` บนพื้นขาว | 3.965 | `--info` |
 | `#ffffff` บน sky `#5DADE2` | 2.459 | `--on-info` `#0a2433` |
-| `--primary` บน cream `#FFF8E7` ของ Flip7 | 4.465 | `--field` `#fffdf6` (4.646) |
+| `--primary` บน cream `#FFF8E7` | 4.465 | `--primary-strong` (6.435) เป็นตัวหนังสือ/ไอคอนในช่องกรอก |
+| `--line-strong` `#c7d0ce` เป็นขอบของ control | 1.486 | `--control-line` `#788784` (3.752) |
+| ขอบ control บน topbar ที่ขาว 34% | 2.109 light / 2.963 dark | `--topbar-control-line` ขาว 55% |
 | ตัวขาวบน `--primary` เดิม `#058581` | 4.489 | `--primary-fill` `#04817d` |
 
 **เวลาแตะเรื่องสี ต้องวัดจาก DOM จริงทั้งสองธีม ห้ามเดา** เหตุผล: กรณี 4.489 กับ 4.465 ข้างบนคือตกเกณฑ์แบบมองด้วยตาไม่เห็นเลย และทั้งสองกรณีทำให้ element หลักทั้งแอปตกมาตรฐานพร้อมกัน
@@ -226,10 +257,11 @@ glow ใช้ได้ **เฉพาะ element ที่กดได้ ต�
 | ปุ่มโปร่ง (ghost) | pill | โปร่งใส + `--primary` | hover พื้น `--primary-soft` |
 | ปุ่มอันตราย | pill | `--danger-fill` + ขาว | hover `--glow-coral` |
 | ปุ่มไอคอน | วงกลม `--radius-full` | `--surface` | ขนาดกดได้ ≥36px |
-| input / select / textarea | `--radius-md` | **`--field`** | focus: ขอบ `--primary` + `--shadow-focus` |
+| input / select / textarea | `--radius-md` | **`--field`** | ขอบ `--control-line` · focus: ขอบ `--primary` + `--shadow-focus` |
+| ปุ่มเพิ่ม/ลบ (counter) | สี่เหลี่ยมมน `--radius-md` 40px | เพิ่ม: `--primary-soft` · ลบ: ตัวหนังสือ `--coral` | Flip7 counter button 80rpx |
 | กล่อง input ประกอบ (มีปุ่มในกรอบ) | `--radius-md` | `--field` | `:focus-within` ต้องได้ ring เดียวกัน |
 | การ์ด / พาเนล | `--radius-lg`, ทึบ | `--surface` + ขอบ `--line` | `--shadow-sm` ไม่มี glow ไม่มี hover lift |
-| การ์ดบอกสถานะ | เพิ่ม `border-inline-start: 4px` | แถบ: `--primary` ปกติ · `--accent` เน้น · `--coral` เร่งด่วน · `--danger` ผิดพลาด · `--success` เรียบร้อย | — |
+| การ์ดบอกสถานะ | เพิ่ม `border-inline-start: 3px` (Flip7 6rpx) | แถบ: `--primary` ปกติ · `--accent` เน้น · `--coral` เร่งด่วน · `--danger` ผิดพลาด · `--success` เรียบร้อย | — |
 | badge / chip / status | pill | `-soft` + ตัวหนังสือสีเดียวกัน + ขอบ `-line` | — |
 | tab | pill ในราง | active: `--primary-fill` + ขาว | — |
 | segmented control | pill ในราง | active: `--primary-soft` + `--primary-strong` | — |
@@ -246,7 +278,7 @@ glow ใช้ได้ **เฉพาะ element ที่กดได้ ต�
 
 ## 5. เกณฑ์ที่ต้องผ่านก่อนถือว่างาน UI เสร็จ
 
-1. contrast ผ่าน 4.5:1 (ตัวใหญ่ 3:1) **วัดจาก DOM จริงทั้ง light และ dark** ไม่ใช่จากตาราง §3 เพียงอย่างเดียว เพราะการ์ดอาจซ้อนพื้นหลายชั้นจนค่าเปลี่ยน
+1. contrast ผ่าน 4.5:1 (ตัวใหญ่ 3:1) และ **ขอบของ control ผ่าน 3:1** (WCAG 1.4.11 — control ที่ `disabled` ได้รับการยกเว้นตามข้อกำหนด) **วัดจาก DOM จริงทั้ง light และ dark** ไม่ใช่จากตาราง §3 เพียงอย่างเดียว เพราะการ์ดอาจซ้อนพื้นหลายชั้นจนค่าเปลี่ยน
 2. overflow แนวนอน = 0px ที่ **375 / 700 / 1000 / 1400px** และไม่มีข้อความถูกตัด — ช่วง 701–1199px คือจุดที่บั๊กเกิดบ่อยที่สุดเพราะไม่มี media query ครอบ
 3. มี **skip link** เป็น focusable ตัวแรก ชี้ไป `<main id="main" tabindex="-1">`
 4. ทุก element ที่ focus ได้ต้องมองเห็นวงแหวน focus — **ห้าม `outline: 0` โดยไม่มีตัวแทน**

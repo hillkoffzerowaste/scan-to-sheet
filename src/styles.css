@@ -45,9 +45,16 @@
   --on-info: #0a2433;
   --info-soft: rgba(93,173,226,0.14);
   --info-line: rgba(93,173,226,0.38);
-  /* พื้น input แบบครีมของ Flip7 แต่ขยับจาก #FFF8E7 ซึ่งวัดกับ --primary ได้ 4.465 ตกเกณฑ์
-     ค่านี้ได้ 4.646 และแยกพื้นที่ "กรอก" ออกจากพื้นที่ "อ่าน" ด้วยตาทันที */
-  --field: #fffdf6;
+  /* พื้น input ครีมตรงสเปก Flip7 ใช้ค่านี้ได้เพราะตัวหนังสือ/ไอคอน teal ในช่องกรอกเปลี่ยนไปใช้
+     --primary-strong (6.435) แล้ว ส่วน --primary บนครีมนี้ได้ 4.465 จึงห้ามเป็นตัวหนังสือปกติ */
+  --field: #FFF8E7;
+  /* ขอบของ control ต้องได้ 3:1 ตาม WCAG 1.4.11 --line-strong (#c7d0ce) วัดได้เพียง 1.486
+     บนพื้นขาว คือขอบ input ทุกช่องในแอปไม่ผ่านเกณฑ์มาตลอด ค่านี้ได้ 3.347–3.752
+     บนครีม/ขาว/surface-soft/page ทั้งสี่แบบ */
+  --control-line: #788784;
+  /* control ที่นั่งบน --topbar-bg ต้องใช้ขอบสว่าง ค่า 0.34 เดิมได้ 2.109 (light) / 2.963 (dark)
+     ตกเกณฑ์ 3:1 ทั้งสองธีม ค่านี้ได้ 3.206 / 5.418 — ไม่ต้องพลิกตามธีมเพราะ topbar เข้มทั้งคู่ */
+  --topbar-control-line: rgba(255,255,255,0.55);
   /* Brand chrome that carries white text (topbar). Deliberately darker than --primary:
      white on #058581 measures 4.49, just under the 4.5 AA floor. Dark in both themes, so
      anything sitting on it — including the theme toggle's active pill — stays readable. */
@@ -72,6 +79,8 @@
   --shadow-sm: 0 1px 2px rgba(16,24,32,0.06);
   --shadow-md: 0 1px 3px rgba(16,24,32,0.08);
   --shadow-modal: 0 12px 32px rgba(16,24,32,0.18);
+  /* shadow-card ของ Flip7: เงาเป็นสีแบรนด์ ไม่ใช่สีดำ ("don't use plain black shadows") */
+  --shadow-card: 0 2px 10px rgba(4,129,125,0.12);
   /* glow เงาสีของ Flip7 ใช้ได้เฉพาะ element ที่กดได้ ตอน hover/focus/active
      การ์ดนิ่งห้ามมี glow ค้าง เพราะจอนี้เปิดทิ้งไว้ทั้งวันและ glow ทุกใบคือ noise */
   --glow-primary: 0 2px 12px rgba(4,129,125,0.30);
@@ -79,11 +88,12 @@
   --glow-coral: 0 2px 12px rgba(239,108,74,0.32);
   --glow-info: 0 2px 12px rgba(93,173,226,0.30);
   --shadow-focus: 0 0 0 4px var(--focus-ring);
-  /* สเกลมุมโค้งของ Flip7 แปลงจาก rpx ที่ 1rpx = 0.5px (16/24/32rpx) */
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
-  --radius-xl: 20px;
+  /* สเกลมุมโค้งตรงสเปก Flip7 แปลงจาก rpx ที่ 1rpx = 0.5px
+     sm 8rpx (tag/ป้ายเล็ก) · md 16rpx (ปุ่ม/ช่องกรอก) · lg 24rpx (การ์ด/พาเนล) · xl 32rpx (modal) */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
   --radius-full: 999px;
   --ease-bounce: cubic-bezier(0.34, 1.35, 0.64, 1);
   --dur-press: 0.12s;
@@ -141,6 +151,7 @@
   --info: #7cc0ea;
   --info-line: rgba(124,192,234,0.35);
   --field: #1d2320;
+  --control-line: #637d78;
   --topbar-bg: #0a2e2c;
   --warning: #e8942f;
   --warning-bg: rgba(232,148,47,0.16);
@@ -158,6 +169,7 @@
   --shadow-sm: 0 1px 2px rgba(0,0,0,0.5);
   --shadow-md: 0 1px 3px rgba(0,0,0,0.55);
   --shadow-modal: 0 12px 32px rgba(0,0,0,0.6);
+  --shadow-card: 0 2px 12px rgba(26,163,157,0.18);
   /* glow แรงขึ้นในธีมมืด: เงาสีบนพื้นเข้มถูกกลืนไปมาก ค่าเดียวกับธีมสว่างจะแทบมองไม่เห็น */
   --glow-primary: 0 2px 14px rgba(26,163,157,0.45);
   --glow-accent: 0 2px 14px rgba(255,210,63,0.35);
@@ -2892,7 +2904,7 @@ tbody tr:hover {
 .enterprise-shell .scan-panel.workflow-drive {
   border-width: 1px;
   border-top-width: 3px;
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--shadow-card);
 }
 
 .enterprise-shell .scan-panel.workflow-packer {
@@ -3416,7 +3428,7 @@ tbody tr:hover {
 .enterprise-shell .topbar .icon-button,
 .enterprise-shell .topbar .secondary-button,
 .enterprise-shell .topbar .ghost-button {
-  border-color: rgba(255, 255, 255, 0.34) !important;
+  border-color: var(--topbar-control-line) !important;
   background: rgba(0, 0, 0, 0.12) !important;
   color: #fff !important;
   box-shadow: none !important;
@@ -3717,6 +3729,147 @@ tbody tr:hover {
 .enterprise-shell .drive-card strong,
 .enterprise-shell .staff-summary strong {
   font-weight: 800;
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Flip7 เต็มรูปแบบ — ชั้นนี้ต่อจากชั้นสำเนียง ดัน Flip7 ให้สุดเท่าที่เกณฑ์ AA 4.5
+   และโหมดมืดยังอยู่ครบ ทุกค่าที่นี่วัดแล้ว ดู DESIGN.md §3
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ── ขอบของ control ──
+   WCAG 1.4.11 บังคับให้ขอบที่ใช้ระบุตัว control ได้ 3:1 --line-strong (#c7d0ce)
+   วัดได้เพียง 1.486 บนพื้นขาว คือช่องกรอกทุกช่องในแอปไม่ผ่านเกณฑ์มาตลอด */
+.enterprise-shell input:not([type="checkbox"]):not([type="radio"]),
+.enterprise-shell select,
+.enterprise-shell textarea,
+.enterprise-shell .search-input-row,
+.enterprise-shell .staff-search,
+.enterprise-shell .date-box,
+.enterprise-shell .segmented-control,
+.enterprise-shell .staff-section-tabs,
+.enterprise-shell .staff-filter-control input,
+.enterprise-shell .staff-filter-control select,
+.enterprise-shell .staff-status-editor select,
+.enterprise-shell .staff-form-grid input,
+.enterprise-shell .staff-form-grid select,
+.enterprise-shell .staff-form-grid textarea,
+.enterprise-shell .duty-type-form input,
+.enterprise-shell .courier-add-form input,
+.enterprise-shell .field-control input {
+  border-color: var(--control-line);
+}
+
+/* ราง theme toggle นั่งบน topbar เข้ม จึงต้องได้ขอบสว่าง ไม่ใช่ --control-line ของพื้นสว่าง */
+.enterprise-shell .topbar .theme-toggle,
+.enterprise-shell .theme-toggle {
+  border: 1px solid var(--topbar-control-line);
+}
+
+/* teal ธรรมดาบนครีมได้ 4.465 ไม่ผ่าน ตัวหนังสือและไอคอนในช่องกรอกจึงใช้ค่าเข้ม (6.435) */
+.enterprise-shell .search-input-row svg,
+.enterprise-shell .staff-search svg,
+.enterprise-shell .date-box svg,
+.enterprise-shell .date-box span,
+.enterprise-shell .scan-input-row svg {
+  color: var(--primary-strong);
+}
+
+/* ── เงาการ์ดเป็นสีแบรนด์ ──
+   Flip7: "Don't use plain black shadows on interactive elements" และการ์ดใช้ shadow-card
+   ซึ่งเป็น teal ที่ 10% ไม่ใช่ดำ */
+.enterprise-shell .side-panel,
+.enterprise-shell .scan-panel,
+.enterprise-shell .report-panel,
+.enterprise-shell .search-panel,
+.enterprise-shell .missing-check-panel,
+.enterprise-shell .standards-panel,
+.enterprise-shell .secondary-panel,
+.enterprise-shell .sheet-recovery-panel,
+.enterprise-shell .marketplace-upload-panel,
+.enterprise-shell .staff-card,
+.enterprise-shell .app-title,
+.enterprise-shell .tab-bar {
+  box-shadow: var(--shadow-card);
+}
+
+/* ── แถบสีขอบซ้าย 6rpx = 3px ตรงสเปก ── */
+.enterprise-shell .drive-card,
+.enterprise-shell .missing-result-card,
+.enterprise-shell .report-card,
+.enterprise-shell .metric-row > div,
+.enterprise-shell .packer-row > div,
+.enterprise-shell .packer-workflow-guide,
+.enterprise-shell .drive-workflow-guide {
+  border-inline-start-width: 3px;
+}
+
+/* ── glow ติดค้างบน element ที่กดได้ ──
+   Flip7: "Do use colored glow shadows for interactive elements" — ไม่ใช่แค่ตอน hover
+   ให้เฉพาะปุ่มที่เป็นการกระทำหลักและสถานะที่เลือกอยู่ ไม่ใส่ทุกปุ่มในจอ เพราะการ์ดข้อมูล
+   ที่วางเรียงกันหลายใบพร้อม glow ทุกใบจะกลบกันเอง */
+.enterprise-shell .scan-input-row button:not(:disabled) {
+  box-shadow: var(--glow-accent);
+}
+
+.enterprise-shell .primary-action:not(:disabled),
+.enterprise-shell .secondary-button:not(:disabled),
+.enterprise-shell .side-panel .courier-button.active:not(:disabled),
+.enterprise-shell .tab-button.active {
+  box-shadow: var(--glow-primary);
+}
+
+.enterprise-shell .side-panel.workflow-drive .courier-button.active:not(:disabled),
+.enterprise-shell .workflow-drive.scan-form .scan-input-row button:not(:disabled) {
+  box-shadow: var(--glow-info);
+}
+
+.enterprise-shell .popup-cancel-btn.active:not(:disabled) {
+  box-shadow: var(--glow-coral);
+}
+
+/* ── ปุ่มเพิ่ม/ลบทรงสี่เหลี่ยมมน ──
+   Flip7 counter button: 80rpx = 40px, มุม 16rpx = 8px, ฝั่งลบเป็น coral ฝั่งบวกเป็น teal
+   ตัวหนังสือบนพื้นสีต้องเข้ม เพราะขาวบน coral วัดได้ 3.037 และบน teal 4.728 ก็ยังต่ำกว่า
+   ที่ควรเป็นสำหรับตัวเล็ก */
+.enterprise-shell .weekly-add {
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--primary);
+  border-radius: var(--radius-md);
+  background: var(--primary-soft);
+  color: var(--primary-strong);
+  font-weight: 800;
+}
+
+.enterprise-shell .weekly-chip button:last-child,
+.enterprise-shell .duty-type-list button:last-child,
+.enterprise-shell .assignment-actions button.danger-text {
+  color: var(--coral);
+}
+
+/* ── เส้นประคั่น ──
+   Flip7: "Do use dashed borders for section dividers" ขยายไปถึงหัวพาเนลที่พับได้
+   ซึ่งเป็นตัวคั่นกลุ่มเนื้อหาจริงในหน้านี้ */
+.enterprise-shell .secondary-panel[open] > summary,
+.enterprise-shell .search-panel[open] > summary,
+.enterprise-shell .report-panel[open] > summary,
+.enterprise-shell .standards-panel[open] > summary {
+  border-bottom: 2px dashed var(--line-strong);
+}
+
+/* ── ป้ายและ tag ──
+   Flip7 ให้ tag เล็กใช้มุม 8rpx = 4px ส่วน badge/chip เป็นแคปซูล */
+.enterprise-shell .staff-position,
+.enterprise-shell .code-cell {
+  border-radius: var(--radius-sm);
+}
+
+/* ── ฉลองจังหวะที่สแกนติด ──
+   Flip7 บอกให้ฉลองด้วยสีของแบรนด์ แต่ห้าม micro-interaction เกิน 500ms
+   ของเดิม 0.6s เกินกฎของ Flip7 เอง */
+.enterprise-shell .scan-input-row.flash {
+  animation: flash-success 0.45s ease;
 }
 
 @media (min-width: 1200px) {
