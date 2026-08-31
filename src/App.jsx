@@ -1778,7 +1778,7 @@ function App() {
             backgroundResult = {
               ...result,
               sheetSyncStatus: 'failed',
-              sheetSyncError: sheetError.message,
+              sheetSyncError: userErrorMessage(sheetError, 'ซิงก์ Google Sheet ไม่สำเร็จ'),
             };
           }
 
@@ -2189,7 +2189,7 @@ function App() {
             backgroundResult = {
               ...result,
               sheetSyncStatus: 'failed',
-              sheetSyncError: sheetError.message,
+              sheetSyncError: userErrorMessage(sheetError, 'ซิงก์ Google Sheet ไม่สำเร็จ'),
             };
           }
 

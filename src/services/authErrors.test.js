@@ -80,3 +80,21 @@ test('unexpected SDK errors do not leak English or internal details into Thai UI
   assert.equal(userErrorMessage(new Error('Google ตอบสนองช้าเกินกำหนด')), 'Google ตอบสนองช้าเกินกำหนด');
   assert.equal(scanErrorMessage(new Error('Firestore unavailable')), 'บันทึกไม่สำเร็จ กรุณาลองใหม่');
 });
+
+test('a Thai message with a machine payload spliced into it is still withheld', () => {
+  // การเช็คว่ามีอักษรไทยกันได้แค่ข้อความอังกฤษล้วน ข้อความไทยที่ต่อ body ของ Google เข้ามา
+  // จะพา spreadsheet id และ range ออกไปโชว์บน status banner
+  assert.equal(
+    userErrorMessage(new Error('อัปเดตไม่สำเร็จ: {"error":{"message":"Unable to parse range: 2026-08-31!A1"}}')),
+    'ดำเนินการไม่สำเร็จ กรุณาลองใหม่',
+  );
+  assert.equal(
+    userErrorMessage(new Error('เรียก https://sheets.googleapis.com/v4/spreadsheets/abc123 ไม่สำเร็จ')),
+    'ดำเนินการไม่สำเร็จ กรุณาลองใหม่',
+  );
+  // เลขพัสดุ 13 หลักถูกฝังในข้อความให้ผู้ใช้อ่านอยู่จริง ต้องไม่ถูกเข้าใจผิดว่าเป็น payload
+  assert.equal(
+    userErrorMessage(new Error('เลขพัสดุ TH1234567890123 ซ้ำในชีตวันนี้')),
+    'เลขพัสดุ TH1234567890123 ซ้ำในชีตวันนี้',
+  );
+});

@@ -52,9 +52,24 @@ export function oauthCallbackErrorMessage(code) {
     : 'Google ไม่อนุมัติการเข้าสู่ระบบ กรุณาลองใหม่';
 }
 
+/**
+ * สัญญาของระบบคือ throw ข้อความสรุปภาษาไทย แล้วเก็บ payload ดิบไว้ที่ `error.detail`
+ * (ดู googleSheets.js) ฟังก์ชันนี้เป็นชั้นกันพลาด ไม่ใช่ตัวบังคับสัญญานั้น
+ *
+ * ด่านแรกเช็คว่ามีอักษรไทย ซึ่งกันข้อความของ provider ที่เป็นอังกฤษล้วนได้ แต่กันไม่ได้ถ้ามีคน
+ * เขียน `throw new Error('ผิดพลาด: ' + JSON.stringify(body))` — ด่านที่สองจึงตัดข้อความที่มี
+ * โครงสร้างของ payload เครื่อง (JSON, อาเรย์, เครื่องหมายคำพูด, แท็ก, URL) ซึ่งไม่เคยปรากฏใน
+ * ข้อความที่เขียนให้ผู้ใช้อ่านเลยแม้แต่ข้อความเดียวในโปรเจกต์นี้
+ *
+ * ไม่ใช้กฎ "เลขติดกันยาว" เพราะเลขพัสดุมี 13 หลักและถูกฝังในข้อความให้ผู้ใช้อ่านอยู่จริง
+ */
+const MACHINE_PAYLOAD_PATTERN = /[{}[\]"<>]|https?:\/\//;
+
 export function userErrorMessage(error, fallback = 'ดำเนินการไม่สำเร็จ กรุณาลองใหม่') {
   const message = String(error?.message ?? '').trim();
-  return /[ก-๙]/.test(message) ? message : fallback;
+  if (!/[ก-๙]/.test(message)) return fallback;
+  if (MACHINE_PAYLOAD_PATTERN.test(message)) return fallback;
+  return message;
 }
 
 /**
