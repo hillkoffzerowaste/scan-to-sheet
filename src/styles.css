@@ -106,13 +106,14 @@
   --glow-coral: 0 2px 12px rgba(239,108,74,0.32);
   --glow-info: 0 2px 12px rgba(93,173,226,0.30);
   --shadow-focus: 0 0 0 4px var(--focus-ring);
-  /* สเกลมุมโค้งตรงสเปก Flip7 แปลงจาก rpx ที่ 1rpx = 0.5px
-     sm 8rpx (tag/ป้ายเล็ก) · md 16rpx (ปุ่ม/ช่องกรอก) · lg 24rpx (การ์ด/พาเนล) · xl 32rpx (modal) */
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-xl: 16px;
-  --radius-full: 999px;
+  /* สเกลมุมโค้งของ Windows Enterprise Shell: sm สำหรับ control และป้าย · md สำหรับหน้าต่างและพาเนล
+     สเกลเดิมของ Flip7 (4/8/12/16 + pill) ถูกยกเลิก — lg/xl/full ยังประกาศไว้ให้เท่ากับ md
+     เพราะโค้ดเก่าบางส่วนยังอ้างถึง ห้ามใช้ในโค้ดใหม่ */
+  --radius-sm: 3px;
+  --radius-md: 4px;
+  --radius-lg: var(--radius-md);
+  --radius-xl: var(--radius-md);
+  --radius-full: var(--radius-md);
   --ease-bounce: cubic-bezier(0.34, 1.35, 0.64, 1);
   --dur-press: 0.12s;
   --dur-ui: 0.18s;
@@ -3090,9 +3091,16 @@ tbody tr:hover {
   color: var(--on-info);
 }
 
-.enterprise-shell .side-panel.workflow-drive .courier-button.active strong,
 .enterprise-shell .side-panel.workflow-drive .courier-button.active span {
   color: var(--on-info);
+}
+
+/* ป้ายนับในปุ่มที่เลือกอยู่กลับสีกับตัวปุ่ม: พื้นเข้ม + ตัวหนังสือสีสด
+   เดิมโหมด Drive เปลี่ยนแค่ "สีตัวหนังสือ" เป็น --on-info โดยพื้นยังเป็น --on-primary
+   ผลคือเข้มบนเข้ม วัดได้ 1.031 คืออ่านตัวเลขไม่ออกเลย ต้องเปลี่ยนเป็นคู่เสมอ */
+.enterprise-shell .side-panel.workflow-drive .courier-button.active strong {
+  background: var(--on-info);
+  color: var(--info-fill);
 }
 
 .enterprise-shell .field-control input,
@@ -3203,10 +3211,7 @@ tbody tr:hover {
 /* กฎ `.enterprise-shell *` ที่เคยสั่ง animation/transition/backdrop-filter เป็น none !important
    ถูกลบออกแล้ว เพราะทุกต้นเหตุที่มันกดไว้ถูกลบที่ต้นทางไปหมด (title-glow, scan-pulse,
    accent-pulse, rowSlideIn, cardEntrance, status-pop, fadeInUp, pulse-active, badge-pulse,
-   danger-glow และ transition: background-color var(--dur-ui) ease, border-color var(--dur-ui) ease,
-    box-shadow var(--dur-ui) ease, color var(--dur-ui) ease,
-    transform var(--dur-press) var(--ease-bounce);
-}
+   danger-glow และ blanket transition ที่ครอบทุก element) */
 
 .enterprise-shell .secondary-panel {
   display: block;
@@ -4185,7 +4190,10 @@ tbody tr:hover {
 
 .win-nav-item.active {
   background: var(--primary-soft);
-  border-left-color: var(--primary-fill);
+  /* เส้นซ้ายคือตัวบ่งบอก "หน้าที่เปิดอยู่" จึงต้องได้ 3:1 (WCAG 1.4.11)
+     --primary-fill #2BA8A2 วัดบนพื้น sidebar ได้เพียง 2.906 ในธีมสว่าง จึงใช้เฉดเข้มแทน
+     พื้น --primary-soft เองได้แค่ 1.109 บอกสถานะด้วยตัวเองไม่ได้ */
+  border-left-color: var(--primary-strong);
   color: var(--primary-strong);
   font-weight: 500;
 }
@@ -4391,3 +4399,67 @@ tbody tr:hover {
 /* ป้ายสถานะ */
 .win-shell .status-badge,
 .win-shell .win-nav-badge { border-radius: var(--radius-sm); }
+
+/* ── popup สแกนเป็น "หน้าต่าง" ไม่ใช่ sheet ที่เลื่อนขึ้นมา ─────────────────────
+   หัวเป็นแถบเข้มเหมือน title bar ของโปรแกรม ปุ่มปิดอยู่มุมขวาบนและเป็นสีแดงตอน hover
+   ตามแบบที่ผู้ใช้คุ้นจากหน้าต่างบน Windows */
+.win-shell ~ .scan-popup-overlay .scan-popup-sheet,
+.win-shell .scan-popup-sheet {
+  padding: 0;
+  border-radius: var(--radius-md);
+  animation: none;
+}
+
+.win-shell .scan-popup-header {
+  top: 0;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 6px 6px 12px;
+  background: var(--topbar-bg);
+  color: var(--on-topbar);
+  border-bottom: 0;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+}
+
+.win-shell .scan-popup-header h2,
+.win-shell .scan-popup-header span {
+  color: var(--on-topbar);
+  font-size: 0.85rem;
+}
+
+.win-shell .scan-popup-icon-close {
+  width: 26px;
+  height: 22px;
+  border: 0;
+  border-radius: 2px;
+  background: transparent;
+  color: var(--on-topbar);
+  transition: background-color var(--dur-ui) ease;
+}
+
+.win-shell .scan-popup-icon-close:hover {
+  background: var(--danger-fill);
+  color: var(--on-danger);
+}
+
+/* เนื้อในหน้าต่างต้องมีระยะขอบของตัวเอง เพราะ sheet ไม่มี padding แล้ว */
+.win-shell .scan-popup-feedback,
+.win-shell .scan-popup-sheet > *:not(.scan-popup-header):not(.scan-popup-close) {
+  margin-inline: 12px;
+}
+
+.win-shell .scan-popup-sheet > .scan-popup-close {
+  display: block;
+  width: calc(100% - 24px);
+  margin: 10px 12px 12px;
+}
+
+/* ขอบของ control ต้องได้ 3:1 ทุกตัว (WCAG 1.4.11) กฎเดิมบางชุดยังใช้ --line-strong (1.519)
+   และ --line ซึ่งเป็นเส้นตกแต่ง ต้องมี specificity เท่ากันและมาทีหลังจึงจะชนะ
+   ไม่ใช้ !important เพราะกฎเดิมไม่ได้ใช้ */
+.enterprise-shell.win-shell input,
+.enterprise-shell.win-shell select,
+.enterprise-shell.win-shell textarea,
+.enterprise-shell.win-shell .field-control {
+  border-color: var(--control-line);
+}
