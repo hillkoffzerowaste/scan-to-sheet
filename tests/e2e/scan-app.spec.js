@@ -138,7 +138,7 @@ test.describe('Scan to Sheet — External tools', () => {
   });
 
   test('opens the label checker from the sidebar in a new tab', async ({ page }) => {
-    for (const width of [375, 1000, 1400]) {
+    for (const width of [1280, 1440, 1920]) {
       await page.setViewportSize({ width, height: 900 });
       await page.goto(BASE_URL);
 
@@ -164,14 +164,14 @@ test.describe('Scan to Sheet — Packer Tab', () => {
   });
 
   test('renders app shell and title', async ({ page }) => {
-    await expect(page.locator('.app-shell')).toBeVisible();
-    await expect(page.locator('.title-badge')).toContainText('Scan to Sheet');
-    await expect(page.locator('.title-badge')).toContainText('HILLKOFF');
+    await expect(page.locator('.win-shell')).toBeVisible();
+    await expect(page.locator('.win-app-name')).toContainText('Scan to Sheet');
+    await expect(page.locator('.win-app-name')).toContainText('HILLKOFF');
     await expect(page.locator('h1')).toBeVisible();
   });
 
   test('shows Login with Google when not signed in', async ({ page }) => {
-    const loginBtn = page.locator('.top-connect-box .secondary-button');
+    const loginBtn = page.locator('.win-titlebar-btn', { hasText: /Login with Google|OAuth Client ID/ });
     await expect(loginBtn).toBeVisible();
   });
 
@@ -290,23 +290,27 @@ const settleTransitions = (page) => page.evaluate(() => Promise.all(
     .map((animation) => animation.finished.catch(() => {})),
 ));
 
+/**
+ * The Windows shell replaced the two-button Light/Dark segmented control with a single
+ * toggle in the title bar, so a test can no longer click "the Dark button" directly —
+ * it has to check the current theme first and only click when a switch is actually needed.
+ */
+const setTheme = async (page, theme) => {
+  const current = await page.locator('html').getAttribute('data-theme');
+  if (current !== theme) {
+    await page.locator('.win-titlebar-btn', { hasText: /โหมด(มืด|สว่าง)/ }).click();
+  }
+  await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+};
+
 test.describe('Scan to Sheet — Theme & Layout', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto(BASE_URL);
   });
 
   test('theme toggle switches dark/light', async ({ page }) => {
-    const darkBtn = page.locator('.theme-toggle button:has-text("Dark")');
-    await darkBtn.click();
-
-    // Check that data-theme changed
-    const html = page.locator('html');
-    await expect(html).toHaveAttribute('data-theme', 'dark');
-
-    // Switch back to light
-    const lightBtn = page.locator('.theme-toggle button:has-text("Light")');
-    await lightBtn.click();
-    await expect(html).toHaveAttribute('data-theme', 'light');
+    await setTheme(page, 'dark');
+    await setTheme(page, 'light');
   });
 
   test('applies the stored dark theme before React loads', async ({ page }) => {
@@ -363,13 +367,13 @@ test.describe('Scan to Sheet — Theme & Layout', () => {
   });
 
   test('keeps active and disabled controls readable in dark theme', async ({ page }) => {
-    await page.locator('.theme-toggle button:has-text("Dark")').click();
+    await setTheme(page, 'dark');
     await settleTransitions(page);
 
     const contrast = await page.locator('.enterprise-shell').evaluate((root, helpers) => {
       const { ratioFor } = new Function(helpers)();
       return {
-        activeTab: ratioFor(root, '.tab-button.active'),
+        activeTab: ratioFor(root, '.win-nav-item.active'),
         activeCourier: ratioFor(root, '.courier-button.active'),
         disabledControl: ratioFor(root, 'button:disabled'),
       };
@@ -384,20 +388,20 @@ test.describe('Scan to Sheet — Theme & Layout', () => {
     const inspect = async () => page.locator('.enterprise-shell').evaluate((root, helpers) => {
       const { ratioFor } = new Function(helpers)();
       return {
-        activeTab: ratioFor(root, '.tab-button.active'),
+        activeTab: ratioFor(root, '.win-nav-item.active'),
         activeCourier: ratioFor(root, '.courier-button.active'),
         driveLabel: ratioFor(root, '.drive-mode-label'),
         statusBanner: ratioFor(root, '.status-banner'),
-        topbarTitle: ratioFor(root, '.topbar h1', '.topbar'),
+        topbarTitle: ratioFor(root, '.win-app-name', '.win-titlebar'),
       };
     }, CONTRAST_HELPERS);
 
-    await page.locator('.theme-toggle button:has-text("Light")').click();
+    await setTheme(page, 'light');
     await page.getByTestId('drive-tab').click();
     await settleTransitions(page);
     const light = await inspect();
 
-    await page.locator('.theme-toggle button:has-text("Dark")').click();
+    await setTheme(page, 'dark');
     await settleTransitions(page);
     const dark = await inspect();
 
@@ -411,7 +415,7 @@ test.describe('Scan to Sheet — Theme & Layout', () => {
   });
 
   test('keeps marketplace file controls readable in light mode', async ({ page }) => {
-    await page.locator('.theme-toggle button:has-text("Light")').click();
+    await setTheme(page, 'light');
     await page.locator('.marketplace-upload-panel summary').click();
     await settleTransitions(page);
 
@@ -454,39 +458,46 @@ test.describe('Scan to Sheet — Status Banner', () => {
   });
 });
 
-test.describe('Scan to Sheet — Mobile Responsiveness', () => {
-  test('app is usable on mobile viewport', async ({ page }) => {
-    await page.setViewportSize({ width: 375, height: 812 });
-    await page.goto(BASE_URL);
+/*
+ * เดิมชุดนี้ชื่อ "Mobile Responsiveness" และตรวจที่ 375px กับแถบแท็บบนจอ
+ * ระบบเปลี่ยนเป็น Windows Enterprise Shell ซึ่งเป็น desktop-only แล้ว (ดู DESIGN.md ข้อ 1)
+ * จึงเปลี่ยนมาตรวจความกว้างจอเดสก์ท็อปที่ DESIGN.md กำหนดไว้แทน คือ 1280 / 1440 / 1920
+ * สิ่งที่ต้องคุ้มครองยังเป็นเรื่องเดิม: เมนูต้องอ่านได้ครบ ตารางต้องเลื่อนในกล่องของตัวเอง
+ * และหน้าต้องไม่มี overflow แนวนอน
+ */
+test.describe('Scan to Sheet — Desktop layout', () => {
+  for (const width of [1280, 1440, 1920]) {
+    test(`shell holds together at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(BASE_URL);
 
-    await expect(page.locator('.app-shell')).toBeVisible();
-    await expect(page.locator('h1')).toBeVisible();
+      await expect(page.locator('.win-shell')).toBeVisible();
+      await expect(page.locator('h1')).toBeVisible();
 
-    const tabLayout = await page.locator('.tab-bar').evaluate((tabBar) => {
-      const buttons = Array.from(tabBar.querySelectorAll('.tab-button'));
-      const boxes = buttons.map((button) => button.getBoundingClientRect());
-      return {
-        count: buttons.length,
-        rows: new Set(boxes.map((box) => Math.round(box.top))).size,
-        smallestWidth: Math.min(...boxes.map((box) => box.width)),
-        smallestHeight: Math.min(...boxes.map((box) => box.height)),
-        overflow: tabBar.scrollWidth > tabBar.clientWidth,
-      };
+      const layout = await page.locator('.win-shell').evaluate((shell) => {
+        const items = Array.from(shell.querySelectorAll('.win-nav-item'));
+        const main = shell.querySelector('.win-main');
+        return {
+          navCount: items.length,
+          navClipped: items.some((item) => item.scrollWidth > item.clientWidth),
+          mainWidth: Math.round(main.getBoundingClientRect().width),
+          pageOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+          bodyOverflow: document.body.scrollWidth - document.body.clientWidth,
+        };
+      });
+
+      expect(layout.navCount).toBeGreaterThan(0);
+      expect(layout.navClipped, `sidebar label clipped at ${width}px`).toBe(false);
+      expect(layout.mainWidth).toBeGreaterThan(600);
+      expect(layout.pageOverflow, `page overflow at ${width}px`).toBe(0);
+      expect(layout.bodyOverflow, `body overflow at ${width}px`).toBe(0);
+
+      // ตารางที่กว้างเกินต้องเลื่อนในกล่องของตัวเอง ไม่ใช่ดัน body
+      const overflowX = await page.locator('.table-wrap').first()
+        .evaluate((el) => window.getComputedStyle(el).overflowX);
+      expect(overflowX).toBe('auto');
     });
-    expect(tabLayout.count).toBeGreaterThan(0);
-    expect(tabLayout.rows).toBeGreaterThan(0);
-    expect(tabLayout.smallestWidth).toBeGreaterThanOrEqual(44);
-    expect(tabLayout.smallestHeight).toBeGreaterThanOrEqual(44);
-    expect(tabLayout.overflow).toBe(false);
-
-    const pageOverflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
-    expect(pageOverflow).toBe(false);
-
-    // Table should scroll horizontally
-    const tableWrap = page.locator('.table-wrap').first();
-    const overflowX = await tableWrap.evaluate((el) => window.getComputedStyle(el).overflowX);
-    expect(overflowX).toBe('auto');
-  });
+  }
 });
 
 test.describe('Scan to Sheet — Brand standards', () => {

@@ -21,10 +21,9 @@ export default defineConfig({
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
     },
-    {
-      name: 'Mobile Chrome',
-      use: { ...devices['Pixel 5'] },
-    },
+    // project 'Mobile Chrome' (Pixel 5) ถูกถอดออกพร้อมกับการย้ายมาใช้ Windows Enterprise Shell
+    // ซึ่งเป็น desktop-only — ความกว้างที่ต้องคุ้มครองย้ายไปอยู่ในชุด "Desktop layout"
+    // ที่ตรวจ 1280 / 1440 / 1920 แทน (ดู DESIGN.md ข้อ 5)
   ],
   webServer: {
     command: '.\\node_modules\\.bin\\vite.cmd --host 0.0.0.0',

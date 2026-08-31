@@ -32,6 +32,10 @@ import {
   Users,
 } from 'lucide-react';
 import StaffDirectory from './features/staff/StaffDirectory.jsx';
+import MenuBar from './shell/MenuBar.jsx';
+import Sidebar from './shell/Sidebar.jsx';
+import StatusBar from './shell/StatusBar.jsx';
+import TitleBar from './shell/TitleBar.jsx';
 import WorkflowView from './views/WorkflowView.jsx';
 import ScanPopup from './views/ScanPopup.jsx';
 import { CAMERA_POPUP_ID, CAMERA_REGION_ID, DEFAULT_LOOKBACK_HOURS, ISSUE_CUSTOMER_CANCELLED, ISSUE_DAMAGED, ISSUE_RETURNED, PACKER_UNASSIGNED } from './constants.js';
@@ -305,6 +309,7 @@ function App() {
   const [scanFlash, setScanFlash] = useState(false);
   const [scanPopupOpen, setScanPopupOpen] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [theme, setTheme] = useState(() => (
     document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light'
   ));
@@ -2320,6 +2325,34 @@ function App() {
     if (canFocus) input.focus({ preventScroll: true });
   }
 
+  // เมนูบาร์ผูกกับคำสั่งที่มีอยู่แล้วเท่านั้น หัวข้อที่ไม่มีรายการใดใช้ได้จะถูกซ่อนโดย MenuBar เอง
+  const shellMenus = [
+    {
+      label: 'แฟ้ม',
+      items: [
+        sheetUrl && { label: 'เปิด Master Sheet', href: sheetUrl },
+        { label: 'ออกจากระบบ', onSelect: () => { void signOut(); }, disabled: !isSignedIn },
+      ],
+    },
+    {
+      label: 'มุมมอง',
+      items: [
+        { label: 'รีเฟรชข้อมูลวันนี้', onSelect: () => { void refreshAllCounts(); }, disabled: !isSignedIn },
+        { label: sidebarCollapsed ? 'ขยายเมนูซ้าย' : 'ยุบเมนูซ้าย', onSelect: () => setSidebarCollapsed((value) => !value) },
+        { separator: true },
+        { label: theme === 'dark' ? 'ใช้โหมดสว่าง' : 'ใช้โหมดมืด', onSelect: () => setTheme(theme === 'dark' ? 'light' : 'dark') },
+        { label: soundEnabled ? 'ปิดเสียงแจ้งเตือน' : 'เปิดเสียงแจ้งเตือน', onSelect: () => setSoundEnabled((value) => !value) },
+      ],
+    },
+    {
+      label: 'เครื่องมือ',
+      items: [
+        { label: 'ตรวจออเดอร์ที่หาย', onSelect: () => { void handleCheckMissingOrders(); }, disabled: !isSignedIn || missingBusy },
+        { label: 'ไปหน้ารายงาน', onSelect: () => switchTab('reports') },
+      ],
+    },
+  ];
+
   function switchTab(nextTab) {
     setActiveTab(nextTab);
     setScanPopupOpen(false);
@@ -2966,156 +2999,30 @@ function App() {
   return (
     <>
     <a className="skip-link" href="#main">ข้ามไปยังเนื้อหาหลัก</a>
-    <main id="main" tabIndex={-1} className="app-shell enterprise-shell">
-      <section className="topbar">
-        <div className="app-title">
-          <span className="title-badge">
-            <ScanLine size={22} />
-            <span className="brand-wordmark">HILLKOFF</span>
-            <span className="title-product">Scan to Sheet</span>
-          </span>
-          <h1>สแกนใบปะหน้าเข้า Google Sheet</h1>
-          <span className="title-accent" />
-        </div>
-        <div className="account-strip">
-          <div className="account-pill">
-            <Mail size={16} />
-            <span>{user.email}</span>
-          </div>
-          <div className="top-connect-box">
-            <div className="connect-title">
-              <FileSpreadsheet size={18} />
-              <span>{isSignedIn ? 'Firestore พร้อมใช้งาน' : 'Firebase ยังไม่เชื่อม'}</span>
-            </div>
-            {isSignedIn ? (
-              <button className="ghost-button" type="button" onClick={signOut}>
-                <LogOut size={16} />
-                <span>ออกจากระบบ</span>
-              </button>
-            ) : (
-              <button className="secondary-button" type="button" onClick={signInWithGoogle} disabled={busy || !isGoogleReady}>
-                {busy ? <RefreshCw size={16} className="spin" /> : <LogIn size={16} />}
-                <span>{isGoogleReady ? 'Login with Google' : 'รอใส่ OAuth Client ID'}</span>
-              </button>
-            )}
-          </div>
-          {sheetUrl && (
-            <a className="ghost-button master-sheet-link" href={sheetUrl} target="_blank" rel="noreferrer">
-              <FileSpreadsheet size={16} />
-              <span>Master Sheet</span>
-            </a>
-          )}
-          <div className="theme-toggle" aria-label="เลือกโหมดสี">
-            <button
-              className={theme === 'light' ? 'active' : ''}
-              type="button"
-              onClick={() => setTheme('light')}
-              title="Light mode"
-            >
-              <Sun size={16} />
-              <span>Light</span>
-            </button>
-            <button
-              className={theme === 'dark' ? 'active' : ''}
-              type="button"
-              onClick={() => setTheme('dark')}
-              title="Dark mode"
-            >
-              <Moon size={16} />
-              <span>Dark</span>
-            </button>
-          </div>
-          <button className="icon-button" type="button" onClick={() => setSoundEnabled((value) => !value)} title="เปิด/ปิดเสียง">
-            <Volume2 size={18} />
-          </button>
-        </div>
-      </section>
-
-      {/* Tab Bar */}
-      <nav className="tab-bar" aria-label="เลือกโหมดการทำงาน">
-        <button
-          data-testid="packer-tab"
-          className={`tab-button ${activeTab === 'packer' ? 'active' : ''}`}
-          type="button"
-          aria-current={activeTab === 'packer' ? 'page' : undefined}
-          onClick={() => switchTab('packer')}
-        >
-          <PackageCheck size={18} />
-          <span>📦 แพ็กสินค้า (Packer)</span>
-        </button>
-        <button
-          data-testid="drive-tab"
-          className={`tab-button ${activeTab === 'drive' ? 'active' : ''}`}
-          type="button"
-          aria-current={activeTab === 'drive' ? 'page' : undefined}
-          onClick={() => switchTab('drive')}
-        >
-          <Upload size={18} />
-          <span>📥 รับเข้า Drive (Admin)</span>
-          {missingAlertBadge > 0 && (
-            <span className="tab-badge">{missingAlertBadge}</span>
-          )}
-        </button>
-        <button
-          data-testid="reports-tab"
-          className={`tab-button ${activeTab === 'reports' ? 'active' : ''}`}
-          type="button"
-          aria-current={activeTab === 'reports' ? 'page' : undefined}
-          onClick={() => switchTab('reports')}
-        >
-          <BarChart3 size={18} />
-          <span>รายงาน</span>
-        </button>
-        <a
-          data-testid="delivery-system-link"
-          className="tab-button"
-          href="https://repo-rho-livid.vercel.app/"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Truck size={18} />
-          <span>ระบบส่งของ</span>
-        </a>
-        <a
-          data-testid="misdelivery-management-link"
-          className="tab-button"
-          href="https://script.google.com/a/macros/hillkoff.com/s/AKfycbxQENSgzP-0IzDX0J_pY2g9HoMlCKMaNQYJlnxPbudqELr79oKdwYpoNflqrSAfsgw2/exec"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <AlertTriangle size={18} />
-          <span>จัดการส่งของผิด</span>
-        </a>
-        <button
-          data-testid="staff-directory-tab"
-          className={`tab-button ${activeTab === 'staff' ? 'active' : ''}`}
-          type="button"
-          aria-current={activeTab === 'staff' ? 'page' : undefined}
-          onClick={() => switchTab('staff')}
-        >
-          <Users size={18} />
-          <span>แผนผังพนักงานห้องแพ็ค</span>
-        </button>
-        <a
-          className="tab-button"
-          href="https://barcode-checker-ashy.vercel.app/"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Printer size={18} />
-          <span>พิมพ์ใบเช็ค ใบปะหน้า</span>
-        </a>
-        <a
-          data-testid="coffee-drum-tab"
-          className="tab-button"
-          href="https://script.google.com/a/macros/hillkoff.com/s/AKfycbxETrRx_gJBuVTdl2MUaumr5Pem4LzahebQ6HZzrknPOr-PPCPmJHQ0I9f-p-kYJB-J/exec"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Coffee size={18} />
-          <span>เบิกออก/รับเข้ากาแฟถัง</span>
-        </a>
-      </nav>
+    <div id="main" tabIndex={-1} className={`app-shell enterprise-shell win-shell ${sidebarCollapsed ? 'collapsed' : ''}`}>
+      <TitleBar
+        user={user}
+        isSignedIn={isSignedIn}
+        isGoogleReady={isGoogleReady}
+        busy={busy}
+        signInWithGoogle={signInWithGoogle}
+        signOut={signOut}
+        sheetUrl={sheetUrl}
+        theme={theme}
+        setTheme={setTheme}
+        soundEnabled={soundEnabled}
+        setSoundEnabled={setSoundEnabled}
+      />
+      <MenuBar menus={shellMenus} />
+      <div className="win-body">
+        <Sidebar
+          activeTab={activeTab}
+          switchTab={switchTab}
+          missingAlertBadge={missingAlertBadge}
+          collapsed={sidebarCollapsed}
+          setCollapsed={setSidebarCollapsed}
+        />
+        <div className="win-main">
 
       {['packer', 'drive'].includes(activeTab) && (
         <WorkflowView
@@ -3285,7 +3192,17 @@ function App() {
           stopCamera={stopCamera}
         />
       )}
-    </main>
+        </div>
+      </div>
+      <StatusBar
+        activeTab={activeTab}
+        isSignedIn={isSignedIn}
+        totalTodayCount={totalTodayCount}
+        scanQueueSnapshot={scanQueueSnapshot}
+        selectedPacker={selectedPacker}
+        today={today}
+      />
+    </div>
     </>
   );
 }

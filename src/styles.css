@@ -4,14 +4,25 @@
 :root {
   color-scheme: light;
   font-family: Kanit, "Noto Sans Thai", system-ui, -apple-system, sans-serif;
-  --page: #eaf4f3;
-  --page-soft: #dcede9;
+  /* โทน Windows Enterprise Shell: ขาว-เทาไม่มีความอุ่น พื้นเอียงไปทางเขียวฟ้าจางมาก
+     เพื่อให้อยู่ตระกูลเดียวกับสีแบรนด์ ไม่ใช่เทาสีตะกั่วที่ตัดกับ teal */
+  --page: #F3F6F6;
+  --page-soft: #E8EDED;
   --surface: #ffffff;
-  --surface-soft: #f3f8f7;
+  --surface-soft: #F9FBFB;
   --text: #1c1c1e;
   --muted: #5c6b69;
-  --line: #dde3e2;
-  --line-strong: #c7d0ce;
+  --line: #E3E8E8;
+  --line-strong: #CCD3D3;
+  /* เปลือกแบบ Windows: chrome คือพื้นของ toolbar/หัวตาราง/แถบสถานะ ส่วนที่เหลือเป็นสถานะของแถว
+     --win-sel เทียบพื้นขาววัดได้ 1.215 จึงบอก "เลือกอยู่" ด้วยตัวเองไม่ได้
+     ต้องมีเส้น --win-sel-line (6.823) คู่เสมอ */
+  --win-chrome: #EDF1F1;
+  --win-grid-line: #E9EDED;
+  --win-row-alt: #FAFCFC;
+  --win-row-hover: #E9F5F4;
+  --win-sel: #D6EEEB;
+  --win-sel-line: #1a6561;
   /* teal ของ Flip7 (#2BA8A2) ทั้งเฉด: --primary-fill ใช้ค่าตรงสเปก ส่วนค่าที่ต้องอ่านเป็น
      "ตัวหนังสือ" ต้องไล่ให้เข้มลงในเฉดเดิม เพราะ #2BA8A2 บนขาววัดได้ 2.906 และ Primary Dark
      #1E8C86 ของ Flip7 เองก็ได้เพียง 4.077 (ผ่านเฉพาะตัวใหญ่)
@@ -53,9 +64,9 @@
   --on-info: #0a2433;
   --info-soft: rgba(93,173,226,0.14);
   --info-line: rgba(93,173,226,0.38);
-  /* พื้น input ครีมตรงสเปก Flip7 ใช้ค่านี้ได้เพราะตัวหนังสือ/ไอคอน teal ในช่องกรอกเปลี่ยนไปใช้
-     --primary-strong (6.435) แล้ว ส่วน --primary บนครีมนี้ได้ 4.465 จึงห้ามเป็นตัวหนังสือปกติ */
-  --field: #FFF8E7;
+  /* ช่องกรอกเป็นขาวล้วนแล้ว ทิ้งครีม #FFF8E7 ของระบบเดิม — ตัวช่องแยกจากพื้นด้วยขอบ
+     --control-line (3.752) ไม่ใช่ด้วยสีพื้น */
+  --field: #ffffff;
   /* ขอบของ control ต้องได้ 3:1 ตาม WCAG 1.4.11 --line-strong (#c7d0ce) วัดได้เพียง 1.486
      บนพื้นขาว คือขอบ input ทุกช่องในแอปไม่ผ่านเกณฑ์มาตลอด ค่านี้ได้ 3.347–3.752
      บนครีม/ขาว/surface-soft/page ทั้งสี่แบบ */
@@ -139,6 +150,12 @@
   --muted: #9aa5a3;
   --line: #223330;
   --line-strong: #2f4642;
+  --win-chrome: #0f1918;
+  --win-grid-line: #1e2c2a;
+  --win-row-alt: #111c1b;
+  --win-row-hover: #182726;
+  --win-sel: #123c39;
+  --win-sel-line: #3CC4BD;
   /* Flip7 Primary Light ตรงสเปก อ่านเป็นตัวหนังสือบนพื้นเข้มได้ 7.820 (surface) */
   --primary: #3CC4BD;
   --primary-strong: #3ae3db;
@@ -269,7 +286,7 @@ p {
 .app-title {
   position: relative;
   padding: 18px 20px 14px;
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   background: var(--surface);
   border: 1px solid var(--line);
   box-shadow: var(--shadow-sm);
@@ -281,7 +298,7 @@ p {
   align-items: center;
   gap: 8px;
   padding: 5px 14px;
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-sm);
   background: var(--primary-soft);
   border: 1px solid var(--primary-soft);
   color: var(--primary);
@@ -504,7 +521,7 @@ select:hover {
 }
 
 .issue-bar button:not(:disabled):hover {
-  box-shadow: var(--glow-accent);
+  box-shadow: none;
 }
 
 .issue-bar button:not(:disabled):active {
@@ -528,7 +545,7 @@ select:hover {
 }
 
 .table-action-button:not(:disabled):hover {
-  box-shadow: var(--glow-accent);
+  box-shadow: none;
 }
 
 .table-action-button:not(:disabled):active {
@@ -605,7 +622,7 @@ select:hover {
 }
 
 .current-courier-badge:hover {
-  box-shadow: var(--glow-primary);
+  box-shadow: none;
 }
 
 .field-control input {
@@ -651,7 +668,7 @@ select:hover {
   overflow-y: auto;
   padding: 18px;
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   background: var(--surface);
   box-shadow: var(--shadow-modal);
   animation: overlay-in 0.15s ease;
@@ -792,7 +809,7 @@ select:hover {
 .staff-org-level { position: relative; display: grid; gap: 10px; padding-top: 30px; }
 .staff-org-level:first-child { padding-top: 0; }
 .staff-org-level:not(:first-child)::before { content: ""; position: absolute; top: 0; left: 50%; width: 1px; height: 30px; background: var(--line-strong); }
-.staff-org-level h3 { position: relative; z-index: 1; width: fit-content; margin: 0 auto; padding: 6px 12px; border: 1px solid var(--line-strong); border-radius: var(--radius-full); background: var(--surface); color: var(--text); font-size: 1rem; text-align: center; }
+.staff-org-level h3 { position: relative; z-index: 1; width: fit-content; margin: 0 auto; padding: 6px 12px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); font-size: 1rem; text-align: center; }
 .staff-org-level h3 span { color: var(--muted); font-size: .82rem; font-weight: 500; }
 .staff-org-leader .staff-grid { width: min(240px, 100%); margin: 0 auto; grid-template-columns: minmax(0, 1fr); }
 .staff-org-leader .staff-card { border-color: var(--primary); }
@@ -824,7 +841,7 @@ select:hover {
 .staff-card-title p { margin: 2px 0 0; color: var(--muted); font-size: .9rem; }
 .staff-position { padding: 3px 7px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); color: var(--primary-strong); font-size: .78rem; white-space: nowrap; }
 .staff-card-badges { display: flex; flex-wrap: wrap; gap: 5px; }
-.staff-status, .staff-lead-badge { display: inline-flex; align-items: center; gap: 4px; width: fit-content; padding: 3px 7px; border: 1px solid var(--line-strong); border-radius: var(--radius-full); font-size: .75rem; font-weight: 700; }
+.staff-status, .staff-lead-badge { display: inline-flex; align-items: center; gap: 4px; width: fit-content; padding: 3px 7px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); font-size: .75rem; font-weight: 700; }
 .staff-status.status-working { border-color: var(--success-line); background: var(--success-bg); color: var(--success); }
 .staff-status.status-leave, .staff-status.status-outside { border-color: var(--warning-line); background: var(--warning-bg); color: var(--warning); }
 .staff-status.status-off { border-color: var(--line-strong); background: var(--surface-soft); color: var(--muted); }
@@ -855,7 +872,7 @@ select:hover {
 .duty-type-form { display: flex; align-items: end; gap: 8px; padding: 10px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); }
 .duty-type-form label { flex: 1; align-items: stretch; flex-direction: column; }
 .duty-type-list { display: flex; flex-wrap: wrap; gap: 6px; }
-.duty-type-list span { display: inline-flex; align-items: center; border: 1px solid var(--line-strong); border-radius: var(--radius-full); background: var(--surface); overflow: hidden; }
+.duty-type-list span { display: inline-flex; align-items: center; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--surface); overflow: hidden; }
 .duty-type-list button { padding: 5px 8px; border: 0; border-inline-end: 1px solid var(--line); background: transparent; color: var(--text); }
 .duty-type-list button:last-child { border-inline-end: 0; color: var(--primary-strong); }
 .duty-type-list span.inactive { opacity: .55; text-decoration: line-through; }
@@ -868,7 +885,7 @@ select:hover {
 .assignment-actions button { border: 0; background: transparent; color: var(--primary-strong); }
 .danger-text { color: var(--danger) !important; }
 .staff-modal-overlay { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 16px; background: color-mix(in srgb, var(--text) 58%, transparent); }
-.staff-modal { width: min(720px, 100%); max-height: calc(100vh - 32px); overflow: auto; padding: 18px; border: 1px solid var(--line); border-radius: var(--radius-xl); background: var(--surface); color: var(--text); box-shadow: var(--shadow-modal); }
+.staff-modal { width: min(720px, 100%); max-height: calc(100vh - 32px); overflow: auto; padding: 18px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); color: var(--text); box-shadow: var(--shadow-modal); }
 .staff-modal.compact { width: min(480px, 100%); display: grid; gap: 14px; }
 .staff-modal header { justify-content: space-between; margin-bottom: 16px; }
 .staff-modal header h3 { margin: 0; }
@@ -883,7 +900,7 @@ select:hover {
 .staff-modal footer .primary-action { background: var(--primary-fill); color: var(--on-primary); border-color: var(--primary); }
 .staff-modal-hint { margin: 0; padding: 8px 10px; border-inline-start: 3px solid var(--primary); border-radius: var(--radius-sm); background: var(--surface-soft); color: var(--muted); font-size: .84rem; line-height: 1.6; }
 .duty-entry-badges { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; }
-.duty-badge { padding: 2px 7px; border: 1px solid var(--line-strong); border-radius: var(--radius-full); font-size: .74rem; font-weight: 700; }
+.duty-badge { padding: 2px 7px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); font-size: .74rem; font-weight: 700; }
 .duty-badge.scheduled { border-color: var(--primary); background: var(--primary-soft); color: var(--primary-strong); }
 .duty-badge.adhoc { background: var(--surface-soft); color: var(--muted); }
 .duty-badge.changed { border-color: var(--warning-line); background: var(--warning-bg); color: var(--warning); }
@@ -908,7 +925,7 @@ select:hover {
 .weekly-grid tbody th { min-width: 170px; background: var(--surface-soft); color: var(--text); font-size: .88rem; font-weight: 700; }
 .weekly-grid tbody th small { color: var(--muted); font-weight: 500; }
 .weekly-grid .is-selected { background: var(--primary-soft); }
-.weekly-chip { display: inline-flex; align-items: center; gap: 3px; margin: 0 4px 4px 0; padding: 2px 4px 2px 8px; border: 1px solid var(--line-strong); border-radius: var(--radius-full); background: var(--surface); color: var(--text); font-size: .82rem; }
+.weekly-chip { display: inline-flex; align-items: center; gap: 3px; margin: 0 4px 4px 0; padding: 2px 4px 2px 8px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); font-size: .82rem; }
 .weekly-chip button { display: grid; place-items: center; width: 20px; height: 20px; padding: 0; border: 0; border-radius: var(--radius-full); background: transparent; color: var(--muted); }
 .weekly-chip button:last-child { color: var(--danger); }
 .weekly-add { display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 1px dashed var(--line-strong); border-radius: var(--radius-sm); background: transparent; color: var(--primary-strong); }
@@ -1113,7 +1130,7 @@ select:hover {
     width: 100%;
     max-height: 82dvh;
     padding: 14px;
-    border-radius: var(--radius-lg);
+    border-radius: var(--radius-md);
   }
 
   .scan-popup-header {
@@ -1137,7 +1154,7 @@ select:hover {
 .scan-panel,
 .report-panel {
   border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   background: var(--surface);
   box-shadow: var(--shadow-sm);
   min-width: 0;
@@ -1168,7 +1185,7 @@ select:hover {
   margin-bottom: 14px;
   padding: 14px 16px;
   border: 1px solid var(--line);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-md);
   background: var(--surface);
 }
 
@@ -1256,12 +1273,12 @@ select:hover {
   border-left-color: var(--primary);
   background: var(--primary-soft);
   color: var(--primary-strong);
-  box-shadow: var(--glow-primary);
+  box-shadow: none;
 }
 
 .courier-button strong {
   min-width: 34px;
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-sm);
   background: var(--page-soft);
   padding: 3px 8px;
   text-align: center;
@@ -1410,7 +1427,7 @@ select:hover {
 .secondary-button:not(:disabled):hover {
   filter: none;
   background: var(--primary-strong);
-  box-shadow: var(--glow-primary);
+  box-shadow: none;
 }
 
 .secondary-button:not(:disabled):active {
@@ -1675,7 +1692,7 @@ select:hover {
   height: min(72%, 360px);
   border: 2px dashed rgba(255, 255, 255, 0.86);
   border-radius: var(--radius-md);
-  box-shadow: var(--glow-primary);
+  box-shadow: none;
 }
 
 .scan-frame span::before {
@@ -1686,7 +1703,7 @@ select:hover {
   top: 50%;
   height: 2px;
   background: var(--primary);
-  box-shadow: var(--glow-primary);
+  box-shadow: none;
   animation: scan-line 2s ease-in-out infinite;
 }
 
@@ -1789,7 +1806,7 @@ select:hover {
   align-items: center;
   gap: 10px;
   border: 2px solid var(--primary);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   background: var(--surface);
   padding: 12px;
 }
@@ -1884,9 +1901,9 @@ select:hover {
   display: grid;
   gap: 6px;
   min-height: 76px;
-  padding: var(--radius-lg);
+  padding: var(--radius-md);
   border: 0.5px solid var(--line);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-md);
   background: var(--surface-soft);
   box-shadow: var(--shadow-sm);
   transition: background-color var(--dur-ui) ease, border-color var(--dur-ui) ease,
@@ -1946,7 +1963,7 @@ select:hover {
   gap: 4px;
   padding: 12px 10px;
   border: 0.5px solid var(--line);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-md);
   background: var(--surface-soft);
   box-shadow: var(--shadow-sm);
   text-align: center;
@@ -2184,7 +2201,7 @@ th {
 .status-badge {
   display: inline-block;
   padding: 2px 10px;
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-sm);
   font-weight: 900;
   font-size: 0.82rem;
 }
@@ -2233,7 +2250,7 @@ tbody tr:hover {
 }
 
 .table-wrap {
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   overflow-x: auto;
   overflow-y: hidden;
   box-shadow: var(--shadow-sm);
@@ -2373,7 +2390,7 @@ tbody tr:hover {
   align-items: center;
   justify-content: center;
   padding: 0 6px;
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-sm);
   background: var(--danger-fill);
   color: var(--on-danger);
   font-size: 0.72rem;
@@ -2385,7 +2402,7 @@ tbody tr:hover {
   display: inline-block;
   margin-top: 4px;
   padding: 3px 10px;
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-sm);
   background: var(--info-soft);
   border: 1px solid var(--info-line);
   color: var(--info);
@@ -2468,7 +2485,7 @@ tbody tr:hover {
 
 .workflow-drive.camera-panel .scan-frame span::before {
   background: var(--info-fill);
-  box-shadow: var(--glow-info);
+  box-shadow: none;
 }
 
 .workflow-drive.scan-form .scan-input-row:focus-within {
@@ -2778,7 +2795,7 @@ tbody tr:hover {
 .enterprise-shell .app-title {
   padding: 16px 20px;
   border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   background: var(--surface);
   box-shadow: var(--shadow-sm);
 }
@@ -2849,7 +2866,7 @@ tbody tr:hover {
   gap: 4px;
   padding: 4px;
   border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   background: var(--surface);
   box-shadow: var(--shadow-sm);
 }
@@ -2881,7 +2898,7 @@ tbody tr:hover {
 .enterprise-shell .missing-check-panel,
 .enterprise-shell .standards-panel {
   border-color: var(--line);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   background: var(--surface);
   box-shadow: var(--shadow-sm);
 }
@@ -2921,7 +2938,7 @@ tbody tr:hover {
 .enterprise-shell .scan-panel.workflow-drive {
   border-width: 1px;
   border-top-width: 3px;
-  box-shadow: var(--shadow-card);
+  box-shadow: none;
 }
 
 .enterprise-shell .scan-panel.workflow-packer {
@@ -3107,46 +3124,10 @@ tbody tr:hover {
 }
 
 @media (min-width: 1200px) {
-  .enterprise-shell {
-    display: grid;
-    grid-template-columns: 232px minmax(0, 1fr);
-    grid-template-areas:
-      "topbar topbar"
-      "nav guide"
-      "nav upload"
-      "nav standards"
-      "nav workspace"
-      "nav report";
-    column-gap: 24px;
-    align-items: start;
-  }
-
-  .enterprise-shell > .topbar { grid-area: topbar; }
-  .enterprise-shell > .tab-bar { grid-area: nav; }
-  .enterprise-shell > .workflow-guide { grid-area: guide; }
-  .enterprise-shell > .marketplace-upload-panel { grid-area: upload; }
-  .enterprise-shell > .standards-panel { grid-area: standards; }
-  .enterprise-shell > .workspace-grid { grid-area: workspace; }
-  .enterprise-shell > .report-panel { grid-area: report; margin-top: 0; }
-
-  .enterprise-shell > .tab-bar {
-    position: sticky;
-    top: 24px;
-    display: flex;
-    flex-direction: column;
-    align-items: stretch;
-    margin: 0;
-  }
-
-  .enterprise-shell > .tab-bar .tab-button {
-    justify-content: flex-start;
-    padding: 0 12px;
-    text-align: left;
-  }
-
-  .enterprise-shell > .tab-bar .tab-button:last-child {
-    border-top: 1px solid var(--line);
-  }
+  /* โครง grid 2 คอลัมน์ของหน้าจอเดิม (topbar + tab-bar เป็นเมนูซ้าย) ถูกลบทิ้งพร้อมกับ
+     การย้ายมาใช้ .win-shell ซึ่งวางโครงเองทั้งหมด กฎเดิมอ้าง .topbar และ .tab-bar
+     ที่ไม่มีอยู่ใน DOM แล้ว และ grid-template-areas ของมันทำให้ลูกของ shell ใหม่
+     ถูกดันไปคอลัมน์ที่สองจนหน้าจอว่างเปล่า */
 
   .enterprise-shell .workspace-grid {
     grid-template-columns: 280px minmax(0, 1fr);
@@ -3526,7 +3507,7 @@ tbody tr:hover {
 .enterprise-shell .marketplace-file-input::file-selector-button {
   margin-right: 8px;
   border: 0;
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-sm);
   color: var(--on-primary);
   background: var(--primary-fill);
   font: inherit;
@@ -3601,7 +3582,7 @@ tbody tr:hover {
 .enterprise-shell .missing-results-actions button,
 .enterprise-shell .recent-actions .text-button,
 .enterprise-shell .staff-section-tabs button {
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-sm);
 }
 
 /* ปุ่มไอคอนเป็นวงกลมเต็ม และต้องกดติดด้วยนิ้วบนแท็บเล็ตหน้างาน (Flip7: ≥72rpx = 36px) */
@@ -3609,14 +3590,14 @@ tbody tr:hover {
 .enterprise-shell .theme-toggle button {
   min-width: 36px;
   min-height: 36px;
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-sm);
 }
 
 /* รางของ segmented control ต้องโค้งตามลูกใน ไม่งั้นมุมลูกโผล่พ้นราง */
 .enterprise-shell .segmented-control,
 .enterprise-shell .staff-section-tabs,
 .enterprise-shell .theme-toggle {
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-sm);
 }
 
 /* ── glow เงาสี: เฉพาะ element ที่กดได้ ตอน hover/focus ──
@@ -3626,22 +3607,22 @@ tbody tr:hover {
 .enterprise-shell .secondary-button:not(:disabled):hover,
 .enterprise-shell .secondary-button:focus-visible,
 .enterprise-shell .side-panel .courier-button.active:not(:disabled):hover {
-  box-shadow: var(--glow-primary);
+  box-shadow: none;
 }
 
 .enterprise-shell .scan-input-row button:not(:disabled):hover,
 .enterprise-shell .scan-input-row button:focus-visible {
-  box-shadow: var(--glow-accent);
+  box-shadow: none;
 }
 
 .enterprise-shell .popup-cancel-btn.active:not(:disabled):hover,
 .enterprise-shell .missing-result-card.danger .table-action-button:not(:disabled):hover {
-  box-shadow: var(--glow-coral);
+  box-shadow: none;
 }
 
 .enterprise-shell .side-panel.workflow-drive .courier-button.active:not(:disabled):hover,
 .enterprise-shell .workflow-drive.scan-form .scan-input-row button:not(:disabled):hover {
-  box-shadow: var(--glow-info);
+  box-shadow: none;
 }
 
 /* ── พื้นครีมของช่องกรอก ──
@@ -3743,7 +3724,7 @@ tbody tr:hover {
    (ตัวนั้นยังเป็น --danger-fill เพราะหมายถึงงานที่ยังไม่เสร็จ) */
 .enterprise-shell .report-badge {
   border: 1px solid var(--accent-line);
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-sm);
   background: var(--accent-soft);
   color: var(--accent);
   font-weight: 800;
@@ -3825,7 +3806,7 @@ tbody tr:hover {
 .enterprise-shell .staff-card,
 .enterprise-shell .app-title,
 .enterprise-shell .tab-bar {
-  box-shadow: var(--shadow-card);
+  box-shadow: none;
 }
 
 /* ── แถบสีขอบซ้าย 6rpx = 3px ตรงสเปก ── */
@@ -3844,23 +3825,23 @@ tbody tr:hover {
    ให้เฉพาะปุ่มที่เป็นการกระทำหลักและสถานะที่เลือกอยู่ ไม่ใส่ทุกปุ่มในจอ เพราะการ์ดข้อมูล
    ที่วางเรียงกันหลายใบพร้อม glow ทุกใบจะกลบกันเอง */
 .enterprise-shell .scan-input-row button:not(:disabled) {
-  box-shadow: var(--glow-accent);
+  box-shadow: none;
 }
 
 .enterprise-shell .primary-action:not(:disabled),
 .enterprise-shell .secondary-button:not(:disabled),
 .enterprise-shell .side-panel .courier-button.active:not(:disabled),
 .enterprise-shell .tab-button.active {
-  box-shadow: var(--glow-primary);
+  box-shadow: none;
 }
 
 .enterprise-shell .side-panel.workflow-drive .courier-button.active:not(:disabled),
 .enterprise-shell .workflow-drive.scan-form .scan-input-row button:not(:disabled) {
-  box-shadow: var(--glow-info);
+  box-shadow: none;
 }
 
 .enterprise-shell .popup-cancel-btn.active:not(:disabled) {
-  box-shadow: var(--glow-coral);
+  box-shadow: none;
 }
 
 /* ── ขอบของปุ่มที่ถมสีทึบ ──
@@ -3981,3 +3962,432 @@ tbody tr:hover {
     font-size: 0.78rem;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Windows Enterprise Shell — เปลือกของโปรแกรม (title bar / menu bar / sidebar /
+   status bar) ค่าสีทุกตัวมาจาก token ที่ต้นไฟล์ ดูกฎและตัวเลข contrast ที่ DESIGN.md
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* .app-shell / .enterprise-shell เดิมกำหนดความกว้างและ padding แบบหน้าเว็บกลางจอ
+   เปลือกแบบ Windows กินเต็มจอเสมอ จึงต้องล้างค่าเหล่านั้นด้วย specificity ที่สูงกว่า
+   (สองคลาส) ไม่ใช่ด้วย !important */
+.app-shell.win-shell {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+}
+
+.win-shell {
+  display: grid;
+  grid-template-rows: 34px 26px minmax(0, 1fr) 24px;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--page);
+}
+
+/* ── title bar ── */
+.win-titlebar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-inline: 8px;
+  background: var(--topbar-bg);
+  color: var(--on-topbar);
+  min-width: 0;
+}
+
+.win-app-mark {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-sm);
+  background: var(--primary-fill);
+  color: var(--on-primary);
+  flex: none;
+}
+
+/* ต้อง scope ด้วย .win-titlebar (สองคลาส) เพราะกฎ `.enterprise-shell h1` ชนะคลาสเดี่ยว
+   ผลคือชื่อโปรแกรมเคยได้ทั้งสี --text และ font-size 26.88px ทับพื้น topbar เข้ม
+   จนตัวหนังสือแทบอ่านไม่ออก (เทสต์ contrast จับได้) */
+.win-titlebar .win-app-name {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 500;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+  color: var(--on-topbar);
+}
+
+.win-titlebar-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.win-conn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.win-conn-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--success);
+  flex: none;
+}
+
+.win-conn.offline .win-conn-dot { background: var(--warning); }
+
+.win-titlebar-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  font-size: 0.72rem;
+  font-family: inherit;
+  color: var(--on-topbar);
+  background: transparent;
+  border: 1px solid var(--topbar-control-line);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color var(--dur-ui) ease;
+}
+
+.win-titlebar-btn.icon-only { padding-inline: 5px; }
+.win-titlebar-btn:not(:disabled):hover { background: rgba(255, 255, 255, 0.14); }
+.win-titlebar-btn:not(:disabled):active { transform: scale(0.97); }
+.win-titlebar-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+/* ── menu bar ── */
+.win-menubar {
+  display: flex;
+  align-items: stretch;
+  padding-left: 4px;
+  background: var(--win-chrome);
+  border-bottom: 1px solid var(--line);
+  position: relative;
+  z-index: 30;
+}
+
+.win-menu { position: relative; display: flex; }
+
+.win-menu-title {
+  padding-inline: 10px;
+  font-family: inherit;
+  font-size: 0.78rem;
+  color: var(--text);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  transition: background-color var(--dur-ui) ease;
+}
+
+.win-menu-title:hover,
+.win-menu-title.open {
+  background: var(--primary-soft);
+  color: var(--primary-strong);
+}
+
+.win-menu-pop {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  min-width: 220px;
+  padding: 3px;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-modal);
+}
+
+.win-menu-pop button,
+.win-menu-pop a {
+  display: block;
+  width: 100%;
+  padding: 5px 10px;
+  font-family: inherit;
+  font-size: 0.78rem;
+  text-align: left;
+  text-decoration: none;
+  color: var(--text);
+  background: transparent;
+  border: 0;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.win-menu-pop button:not(:disabled):hover,
+.win-menu-pop a:hover { background: var(--primary-soft); color: var(--primary-strong); }
+.win-menu-pop button:disabled { color: var(--muted); cursor: not-allowed; }
+.win-menu-pop hr { margin: 3px 0; border: 0; border-top: 1px solid var(--line); }
+
+/* ── body: sidebar + พื้นที่ทำงาน ── */
+.win-body {
+  display: grid;
+  grid-template-columns: 216px minmax(0, 1fr);
+  min-height: 0;
+}
+
+.win-shell.collapsed .win-body { grid-template-columns: 46px minmax(0, 1fr); }
+
+.win-sidebar {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  padding-block: 6px;
+  background: var(--surface);
+  border-right: 1px solid var(--line);
+}
+
+.win-nav-group { padding-block: 4px; }
+
+.win-nav-heading {
+  margin: 6px 12px 4px;
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.win-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 7px 12px;
+  font-family: inherit;
+  font-size: 0.8rem;
+  text-align: left;
+  text-decoration: none;
+  color: var(--text);
+  background: transparent;
+  border: 0;
+  border-left: 3px solid transparent;
+  cursor: pointer;
+  transition: background-color var(--dur-ui) ease;
+}
+
+.win-nav-item:hover { background: var(--win-row-hover); }
+
+.win-nav-item.active {
+  background: var(--primary-soft);
+  border-left-color: var(--primary-fill);
+  color: var(--primary-strong);
+  font-weight: 500;
+}
+
+.win-nav-icon { flex: none; }
+.win-nav-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.win-nav-external { flex: none; color: var(--muted); }
+
+.win-nav-badge {
+  flex: none;
+  padding-inline: 6px;
+  font-size: 0.66rem;
+  line-height: 1.5;
+  color: var(--on-danger);
+  background: var(--danger-fill);
+  border-radius: 8px;
+}
+
+.win-sidebar-toggle {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: auto;
+  padding: 7px 12px;
+  font-family: inherit;
+  font-size: 0.78rem;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  border-top: 1px solid var(--line);
+  cursor: pointer;
+}
+
+.win-sidebar-toggle:hover { background: var(--win-row-hover); color: var(--text); }
+
+/* เมนูยุบ: เหลือเฉพาะไอคอน ป้ายนับยังต้องเห็นเพราะมันคือเหตุผลที่ต้องกดเข้าไป */
+.win-shell.collapsed .win-nav-label,
+.win-shell.collapsed .win-nav-heading,
+.win-shell.collapsed .win-nav-external { display: none; }
+.win-shell.collapsed .win-nav-item,
+.win-shell.collapsed .win-sidebar-toggle { justify-content: center; padding-inline: 0; }
+.win-shell.collapsed .win-nav-badge { position: absolute; margin-left: 22px; }
+.win-shell.collapsed .win-nav-item { position: relative; }
+
+/* ── พื้นที่ทำงาน: view เดิมทั้งหมดอยู่ในกล่องนี้และเลื่อนในตัวเอง ไม่ดัน body ── */
+.win-main {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 10px;
+  background: var(--page);
+}
+
+/* ── status bar ── */
+.win-statusbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-inline: 10px;
+  font-size: 0.7rem;
+  color: var(--muted);
+  background: var(--win-chrome);
+  border-top: 1px solid var(--line);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.win-statusbar b { color: var(--text); font-weight: 500; }
+.win-statusbar-alert { color: var(--danger); }
+.win-statusbar-alert b { color: var(--danger); }
+.win-statusbar-right { margin-left: auto; display: flex; gap: 14px; }
+
+/* ── ลุคของเนื้อหาในเปลือก Windows ────────────────────────────────────────────
+   กฎทั้งหมด scope ด้วย .win-shell เพื่อให้ชนะกฎเดิมด้วย specificity ไม่ใช่ !important
+   หลัก: ขอบ 1px · มุม 3–4px · ไม่มีเงา · หนาแน่นระดับโปรแกรมเดสก์ท็อป
+   ────────────────────────────────────────────────────────────────────────────── */
+
+/* พาเนล: แบน ทึบ ขอบเดียว ไม่มีเงาและไม่ขยับตอน hover */
+.win-shell .side-panel,
+.win-shell .scan-panel,
+.win-shell .report-panel,
+.win-shell .secondary-panel,
+.win-shell .marketplace-upload-panel,
+.win-shell .standards-panel,
+.win-shell .drive-card,
+.win-shell .search-panel {
+  border-radius: var(--radius-sm);
+  box-shadow: none;
+  transition: border-color var(--dur-ui) ease;
+}
+
+.win-shell .side-panel,
+.win-shell .scan-panel,
+.win-shell .report-panel {
+  padding: 10px;
+}
+
+/* ปุ่มทั่วไป: สี่เหลี่ยมมุม 3px ขอบต้องได้ 3:1 จึงใช้ --control-line ไม่ใช่ --line-strong */
+.win-shell button,
+.win-shell .secondary-button,
+.win-shell .ghost-button,
+.win-shell .report-button,
+.win-shell .text-button {
+  border-radius: var(--radius-sm);
+}
+
+.win-shell .secondary-button,
+.win-shell .ghost-button,
+.win-shell .report-button {
+  min-height: 28px;
+  padding: 3px 10px;
+  font-size: 0.8rem;
+  border-color: var(--control-line);
+  box-shadow: none;
+}
+
+.win-shell .primary-button,
+.win-shell .scan-submit,
+.win-shell .report-button.primary {
+  border: 1px solid var(--primary-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: none;
+}
+
+/* ช่องกรอก: ขอบเป็นตัวบอกขอบเขต ไม่ใช่สีพื้น */
+.win-shell input,
+.win-shell select,
+.win-shell textarea,
+.win-shell .field-control {
+  border-radius: var(--radius-sm);
+  border-color: var(--control-line);
+  box-shadow: none;
+}
+
+.win-shell .field-control { min-height: 30px; }
+
+/* ปุ่มเลือกขนส่ง: เป็นรายการในลิสต์ ไม่ใช่การ์ด */
+.win-shell .courier-button {
+  min-height: 32px;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  box-shadow: none;
+}
+
+.win-shell .courier-button.active {
+  border-color: var(--primary-strong);
+}
+
+/* ตารางข้อมูลแบบ data grid: หัวติดบน เส้นทุกช่อง แถวสลับ เลือกได้ */
+.win-shell .table-wrap {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  overflow: auto;
+}
+
+.win-shell table {
+  border-collapse: collapse;
+  width: 100%;
+  background: var(--surface);
+}
+
+.win-shell thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 5px 9px;
+  font-size: 0.74rem;
+  font-weight: 500;
+  color: var(--muted);
+  text-align: left;
+  white-space: nowrap;
+  background: var(--win-chrome);
+  border-bottom: 1px solid var(--line-strong);
+  border-right: 1px solid var(--win-grid-line);
+}
+
+.win-shell tbody td {
+  padding: 4px 9px;
+  font-size: 0.8rem;
+  border-bottom: 1px solid var(--win-grid-line);
+  border-right: 1px solid var(--win-grid-line);
+}
+
+.win-shell tbody tr:nth-child(even) { background: var(--win-row-alt); }
+
+/* แถวในตารางเป็นข้อยกเว้นของกฎห้าม hover เพราะคลิกเลือกได้จริง */
+.win-shell tbody tr:hover { background: var(--win-row-hover); }
+
+.win-shell tbody tr.selected {
+  background: var(--win-sel);
+  box-shadow: inset 3px 0 0 var(--win-sel-line);
+}
+
+.win-shell .code-cell { font-family: Consolas, "Cascadia Mono", ui-monospace, monospace; }
+.win-shell .empty-cell { color: var(--muted); text-align: center; padding-block: 14px; }
+
+/* หัวข้อ: ระดับโปรแกรม ไม่ใช่ระดับหน้า marketing */
+.win-shell h2 { font-size: 1rem; }
+.win-shell h3 { font-size: 0.88rem; }
+.win-shell .eyebrow { font-size: 0.68rem; font-weight: 600; letter-spacing: 0.4px; }
+.win-shell .panel-heading { font-size: 0.86rem; }
+
+/* ป้ายสถานะ */
+.win-shell .status-badge,
+.win-shell .win-nav-badge { border-radius: var(--radius-sm); }
