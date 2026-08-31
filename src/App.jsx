@@ -32,6 +32,8 @@ import {
   Users,
 } from 'lucide-react';
 import StaffDirectory from './features/staff/StaffDirectory.jsx';
+import { CAMERA_POPUP_ID, CAMERA_REGION_ID, DEFAULT_LOOKBACK_HOURS, ISSUE_CUSTOMER_CANCELLED, ISSUE_DAMAGED, ISSUE_RETURNED, PACKER_UNASSIGNED } from './constants.js';
+import { DeploymentUpdateBanner, StatusBanner } from './views/StatusBanner.jsx';
 import ReportsView from './views/ReportsView.jsx';
 import { buildPackerOptions } from './features/staff/staffDirectory.js';
 import { subscribeStaffMembers } from './features/staff/staffService.js';
@@ -153,17 +155,10 @@ const EMPTY_USER = {
 const THEME_KEY = 'scan-to-sheet-theme';
 const GOOGLE_SESSION_KEY = 'scan-to-sheet-google-session-v1';
 const LOGGED_OUT_FLAG = 'scan-to-sheet-logged-out-v1';
-const CAMERA_REGION_ID = 'camera-reader';
-const CAMERA_POPUP_ID = 'camera-reader-popup';
 const CAMERA_COOLDOWN_MS = 5000;
 const CAMERA_SCAN_FPS = 18;
-const ISSUE_CUSTOMER_CANCELLED = 'ลูกค้ายกเลิก';
-const ISSUE_RETURNED = 'สินค้าตีกลับ';
-const ISSUE_DAMAGED = 'สินค้าเสียหาย';
-const PACKER_UNASSIGNED = 'ยังไม่ระบุ';
 const DEFAULT_PACKERS = [PACKER_UNASSIGNED, 'กิต', 'มาย', 'ยุทธ', 'หล้า', 'มุก', 'เบ้น', 'คะนิ้ง'];
 const DEFAULT_THRESHOLD_MINUTES = 30;
-const DEFAULT_LOOKBACK_HOURS = 48;
 const AUTO_CHECK_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
 const MISSING_CHECK_CACHE_KEY = 'missing-order-check-cache';
 const MISSING_CHECK_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
@@ -4103,34 +4098,6 @@ function App() {
       )}
     </main>
     </>
-  );
-}
-
-function StatusBanner({ status }) {
-  const Icon = status.type === 'success' ? CheckCircle2 : status.type === 'duplicate' || status.type === 'warning' ? AlertTriangle : PackageCheck;
-  return (
-    <div className={`status-banner ${status.type}`} role="status" aria-live="polite" aria-atomic="true">
-      <Icon size={22} />
-      <div>
-        <strong>{status.title}</strong>
-        <span>{status.message}</span>
-      </div>
-    </div>
-  );
-}
-
-function DeploymentUpdateBanner() {
-  return (
-    <div className="status-banner warning" role="status" aria-live="polite" aria-atomic="true">
-      <RefreshCw size={22} />
-      <div>
-        <strong>มีเวอร์ชันใหม่พร้อมใช้งาน</strong>
-        <span>รีเฟรชก่อนสแกนต่อ เพื่อใช้รูปแบบการบันทึกล่าสุด</span>
-      </div>
-      <button className="secondary-button" type="button" onClick={() => window.location.reload()}>
-        รีเฟรชตอนนี้
-      </button>
-    </div>
   );
 }
 
