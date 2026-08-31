@@ -273,7 +273,9 @@ glow ใช้ได้ **เฉพาะ element ที่กดได้** แ
 | CTA เน้นสุด (ยืนยันงานสำคัญ) | pill | `--accent-fill` + `--on-accent` | hover `--glow-accent` |
 | ปุ่มรอง (secondary) | pill | `--surface` + ขอบ `--line-strong` | hover พื้น `--surface-soft` |
 | ปุ่มโปร่ง (ghost) | pill | โปร่งใส + `--primary` | hover พื้น `--primary-soft` |
-| ปุ่มอันตราย | pill | `--danger-fill` + ขาว | hover `--glow-coral` |
+| ปุ่มอันตราย | pill | `--danger-fill` + `--on-danger` | hover `--glow-coral` |
+| ปุ่มแจ้งปัญหาที่กดค้าง | pill | `--coral-fill` + `--on-coral` (5.967) | glow `--glow-coral` — เทียบได้กับ BOOM button ของ Flip7 |
+| ช่องติ๊ก / เรดิโอ | หน้าตา native ของระบบ | `accent-color: var(--primary-fill)` | **ต้องถูกกันออกจากกฎรวมของช่องกรอก** ไม่งั้น `accent-color` ไม่มีผลและกล่องกลายเป็นสี่เหลี่ยมเปล่า |
 | ปุ่มไอคอน | วงกลม `--radius-full` | `--surface` | ขนาดกดได้ ≥36px |
 | input / select / textarea | `--radius-md` | **`--field`** | ขอบ `--control-line` · focus: ขอบ `--primary` + `--shadow-focus` |
 | ปุ่มเพิ่ม/ลบ (counter) | สี่เหลี่ยมมน `--radius-md` 40px | เพิ่ม: `--primary-soft` · ลบ: ตัวหนังสือ `--coral` | Flip7 counter button 80rpx |
@@ -301,7 +303,7 @@ glow ใช้ได้ **เฉพาะ element ที่กดได้** แ
 3. มี **skip link** เป็น focusable ตัวแรก ชี้ไป `<main id="main" tabindex="-1">`
 4. ทุก element ที่ focus ได้ต้องมองเห็นวงแหวน focus — **ห้าม `outline: 0` โดยไม่มีตัวแทน**
 5. `:root` ยังมีชุดเดียว: `grep -c "^:root" src/styles.css` ต้องได้ 2 (light + dark) เท่านั้น
-6. ไม่มี hex/rgba ใหม่นอก `:root`
+6. ไม่มี hex/rgba ใหม่นอก `:root` และ **ไม่มีค่ามุมโค้งดิบ** — `grep -n "border-radius: [0-9]" src/styles.css` ต้องเหลือเฉพาะ `0`, เส้นคาด 3px และหน่วย mm ของใบพิมพ์
 7. `npm run test:marketplace` และ `npm run build` เขียวทั้งคู่
 
 ---

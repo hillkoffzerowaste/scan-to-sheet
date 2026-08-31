@@ -110,7 +110,6 @@
   --print-paper: #ffffff;
   --print-ink: #101820;
   --print-muted: #4a5568;
-  --print-line: #8a949e;
   /* Section hues for the printed roster: one ink and one tint, so the sheet is readable at
      arm's length on the wall and the ink clears 4.5 on its own tint. */
   --print-accent: #1a6561;
@@ -397,7 +396,7 @@ h3 {
   min-height: 40px;
   padding: 0 8px 0 12px;
   border: 1px solid var(--line-strong);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--surface);
 }
 
@@ -869,7 +868,7 @@ select:hover {
 .assignment-actions button { border: 0; background: transparent; color: var(--primary-strong); }
 .danger-text { color: var(--danger) !important; }
 .staff-modal-overlay { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 16px; background: color-mix(in srgb, var(--text) 58%, transparent); }
-.staff-modal { width: min(720px, 100%); max-height: calc(100vh - 32px); overflow: auto; padding: 18px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); color: var(--text); box-shadow: var(--shadow-modal); }
+.staff-modal { width: min(720px, 100%); max-height: calc(100vh - 32px); overflow: auto; padding: 18px; border: 1px solid var(--line); border-radius: var(--radius-xl); background: var(--surface); color: var(--text); box-shadow: var(--shadow-modal); }
 .staff-modal.compact { width: min(480px, 100%); display: grid; gap: 14px; }
 .staff-modal header { justify-content: space-between; margin-bottom: 16px; }
 .staff-modal header h3 { margin: 0; }
@@ -1064,10 +1063,12 @@ select:hover {
     box-shadow var(--dur-ui) ease, color var(--dur-ui) ease,
     transform var(--dur-press) var(--ease-bounce);
 }
+/* ปุ่มนี้ถูกกดค้างไว้เพื่อบอกว่าออเดอร์นี้มีปัญหา เป็นสถานะที่ต้องเห็นทันทีว่าเลือกอยู่
+   จึงใช้พื้น coral เต็มสีกับตัวหนังสือเข้ม (5.967) ไม่ใช่ tint จางแบบคำเตือนทั่วไป */
 .popup-cancel-btn.active {
-  border-color: var(--warning-line);
-  background: var(--warning-bg);
-  color: var(--warning);
+  border-color: var(--coral);
+  background: var(--coral-fill);
+  color: var(--on-coral);
 }
 .popup-cancel-btn:not(:disabled):hover {
   border-color: var(--warning-line);
@@ -1167,7 +1168,7 @@ select:hover {
   margin-bottom: 14px;
   padding: 14px 16px;
   border: 1px solid var(--line);
-  border-radius: 18px;
+  border-radius: var(--radius-xl);
   background: var(--surface);
 }
 
@@ -1180,7 +1181,7 @@ select:hover {
 .marketplace-upload-result {
   grid-column: 1 / -1;
   padding: 9px 12px;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   font-size: 0.88rem;
   font-weight: 700;
 }
@@ -1228,7 +1229,7 @@ select:hover {
   padding: 10px 12px;
   border: 1px solid var(--line);
   border-left: 4px solid transparent;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   background: var(--surface);
   color: var(--text);
   text-align: left;
@@ -1260,7 +1261,7 @@ select:hover {
 
 .courier-button strong {
   min-width: 34px;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   background: var(--page-soft);
   padding: 3px 8px;
   text-align: center;
@@ -1315,7 +1316,7 @@ select:hover {
   place-items: center;
   width: 36px;
   border: 0;
-  border-radius: 9px;
+  border-radius: var(--radius-md);
   color: white;
   background: var(--primary-fill);
 }
@@ -1323,7 +1324,7 @@ select:hover {
 .courier-add-row select {
   width: 100%;
   padding: 8px 10px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--line);
   background: var(--surface);
   color: var(--text);
@@ -1353,7 +1354,7 @@ select:hover {
   margin-top: 10px;
   padding: 8px 12px;
   border: 1px solid var(--warning-line);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--warning-bg);
   color: var(--warning);
   font-size: 0.82rem;
@@ -1493,7 +1494,7 @@ select:hover {
   min-height: 46px;
   padding: 0 11px;
   border: 1px solid var(--line-strong);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--surface);
 }
 
@@ -1504,14 +1505,6 @@ select:hover {
   outline: 0;
   background: transparent;
   color: var(--text);
-}
-
-.search-scope-control {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.search-date-control {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .search-button {
@@ -1526,7 +1519,7 @@ select:hover {
 .empty-search {
   padding: 12px;
   border: 1px dashed var(--line-strong);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   color: var(--muted);
   text-align: center;
   font-weight: 800;
@@ -1539,7 +1532,7 @@ select:hover {
 .table-action-button {
   min-height: 34px;
   border: 1px solid var(--warning-line);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: var(--warning-bg);
   color: var(--warning);
   font-weight: 900;
@@ -1585,7 +1578,7 @@ select:hover {
   min-height: 42px;
   width: 100%;
   border: 1px solid var(--line-strong);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--surface);
   color: var(--text);
   padding: 0 10px;
@@ -1595,7 +1588,7 @@ select:hover {
 .issue-bar button {
   min-height: 42px;
   border: 1px solid var(--warning-line);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--surface);
   color: var(--warning);
   font-weight: 900;
@@ -1646,7 +1639,7 @@ select:hover {
   overflow: hidden;
   min-height: 300px;
   border: 2px solid var(--primary);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--page);
 }
 
@@ -1681,7 +1674,7 @@ select:hover {
   width: min(92%, 680px);
   height: min(72%, 360px);
   border: 2px dashed rgba(255, 255, 255, 0.86);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   box-shadow: var(--glow-primary);
 }
 
@@ -1710,7 +1703,7 @@ select:hover {
 .camera-message {
   margin-bottom: 0;
   border: 1px solid var(--line-strong);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--surface-soft);
   color: var(--muted);
   padding: 12px;
@@ -1796,7 +1789,7 @@ select:hover {
   align-items: center;
   gap: 10px;
   border: 2px solid var(--primary);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   background: var(--surface);
   padding: 12px;
 }
@@ -1893,7 +1886,7 @@ select:hover {
   min-height: 76px;
   padding: var(--radius-lg);
   border: 0.5px solid var(--line);
-  border-radius: 20px;
+  border-radius: var(--radius-xl);
   background: var(--surface-soft);
   box-shadow: var(--shadow-sm);
   transition: background-color var(--dur-ui) ease, border-color var(--dur-ui) ease,
@@ -1953,7 +1946,7 @@ select:hover {
   gap: 4px;
   padding: 12px 10px;
   border: 0.5px solid var(--line);
-  border-radius: 16px;
+  border-radius: var(--radius-xl);
   background: var(--surface-soft);
   box-shadow: var(--shadow-sm);
   text-align: center;
@@ -2030,7 +2023,7 @@ select:hover {
   justify-content: center;
   gap: 8px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--surface-soft);
   color: var(--primary-strong);
   font-weight: 800;
@@ -2048,8 +2041,19 @@ select:hover {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   overflow: hidden;
   border: 1px solid var(--line-strong);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--surface);
+}
+
+/* ต้องอยู่ *หลัง* .segmented-control เท่านั้น: ทั้งคู่มี specificity เท่ากัน (คลาสเดียว) เดิม
+   .search-scope-control ถูกประกาศไว้ก่อน กฎฐาน 3 คอลัมน์จึงชนะตาม source order ทำให้ปุ่มสองตัว
+   ถูกบีบอยู่ในสามคอลัมน์ (กว้าง 35.8px) และป้ายไทยถูกตัด 2–3px ที่จอ 1000–1200px */
+.search-scope-control {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.search-date-control {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .segmented-control button {
@@ -2085,7 +2089,7 @@ select:hover {
   min-height: 44px;
   width: 100%;
   border: 1px solid var(--line-strong);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--surface);
   color: var(--text);
   padding: 0 12px;
@@ -2115,7 +2119,7 @@ select:hover {
   min-height: 74px;
   padding: 12px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--surface);
 }
 
@@ -2148,7 +2152,7 @@ select:hover {
 .table-wrap {
   overflow-x: auto;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--surface);
 }
 
@@ -2180,7 +2184,7 @@ th {
 .status-badge {
   display: inline-block;
   padding: 2px 10px;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   font-weight: 900;
   font-size: 0.82rem;
 }
@@ -2596,7 +2600,7 @@ tbody tr:hover {
 
 .missing-result-card {
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--surface);
   overflow: hidden;
 }
@@ -2953,7 +2957,7 @@ tbody tr:hover {
   min-width: 0;
   padding: 9px 10px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--surface-soft);
 }
 
@@ -3010,18 +3014,18 @@ tbody tr:hover {
 }
 
 .enterprise-shell .status-badge {
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   font-size: 0.72rem;
 }
 
 .enterprise-shell .segmented-control {
   border-color: var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--surface-soft);
 }
 
 .enterprise-shell .segmented-control button.active {
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: var(--surface);
   color: var(--primary-strong);
   box-shadow: var(--shadow-sm);
@@ -3076,10 +3080,23 @@ tbody tr:hover {
 
 .enterprise-shell .field-control input,
 .enterprise-shell .field-control select,
-.enterprise-shell input,
+.enterprise-shell input:not([type="checkbox"]):not([type="radio"]),
 .enterprise-shell select {
   border-color: var(--line-strong);
   border-radius: var(--radius-md);
+}
+
+/* ช่องติ๊ก/เรดิโอต้องหลุดจากกฎรวมของช่องกรอก ไม่งั้นเบราว์เซอร์เลิกวาดแบบ native แล้ว
+   accent-color ไม่มีผล กล่องติ๊กจะกลายเป็นสี่เหลี่ยมเปล่าที่ดูไม่ออกว่ากดได้ */
+.enterprise-shell input[type="checkbox"],
+.enterprise-shell input[type="radio"] {
+  width: auto;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  accent-color: var(--primary-fill);
 }
 
 .enterprise-shell .field-control input:hover,
@@ -3244,7 +3261,7 @@ tbody tr:hover {
   flex: 0 0 auto;
   padding: 4px 8px;
   border: 1px solid var(--line);
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   color: var(--muted);
   font-size: 0.7rem;
   font-weight: 800;

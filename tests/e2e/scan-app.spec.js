@@ -309,6 +309,19 @@ test.describe('Scan to Sheet — Theme & Layout', () => {
     await expect(html).toHaveAttribute('data-theme', 'light');
   });
 
+  test('applies the stored dark theme before React loads', async ({ page }) => {
+    await page.evaluate(() => localStorage.setItem('scan-to-sheet-theme', 'dark'));
+    // Vite re-requests the module as /src/main.jsx?t=<timestamp> after any full reload it
+    // triggers (dependency re-optimisation, or an HMR update while another client is
+    // connected to the same dev server). A glob without the query misses that second
+    // request, React boots, and the assertion below fails intermittently.
+    await page.route(/\/src\/main\.jsx(\?|$)/, (route) => route.abort());
+    await page.reload({ waitUntil: 'domcontentloaded' });
+
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+    await expect(page.locator('#root')).toBeEmpty();
+  });
+
   /**
    * The design system permits transitions, but only as interactive feedback: a named set of
    * properties, short durations, and never `all` — which used to drag width and transform
