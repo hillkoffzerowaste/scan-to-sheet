@@ -3127,12 +3127,23 @@ export function doesBangkokDateOverlapLookback(date, now, lookbackMs) {
   return dayEndExclusive.getTime() > windowStart && dayStart.getTime() <= now.getTime();
 }
 
+/**
+ * เวลาในชีตคือเวลาของ *เครื่องที่สแกน* ไม่ใช่ของเซิร์ฟเวอร์ และแอปนี้ใช้หลายเครื่องพร้อมกัน
+ * ถ้าเครื่องหนึ่งนาฬิกาเร็วกว่าเครื่องที่เปิดรายงานเพียงนาทีเดียว แถวที่เพิ่งสแกนจะมีเวลาล้ำ
+ * อนาคตและถูกตัดออกจากหน้าต่าง ผลคือออเดอร์ที่สแกนแล้วถูกรายงานว่า "ตกหล่น" ซึ่งเป็นสัญญาณ
+ * ปลอมที่ทำให้คนหน้างานไปตามหาของที่แพ็คไปแล้ว
+ *
+ * เผื่อเฉพาะฝั่งอนาคตและเฉพาะระดับนาที ส่วนแท็บที่ลงวันที่ผิดเป็นวันข้างหน้าทั้งวันยังถูกตัด
+ * ที่ระดับวันใน doesBangkokDateOverlapLookback ตามเดิม เพราะนั่นคือการพิมพ์ผิด ไม่ใช่นาฬิกาคลาด
+ */
+export const CLOCK_SKEW_TOLERANCE_MS = 5 * 60 * 1000;
+
 export function isInstantWithinLookback(instant, now, lookbackMs) {
   if (!(instant instanceof Date) || !(now instanceof Date)) return false;
   if (!Number.isFinite(instant.getTime()) || !Number.isFinite(now.getTime())) return false;
   if (!Number.isFinite(lookbackMs) || lookbackMs < 0) return false;
   const elapsedMs = now.getTime() - instant.getTime();
-  return elapsedMs >= 0 && elapsedMs <= lookbackMs;
+  return elapsedMs >= -CLOCK_SKEW_TOLERANCE_MS && elapsedMs <= lookbackMs;
 }
 
 function parseDateTime(dateStr, timeStr) {

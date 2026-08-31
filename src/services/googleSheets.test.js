@@ -30,7 +30,14 @@ test('missing-order lookback includes the Bangkok boundary day but filters exact
 
   assert.equal(isInstantWithinLookback(new Date('2026-08-29T16:00:00.000Z'), now, lookbackMs), true);
   assert.equal(isInstantWithinLookback(new Date('2026-08-29T14:59:59.999Z'), now, lookbackMs), false);
-  assert.equal(isInstantWithinLookback(new Date('2026-08-31T15:00:00.001Z'), now, lookbackMs), false);
+
+  // เวลาในชีตมาจากนาฬิกาของเครื่องที่สแกน แถวที่เพิ่งสแกนจากเครื่องที่เร็วกว่าเล็กน้อยต้องยังนับ
+  // อยู่ในหน้าต่าง ไม่งั้นออเดอร์ที่สแกนแล้วจะถูกรายงานว่าตกหล่น
+  assert.equal(isInstantWithinLookback(new Date('2026-08-31T15:00:00.001Z'), now, lookbackMs), true);
+  assert.equal(isInstantWithinLookback(new Date('2026-08-31T15:05:00.000Z'), now, lookbackMs), true);
+  assert.equal(isInstantWithinLookback(new Date('2026-08-31T15:05:00.001Z'), now, lookbackMs), false);
+  // แท็บที่ลงวันที่เป็นวันข้างหน้ายังต้องถูกตัดที่ระดับวัน เพราะนั่นคือการพิมพ์ผิด
+  assert.equal(doesBangkokDateOverlapLookback('2026-09-02', now, lookbackMs), false);
 });
 
 test('Marketplace Orders upsert keeps unchanged rows and appends only new order keys', async () => {
