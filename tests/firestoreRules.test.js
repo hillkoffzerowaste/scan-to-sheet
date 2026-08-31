@@ -6,6 +6,7 @@ const readRules = () => readFile(new URL("../firestore.rules", import.meta.url),
 const readStorageRules = () => readFile(new URL("../storage.rules", import.meta.url), "utf8");
 const readSheetWriter = () => readFile(new URL("../src/services/googleSheets.js", import.meta.url), "utf8");
 const readLabelScript = () => readFile(new URL("../apps-script/label-sync/Code.gs", import.meta.url), "utf8");
+const readStaffService = () => readFile(new URL("../src/features/staff/staffService.js", import.meta.url), "utf8");
 
 test("staff private contacts allow Admin reads without write payload validation", async () => {
   const rules = await readFile(new URL("../firestore.rules", import.meta.url), "utf8");
@@ -82,4 +83,22 @@ test("external operational text is never written to Sheets as a formula", async 
   assert.doesNotMatch(sheetWriter, /valueInputOption=USER_ENTERED/);
   assert.match(labelScript, /function literalizeSheetText_\(value\)/);
   assert.match(labelScript, /setValue\(literalizeSheetText_\(value\)\)/);
+});
+
+test("a photo at the advertised 5 MB limit is accepted by both client and Storage rules", async () => {
+  const [storageRules, staffService] = await Promise.all([readStorageRules(), readStaffService()]);
+  assert.match(storageRules, /request\.resource\.size <= 5 \* 1024 \* 1024/);
+  assert.match(staffService, /file\.size > 5 \* 1024 \* 1024/);
+});
+
+test("weekly duty deletion refuses a truncated override cleanup", async () => {
+  const staffService = await readStaffService();
+  const block = staffService.match(/export async function deleteWeeklyDuty\(id\) \{([\s\S]*?)\n\}/);
+  assert.ok(block, "deleteWeeklyDuty must exist");
+  assert.match(block[1], /limit\(OVERRIDE_LIMIT \+ 1\)/);
+  assert.match(block[1], /stranded\.size > OVERRIDE_LIMIT/);
+  assert.ok(
+    block[1].indexOf("stranded.size > OVERRIDE_LIMIT") < block[1].indexOf("batch.delete"),
+    "the cap guard must run before destructive writes",
+  );
 });

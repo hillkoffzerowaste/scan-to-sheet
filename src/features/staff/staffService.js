@@ -328,9 +328,16 @@ export async function deleteWeeklyDuty(id) {
     query(
       collection(firestoreDb, "staffDutyOverrides"),
       where("weeklyDutyId", "==", id),
-      limit(OVERRIDE_LIMIT)
+      // Read one beyond the supported cleanup size so a capped query cannot make deletion
+      // look complete while silently leaving orphaned overrides behind.
+      limit(OVERRIDE_LIMIT + 1)
     )
   );
+  if (stranded.size > OVERRIDE_LIMIT) {
+    const error = new Error("เวรนี้มีรายการเปลี่ยนแปลงรายวันมากเกินกว่าจะลบอย่างปลอดภัย");
+    error.code = "STAFF_DUTY_DELETE_LIMIT";
+    throw error;
+  }
   const batch = writeBatch(firestoreDb);
   stranded.docs.forEach((item) => batch.delete(item.ref));
   batch.delete(doc(firestoreDb, "staffWeeklyDuties", id));

@@ -256,6 +256,8 @@ export function staffSaveErrorMessage(error) {
     return "รหัสพนักงานต้องยาวไม่เกิน 60 ตัวอักษร";
   if (code === "STAFF_DUPLICATE_PACKER_NICKNAME")
     return "ชื่อเล่นผู้แพ็คซ้ำกัน";
+  if (code === "STAFF_DUTY_DELETE_LIMIT")
+    return "เวรนี้มีรายการเปลี่ยนแปลงรายวันมากเกินกว่าจะลบอัตโนมัติ กรุณาลบรายการรายวันเก่าก่อน";
   if (code.includes("storage/unauthorized"))
     return "ไม่มีสิทธิ์อัปโหลดรูปพนักงาน กรุณาเข้าสู่ระบบใหม่";
   if (code.includes("permission-denied"))

@@ -21,7 +21,7 @@ service firebase.storage {
     match /staff-photos/{staffId}/{fileName} {
       allow read: if isOperationalStaff();
       allow create, update: if isStaffAdmin()
-        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.size <= 5 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
       allow delete: if isStaffAdmin();
     }

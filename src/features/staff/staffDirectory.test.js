@@ -271,4 +271,8 @@ test("maps staff save failures to actionable Thai messages without internal deta
     }),
     "รหัสพนักงานนี้ถูกใช้งานแล้ว"
   );
+  assert.equal(
+    staffSaveErrorMessage({ code: "STAFF_DUTY_DELETE_LIMIT" }),
+    "เวรนี้มีรายการเปลี่ยนแปลงรายวันมากเกินกว่าจะลบอัตโนมัติ กรุณาลบรายการรายวันเก่าก่อน"
+  );
 });
