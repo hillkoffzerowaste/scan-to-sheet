@@ -2922,16 +2922,12 @@ export async function checkMissingOrders({
   const sheetTitles = (spreadsheet.sheets?.map((item) => item.properties.title) ?? [])
     .filter((title) => /^\d{4}-\d{2}-\d{2}$/.test(title));
 
-  // Filter to dates within lookback window
-  const relevantDates = sheetTitles.filter((title) => {
-    const d = parseDateOnly(title);
-    if (!d) return false;
-    // The elapsed time is negative for a tab dated in the future, which used to pass the
-    // upper bound and drag a mistyped tab into every missing-order report. Bangkok is UTC+7,
-    // so today's tab is legitimately up to 7h "ahead" of its UTC midnight.
-    const elapsedMs = now.getTime() - d.getTime();
-    return elapsedMs >= -BANGKOK_UTC_OFFSET_MS && elapsedMs <= lookbackMs;
-  });
+  // Read every Bangkok calendar day that overlaps the exact lookback window. Comparing the
+  // tab's UTC-labelled midnight directly used to drop the boundary day (for example, a scan
+  // at 23:00 could still be within 48h even though that day's midnight was already 71h old).
+  const relevantDates = sheetTitles.filter((title) => (
+    doesBangkokDateOverlapLookback(title, now, lookbackMs)
+  ));
 
   const matched = [];
   const pending = [];
@@ -2956,6 +2952,10 @@ export async function checkMissingOrders({
       const adminTimeStr = row.adminTime || row.time || '00:00:00';
       const adminDateStr = row.adminDate || row.date || date;
       const adminDateTime = parseDateTime(adminDateStr, adminTimeStr);
+
+      // Date tabs are only a coarse read bound. Enforce the requested rolling window on the
+      // actual admin timestamp so old rows from the boundary tab and future rows are excluded.
+      if (adminDateTime && !isInstantWithinLookback(adminDateTime, now, lookbackMs)) continue;
 
       const isCancelled = row.status === 'Cancelled' || row.note === 'ลูกค้ายกเลิก';
       const isReturned = row.status === 'Returned' || row.note === 'สินค้าตีกลับ';
@@ -3117,6 +3117,23 @@ export function findCancellationRow(rows, { courier, code }) {
 // instant with Date.UTC alone would place it 7h in the future, making every
 // `Date.now() - parseDateTime(...)` elapsed check 7h too small.
 const BANGKOK_UTC_OFFSET_MS = 7 * 60 * 60 * 1000;
+
+export function doesBangkokDateOverlapLookback(date, now, lookbackMs) {
+  const dayStart = parseDateTime(date, '00:00:00');
+  if (!dayStart || !(now instanceof Date) || !Number.isFinite(now.getTime())) return false;
+  if (!Number.isFinite(lookbackMs) || lookbackMs < 0) return false;
+  const dayEndExclusive = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+  const windowStart = now.getTime() - lookbackMs;
+  return dayEndExclusive.getTime() > windowStart && dayStart.getTime() <= now.getTime();
+}
+
+export function isInstantWithinLookback(instant, now, lookbackMs) {
+  if (!(instant instanceof Date) || !(now instanceof Date)) return false;
+  if (!Number.isFinite(instant.getTime()) || !Number.isFinite(now.getTime())) return false;
+  if (!Number.isFinite(lookbackMs) || lookbackMs < 0) return false;
+  const elapsedMs = now.getTime() - instant.getTime();
+  return elapsedMs >= 0 && elapsedMs <= lookbackMs;
+}
 
 function parseDateTime(dateStr, timeStr) {
   const d = parseDateOnly(dateStr);

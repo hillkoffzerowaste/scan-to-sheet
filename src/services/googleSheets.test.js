@@ -10,13 +10,28 @@ import {
   buildDailyDataTypeFormattingRequests,
   buildDailyRowDataTypeFormattingRequests,
   buildDailyRowUpdateData,
+  doesBangkokDateOverlapLookback,
   findCancellationRow,
   findMarketplaceOrderGoogle,
   getDailySheetPropertiesForMarketplaceBackfill,
   upsertMarketplaceOrdersGoogle,
   updateScanIssueGoogle,
   apiFetch,
+  isInstantWithinLookback,
 } from './googleSheets.js';
+
+test('missing-order lookback includes the Bangkok boundary day but filters exact row times', () => {
+  const now = new Date('2026-08-31T15:00:00.000Z'); // 22:00 Bangkok
+  const lookbackMs = 48 * 60 * 60 * 1000;
+
+  assert.equal(doesBangkokDateOverlapLookback('2026-08-29', now, lookbackMs), true);
+  assert.equal(doesBangkokDateOverlapLookback('2026-08-28', now, lookbackMs), false);
+  assert.equal(doesBangkokDateOverlapLookback('2026-09-01', now, lookbackMs), false);
+
+  assert.equal(isInstantWithinLookback(new Date('2026-08-29T16:00:00.000Z'), now, lookbackMs), true);
+  assert.equal(isInstantWithinLookback(new Date('2026-08-29T14:59:59.999Z'), now, lookbackMs), false);
+  assert.equal(isInstantWithinLookback(new Date('2026-08-31T15:00:00.001Z'), now, lookbackMs), false);
+});
 
 test('Marketplace Orders upsert keeps unchanged rows and appends only new order keys', async () => {
   const originalFetch = globalThis.fetch;
