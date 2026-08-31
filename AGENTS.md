@@ -76,8 +76,11 @@ npm run build
 ## 4. โครงสร้างที่ต้องรู้
 
 ```text
-src/App.jsx                  UI ทั้งหมด + state (ไฟล์ใหญ่ ~4000 บรรทัด)
-src/styles.css               CSS ทั้งหมด — มี :root ชุดเดียว ห้ามสร้างซ้ำ (ดูข้อ 5)
+src/App.jsx                  state ทั้งหมดของแอป + ประกอบ shell เข้ากับ view (~3,300 บรรทัด)
+src/shell/                   เปลือกแบบ Windows: TitleBar MenuBar Sidebar Toolbar StatusBar
+src/views/                   หน้าจอ: WorkflowView (packer/drive) ReportsView ScanPopup StatusBanner
+src/constants.js             ค่าคงที่ที่ทั้ง App และ view ใช้ร่วมกัน (ISSUE_*, CAMERA_*, PACKER_UNASSIGNED)
+src/styles.css               CSS ทั้งหมด — มี :root สองชุด (light/dark) ห้ามสร้างซ้ำ (ดูข้อ 5)
 src/services/
   googleSheets.js            เขียน/อ่าน Google Sheet, apiFetch, retry
   firebaseScans.js           Firestore: orders, marketplaceOrders, sync status
@@ -126,12 +129,14 @@ firestore.rules              ต้องแก้ตามเมื่อเพ
 
 ต้องวัด **ขอบเขตของ control** ด้วย (WCAG 1.4.11 เกณฑ์ 3:1): ถ้า control มีขอบให้วัดสีขอบ ถ้าไม่มีให้วัดสีพื้นของมันเทียบพื้นรอบข้าง — ปุ่มที่ถมสีแบรนด์ไม่ผ่านด้วยตัวสีเอง (teal 2.554 บนพื้น chrome) จึงต้องมีขอบ `--primary-strong` (5.995) ส่วน control ที่ `disabled` ได้รับการยกเว้นตามข้อกำหนด
 
-เหตุผลที่ต้องวัดจริง: เคยมีกรณีที่ขาวบน `--primary` วัดได้ **4.489** และ teal บนครีมได้ **4.465** คือตกเกณฑ์แบบมองด้วยตาไม่เห็น และทำให้ปุ่มหลักทุกปุ่มในแอปตกมาตรฐานพร้อมกัน ตอนออกแบบ shell ใหม่ก็เจออีกสองจุดด้วยวิธีเดียวกัน (เส้นแถวที่เลือก 2.906 · ขอบป้ายจำนวนแถว 1.55)
+เหตุผลที่ต้องวัดจริง: เคยมีกรณีที่ขาวบน `--primary` วัดได้ **4.489** และ teal บนครีมได้ **4.465** คือตกเกณฑ์แบบมองด้วยตาไม่เห็น และทำให้ปุ่มหลักทุกปุ่มในแอปตกมาตรฐานพร้อมกัน ตอนย้ายมา Windows shell ก็เจออีกสี่จุดด้วยวิธีเดียวกัน: เส้นแถวที่เลือก 2.906 · ขอบป้ายจำนวนแถว 1.55 · เส้นซ้ายของเมนูที่เปิดอยู่ 2.906 · ป้ายนับในปุ่มขนส่งโหมด Drive ที่เป็นตัวเข้มบนพื้นเข้ม **1.031** (อ่านไม่ออกเลยแต่ดูผ่านตาไม่รู้สึก)
+
+**เวลาวัดต้องหยุด transition ก่อน** ใส่ `*{transition:none !important;animation:none !important}` ชั่วคราว ไม่งั้นจะอ่านค่าที่ค้างกลางทางของการสลับธีม เคยรายงานผิดว่ามีตัวหนังสือตก 11 รายการทั้งที่สีถูกหมด
 
 **ต้องตรวจ layout ที่หลายความกว้าง** 1280 / 1440 / 1920px — overflow แนวนอนต้องเป็น 0px และตารางที่กว้างเกินต้องเลื่อนในกล่องของตัวเอง ไม่ใช่ดัน body
 *(เดิมคือ 375 / 700 / 1000 / 1400px เปลี่ยนเพราะระบบเป็น desktop-only แล้ว)*
 
-> **งานค้างที่ต้องทำตอนย้าย shell ไม่ใช่ตอนนี้** — ยังมี 3 จุดที่ผูกกับมือถือ: [tests/e2e/scan-app.spec.js:141](tests/e2e/scan-app.spec.js) วน 375/1000/1400 · [tests/e2e/scan-app.spec.js:458](tests/e2e/scan-app.spec.js) เทสต์ `app is usable on mobile viewport` · [playwright.config.js:26](playwright.config.js) project `Pixel 5` ตราบใดที่ UI จริงยังรองรับมือถือ **ห้ามลบเทสต์เหล่านี้ทิ้งก่อน** เพราะจะเสียการคุ้มครองโดยไม่ได้อะไรตอบแทน ให้แก้พร้อมกับตอนที่ shell ใหม่มาแทนจริง
+> **ย้าย shell เสร็จแล้ว** เทสต์ที่เคยผูกกับมือถือถูกเปลี่ยนตามโครงใหม่: ชุด `Mobile Responsiveness` กลายเป็น `Desktop layout` ที่ตรวจ 1280/1440/1920 และ project `Pixel 5` ถูกถอดออกจาก `playwright.config.js`
 >
 > Capacitor/Android ยังอยู่ใน `package.json` ตั้งใจไม่ถอด การเลิกรองรับมือถือเป็นเรื่องของ *ดีไซน์* ไม่ใช่การถอด build target ถ้าจะถอดจริงต้องเป็นงานแยกที่ผู้ใช้สั่ง
 
