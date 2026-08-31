@@ -36,6 +36,7 @@ import MenuBar from './shell/MenuBar.jsx';
 import Sidebar from './shell/Sidebar.jsx';
 import StatusBar from './shell/StatusBar.jsx';
 import TitleBar from './shell/TitleBar.jsx';
+import Toolbar from './shell/Toolbar.jsx';
 import WorkflowView from './views/WorkflowView.jsx';
 import ScanPopup from './views/ScanPopup.jsx';
 import { CAMERA_POPUP_ID, CAMERA_REGION_ID, DEFAULT_LOOKBACK_HOURS, ISSUE_CUSTOMER_CANCELLED, ISSUE_DAMAGED, ISSUE_RETURNED, PACKER_UNASSIGNED } from './constants.js';
@@ -2353,6 +2354,21 @@ function App() {
     },
   ];
 
+  // แถบคำสั่งอยู่นอกพาเนล จึงต้องเปิด <details> ที่ห่อ control นั้นไว้ก่อน ไม่งั้นกดแล้วเงียบ
+  function openMarketplaceFile() {
+    const panel = document.querySelector('.marketplace-upload-panel');
+    if (panel && !panel.open) panel.open = true;
+    marketplaceFileRef.current?.click();
+  }
+
+  function focusSearch() {
+    const panel = document.querySelector('.search-panel');
+    if (panel && !panel.open) panel.open = true;
+    const field = panel?.querySelector('input');
+    field?.scrollIntoView({ block: 'center' });
+    field?.focus();
+  }
+
   function switchTab(nextTab) {
     setActiveTab(nextTab);
     setScanPopupOpen(false);
@@ -3023,6 +3039,17 @@ function App() {
           setCollapsed={setSidebarCollapsed}
         />
         <div className="win-main">
+        <Toolbar
+          activeTab={activeTab}
+          isSignedIn={isSignedIn}
+          busy={busy}
+          refreshAllCounts={refreshAllCounts}
+          openMarketplaceFile={openMarketplaceFile}
+          focusSearch={focusSearch}
+          handleCheckMissingOrders={handleCheckMissingOrders}
+          missingBusy={missingBusy}
+          today={today}
+        />
 
       {['packer', 'drive'].includes(activeTab) && (
         <WorkflowView

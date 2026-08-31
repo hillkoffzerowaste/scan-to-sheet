@@ -4463,3 +4463,44 @@ tbody tr:hover {
 .enterprise-shell.win-shell .field-control {
   border-color: var(--control-line);
 }
+
+/* ── แถบคำสั่งของหน้า ── */
+.win-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: -10px -10px 10px;
+  padding: 5px 8px;
+  background: var(--win-chrome);
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+
+.win-tool-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 3px 10px;
+  font-family: inherit;
+  font-size: 0.78rem;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--control-line);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background-color var(--dur-ui) ease, border-color var(--dur-ui) ease;
+}
+
+.win-tool-btn:not(:disabled):hover { background: var(--primary-soft); border-color: var(--primary); }
+.win-tool-btn:not(:disabled):active { transform: scale(0.97); }
+.win-tool-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.win-tool-sep {
+  align-self: stretch;
+  width: 1px;
+  margin-inline: 4px;
+  background: var(--line-strong);
+}
+
+.win-toolbar-right { margin-left: auto; font-size: 0.72rem; color: var(--muted); }
