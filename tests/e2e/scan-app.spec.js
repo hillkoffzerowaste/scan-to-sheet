@@ -278,6 +278,18 @@ test.describe('Scan to Sheet — Drive Tab', () => {
   });
 });
 
+/**
+ * Colours are transitioned for interactive feedback, so a ratio read straight after a click
+ * lands on an interpolated colour partway between the two states — white on a half-applied
+ * teal measures 3.64 rather than the 4.728 the finished state gives. Wait for the running
+ * transitions to finish, and only those: the loading spinner never finishes.
+ */
+const settleTransitions = (page) => page.evaluate(() => Promise.all(
+  document.getAnimations()
+    .filter((animation) => animation instanceof CSSTransition)
+    .map((animation) => animation.finished.catch(() => {})),
+));
+
 test.describe('Scan to Sheet — Theme & Layout', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto(BASE_URL);
@@ -297,22 +309,49 @@ test.describe('Scan to Sheet — Theme & Layout', () => {
     await expect(html).toHaveAttribute('data-theme', 'light');
   });
 
-  test('keeps secondary tools collapsed and removes decorative motion', async ({ page }) => {
+  /**
+   * The design system permits transitions, but only as interactive feedback: a named set of
+   * properties, short durations, and never `all` — which used to drag width and transform
+   * along with the colours and made controls slide around on re-render. Decorative motion
+   * (looping pulses, entrance slides), gradients and blur stay banned outright.
+   *
+   * This replaces an assertion of `transitions: 0`, which locked in a blanket ban that the
+   * press/hover feedback in DESIGN.md §2 cannot satisfy.
+   */
+  test('keeps secondary tools collapsed and limits motion to interactive feedback', async ({ page }) => {
     await expect(page.locator('details.secondary-panel[open]')).toHaveCount(0);
     const visualOverhead = await page.locator('.enterprise-shell').evaluate((root) => {
+      const ALLOWED_PROPERTIES = ['background-color', 'border-color', 'box-shadow', 'color', 'transform'];
+      const MAX_DURATION_SECONDS = 0.2;
       const elements = Array.from(root.querySelectorAll('*'));
+      const transitioning = elements.filter((el) => getComputedStyle(el).transitionDuration !== '0s');
+      const describe = (el) => el.tagName.toLowerCase() + (typeof el.className === 'string' && el.className ? `.${el.className.trim().split(/\s+/).join('.')}` : '');
       return {
         animations: elements.filter((el) => getComputedStyle(el).animationName !== 'none' && getComputedStyle(el).animationName !== '' && !el.classList.contains('spin')).length,
-        transitions: elements.filter((el) => getComputedStyle(el).transitionDuration !== '0s').length,
         gradients: elements.filter((el) => getComputedStyle(el).backgroundImage.includes('gradient')).length,
         blur: elements.filter((el) => getComputedStyle(el).backdropFilter !== 'none').length,
+        unnamedProperties: transitioning
+          .filter((el) => getComputedStyle(el).transitionProperty.split(',').map((part) => part.trim())
+            .some((property) => !ALLOWED_PROPERTIES.includes(property)))
+          .map((el) => `${describe(el)} => ${getComputedStyle(el).transitionProperty}`),
+        slowTransitions: transitioning
+          .filter((el) => getComputedStyle(el).transitionDuration.split(',')
+            .some((duration) => Number.parseFloat(duration) > MAX_DURATION_SECONDS))
+          .map((el) => `${describe(el)} => ${getComputedStyle(el).transitionDuration}`),
       };
     });
-    expect(visualOverhead).toEqual({ animations: 0, transitions: 0, gradients: 0, blur: 0 });
+    expect(visualOverhead).toEqual({
+      animations: 0,
+      gradients: 0,
+      blur: 0,
+      unnamedProperties: [],
+      slowTransitions: [],
+    });
   });
 
   test('keeps active and disabled controls readable in dark theme', async ({ page }) => {
     await page.locator('.theme-toggle button:has-text("Dark")').click();
+    await settleTransitions(page);
 
     const contrast = await page.locator('.enterprise-shell').evaluate((root, helpers) => {
       const { ratioFor } = new Function(helpers)();
@@ -342,9 +381,11 @@ test.describe('Scan to Sheet — Theme & Layout', () => {
 
     await page.locator('.theme-toggle button:has-text("Light")').click();
     await page.getByTestId('drive-tab').click();
+    await settleTransitions(page);
     const light = await inspect();
 
     await page.locator('.theme-toggle button:has-text("Dark")').click();
+    await settleTransitions(page);
     const dark = await inspect();
 
     for (const themeContrast of [light, dark]) {
@@ -359,6 +400,7 @@ test.describe('Scan to Sheet — Theme & Layout', () => {
   test('keeps marketplace file controls readable in light mode', async ({ page }) => {
     await page.locator('.theme-toggle button:has-text("Light")').click();
     await page.locator('.marketplace-upload-panel summary').click();
+    await settleTransitions(page);
 
     const controls = await page.locator('.marketplace-upload-panel').evaluate((panel, helpers) => {
       const { ratioFor } = new Function(helpers)();

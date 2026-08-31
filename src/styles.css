@@ -24,6 +24,30 @@
   --on-primary: #ffffff;
   --focus-ring: rgba(5,133,129,0.24);
   --brand-gold: #c89b3c;
+  /* ── สำเนียง Flip7: gold / coral / sky ──
+     กฎเดียวกับ --primary vs --primary-fill: สีที่อ่านออกเป็น "ตัวหนังสือ" กับสีที่เอาอะไร
+     "ทับ" ได้ ไม่ใช่ค่าเดียวกัน gold ดิบ #FFD23F เป็นตัวหนังสือบนขาววัดได้ 2.559 และตัวขาว
+     บน gold ได้ 1.444 — ทั้งสองทางตกหมด จึงต้องแยก token ทุกสีออกเป็น text / fill / on-fill */
+  --accent: #7a5600;
+  --accent-fill: #FFD23F;
+  --on-accent: #2a2100;
+  --accent-soft: rgba(255,210,63,0.18);
+  --accent-line: rgba(201,155,60,0.5);
+  /* coral ไม่ใช่ danger: --danger คือ "ล้มเหลว/ข้อมูลผิด" ส่วน coral คือ "เร่งด่วน ต้องเข้าไปดู"
+     ที่ยังไม่ใช่ error #a83620 เลือกจากการวัด — #b8402a ได้ 4.462 บน tint ตัวเองเหนือ --page */
+  --coral: #a83620;
+  --coral-fill: #EF6C4A;
+  --on-coral: #2a0d06;
+  --coral-soft: rgba(239,108,74,0.10);
+  --coral-line: rgba(239,108,74,0.34);
+  --info: #14567f;
+  --info-fill: #5DADE2;
+  --on-info: #0a2433;
+  --info-soft: rgba(93,173,226,0.14);
+  --info-line: rgba(93,173,226,0.38);
+  /* พื้น input แบบครีมของ Flip7 แต่ขยับจาก #FFF8E7 ซึ่งวัดกับ --primary ได้ 4.465 ตกเกณฑ์
+     ค่านี้ได้ 4.646 และแยกพื้นที่ "กรอก" ออกจากพื้นที่ "อ่าน" ด้วยตาทันที */
+  --field: #fffdf6;
   /* Brand chrome that carries white text (topbar). Deliberately darker than --primary:
      white on #058581 measures 4.49, just under the 4.5 AA floor. Dark in both themes, so
      anything sitting on it — including the theme toggle's active pill — stays readable. */
@@ -48,10 +72,22 @@
   --shadow-sm: 0 1px 2px rgba(16,24,32,0.06);
   --shadow-md: 0 1px 3px rgba(16,24,32,0.08);
   --shadow-modal: 0 12px 32px rgba(16,24,32,0.18);
-  --radius-sm: 6px;
-  --radius-md: 8px;
-  --radius-lg: 10px;
+  /* glow เงาสีของ Flip7 ใช้ได้เฉพาะ element ที่กดได้ ตอน hover/focus/active
+     การ์ดนิ่งห้ามมี glow ค้าง เพราะจอนี้เปิดทิ้งไว้ทั้งวันและ glow ทุกใบคือ noise */
+  --glow-primary: 0 2px 12px rgba(4,129,125,0.30);
+  --glow-accent: 0 2px 12px rgba(201,155,60,0.40);
+  --glow-coral: 0 2px 12px rgba(239,108,74,0.32);
+  --glow-info: 0 2px 12px rgba(93,173,226,0.30);
+  --shadow-focus: 0 0 0 4px var(--focus-ring);
+  /* สเกลมุมโค้งของ Flip7 แปลงจาก rpx ที่ 1rpx = 0.5px (16/24/32rpx) */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
   --radius-full: 999px;
+  --ease-bounce: cubic-bezier(0.34, 1.35, 0.64, 1);
+  --dur-press: 0.12s;
+  --dur-ui: 0.18s;
   /* Paper tokens. Deliberately absent from the dark block: a printed roster is always ink on
      white, so printing from dark mode must not carry the dark surfaces onto the page. */
   --print-paper: #ffffff;
@@ -93,6 +129,18 @@
   --on-primary: #ffffff;
   --focus-ring: rgba(81,221,215,0.3);
   --brand-gold: #e1ba63;
+  /* gold/coral/sky สว่างขึ้นเพื่ออ่านเป็นตัวหนังสือบนพื้นเข้ม แต่ token ที่เป็น "พื้น"
+     (-fill) และตัวหนังสือบนพื้นนั้น (--on-*) คงค่าเดิมทั้งสองธีม เพราะมันคือพื้นสีสดที่มี
+     ตัวหนังสือเข้มทับอยู่แล้ว จึงไม่ขึ้นกับว่าหน้าหลังเป็นสว่างหรือมืด */
+  --accent: #FFD23F;
+  --accent-soft: rgba(255,210,63,0.16);
+  --accent-line: rgba(255,210,63,0.38);
+  --coral: #FF8A6A;
+  --coral-soft: rgba(239,108,74,0.12);
+  --coral-line: rgba(255,138,106,0.35);
+  --info: #7cc0ea;
+  --info-line: rgba(124,192,234,0.35);
+  --field: #1d2320;
   --topbar-bg: #0a2e2c;
   --warning: #e8942f;
   --warning-bg: rgba(232,148,47,0.16);
@@ -110,6 +158,11 @@
   --shadow-sm: 0 1px 2px rgba(0,0,0,0.5);
   --shadow-md: 0 1px 3px rgba(0,0,0,0.55);
   --shadow-modal: 0 12px 32px rgba(0,0,0,0.6);
+  /* glow แรงขึ้นในธีมมืด: เงาสีบนพื้นเข้มถูกกลืนไปมาก ค่าเดียวกับธีมสว่างจะแทบมองไม่เห็น */
+  --glow-primary: 0 2px 14px rgba(26,163,157,0.45);
+  --glow-accent: 0 2px 14px rgba(255,210,63,0.35);
+  --glow-coral: 0 2px 14px rgba(239,108,74,0.42);
+  --glow-info: 0 2px 14px rgba(93,173,226,0.38);
 }
 
 * {
@@ -137,9 +190,13 @@ input {
   font: inherit;
 }
 
+/* transition ระบุ property ตรงๆ ไม่ใช้ `all` — ของเดิมเป็น `all 0.35s` ซึ่งลากทุก property
+   รวมถึง width/height/transform ที่ layout เปลี่ยนเองตาม state ทำให้ปุ่มไหลตามตอน re-render */
 button {
   cursor: pointer;
-  transition: all 0.35s cubic-bezier(0.25, 0.1, 0.25, 1);
+  transition: background-color var(--dur-ui) ease, border-color var(--dur-ui) ease,
+    box-shadow var(--dur-ui) ease, color var(--dur-ui) ease,
+    transform var(--dur-press) var(--ease-bounce);
 }
 
 button:disabled,
@@ -148,24 +205,36 @@ input:disabled {
   opacity: 0.62;
 }
 
-button:not(:disabled):hover {
-  filter: brightness(0.92);
-}
-
+/* press feedback ตาม Flip7 (0.95 → 0.96 เพราะปุ่มที่นี่เล็กกว่าปุ่มเกมบนมือถือ)
+   ยืนยันการแตะจริงบนแท็บเล็ตหน้างานที่ไม่มี hover */
 button:not(:disabled):active {
-  transform: scale(0.97);
+  transform: scale(0.96);
 }
 
 input,
-select {
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+select,
+textarea {
+  transition: border-color var(--dur-ui) ease, box-shadow var(--dur-ui) ease;
 }
 
 input:focus,
-select:focus {
+select:focus,
+textarea:focus {
   outline: none;
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(4,129,125, 0.2);
+  box-shadow: var(--shadow-focus);
+}
+
+/* ตัวเลขในตารางและ metric ต้องเรียงหลักตรงกัน ไม่งั้นเลขพัสดุกับยอดนับอ่านเทียบกันยาก */
+td,
+th,
+.code-cell,
+.metric-row strong,
+.packer-row strong,
+.report-card strong,
+.drive-card strong,
+.staff-summary strong {
+  font-variant-numeric: tabular-nums;
 }
 
 h1,
@@ -179,28 +248,10 @@ p {
   position: relative;
   padding: 18px 20px 14px;
   border-radius: var(--radius-lg);
-  background: linear-gradient(135deg, rgba(4,129,125,0.06) 0%, rgba(4,129,125,0.02) 50%, transparent 100%);
-  border: 0.5px solid rgba(4,129,125,0.1);
-  box-shadow: 0 0 0 1px rgba(0,0,0,0.02), 0 4px 16px rgba(0,0,0,0.03);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-sm);
   overflow: hidden;
-}
-
-.app-title::before {
-  content: '';
-  position: absolute;
-  top: -30%;
-  right: -10%;
-  width: 120px;
-  height: 120px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(4,129,125,0.08) 0%, transparent 70%);
-  pointer-events: none;
-  animation: title-glow 4s ease-in-out infinite;
-}
-
-@keyframes title-glow {
-  0%, 100% { transform: translate(0,0) scale(1); opacity: 0.6; }
-  50% { transform: translate(-5px, -5px) scale(1.2); opacity: 1; }
 }
 
 .title-badge {
@@ -209,25 +260,15 @@ p {
   gap: 8px;
   padding: 5px 14px;
   border-radius: var(--radius-full);
-  background: linear-gradient(135deg, rgba(4,129,125,0.15), rgba(4,129,125,0.05));
-  border: 0.5px solid rgba(4,129,125,0.2);
+  background: var(--primary-soft);
+  border: 1px solid var(--primary-soft);
   color: var(--primary);
   font-size: 0.7rem;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   margin-bottom: 12px;
-  box-shadow: 0 0 12px rgba(4,129,125,0.08);
-}
-
-.title-badge svg {
-  filter: drop-shadow(0 0 4px rgba(4,129,125,0.4));
-  animation: scan-pulse 2s ease infinite;
-}
-
-@keyframes scan-pulse {
-  0%, 100% { opacity: 0.5; transform: scale(1); filter: drop-shadow(0 0 3px rgba(4,129,125,0.3)); }
-  50% { opacity: 1; transform: scale(1.15); filter: drop-shadow(0 0 8px rgba(4,129,125,0.6)); }
+  box-shadow: var(--shadow-sm);
 }
 
 h1 {
@@ -245,14 +286,7 @@ h1 {
   height: 3px;
   margin-top: 10px;
   border-radius: 3px;
-  background: linear-gradient(90deg, var(--primary), #409cff 50%, transparent);
-  box-shadow: 0 0 8px rgba(4,129,125,0.3);
-  animation: accent-pulse 3s ease-in-out infinite;
-}
-
-@keyframes accent-pulse {
-  0%, 100% { width: 72px; opacity: 0.7; }
-  50% { width: 96px; opacity: 1; }
+  background: linear-gradient(90deg, var(--primary), var(--accent-fill) 70%, transparent);
 }
 
 h2 {
@@ -398,7 +432,9 @@ h3 {
 
 a, .master-sheet-link {
   text-decoration: none;
-  transition: all 0.25s cubic-bezier(0.25, 0.1, 0.25, 1);
+  transition: background-color var(--dur-ui) ease, border-color var(--dur-ui) ease,
+    box-shadow var(--dur-ui) ease, color var(--dur-ui) ease,
+    transform var(--dur-press) var(--ease-bounce);
 }
 
 a:hover, .master-sheet-link:hover {
@@ -407,40 +443,46 @@ a:hover, .master-sheet-link:hover {
 
 select:hover {
   border-color: var(--primary);
-  box-shadow: 0 0 0 2px rgba(4,129,125, 0.1);
+  box-shadow: 0 0 0 2px var(--primary-soft);
   cursor: pointer;
 }
 
 .date-box {
-  transition: all 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
+  transition: background-color var(--dur-ui) ease, border-color var(--dur-ui) ease,
+    box-shadow var(--dur-ui) ease, color var(--dur-ui) ease,
+    transform var(--dur-press) var(--ease-bounce);
   cursor: default;
 }
 
 .date-box:hover {
   border-color: var(--line-strong);
-  box-shadow: 0 3px 12px rgba(0,0,0,0.06);
+  box-shadow: var(--shadow-md);
 }
 
 .search-input-row {
-  transition: all 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
+  transition: background-color var(--dur-ui) ease, border-color var(--dur-ui) ease,
+    box-shadow var(--dur-ui) ease, color var(--dur-ui) ease,
+    transform var(--dur-press) var(--ease-bounce);
 }
 
 .search-input-row:hover {
   border-color: var(--line-strong);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  box-shadow: var(--shadow-md);
 }
 
 .search-input-row:focus-within {
-  box-shadow: 0 0 0 4px rgba(4,129,125, 0.18);
+  box-shadow: var(--shadow-focus);
   border-color: var(--primary);
 }
 
 .issue-bar button {
-  transition: all 0.25s cubic-bezier(0.25, 0.1, 0.25, 1);
+  transition: background-color var(--dur-ui) ease, border-color var(--dur-ui) ease,
+    box-shadow var(--dur-ui) ease, color var(--dur-ui) ease,
+    transform var(--dur-press) var(--ease-bounce);
 }
 
 .issue-bar button:not(:disabled):hover {
-  box-shadow: 0 3px 10px rgba(255,149,0,0.2);
+  box-shadow: var(--glow-accent);
 }
 
 .issue-bar button:not(:disabled):active {
@@ -448,7 +490,9 @@ select:hover {
 }
 
 .issue-bar select {
-  transition: all 0.25s cubic-bezier(0.25, 0.1, 0.25, 1);
+  transition: background-color var(--dur-ui) ease, border-color var(--dur-ui) ease,
+    box-shadow var(--dur-ui) ease, color var(--dur-ui) ease,
+    transform var(--dur-press) var(--ease-bounce);
 }
 
 .issue-bar select:hover {
@@ -456,11 +500,13 @@ select:hover {
 }
 
 .table-action-button {
-  transition: all 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
+  transition: background-color var(--dur-ui) ease, border-color var(--dur-ui) ease,
+    box-shadow var(--dur-ui) ease, color var(--dur-ui) ease,
+    transform var(--dur-press) var(--ease-bounce);
 }
 
 .table-action-button:not(:disabled):hover {
-  box-shadow: 0 3px 10px rgba(255,149,0,0.15);
+  box-shadow: var(--glow-accent);
 }
 
 .table-action-button:not(:disabled):active {
@@ -468,16 +514,20 @@ select:hover {
 }
 
 .segmented-control button {
-  transition: all 0.25s cubic-bezier(0.25, 0.1, 0.25, 1);
+  transition: background-color var(--dur-ui) ease, border-color var(--dur-ui) ease,
+    box-shadow var(--dur-ui) ease, color var(--dur-ui) ease,
+    transform var(--dur-press) var(--ease-bounce);
 }
 
 .segmented-control button:not(.active):hover {
-  background: rgba(4,129,125,0.06);
+  background: var(--primary-soft);
   color: var(--primary);
 }
 
 .icon-button {
-  transition: all 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
+  transition: background-color var(--dur-ui) ease, border-color var(--dur-ui) ease,
+    box-shadow var(--dur-ui) ease, color var(--dur-ui) ease,
+    transform var(--dur-press) var(--ease-bounce);
 }
 
 .icon-button:not(:disabled):hover {
@@ -490,7 +540,9 @@ select:hover {
 }
 
 .empty-search {
-  transition: all 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
+  transition: background-color var(--dur-ui) ease, border-color var(--dur-ui) ease,
+    box-shadow var(--dur-ui) ease, color var(--dur-ui) ease,
+    transform var(--dur-press) var(--ease-bounce);
 }
 
 .empty-search:hover {
@@ -499,48 +551,60 @@ select:hover {
 }
 
 .report-badge {
-  transition: all 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
+  transition: background-color var(--dur-ui) ease, border-color var(--dur-ui) ease,
+    box-shadow var(--dur-ui) ease, color var(--dur-ui) ease,
+    transform var(--dur-press) var(--ease-bounce);
 }
 
 .report-badge:hover {
-  box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+  box-shadow: var(--shadow-md);
 }
 
 .camera-message {
-  transition: all 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
+  transition: background-color var(--dur-ui) ease, border-color var(--dur-ui) ease,
+    box-shadow var(--dur-ui) ease, color var(--dur-ui) ease,
+    transform var(--dur-press) var(--ease-bounce);
 }
 
 .status-badge {
-  transition: all 0.25s cubic-bezier(0.25, 0.1, 0.25, 1);
+  transition: background-color var(--dur-ui) ease, border-color var(--dur-ui) ease,
+    box-shadow var(--dur-ui) ease, color var(--dur-ui) ease,
+    transform var(--dur-press) var(--ease-bounce);
 }
 
 .status-badge:hover {
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  box-shadow: var(--shadow-md);
 }
 
 .current-courier-badge {
-  transition: all 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
+  transition: background-color var(--dur-ui) ease, border-color var(--dur-ui) ease,
+    box-shadow var(--dur-ui) ease, color var(--dur-ui) ease,
+    transform var(--dur-press) var(--ease-bounce);
 }
 
 .current-courier-badge:hover {
-  box-shadow: 0 4px 16px rgba(4,129,125,0.15);
+  box-shadow: var(--glow-primary);
 }
 
 .field-control input {
-  transition: all 0.25s cubic-bezier(0.25, 0.1, 0.25, 1);
+  transition: background-color var(--dur-ui) ease, border-color var(--dur-ui) ease,
+    box-shadow var(--dur-ui) ease, color var(--dur-ui) ease,
+    transform var(--dur-press) var(--ease-bounce);
 }
 
 .field-control input:hover {
   border-color: var(--primary);
-  box-shadow: 0 0 0 2px rgba(4,129,125, 0.08);
+  box-shadow: 0 0 0 2px var(--primary-soft);
 }
 
 .account-pill {
-  transition: all 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
+  transition: background-color var(--dur-ui) ease, border-color var(--dur-ui) ease,
+    box-shadow var(--dur-ui) ease, color var(--dur-ui) ease,
+    transform var(--dur-press) var(--ease-bounce);
 }
 
 .account-pill:hover {
-  box-shadow: 0 3px 12px rgba(0,0,0,0.06);
+  box-shadow: var(--shadow-md);
 }
 
 /* ── Scan popup ── */
@@ -552,7 +616,7 @@ select:hover {
   align-items: center;
   justify-content: center;
   padding: 20px;
-  background: rgba(0,0,0,0.35);
+  background: color-mix(in srgb, var(--text) 58%, transparent);
   backdrop-filter: blur(3px);
   -webkit-backdrop-filter: blur(3px);
   animation: overlay-in 0.25s ease;
@@ -973,7 +1037,9 @@ select:hover {
   font-weight: 700;
   font-size: 0.9rem;
   cursor: pointer;
-  transition: all 0.25s ease;
+  transition: background-color var(--dur-ui) ease, border-color var(--dur-ui) ease,
+    box-shadow var(--dur-ui) ease, color var(--dur-ui) ease,
+    transform var(--dur-press) var(--ease-bounce);
 }
 .popup-cancel-btn.active {
   border-color: var(--warning-line);
@@ -1046,29 +1112,14 @@ select:hover {
 .side-panel,
 .scan-panel,
 .report-panel {
-  border: 0.5px solid var(--line);
-  border-radius: 28px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
   background: var(--surface);
-  box-shadow:
-    0 0 0 0.5px var(--line) inset,
-    0 0 0 1px rgba(0,0,0,0.04),
-    0 2px 8px rgba(0,0,0,0.04),
-    0 8px 32px rgba(0,0,0,0.06),
-    0 20px 60px rgba(0,0,0,0.04);
+  box-shadow: var(--shadow-sm);
   min-width: 0;
-  transition: all 0.5s cubic-bezier(0.25, 0.1, 0.25, 1);
-}
-
-.side-panel:hover,
-.scan-panel:hover,
-.report-panel:hover {
-  background: var(--surface-soft);
-  box-shadow:
-    0 0 0 0.5px var(--line) inset,
-    0 0 0 1px rgba(0,0,0,0.06),
-    0 4px 16px rgba(0,0,0,0.06),
-    0 12px 40px rgba(0,0,0,0.08),
-    0 24px 72px rgba(0,0,0,0.06);
+  transition: background-color var(--dur-ui) ease, border-color var(--dur-ui) ease,
+    box-shadow var(--dur-ui) ease, color var(--dur-ui) ease,
+    transform var(--dur-press) var(--ease-bounce);
 }
 
 .side-panel,
@@ -1158,13 +1209,15 @@ select:hover {
   background: var(--surface);
   color: var(--text);
   text-align: left;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
-  transition: all 0.2s ease;
+  box-shadow: var(--shadow-sm);
+  transition: background-color var(--dur-ui) ease, border-color var(--dur-ui) ease,
+    box-shadow var(--dur-ui) ease, color var(--dur-ui) ease,
+    transform var(--dur-press) var(--ease-bounce);
 }
 
 .courier-button:not(:disabled):hover {
   border-color: var(--line-strong);
-  box-shadow: 0 3px 8px rgba(0,0,0,0.06);
+  box-shadow: var(--shadow-md);
   filter: none;
 }
 
@@ -1179,7 +1232,7 @@ select:hover {
   border-left-color: var(--primary);
   background: var(--primary-soft);
   color: var(--primary-strong);
-  box-shadow: 0 2px 8px rgba(4,129,125,0.12);
+  box-shadow: var(--glow-primary);
 }
 
 .courier-button strong {
@@ -1194,8 +1247,8 @@ select:hover {
 
 .courier-button.active strong {
   background: var(--primary-fill);
-  color: #fff;
-  box-shadow: 0 2px 6px rgba(4,129,125,0.25);
+  color: var(--on-primary);
+  box-shadow: var(--shadow-sm);
 }
 
 .scan-tool-panel {
@@ -1280,7 +1333,6 @@ select:hover {
   color: var(--warning);
   font-size: 0.82rem;
   font-weight: 700;
-  animation: fadeInUp 0.3s ease;
 }
 
 .manual-format-option {
@@ -1320,9 +1372,11 @@ select:hover {
   background: var(--primary-fill);
   color: #ffffff;
   border: 0;
-  box-shadow: 0 2px 8px rgba(4,129,125,0.25);
+  box-shadow: var(--shadow-sm);
   transform: translateY(0);
-  transition: all 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
+  transition: background-color var(--dur-ui) ease, border-color var(--dur-ui) ease,
+    box-shadow var(--dur-ui) ease, color var(--dur-ui) ease,
+    transform var(--dur-press) var(--ease-bounce);
   font-weight: 600;
   letter-spacing: -0.01em;
 }
@@ -1330,27 +1384,27 @@ select:hover {
 .secondary-button:not(:disabled):hover {
   filter: none;
   background: var(--primary-strong);
-  box-shadow: 0 4px 12px rgba(4,129,125,0.35);
+  box-shadow: var(--glow-primary);
 }
 
 .secondary-button:not(:disabled):active {
-  background: #0060d0;
-  box-shadow: 0 1px 4px rgba(4,129,125,0.2);
+  background: var(--primary-strong);
+  box-shadow: var(--shadow-sm);
   transform: scale(0.98);
 }
 
 .ghost-button {
   background: linear-gradient(180deg, var(--surface) 0%, var(--surface-soft) 100%);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  box-shadow: var(--shadow-sm);
 }
 
 .ghost-button:not(:disabled):hover {
   filter: none;
-  box-shadow: 0 3px 8px rgba(0,0,0,0.08);
+  box-shadow: var(--shadow-md);
 }
 
 .ghost-button:not(:disabled):active {
-  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  box-shadow: var(--shadow-sm);
   transform: translateY(1px);
 }
 
@@ -1568,7 +1622,7 @@ select:hover {
   min-height: 300px;
   border: 2px solid var(--primary);
   border-radius: 8px;
-  background: #0b1110;
+  background: var(--page);
 }
 
 .camera-reader {
@@ -1603,7 +1657,7 @@ select:hover {
   height: min(72%, 360px);
   border: 2px dashed rgba(255, 255, 255, 0.86);
   border-radius: 8px;
-  box-shadow: 0 0 18px rgba(4,129,125, 0.3);
+  box-shadow: var(--glow-primary);
 }
 
 .scan-frame span::before {
@@ -1613,8 +1667,8 @@ select:hover {
   right: 8%;
   top: 50%;
   height: 2px;
-  background: rgba(4,129,125, 0.85);
-  box-shadow: 0 0 18px rgba(4,129,125, 0.85);
+  background: var(--primary);
+  box-shadow: var(--glow-primary);
   animation: scan-line 2s ease-in-out infinite;
 }
 
@@ -1723,7 +1777,7 @@ select:hover {
 }
 
 .scan-input-row:focus-within {
-  box-shadow: 0 0 0 4px rgba(4,129,125, 0.18);
+  box-shadow: var(--shadow-focus);
   border-color: var(--primary);
 }
 
@@ -1816,13 +1870,15 @@ select:hover {
   border: 0.5px solid var(--line);
   border-radius: 20px;
   background: var(--surface-soft);
-  box-shadow: 0 2px 12px rgba(0,0,0,0.04);
-  transition: all 0.4s cubic-bezier(0.25, 0.1, 0.25, 1);
+  box-shadow: var(--shadow-sm);
+  transition: background-color var(--dur-ui) ease, border-color var(--dur-ui) ease,
+    box-shadow var(--dur-ui) ease, color var(--dur-ui) ease,
+    transform var(--dur-press) var(--ease-bounce);
 }
 
 .metric-row > div:hover {
   background: var(--surface-soft);
-  box-shadow: 0 8px 28px rgba(0,0,0,0.08);
+  box-shadow: var(--shadow-md);
 }
 
 .metric-row span {
@@ -1874,14 +1930,16 @@ select:hover {
   border: 0.5px solid var(--line);
   border-radius: 16px;
   background: var(--surface-soft);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+  box-shadow: var(--shadow-sm);
   text-align: center;
-  transition: all 0.35s cubic-bezier(0.25, 0.1, 0.25, 1);
+  transition: background-color var(--dur-ui) ease, border-color var(--dur-ui) ease,
+    box-shadow var(--dur-ui) ease, color var(--dur-ui) ease,
+    transform var(--dur-press) var(--ease-bounce);
 }
 
 .packer-row > div:hover {
   background: var(--surface-soft);
-  box-shadow: 0 6px 20px rgba(0,0,0,0.06);
+  box-shadow: var(--shadow-md);
 }
 
 .packer-row span {
@@ -2115,8 +2173,8 @@ th {
 
 .status-badge.cross-day {
   margin-left: 6px;
-  background: #fff0d6;
-  color: #a85d00;
+  background: var(--info-soft);
+  color: var(--info);
 }
 
 .status-badge.duplicate,
@@ -2138,7 +2196,7 @@ th {
 }
 
 tbody tr:nth-child(even) {
-  background: rgba(0, 0, 0, 0.02);
+  background: var(--surface-soft);
 }
 
 tbody tr:hover {
@@ -2168,78 +2226,20 @@ tbody tr:hover {
   }
 }
 
-/* ── Row slide in ── */
-@keyframes rowSlideIn {
-  from { opacity: 0; transform: translateX(-12px); }
-  to { opacity: 1; transform: translateX(0); }
-}
-tbody tr { animation: rowSlideIn 0.35s ease backwards; }
-tbody tr:nth-child(1){ animation-delay: 0s; }
-tbody tr:nth-child(2){ animation-delay: 0.03s; }
-tbody tr:nth-child(3){ animation-delay: 0.06s; }
-tbody tr:nth-child(4){ animation-delay: 0.09s; }
-tbody tr:nth-child(5){ animation-delay: 0.12s; }
-tbody tr:nth-child(6){ animation-delay: 0.15s; }
-tbody tr:nth-child(7){ animation-delay: 0.18s; }
-tbody tr:nth-child(8){ animation-delay: 0.21s; }
-
-/* ── Card entrance ── */
-@keyframes cardEntrance {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-.side-panel  { animation: cardEntrance 0.4s ease backwards; animation-delay: 0.05s; }
-.scan-panel  { animation: cardEntrance 0.4s ease backwards; animation-delay: 0.1s; }
-.search-panel{ animation: cardEntrance 0.4s ease backwards; animation-delay: 0.15s; }
-
-/* ── Status pop ── */
-@keyframes status-pop {
-  0% { transform: scale(0); opacity: 0; }
-  60% { transform: scale(1.15); }
-  100% { transform: scale(1); opacity: 1; }
-}
-.status-badge { animation: status-pop 0.3s cubic-bezier(0.34,1.56,0.64,1); }
-
+/* หนึ่งใน animation ที่เก็บไว้: ยืนยันว่าสแกนติดแล้ว เป็น feedback จริง ไม่ใช่การตกแต่ง
+   และเป็นการ "ฉลองจังหวะสำคัญด้วยสีของแบรนด์" ตามที่ Flip7 เรียกร้อง */
 @keyframes flash-success {
-  0% { border-color: var(--primary); box-shadow: 0 0 0 0 rgba(4,129,125,0.4); }
-  50% { border-color: var(--success); box-shadow: 0 0 0 8px rgba(52,199,89,0.2); }
-  100% { border-color: var(--primary); box-shadow: 0 0 0 0 rgba(4,129,125,0); }
+  0% { border-color: var(--primary); box-shadow: 0 0 0 0 var(--success-line); }
+  50% { border-color: var(--success); box-shadow: 0 0 0 8px var(--success-bg); }
+  100% { border-color: var(--primary); box-shadow: 0 0 0 0 transparent; }
 }
 
 .scan-input-row.flash {
   animation: flash-success 0.6s ease;
 }
 
-@keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-.metric-row > div,
-.packer-row > div {
-  animation: fadeInUp 0.3s ease;
-}
-
-.courier-button.active {
-  animation: pulse-active 2s ease infinite;
-}
-
-@keyframes pulse-active {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(4,129,125, 0.2); }
-  50% { box-shadow: 0 0 0 6px rgba(4,129,125, 0.08); }
-}
-
-.side-panel,
-.scan-panel,
-.report-panel {
-  transition: box-shadow 0.3s ease;
-}
-
-.side-panel:hover,
-.scan-panel:hover,
-.report-panel:hover {
-  box-shadow: 0 18px 48px rgba(31, 45, 61, 0.12);
-}
+/* พาเนลข้อมูลกดไม่ได้ จึงไม่มี transition และไม่ตอบสนอง hover — เงาที่ขยับตอนเมาส์ผ่าน
+   พาเนลใหญ่ทั้งใบคือ noise ไม่ใช่ feedback (DESIGN.md §4) */
 
 @media (min-width: 560px) {
   .account-strip {
@@ -2318,7 +2318,9 @@ tbody tr:nth-child(8){ animation-delay: 0.21s; }
   color: var(--muted);
   font-weight: 800;
   font-size: 0.95rem;
-  transition: all 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
+  transition: background-color var(--dur-ui) ease, border-color var(--dur-ui) ease,
+    box-shadow var(--dur-ui) ease, color var(--dur-ui) ease,
+    transform var(--dur-press) var(--ease-bounce);
 }
 
 .tab-button:last-child {
@@ -2330,20 +2332,8 @@ tbody tr:nth-child(8){ animation-delay: 0.21s; }
   color: var(--primary-strong);
 }
 
-.tab-button:first-child.active {
-  background: #15803d;
-  color: #fff;
-  box-shadow: inset 0 -3px 0 #86efac;
-}
-
-.tab-button:last-child.active {
-  background: linear-gradient(135deg, #4338ca, #0369a1);
-  color: #fff;
-  box-shadow: inset 0 -3px 0 #67e8f9;
-}
-
 .tab-button:not(:disabled):hover {
-  background: rgba(4,129,125, 0.06);
+  background: var(--primary-soft);
   color: var(--primary);
 }
 
@@ -2359,12 +2349,6 @@ tbody tr:nth-child(8){ animation-delay: 0.21s; }
   color: var(--on-primary);
   font-size: 0.72rem;
   font-weight: 900;
-  animation: badge-pulse 1.5s ease-in-out infinite;
-}
-
-@keyframes badge-pulse {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.15); }
 }
 
 /* ── Drive Mode Label ── */
@@ -2373,8 +2357,9 @@ tbody tr:nth-child(8){ animation-delay: 0.21s; }
   margin-top: 4px;
   padding: 3px 10px;
   border-radius: var(--radius-full);
-  background: rgba(4,129,125, 0.1);
-  color: var(--primary-strong);
+  background: var(--info-soft);
+  border: 1px solid var(--info-line);
+  color: var(--info);
   font-size: 0.78rem;
   font-weight: 700;
 }
@@ -2395,75 +2380,83 @@ tbody tr:nth-child(8){ animation-delay: 0.21s; }
 .workflow-guide strong { font-size: 1rem; font-weight: 900; }
 .workflow-guide p { margin: 2px 0 0; font-size: 0.88rem; font-weight: 700; line-height: 1.4; }
 
+/* สองโหมดงานแยกกันด้วย "แถบสีขอบ" ตามที่ Flip7 กำหนดให้การ์ดสื่อสารสถานะด้วยขอบสี
+   Packer = teal ของแบรนด์ (โหมดสแกน) · Drive = sky (โหมดจับคู่ข้อมูลกับ Admin)
+   ของเดิม hardcode เขียว #16a34a กับม่วง #4f46e5 ซึ่งไม่มีใน token ไม่มีค่าสำหรับ dark mode
+   และไม่เคยถูกวัด contrast จึงต้องมีกฎ !important ตามกดทับทีหลังทั้งชุด — ตัดวงจรนั้นที่ต้นเหตุ */
 .packer-workflow-guide {
-  border-color: #16a34a;
-  background: #dcfce7;
-  color: #14532d;
+  border-color: var(--primary);
+  border-inline-start: 4px solid var(--primary);
+  background: var(--primary-soft);
+  color: var(--primary-strong);
 }
 
 .drive-workflow-guide {
-  border-color: #4f46e5;
-  background: linear-gradient(100deg, #e0e7ff, #cffafe);
-  color: #312e81;
+  border-color: var(--info-line);
+  border-inline-start: 4px solid var(--info);
+  background: var(--info-soft);
+  color: var(--info);
 }
 
 .scan-panel.workflow-packer {
-  border: 2px solid #16a34a;
-  background: linear-gradient(145deg, #f0fdf4, var(--surface));
+  border: 1px solid var(--line);
+  border-top: 4px solid var(--primary);
+  background: var(--surface);
 }
 
 .scan-panel.workflow-drive {
-  border: 2px solid #4f46e5;
-  background: linear-gradient(145deg, #eef2ff, #f0f9ff);
-  box-shadow: 0 16px 42px rgba(67, 56, 202, 0.18);
+  border: 1px solid var(--line);
+  border-top: 4px solid var(--info);
+  background: var(--surface);
 }
 
 .workflow-drive.current-courier-badge {
-  border-color: var(--primary);
-  background: linear-gradient(100deg, #eef2ff, #e0f2fe);
-  color: #3730a3;
+  border-color: var(--info-line);
+  background: var(--info-soft);
+  color: var(--info);
 }
 
 .workflow-packer.current-courier-badge {
-  border-color: #16a34a;
-  background: #dcfce7;
-  color: #166534;
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  color: var(--primary-strong);
 }
 
 .side-panel.workflow-packer .courier-button.active {
-  border-color: #15803d;
-  background: #15803d;
-  color: #fff;
+  border-color: var(--primary-fill);
+  background: var(--primary-fill);
+  color: var(--on-primary);
 }
 
 .side-panel.workflow-drive .courier-button.active {
-  border-color: #4338ca;
-  background: linear-gradient(135deg, #4338ca, #0369a1);
-  color: #fff;
+  border-color: var(--info-fill);
+  background: var(--info-fill);
+  color: var(--on-info);
 }
 
 .workflow-drive.camera-panel .camera-stage,
-.workflow-drive.scan-form .scan-input-row { border-color: var(--primary); }
+.workflow-drive.scan-form .scan-input-row { border-color: var(--info); }
 
 .workflow-drive.camera-panel .scan-frame span::before {
-  background: rgba(4,129,125, 0.9);
-  box-shadow: 0 0 18px rgba(4,129,125, 0.9);
+  background: var(--info-fill);
+  box-shadow: var(--glow-info);
 }
 
 .workflow-drive.scan-form .scan-input-row:focus-within {
-  box-shadow: 0 0 0 4px rgba(4,129,125, 0.18);
+  box-shadow: var(--shadow-focus);
 }
 
 .workflow-drive.scan-form .scan-input-row button {
-  background: linear-gradient(135deg, #4f46e5, #0ea5e9);
+  background: var(--info-fill);
+  color: var(--on-info);
 }
 
 .scan-popup-sheet.workflow-drive {
-  border-top: 4px solid var(--primary);
-  background: linear-gradient(160deg, #eef2ff, var(--surface) 36%);
+  border-top: 4px solid var(--info);
+  background: var(--surface);
 }
 
-.scan-popup-sheet.workflow-packer { border-top: 4px solid #22c55e; }
+.scan-popup-sheet.workflow-packer { border-top: 4px solid var(--primary); }
 
 /* ── Drive Dashboard ── */
 .drive-dashboard {
@@ -2515,7 +2508,6 @@ tbody tr:nth-child(8){ animation-delay: 0.21s; }
 .drive-card.danger {
   border-color: var(--danger-line);
   background: var(--danger-bg);
-  animation: danger-glow 2s ease-in-out infinite;
 }
 .drive-card.danger svg { color: var(--danger); }
 .drive-card.danger strong { color: var(--danger); }
@@ -2526,11 +2518,6 @@ tbody tr:nth-child(8){ animation-delay: 0.21s; }
 }
 .drive-card.muted svg { color: var(--muted); }
 .drive-card.muted strong { color: var(--muted); }
-
-@keyframes danger-glow {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0.3); }
-  50% { box-shadow: 0 0 0 6px rgba(255, 59, 48, 0.1); }
-}
 
 /* ── Missing Order Check ── */
 .missing-check-panel {
@@ -2841,7 +2828,6 @@ tbody tr:nth-child(8){ animation-delay: 0.21s; }
 .enterprise-shell .tab-button {
   min-height: 44px;
   border: 0;
-  border-radius: 7px;
   font-size: 0.88rem;
 }
 
@@ -2877,15 +2863,15 @@ tbody tr:nth-child(8){ animation-delay: 0.21s; }
 }
 
 .enterprise-shell .packer-workflow-guide {
-  border-color: var(--success-line);
-  background: var(--success-bg);
-  color: var(--success);
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  color: var(--primary-strong);
 }
 
 .enterprise-shell .drive-workflow-guide {
-  border-color: #bfdbfe;
-  background: var(--primary-soft);
-  color: var(--primary-strong);
+  border-color: var(--info-line);
+  background: var(--info-soft);
+  color: var(--info);
 }
 
 .enterprise-shell .side-panel,
@@ -2910,12 +2896,12 @@ tbody tr:nth-child(8){ animation-delay: 0.21s; }
 }
 
 .enterprise-shell .scan-panel.workflow-packer {
-  border-top-color: var(--success);
+  border-top-color: var(--primary);
   background: var(--surface);
 }
 
 .enterprise-shell .scan-panel.workflow-drive {
-  border-top-color: var(--primary);
+  border-top-color: var(--info);
   background: var(--surface);
 }
 
@@ -3029,15 +3015,33 @@ tbody tr:nth-child(8){ animation-delay: 0.21s; }
   transform: none;
 }
 
-.enterprise-shell .scan-input-row button {
-  border-radius: 7px;
-  background: var(--primary);
+/* ปุ่มขนส่งที่เลือกอยู่เป็นพื้นสีเข้มที่มีตัวหนังสือทับ จึงต้องใช้ token -fill กับ --on-*
+   ไม่ใช่ --primary ตรงๆ เพราะใน dark mode --primary สว่างเกินกว่าจะเอาตัวขาวมาทับ
+   วัดแล้ว: ขาวบน --primary-fill = 4.728 (light) / 5.996 (dark) */
+.enterprise-shell .side-panel .courier-button.active {
+  background: var(--primary-fill);
+  border-color: var(--primary-fill);
+  color: var(--on-primary);
+  box-shadow: none;
 }
 
-.enterprise-shell .side-panel .courier-button.active {
-  background: var(--primary);
-  border-color: var(--primary);
+.enterprise-shell .side-panel .courier-button.active strong,
+.enterprise-shell .side-panel .courier-button.active span {
+  background: transparent;
+  color: var(--on-primary);
   box-shadow: none;
+}
+
+/* โหมด Drive ใช้ sky ตัวหนังสือต้องเข้ม (--on-info) เพราะขาวบน sky วัดได้ 2.459 */
+.enterprise-shell .side-panel.workflow-drive .courier-button.active {
+  background: var(--info-fill);
+  border-color: var(--info-fill);
+  color: var(--on-info);
+}
+
+.enterprise-shell .side-panel.workflow-drive .courier-button.active strong,
+.enterprise-shell .side-panel.workflow-drive .courier-button.active span {
+  color: var(--on-info);
 }
 
 .enterprise-shell .field-control input,
@@ -3045,8 +3049,7 @@ tbody tr:nth-child(8){ animation-delay: 0.21s; }
 .enterprise-shell input,
 .enterprise-shell select {
   border-color: var(--line-strong);
-  border-radius: 7px;
-  background: var(--surface);
+  border-radius: var(--radius-md);
 }
 
 .enterprise-shell .field-control input:hover,
@@ -3169,60 +3172,12 @@ tbody tr:nth-child(8){ animation-delay: 0.21s; }
   }
 }
 
-/* ── Enterprise focus pass: remove decorative motion and visual noise ── */
-.enterprise-shell *,
-.enterprise-shell *::before,
-.enterprise-shell *::after {
-  animation: none !important;
-  transition: none !important;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-}
-
-/* Loading feedback is functional, so it remains the one permitted animation. */
-.enterprise-shell .spin {
-  animation: spin 0.8s linear infinite !important;
-}
-
-/* Decorative hover lifts were removed at source, so this no longer has to blanket-kill
-   transforms — which also blocked the button press feedback the design system calls for. */
-.enterprise-shell *:hover {
-  filter: none !important;
-}
-
-/* Press feedback: the one transform worth keeping, because it confirms a real tap on a
-   touch device where hover does not exist. */
-.enterprise-shell button:not(:disabled):active {
-  transform: scale(0.97);
-}
-
-.enterprise-shell .app-title,
-.enterprise-shell .title-badge,
-.enterprise-shell .workflow-guide,
-.enterprise-shell .scan-panel.workflow-packer,
-.enterprise-shell .scan-panel.workflow-drive,
-.enterprise-shell .current-courier-badge,
-.enterprise-shell .title-badge,
-.enterprise-shell .workflow-guide svg,
-.enterprise-shell .current-courier-badge svg {
-  color: var(--primary-strong);
-}
-
-.enterprise-shell .packer-workflow-guide,
-.enterprise-shell .drive-workflow-guide {
-  background: var(--surface-soft) !important;
-  color: var(--text);
-}
-
-.enterprise-shell .scan-panel.workflow-packer,
-.enterprise-shell .scan-panel.workflow-drive {
-  border-top-color: var(--primary) !important;
-}
-
-.enterprise-shell .side-panel .courier-button.active {
-  background: var(--primary-fill) !important;
-  border-color: var(--primary-fill) !important;
-  color: #fff !important;
+/* กฎ `.enterprise-shell *` ที่เคยสั่ง animation/transition/backdrop-filter เป็น none !important
+   ถูกลบออกแล้ว เพราะทุกต้นเหตุที่มันกดไว้ถูกลบที่ต้นทางไปหมด (title-glow, scan-pulse,
+   accent-pulse, rowSlideIn, cardEntrance, status-pop, fadeInUp, pulse-active, badge-pulse,
+   danger-glow และ transition: background-color var(--dur-ui) ease, border-color var(--dur-ui) ease,
+    box-shadow var(--dur-ui) ease, color var(--dur-ui) ease,
+    transform var(--dur-press) var(--ease-bounce);
 }
 
 .enterprise-shell .secondary-panel {
@@ -3484,23 +3439,15 @@ tbody tr:nth-child(8){ animation-delay: 0.21s; }
   background: rgba(255, 255, 255, 0.16) !important;
 }
 
-.enterprise-shell .workflow-guide,
-.enterprise-shell .packer-workflow-guide,
-.enterprise-shell .drive-workflow-guide {
-  border-color: var(--line) !important;
-  background: var(--surface-soft) !important;
-  color: var(--text) !important;
-}
-
 .enterprise-shell .workflow-guide svg,
 .enterprise-shell .current-courier-badge svg {
-  color: var(--primary-strong) !important;
+  color: currentColor;
 }
 
 .enterprise-shell .drive-mode-label {
-  border: 1px solid var(--line) !important;
-  background: var(--primary-soft) !important;
-  color: var(--primary-strong) !important;
+  border: 1px solid var(--info-line);
+  background: var(--info-soft);
+  color: var(--info);
 }
 
 .enterprise-shell input,
@@ -3532,53 +3479,17 @@ tbody tr:nth-child(8){ animation-delay: 0.21s; }
 .enterprise-shell .marketplace-file-input::file-selector-button {
   margin-right: 8px;
   border: 0;
-  border-radius: var(--radius-sm);
-  color: #fff;
+  border-radius: var(--radius-full);
+  color: var(--on-primary);
   background: var(--primary-fill);
   font: inherit;
   font-weight: 700;
 }
 
-.enterprise-shell .current-courier-badge.workflow-packer,
-.enterprise-shell .current-courier-badge.workflow-drive {
-  border-color: var(--line) !important;
-  background: var(--surface-soft) !important;
-  color: var(--text) !important;
-}
-
-.enterprise-shell .scan-panel.workflow-packer,
-.enterprise-shell .scan-panel.workflow-drive {
-  border-color: var(--line) !important;
-  border-top-color: var(--primary) !important;
-  background: var(--surface) !important;
-}
-
-.enterprise-shell .workflow-packer.scan-form .scan-input-row,
-.enterprise-shell .workflow-drive.scan-form .scan-input-row {
-  border-color: var(--line-strong) !important;
-}
-
-.enterprise-shell .workflow-packer.scan-form .scan-input-row:focus-within,
-.enterprise-shell .workflow-drive.scan-form .scan-input-row:focus-within {
-  border-color: var(--primary) !important;
-  box-shadow: 0 0 0 3px var(--focus-ring) !important;
-}
-
-.enterprise-shell .workflow-packer.scan-form .scan-input-row button,
-.enterprise-shell .workflow-drive.scan-form .scan-input-row button {
-  background: var(--primary) !important;
-}
-
-.enterprise-shell .scan-popup-sheet.workflow-packer,
-.enterprise-shell .scan-popup-sheet.workflow-drive {
-  border-top-color: var(--primary) !important;
-  background: var(--surface) !important;
-}
-
 .enterprise-shell .status-badge.cross-day {
-  border: 1px solid var(--warning-line);
-  background: var(--warning-bg);
-  color: var(--warning);
+  border: 1px solid var(--info-line);
+  background: var(--info-soft);
+  color: var(--info);
 }
 
 .enterprise-shell tbody tr:nth-child(even) {
@@ -3611,6 +3522,201 @@ tbody tr:nth-child(8){ animation-delay: 0.21s; }
   color: var(--muted) !important;
   border-color: var(--line) !important;
   background: var(--surface-soft) !important;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   สำเนียง Flip7 — วางไว้ท้ายสุดก่อน media query เพราะเป็นชั้นที่ต้องชนะกฎรูปทรงเดิม
+   แต่ยังต้องแพ้ media query ที่ปรับตามความกว้างจอ ดูที่มาของทุกค่าใน DESIGN.md
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ── ปุ่มทรง pill ──
+   ลักษณะที่จำได้ที่สุดของ Flip7 ใช้กับ "ปุ่มที่กดแล้วเกิดการกระทำ" เท่านั้น
+   การ์ด พาเนล ตาราง และกล่องกรอกยังเป็นสี่เหลี่ยมมุมมน เพราะ pill กับกล่องข้อมูล
+   ที่วางชิดกันหลายใบทำให้ขอบเขตของแต่ละใบอ่านยากขึ้น */
+.enterprise-shell .primary-action,
+.enterprise-shell .secondary-button,
+.enterprise-shell .ghost-button,
+.enterprise-shell .search-button,
+.enterprise-shell .report-button,
+.enterprise-shell .table-action-button,
+.enterprise-shell .staff-edit,
+.enterprise-shell .staff-report-button,
+.enterprise-shell .popup-cancel-btn,
+.enterprise-shell .staff-modal footer button,
+.enterprise-shell .schedule-toolbar button,
+.enterprise-shell .duty-type-form button,
+.enterprise-shell .issue-bar button,
+.enterprise-shell .scan-input-row button,
+.enterprise-shell .tab-button,
+.enterprise-shell .segmented-control button,
+.enterprise-shell .scan-tool-panel button,
+.enterprise-shell .courier-add-form button,
+.enterprise-shell .missing-results-actions button,
+.enterprise-shell .recent-actions .text-button,
+.enterprise-shell .staff-section-tabs button {
+  border-radius: var(--radius-full);
+}
+
+/* ปุ่มไอคอนเป็นวงกลมเต็ม และต้องกดติดด้วยนิ้วบนแท็บเล็ตหน้างาน (Flip7: ≥72rpx = 36px) */
+.enterprise-shell .icon-button,
+.enterprise-shell .theme-toggle button {
+  min-width: 36px;
+  min-height: 36px;
+  border-radius: var(--radius-full);
+}
+
+/* รางของ segmented control ต้องโค้งตามลูกใน ไม่งั้นมุมลูกโผล่พ้นราง */
+.enterprise-shell .segmented-control,
+.enterprise-shell .staff-section-tabs,
+.enterprise-shell .theme-toggle {
+  border-radius: var(--radius-full);
+}
+
+/* ── glow เงาสี: เฉพาะ element ที่กดได้ ตอน hover/focus ──
+   การ์ดนิ่งไม่มี glow เพราะจอนี้เปิดค้างทั้งวัน glow ทุกใบจะกลายเป็น noise */
+.enterprise-shell .primary-action:not(:disabled):hover,
+.enterprise-shell .primary-action:focus-visible,
+.enterprise-shell .secondary-button:not(:disabled):hover,
+.enterprise-shell .secondary-button:focus-visible,
+.enterprise-shell .side-panel .courier-button.active:not(:disabled):hover {
+  box-shadow: var(--glow-primary);
+}
+
+.enterprise-shell .scan-input-row button:not(:disabled):hover,
+.enterprise-shell .scan-input-row button:focus-visible {
+  box-shadow: var(--glow-accent);
+}
+
+.enterprise-shell .popup-cancel-btn.active:not(:disabled):hover,
+.enterprise-shell .missing-result-card.danger .table-action-button:not(:disabled):hover {
+  box-shadow: var(--glow-coral);
+}
+
+.enterprise-shell .side-panel.workflow-drive .courier-button.active:not(:disabled):hover,
+.enterprise-shell .workflow-drive.scan-form .scan-input-row button:not(:disabled):hover {
+  box-shadow: var(--glow-info);
+}
+
+/* ── พื้นครีมของช่องกรอก ──
+   Flip7 ใช้ครีมเป็นพื้นที่กรอกเพื่อแยกจากพื้นที่อ่าน ค่าที่นี่ไม่ใช่ #FFF8E7 ของ Flip7
+   เพราะ --primary บนครีมนั้นวัดได้ 4.465 ตกเกณฑ์ ค่านี้ได้ 4.646 (DESIGN.md §3) */
+.enterprise-shell input:not([type="checkbox"]):not([type="radio"]):not(:disabled),
+.enterprise-shell select:not(:disabled),
+.enterprise-shell textarea:not(:disabled),
+.enterprise-shell .search-input-row,
+.enterprise-shell .scan-input-row,
+.enterprise-shell .staff-search,
+.enterprise-shell .date-box {
+  background: var(--field);
+}
+
+/* input ที่ไม่ต้องมีพื้นของตัวเองเพราะอยู่ในกล่องที่เป็นครีมแล้ว — ถ้าให้พื้นซ้อนอีกชั้น
+   ขอบในจะเห็นเป็นกล่องในกล่อง */
+.enterprise-shell .search-input-row input,
+.enterprise-shell .scan-input-row input,
+.enterprise-shell .staff-search input {
+  background: transparent;
+}
+
+/* กล่องกรอกที่ประกอบจากหลายส่วน ต้องได้ ring ตอนโฟกัสลูกในด้วย ไม่งั้นคนใช้คีย์บอร์ด
+   มองไม่เห็นว่าเคอร์เซอร์อยู่ไหน (ห้าม outline: 0 โดยไม่มีตัวแทน) */
+.enterprise-shell .search-input-row:focus-within,
+.enterprise-shell .scan-input-row:focus-within,
+.enterprise-shell .staff-search:focus-within,
+.enterprise-shell .date-box:focus-within {
+  border-color: var(--primary);
+  box-shadow: var(--shadow-focus);
+}
+
+/* ── หัวข้อ section เส้นประ ──
+   Flip7 ใช้เส้นประคั่นหัวข้อ ที่นี่ใช้กับหัวข้อของกลุ่มเนื้อหาเท่านั้น ไม่ใช้กับทุก h3
+   เพราะการ์ดเล็กที่มี h3 อยู่ข้างในจะกลายเป็นเส้นประเต็มจอ */
+.enterprise-shell .recent-header h3,
+.enterprise-shell .search-heading,
+.enterprise-shell .report-header h2,
+.enterprise-shell .missing-check-header h3,
+.enterprise-shell .staff-page-header h2,
+.enterprise-shell .staff-group h3 {
+  padding-bottom: 8px;
+  border-bottom: 2px dashed var(--line-strong);
+}
+
+/* ── แถบสีขอบซ้ายบอกสถานะการ์ด ──
+   Flip7: "use left-border color accents on cards for state communication"
+   ทำให้กวาดตาหาการ์ดที่ต้องเข้าไปดูได้โดยไม่ต้องอ่านตัวหนังสือ */
+.enterprise-shell .drive-card,
+.enterprise-shell .missing-result-card,
+.enterprise-shell .report-card,
+.enterprise-shell .metric-row > div,
+.enterprise-shell .packer-row > div {
+  border-inline-start: 4px solid var(--primary);
+}
+
+.enterprise-shell .drive-card.total { border-inline-start-color: var(--primary); }
+.enterprise-shell .drive-card.matched,
+.enterprise-shell .missing-result-card.success { border-inline-start-color: var(--success); }
+.enterprise-shell .drive-card.muted,
+.enterprise-shell .missing-result-card.muted { border-inline-start-color: var(--line-strong); }
+.enterprise-shell .missing-result-card.warning { border-inline-start-color: var(--warning); }
+
+/* coral ไม่ใช่ danger: การ์ดพวกนี้คือ "ยังไม่ถูกสแกน ต้องเข้าไปดู" ซึ่งเป็นงานที่ค้าง
+   ไม่ใช่ระบบทำงานล้มเหลว จึงเป็น coral ตาม DESIGN.md §2 */
+.enterprise-shell .drive-card.danger,
+.enterprise-shell .missing-result-card.danger {
+  border-color: var(--coral-line);
+  border-inline-start: 4px solid var(--coral);
+  background: var(--coral-soft);
+}
+
+.enterprise-shell .drive-card.danger svg,
+.enterprise-shell .drive-card.danger strong,
+.enterprise-shell .missing-result-card.danger .missing-result-card-header {
+  color: var(--coral);
+}
+
+/* แถบขอบซ้ายของ guide ต้องประกาศทีหลัง border-color ของกฎ enterprise ไม่งั้นถูกเกลี่ยเป็นสีเส้นปกติ */
+.enterprise-shell .packer-workflow-guide {
+  border-inline-start: 4px solid var(--primary);
+}
+
+.enterprise-shell .drive-workflow-guide {
+  border-inline-start: 4px solid var(--info);
+}
+
+/* ── CTA สีทอง ──
+   ปุ่มบันทึกการสแกนคือการกระทำที่สำคัญที่สุดในแอป จึงเป็นปุ่มเดียวที่ได้สีทองของ Flip7
+   ตัวหนังสือต้องเข้ม (--on-accent) เพราะตัวขาวบนทองวัดได้ 1.444 อ่านไม่ออกเลย */
+.enterprise-shell .scan-input-row button {
+  background: var(--accent-fill);
+  color: var(--on-accent);
+  border: 0;
+}
+
+/* badge เน้นด้วย tint ทอง — ใช้กับป้ายบอกจำนวนในรายงาน ไม่ใช้กับตัวเลขแจ้งเตือน
+   (ตัวนั้นยังเป็น --danger-fill เพราะหมายถึงงานที่ยังไม่เสร็จ) */
+.enterprise-shell .report-badge {
+  border: 1px solid var(--accent-line);
+  border-radius: var(--radius-full);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 800;
+}
+
+/* ── หัวข้อและตัวเลข ──
+   Flip7 ใช้ 800 พร้อม letter-spacing กว้าง แต่พยัญชนะไทยที่ระยะห่างมากอ่านช้าลง
+   จึงใช้ค่าติดลบเล็กน้อยแทน */
+.enterprise-shell h2,
+.enterprise-shell h3 {
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.enterprise-shell .metric-row strong,
+.enterprise-shell .packer-row strong,
+.enterprise-shell .report-card strong,
+.enterprise-shell .drive-card strong,
+.enterprise-shell .staff-summary strong {
+  font-weight: 800;
 }
 
 @media (min-width: 1200px) {
