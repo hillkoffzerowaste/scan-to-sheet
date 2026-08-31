@@ -139,6 +139,53 @@ test('the run budgets are small enough to finish inside an Apps Script execution
   );
   assert.ok(APPS_SCRIPT_LIMIT_MS - LABEL_SYNC.runBudgetMs >= 60 * 1000, 'leave at least a minute');
   assert.ok(LABEL_SYNC.maxFilesPerRun > 0);
+  assert.ok(LABEL_SYNC.discoveryBudgetMs < LABEL_SYNC.runBudgetMs);
+  assert.ok(LABEL_SYNC.maxFoldersPerRun > 0);
+  assert.ok(LABEL_SYNC.maxCandidateFiles >= LABEL_SYNC.maxFilesPerRun);
+});
+
+test('Drive discovery has time, folder and file ceilings before recursive traversal', () => {
+  const source = readFileSync(codePath, 'utf8');
+  const block = source.match(/function listCandidateFiles_\([\s\S]*?\n\}/)?.[0] ?? '';
+  assert.match(block, /options\.deadlineMs/);
+  assert.match(block, /options\.maxFolders/);
+  assert.match(block, /options\.maxFiles/);
+  assert.match(block, /shouldStop\(/);
+});
+
+test('Drive folder cap still processes the last allowed folder before stopping', () => {
+  const context = loadCode();
+  const iterator = (items) => ({
+    hasNext: () => items.length > 0,
+    next: () => items.shift(),
+  });
+  const labelFile = (id) => ({
+    getId: () => id,
+    getLastUpdated: () => new Date(),
+    getMimeType: () => 'application/pdf',
+  });
+  const child = {
+    getId: () => 'child',
+    getFiles: () => iterator([labelFile('child-file')]),
+    getFolders: () => iterator([]),
+  };
+  const root = {
+    getId: () => 'root',
+    getFiles: () => iterator([labelFile('root-file')]),
+    getFolders: () => iterator([child]),
+  };
+  context.MimeType = { PDF: 'application/pdf', JPEG: 'image/jpeg', PNG: 'image/png' };
+  context.DriveApp = { getFolderById: () => root };
+
+  const result = context.listCandidateFiles_('root', new Date(0), {
+    deadlineMs: Date.now() + 10_000,
+    maxFolders: 1,
+    maxFiles: 10,
+  });
+
+  assert.deepEqual([...result.files].map((file) => file.getId()), ['root-file']);
+  assert.equal(result.foldersVisited, 1);
+  assert.equal(result.stoppedReason, 'folder_budget');
 });
 
 test('the state cap covers more files than the candidate window can hold', () => {

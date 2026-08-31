@@ -16,6 +16,12 @@ var LABEL_SYNC = {
   runBudgetMs: 4 * 60 * 1000,
   // Files handled per run. Bounds both the OCR spend and how much a lost run can cost.
   maxFilesPerRun: 40,
+  // Discovery happens before OCR. It needs its own smaller budget and hard collection caps;
+  // otherwise a large recursive Drive tree can consume the full six-minute execution window
+  // before any processed state is saved.
+  discoveryBudgetMs: 30 * 1000,
+  maxFoldersPerRun: 500,
+  maxCandidateFiles: 5000,
   // Entries kept in Script Properties. At warehouse volume the old 500 was reached within days,
   // and a file that falls out of state is a file that gets OCR'd from scratch again.
   maxStateEntries: 5000,
@@ -52,8 +58,18 @@ function runLabelSync() {
     var spreadsheet = SpreadsheetApp.openById(config.spreadsheetId);
     var logSheet = ensureLogSheet_(spreadsheet, config.logSheetName);
     var state = readProcessedState_();
+    var nowMs = Date.now();
+    var runDeadline = nowMs + LABEL_SYNC.runBudgetMs;
     var oldestFileDate = new Date(Date.now() - config.fileLookbackDays * 24 * 60 * 60 * 1000);
-    var files = listCandidateFiles_(config.folderId, oldestFileDate);
+    var discovery = listCandidateFiles_(config.folderId, oldestFileDate, {
+      deadlineMs: Math.min(runDeadline, nowMs + LABEL_SYNC.discoveryBudgetMs),
+      maxFolders: LABEL_SYNC.maxFoldersPerRun,
+      maxFiles: LABEL_SYNC.maxCandidateFiles,
+    });
+    var files = discovery.files;
+    if (discovery.stoppedReason) {
+      Logger.log('Label Sync Drive discovery stopped early (' + discovery.stoppedReason + '); later files are deferred.');
+    }
     var sheetRows = getTargetDateSheets_(spreadsheet, config.lookbackDays).map(function (sheet) {
       var lastRow = sheet.getLastRow();
       return {
@@ -62,9 +78,6 @@ function runLabelSync() {
       };
     });
     var logRows = [];
-
-    var nowMs = Date.now();
-    var runDeadline = nowMs + LABEL_SYNC.runBudgetMs;
 
     files.forEach(function (file) {
       // Both budgets defer rather than drop: an unprocessed file keeps whatever state it had,
@@ -174,23 +187,39 @@ function positiveInteger_(value, fallback) {
   return Number.isFinite(number) && number > 0 ? number : fallback;
 }
 
-function listCandidateFiles_(rootFolderId, oldestFileDate) {
+function listCandidateFiles_(rootFolderId, oldestFileDate, options) {
+  options = options || {};
   var found = [];
   var seenFolders = {};
+  var folderCount = 0;
+  var stoppedReason = '';
+  function shouldStop(checkFolderBudget) {
+    if (stoppedReason) return true;
+    if (options.deadlineMs && Date.now() >= options.deadlineMs) stoppedReason = 'time_budget';
+    else if (checkFolderBudget && options.maxFolders && folderCount >= options.maxFolders) stoppedReason = 'folder_budget';
+    else if (options.maxFiles && found.length >= options.maxFiles) stoppedReason = 'file_discovery_budget';
+    return Boolean(stoppedReason);
+  }
   function visit(folder) {
+    if (shouldStop(true)) return;
     if (seenFolders[folder.getId()]) return;
     seenFolders[folder.getId()] = true;
+    folderCount += 1;
     var files = folder.getFiles();
     while (files.hasNext()) {
+      if (shouldStop(false)) return;
       var file = files.next();
       if (file.getLastUpdated() < oldestFileDate || !isSupportedLabelFile_(file)) continue;
       found.push(file);
     }
     var folders = folder.getFolders();
-    while (folders.hasNext()) visit(folders.next());
+    while (folders.hasNext()) {
+      if (shouldStop(false)) return;
+      visit(folders.next());
+    }
   }
   visit(DriveApp.getFolderById(rootFolderId));
-  return found;
+  return { files: found, stoppedReason: stoppedReason, foldersVisited: folderCount };
 }
 
 function isSupportedLabelFile_(file) {
