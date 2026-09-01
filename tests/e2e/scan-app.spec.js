@@ -201,16 +201,13 @@ test.describe('Scan to Sheet — Packer Tab', () => {
     await expect(qrPanel.locator('.scan-qr-card img').first()).toBeVisible();
   });
 
-  test('caps wide-screen courier QR workspace near half the scan area', async ({ page }) => {
+  test('caps wide-screen courier QR workspace to fit four codes', async ({ page }) => {
     await page.setViewportSize({ width: 1920, height: 900 });
-    const scanPanel = page.locator('.scan-panel');
     const qrPanel = page.locator('.workspace-qr-panel');
-    const scanBox = await scanPanel.boundingBox();
     const qrBox = await qrPanel.boundingBox();
-    expect(scanBox).not.toBeNull();
     expect(qrBox).not.toBeNull();
-    expect(qrBox.width).toBeGreaterThan(scanBox.width * 1.4);
-    expect(qrBox.width).toBeLessThan(scanBox.width * 1.5);
+    expect(qrBox.width).toBeGreaterThanOrEqual(560);
+    expect(qrBox.width).toBeLessThanOrEqual(576);
   });
 
   test('fits all courier QR codes without scrolling on desktop screens', async ({ page }) => {

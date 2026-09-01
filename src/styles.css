@@ -4572,7 +4572,7 @@ tbody tr:hover {
    กินพื้นที่ที่ต้องใช้ยิง QR จากหน้าจอ */
 @media (min-width: 1400px) {
   .enterprise-shell .workspace-grid {
-    grid-template-columns: 260px minmax(360px, 1fr) minmax(480px, 50%);
+    grid-template-columns: 260px minmax(360px, 1fr) minmax(480px, 576px);
   }
 
   .workspace-qr-panel .scan-qr-grid {
@@ -4652,7 +4652,7 @@ tbody tr:hover {
 
 .scan-popup-overlay.with-qr-panels {
   display: grid;
-  grid-template-columns: minmax(300px, 1fr) minmax(540px, 1.25fr) minmax(300px, 1fr);
+  grid-template-columns: minmax(300px, 320px) minmax(540px, 720px) minmax(300px, 320px);
   gap: 12px;
   justify-content: center;
 }
@@ -4673,7 +4673,7 @@ tbody tr:hover {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
-@media (max-width: 1199px) {
+@media (max-width: 1279px) {
   .scan-popup-overlay.with-qr-panels {
     grid-template-columns: minmax(0, 720px);
   }
