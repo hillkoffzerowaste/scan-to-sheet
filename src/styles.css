@@ -4571,8 +4571,16 @@ tbody tr:hover {
 /* จอกว้างในห้องแพ็กใช้พื้นที่ขวาสำหรับ QR โดยตรง: ช่องสแกนจึงไม่ขยาย
    กินพื้นที่ที่ต้องใช้ยิง QR จากหน้าจอ */
 @media (min-width: 1400px) {
-  .enterprise-shell .workspace-grid {
+  .enterprise-shell .workspace-grid.qr-layout-compact {
+    grid-template-columns: 260px minmax(360px, 1fr) minmax(480px, 512px);
+  }
+
+  .enterprise-shell .workspace-grid.qr-layout-standard {
     grid-template-columns: 260px minmax(360px, 1fr) minmax(480px, 576px);
+  }
+
+  .enterprise-shell .workspace-grid.qr-layout-large {
+    grid-template-columns: 260px minmax(360px, 1fr) minmax(480px, 640px);
   }
 
   .workspace-qr-panel .scan-qr-grid {
@@ -4583,12 +4591,40 @@ tbody tr:hover {
 .scan-qr-panel > header {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 6px;
   padding-bottom: 6px;
   color: var(--text);
   font-size: 0.78rem;
   font-weight: 600;
   border-bottom: 1px solid var(--line);
+}
+
+.scan-qr-title,
+.scan-qr-layout-controls {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.scan-qr-layout-controls select,
+.scan-qr-layout-controls button {
+  min-height: 26px;
+  font-size: var(--ui-xs);
+}
+
+.scan-qr-layout-controls select {
+  width: auto;
+  max-width: 96px;
+  padding-inline: 5px;
+}
+
+.scan-qr-layout-controls button {
+  display: grid;
+  width: 26px;
+  padding: 0;
+  place-items: center;
 }
 
 .scan-qr-grid {
@@ -4655,6 +4691,16 @@ tbody tr:hover {
   grid-template-columns: minmax(300px, 320px) minmax(540px, 720px) minmax(300px, 320px);
   gap: 12px;
   justify-content: center;
+}
+
+.scan-popup-overlay.with-qr-panels.qr-layout-compact {
+  grid-template-columns: minmax(300px, 300px) minmax(540px, 620px) minmax(300px, 300px);
+}
+
+@media (min-width: 1500px) {
+  .scan-popup-overlay.with-qr-panels.qr-layout-large {
+    grid-template-columns: minmax(320px, 340px) minmax(540px, 760px) minmax(320px, 340px);
+  }
 }
 
 .scan-popup-overlay.with-qr-panels .scan-popup-sheet {

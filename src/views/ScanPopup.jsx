@@ -18,6 +18,8 @@ function ScanPopup({
   isSignedIn,
   packerOptions,
   qrPackerMembers,
+  qrLayout,
+  resetQrLayout,
   scanFlash,
   scanMethod,
   scanPopupCourierOptions,
@@ -29,6 +31,7 @@ function ScanPopup({
   selectedCourier,
   selectedPacker,
   setScanMethod,
+  setQrLayout,
   setScanPopupOpen,
   setScanRemark,
   setScanValue,
@@ -39,9 +42,17 @@ function ScanPopup({
   stopCamera,
 }) {
   return (
-        <div className={`scan-popup-overlay ${activeTab === 'packer' ? 'with-qr-panels' : ''}`} onClick={() => { setScanPopupOpen(false); void stopCamera(); }}>
+        <div className={`scan-popup-overlay ${activeTab === 'packer' ? `with-qr-panels qr-layout-${qrLayout}` : ''}`} onClick={() => { setScanPopupOpen(false); void stopCamera(); }}>
           {activeTab === 'packer' && (
-            <CourierQrPanel couriers={scanPopupCourierOptions} role="packer" className="popup-qr-panel popup-qr-couriers" />
+            <CourierQrPanel
+              couriers={scanPopupCourierOptions}
+              role="packer"
+              className="popup-qr-panel popup-qr-couriers"
+              layout={qrLayout}
+              layoutLabel="ป๊อปอัป"
+              onLayoutChange={setQrLayout}
+              onLayoutReset={resetQrLayout}
+            />
           )}
           <div
             className={`scan-popup-sheet workflow-${activeTab}`}
@@ -192,7 +203,7 @@ function ScanPopup({
             </button>
           </div>
           {activeTab === 'packer' && (
-            <PackerQrPanel packers={qrPackerMembers} className="popup-qr-panel popup-qr-packers" />
+            <PackerQrPanel packers={qrPackerMembers} className="popup-qr-panel popup-qr-packers" layout={qrLayout} />
           )}
         </div>
   );

@@ -201,6 +201,17 @@ test.describe('Scan to Sheet — Packer Tab', () => {
     await expect(qrPanel.locator('.scan-qr-card img').first()).toBeVisible();
   });
 
+  test('stores the chosen QR layout for this workstation', async ({ page }) => {
+    const qrPanel = page.locator('.workspace-qr-panel');
+    const layoutSelect = qrPanel.getByLabel('ขนาด QR หน้าแรก');
+    await layoutSelect.selectOption('compact');
+    await expect(qrPanel).toHaveClass(/qr-layout-compact/);
+    await page.reload();
+    await expect(page.locator('.workspace-qr-panel').getByLabel('ขนาด QR หน้าแรก')).toHaveValue('compact');
+    await page.locator('.workspace-qr-panel').getByRole('button', { name: 'คืนค่า QR หน้าแรก' }).click();
+    await expect(page.locator('.workspace-qr-panel').getByLabel('ขนาด QR หน้าแรก')).toHaveValue('standard');
+  });
+
   test('caps wide-screen courier QR workspace to fit four codes', async ({ page }) => {
     await page.setViewportSize({ width: 1920, height: 900 });
     const qrPanel = page.locator('.workspace-qr-panel');

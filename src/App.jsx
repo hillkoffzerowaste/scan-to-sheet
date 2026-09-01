@@ -94,6 +94,7 @@ import { hasDeploymentUpdate } from './services/deploymentUpdate.js';
 import { getScanPopupCourierOptions, getScanPopupStatusMeta } from './services/scanPopup.js';
 import { parseScanQrCommand, resolveScanQrCommand } from './services/scanQrCommand.js';
 import { DEFAULT_SCAN_METHOD } from './services/scanPreferences.js';
+import { DEFAULT_QR_LAYOUT_PREFERENCES, loadQrLayoutPreferences, saveQrLayoutPreferences } from './services/qrLayoutPreferences.js';
 import { barcodeCharacterFromKeyEvent } from './services/barcodeKeyboard.js';
 import {
   apiResponseErrorMessage,
@@ -284,6 +285,7 @@ function App() {
   );
   const [scanFlash, setScanFlash] = useState(false);
   const [scanPopupOpen, setScanPopupOpen] = useState(false);
+  const [qrLayoutPreferences, setQrLayoutPreferences] = useState(() => loadQrLayoutPreferences());
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [theme, setTheme] = useState(() => (
@@ -504,6 +506,10 @@ function App() {
       themeColor.setAttribute('content', theme === 'dark' ? '#04120f' : '#eaf4f3');
     }
   }, [theme]);
+
+  useEffect(() => {
+    saveQrLayoutPreferences(qrLayoutPreferences);
+  }, [qrLayoutPreferences]);
 
   useEffect(() => {
     let unsubscribed = false;
@@ -2304,6 +2310,14 @@ function App() {
     }
   }
 
+  function setQrLayout(scope, layout) {
+    setQrLayoutPreferences((current) => ({ ...current, [scope]: layout }));
+  }
+
+  function resetQrLayout(scope) {
+    setQrLayoutPreferences((current) => ({ ...current, [scope]: DEFAULT_QR_LAYOUT_PREFERENCES[scope] }));
+  }
+
   function focusScanInput({ force = false, inPopup = scanPopupOpen } = {}) {
     // Both scan fields can exist while the popup is open. Separate refs keep closing the popup
     // from clearing the first-page field reference before it can receive the next QR scan.
@@ -3226,6 +3240,8 @@ function App() {
           recentRows={recentRows}
           recoverSelectedSheetRange={recoverSelectedSheetRange}
           refreshAllCounts={refreshAllCounts}
+          qrLayout={qrLayoutPreferences.workspace}
+          resetQrLayout={() => resetQrLayout('workspace')}
           scanFlash={scanFlash}
           scanMethod={scanMethod}
           scanQueueSnapshot={scanQueueSnapshot}
@@ -3261,6 +3277,7 @@ function App() {
           setSheetRecoveryStartDate={setSheetRecoveryStartDate}
           setShowAllRecentRows={setShowAllRecentRows}
           setThresholdMinutes={setThresholdMinutes}
+          setQrLayout={(layout) => setQrLayout('workspace', layout)}
           sheetRecoveryBusy={sheetRecoveryBusy}
           sheetRecoveryEndDate={sheetRecoveryEndDate}
           sheetRecoveryStartDate={sheetRecoveryStartDate}
@@ -3334,6 +3351,8 @@ function App() {
           isSignedIn={isSignedIn}
           packerOptions={packerOptions}
           qrPackerMembers={qrPackerMembers}
+          qrLayout={qrLayoutPreferences.popup}
+          resetQrLayout={() => resetQrLayout('popup')}
           scanFlash={scanFlash}
           scanMethod={scanMethod}
           scanPopupCourierOptions={scanPopupCourierOptions}
@@ -3345,6 +3364,7 @@ function App() {
           selectedCourier={selectedCourier}
           selectedPacker={selectedPacker}
           setScanMethod={setScanMethod}
+          setQrLayout={(layout) => setQrLayout('popup', layout)}
           setScanPopupOpen={setScanPopupOpen}
           setScanRemark={setScanRemark}
           setScanValue={handleScanValueChange}

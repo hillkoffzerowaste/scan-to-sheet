@@ -48,6 +48,8 @@ function WorkflowView({
   recentRows,
   recoverSelectedSheetRange,
   refreshAllCounts,
+  qrLayout,
+  resetQrLayout,
   scanFlash,
   scanMethod,
   scanQueueSnapshot,
@@ -83,6 +85,7 @@ function WorkflowView({
   setSheetRecoveryStartDate,
   setShowAllRecentRows,
   setThresholdMinutes,
+  setQrLayout,
   sheetRecoveryBusy,
   sheetRecoveryEndDate,
   sheetRecoveryStartDate,
@@ -108,7 +111,7 @@ function WorkflowView({
             </div>
           </section>
 
-          <section className="workspace-grid">
+          <section className={`workspace-grid qr-layout-${qrLayout}`}>
         <aside className={`side-panel workflow-${activeTab}`}>
           <div className="panel-heading">
             <Truck size={18} />
@@ -821,6 +824,10 @@ function WorkflowView({
             couriers={couriers}
             role={activeTab === 'drive' ? 'admin' : 'packer'}
             className="workspace-qr-panel"
+            layout={qrLayout}
+            layoutLabel="หน้าแรก"
+            onLayoutChange={setQrLayout}
+            onLayoutReset={resetQrLayout}
           />
       </section>
 
