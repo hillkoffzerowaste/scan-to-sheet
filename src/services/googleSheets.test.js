@@ -18,6 +18,7 @@ import {
   updateScanIssueGoogle,
   apiFetch,
   isInstantWithinLookback,
+  syncLateOrdersGoogle,
 } from './googleSheets.js';
 
 test('missing-order lookback includes the Bangkok boundary day but filters exact row times', () => {
@@ -848,6 +849,44 @@ test('batch recovery removes a stale cross-day Remark even when the Status is al
     assert.equal(outcome.result.repaired, true);
     assert.equal(outcome.result.row.note, '');
     assert.equal(storedRows[0][9], '');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('Late Orders writes quote the sheet name so Google can parse the range', async () => {
+  const originalFetch = globalThis.fetch;
+  const spreadsheetId = 'sheet-late-orders-test';
+  const requestedRanges = [];
+  const jsonResponse = (payload) => new Response(JSON.stringify(payload), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  });
+
+  globalThis.fetch = async (url, options = {}) => {
+    const decodedUrl = decodeURIComponent(String(url));
+    const method = options.method ?? 'GET';
+    const range = decodedUrl.match(/\/values\/([^:?]+)/)?.[1];
+    if (range) requestedRanges.push(range);
+    if (decodedUrl.includes('/values/')) return jsonResponse({});
+    if (decodedUrl.includes(':batchUpdate')) return jsonResponse({});
+    if (decodedUrl.includes('/spreadsheets/')) {
+      return jsonResponse({ sheets: [{ properties: { sheetId: 9, title: 'Late Orders', gridProperties: { rowCount: 100, columnCount: 9 } } }] });
+    }
+    throw new Error(`Unexpected mock request: ${method} ${decodedUrl}`);
+  };
+
+  try {
+    await syncLateOrdersGoogle({
+      token: 'token',
+      config: { master: { id: spreadsheetId } },
+      orders: [{ platform: 'shopee', orderId: '1', trackingNo: 'TH1', marketplaceSkus: [], expectedShipAt: '', sellerOrderStatus: '', scanned: true }],
+      now: new Date('2026-08-25T03:00:00Z'),
+    });
+
+    // A bare `Late Orders!A1:I` is rejected by the Sheets API because the name has a space.
+    assert.ok(requestedRanges.length > 0);
+    requestedRanges.forEach((range) => assert.ok(range.startsWith("'Late Orders'!"), range));
   } finally {
     globalThis.fetch = originalFetch;
   }

@@ -1549,13 +1549,17 @@ export async function syncLateOrdersGoogle({ token, config, orders, now = new Da
     `${updatedAt.date} ${updatedAt.time}`,
   ])];
 
+  // Quoted like every other range in this file. `Late Orders` contains a space, and A1
+  // notation rejects an unquoted sheet name that does — both calls below failed with
+  // "Unable to parse range", so every Marketplace import reported a failed backfill.
+  const escapedTitle = escapeSheetName(title);
   await apiFetch(
-    `${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent(`${title}!A1:I`)}:clear`,
+    `${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent(`${escapedTitle}!A1:I`)}:clear`,
     token,
     { method: 'POST', body: '{}' },
   );
   await apiFetch(
-    `${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent(`${title}!A1:I${values.length}`)}?valueInputOption=RAW`,
+    `${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent(`${escapedTitle}!A1:I${values.length}`)}?valueInputOption=RAW`,
     token,
     { method: 'PUT', body: JSON.stringify({ values }) },
   );
