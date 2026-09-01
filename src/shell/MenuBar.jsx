@@ -22,8 +22,14 @@ function MenuBar({ menus }) {
     };
   }, [openMenu]);
 
+  // ปิดเมนูเมื่อโฟกัสออกไปนอกแถบ — เดิมปิดด้วย mousedown นอกแถบกับ Escape เท่านั้น
+  // คนที่ใช้คีย์บอร์ดจึงกด Tab ออกไปได้โดยเมนูยังกางค้างทับเนื้อหาอยู่
+  const closeIfFocusLeft = (event) => {
+    if (!barRef.current?.contains(event.relatedTarget)) setOpenMenu(null);
+  };
+
   return (
-    <div className="win-menubar" ref={barRef}>
+    <div className="win-menubar" ref={barRef} onBlur={closeIfFocusLeft}>
       {menus.map((menu) => {
         const items = menu.items.filter(Boolean);
         if (items.length === 0) return null;
