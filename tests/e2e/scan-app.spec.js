@@ -201,7 +201,7 @@ test.describe('Scan to Sheet — Packer Tab', () => {
     await expect(qrPanel.locator('.scan-qr-card img').first()).toBeVisible();
   });
 
-  test('gives most wide-screen workspace to courier QR codes', async ({ page }) => {
+  test('caps wide-screen courier QR workspace near half the scan area', async ({ page }) => {
     await page.setViewportSize({ width: 1920, height: 900 });
     const scanPanel = page.locator('.scan-panel');
     const qrPanel = page.locator('.workspace-qr-panel');
@@ -209,7 +209,8 @@ test.describe('Scan to Sheet — Packer Tab', () => {
     const qrBox = await qrPanel.boundingBox();
     expect(scanBox).not.toBeNull();
     expect(qrBox).not.toBeNull();
-    expect(qrBox.width).toBeGreaterThan(scanBox.width * 1.5);
+    expect(qrBox.width).toBeGreaterThan(scanBox.width * 1.4);
+    expect(qrBox.width).toBeLessThan(scanBox.width * 1.5);
   });
 
   test('fits all courier QR codes without scrolling on desktop screens', async ({ page }) => {
@@ -217,10 +218,14 @@ test.describe('Scan to Sheet — Packer Tab', () => {
       await page.setViewportSize({ width, height: 900 });
       const qrPanel = page.locator('.workspace-qr-panel');
       await expect(qrPanel.locator('.scan-qr-card img').first()).toBeVisible();
+      const columns = await qrPanel.locator('.scan-qr-grid').evaluate((grid) => (
+        window.getComputedStyle(grid).gridTemplateColumns.split(' ').length
+      ));
       const heights = await qrPanel.evaluate((panel) => ({
         client: panel.clientHeight,
         scroll: panel.scrollHeight,
       }));
+      expect(columns, `QR column count at ${width}px`).toBe(4);
       expect(heights.scroll, `QR panel scrolls at ${width}px`).toBeLessThanOrEqual(heights.client);
     }
   });

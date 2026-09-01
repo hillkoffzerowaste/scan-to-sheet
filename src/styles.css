@@ -4572,7 +4572,11 @@ tbody tr:hover {
    กินพื้นที่ที่ต้องใช้ยิง QR จากหน้าจอ */
 @media (min-width: 1400px) {
   .enterprise-shell .workspace-grid {
-    grid-template-columns: 260px minmax(400px, 1fr) minmax(480px, 2fr);
+    grid-template-columns: 260px minmax(360px, 1fr) minmax(480px, 50%);
+  }
+
+  .workspace-qr-panel .scan-qr-grid {
+    grid-template-columns: repeat(4, minmax(110px, 135px));
   }
 }
 
@@ -4666,7 +4670,7 @@ tbody tr:hover {
 /* ป๊อปอัปต้องให้ QR ขนส่งทั้งหมดจบในจอเดียว จึงเพิ่มจำนวนคอลัมน์
    และจำกัดขนาดการ์ดแทนการยืดตามพื้นที่ว่างของจอ */
 .popup-qr-panel .scan-qr-grid {
-  grid-template-columns: repeat(auto-fit, minmax(92px, 116px));
+  grid-template-columns: repeat(3, minmax(92px, 116px));
 }
 
 @media (max-width: 1199px) {
