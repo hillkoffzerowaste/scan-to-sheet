@@ -56,11 +56,48 @@ function printCardMarkup(cards, imageSources) {
   `).join('');
 }
 
+const PDF_CARDS_PER_PAGE = 9;
+
+function splitCardsIntoPdfPages(cards) {
+  return Array.from(
+    { length: Math.ceil(cards.length / PDF_CARDS_PER_PAGE) },
+    (_, index) => cards.slice(index * PDF_CARDS_PER_PAGE, (index + 1) * PDF_CARDS_PER_PAGE),
+  );
+}
+
+function pdfPageMarkup({ title, instructions, subheading, cards, pageNumber, pageCount }, imageSources) {
+  const pageLabel = pageCount > 1 ? ` • หน้า ${pageNumber} / ${pageCount}` : '';
+  return `<section class="qr-print-section qr-pdf-export-page"><header><h2>${escapeHtml(title)}</h2><p>${escapeHtml(instructions)}${pageLabel}</p></header>${subheading ? `<h3 class="qr-print-subheading">${escapeHtml(subheading)}</h3>` : ''}<div class="qr-print-grid">${printCardMarkup(cards, imageSources)}</div></section>`;
+}
+
 function pdfSectionMarkup(mode, adminCards, packerCourierCards, packerCards, imageSources) {
   if (mode === 'admin') {
-    return `<section class="qr-print-section"><header><h2>Admin — รับเข้า Drive</h2><p>1. สแกน QR ขนส่ง  2. สแกน Tracking ต่อเนื่อง</p></header><div class="qr-print-grid">${printCardMarkup(adminCards, imageSources)}</div></section>`;
+    const pages = splitCardsIntoPdfPages(adminCards);
+    return pages.map((cards, index) => pdfPageMarkup({
+      title: 'Admin — รับเข้า Drive',
+      instructions: '1. สแกน QR ขนส่ง  2. สแกน Tracking ต่อเนื่อง',
+      cards,
+      pageNumber: index + 1,
+      pageCount: pages.length,
+    }, imageSources)).join('');
   }
-  return `<section class="qr-print-section"><header><h2>Packer — แพ็กสินค้า</h2><p>1. สแกน QR ขนส่ง  2. สแกน QR Packer  3. สแกน Tracking ต่อเนื่อง</p></header><h3 class="qr-print-subheading">QR ขนส่ง</h3><div class="qr-print-grid">${printCardMarkup(packerCourierCards, imageSources)}</div><h3 class="qr-print-subheading">QR Packer</h3><div class="qr-print-grid">${printCardMarkup(packerCards, imageSources)}</div></section>`;
+
+  const sections = [
+    { subheading: 'QR ขนส่ง', cards: packerCourierCards },
+    { subheading: 'QR Packer', cards: packerCards },
+  ].filter((section) => section.cards.length > 0);
+  const pages = sections.flatMap((section) => splitCardsIntoPdfPages(section.cards).map((cards) => ({
+    ...section,
+    cards,
+  })));
+  return pages.map((page, index) => pdfPageMarkup({
+    title: 'Packer — แพ็กสินค้า',
+    instructions: '1. สแกน QR ขนส่ง  2. สแกน QR Packer  3. สแกน Tracking ต่อเนื่อง',
+    subheading: page.subheading,
+    cards: page.cards,
+    pageNumber: index + 1,
+    pageCount: pages.length,
+  }, imageSources)).join('');
 }
 
 export default function QrPrintSheet({ couriers, staff, onClose }) {
@@ -114,23 +151,27 @@ export default function QrPrintSheet({ couriers, staff, onClose }) {
 
     try {
       await new Promise((resolve) => window.requestAnimationFrame(resolve));
-      const canvas = await html2canvas(exportSheet, {
-        backgroundColor: null,
-        scale: 2,
-        useCORS: true,
-      });
       const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4', compress: true });
       const margin = 8;
       const pageWidth = 210 - margin * 2;
-      const pageHeight = (canvas.height * pageWidth) / canvas.width;
-      if (pageHeight > 297 - margin * 2) {
-        throw new Error('QR มีจำนวนมากเกินกว่าหน้า A4 แนวตั้ง');
+      const pages = [...exportSheet.querySelectorAll('.qr-pdf-export-page')];
+      for (const [index, page] of pages.entries()) {
+        const canvas = await html2canvas(page, {
+          backgroundColor: null,
+          scale: 2,
+          useCORS: true,
+        });
+        const pageHeight = (canvas.height * pageWidth) / canvas.width;
+        if (pageHeight > 297 - margin * 2) {
+          throw new Error('ไม่สามารถจัด QR ลงหน้า A4 ได้ กรุณาลองลดขนาดการ์ด');
+        }
+        if (index > 0) pdf.addPage();
+        pdf.addImage(canvas.toDataURL('image/png'), 'PNG', margin, margin, pageWidth, pageHeight);
       }
-      pdf.addImage(canvas.toDataURL('image/png'), 'PNG', margin, margin, pageWidth, pageHeight);
       pdf.save(`scan-to-sheet-qr-${mode}.pdf`);
       setPrintMessage(`ดาวน์โหลด PDF QR ${mode === 'admin' ? 'Admin' : 'Packer'} แล้ว`);
     } catch (error) {
-      setPrintMessage(error.message === 'QR มีจำนวนมากเกินกว่าหน้า A4 แนวตั้ง'
+      setPrintMessage(error.message === 'ไม่สามารถจัด QR ลงหน้า A4 ได้ กรุณาลองลดขนาดการ์ด'
         ? error.message
         : 'สร้าง PDF ไม่สำเร็จ กรุณาลองใหม่');
     } finally {
