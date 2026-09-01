@@ -663,6 +663,9 @@ function WorkflowView({
 
               <div className="recent-header">
                 <h3>รายการล่าสุด</h3>
+                <span className="grid-count">
+                  แสดง {displayedRecentRows.length} จาก {recentRows.length} แถว
+                </span>
                 <div className="recent-actions">
                   {recentRows.length > 3 && (
                     <button className="text-button" type="button" onClick={() => setShowAllRecentRows((value) => !value)}>
@@ -839,6 +842,9 @@ function WorkflowView({
               {/* Drive Recent Rows */}
               <div className="recent-header">
                 <h3>รายการที่ลง Drive</h3>
+                <span className="grid-count">
+                  แสดง {Math.min(driveRecentRows.length, 10)} จาก {driveRecentRows.length} แถว
+                </span>
                 <div className="recent-actions">
                   {sheetUrl && (
                     <a href={sheetUrl} target="_blank" rel="noreferrer">
