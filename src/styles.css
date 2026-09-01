@@ -5126,7 +5126,7 @@ tbody tr:hover {
 .qr-print-loading { display: grid; place-items: center; color: var(--muted); font-size: var(--ui-xs); }
 
 @media print {
-  @page { size: A4 portrait; margin: 10mm; }
+  @page { size: A4 landscape; margin: 10mm; }
   /* ตารางเวรถูกเรนเดอร์ไว้ล่วงหน้าสำหรับคำสั่งพิมพ์เดิม และกฎเก่าจะเปลี่ยนเป็น display:grid
      ตอน print เสมอ หากไม่ซ่อนเฉพาะตอนมี QR sheet ตารางจะทับ/แทรกใน preview ของ QR */
   body:has(.qr-print-sheet) .duty-print-sheet { display: none; }
@@ -5137,10 +5137,9 @@ tbody tr:hover {
   .qr-print-dialog-header, .qr-print-actions { display: none; }
   .qr-print-sheet { gap: 12px; }
   .qr-print-section { gap: 8px; padding: 0; border: 0; border-radius: 0; background: transparent; break-inside: avoid; }
-  .qr-print-packer-section { break-before: page; }
-  .qr-print-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
-  .qr-print-card { min-height: 52mm; padding: 6px; border-color: var(--control-line); break-inside: avoid; }
-  .qr-print-card h3 { font-size: 16pt; }
-  .qr-print-card p { font-size: 10pt; }
+  .qr-print-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 5px; }
+  .qr-print-card { min-height: 44mm; padding: 5px; border-color: var(--control-line); break-inside: avoid; }
+  .qr-print-card h3 { font-size: 14pt; }
+  .qr-print-card p { font-size: 9pt; }
   .qr-print-card img, .qr-print-loading { width: 108px; height: 108px; }
 }
