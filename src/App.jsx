@@ -325,6 +325,8 @@ function App() {
   const [marketplaceFilterPlatform, setMarketplaceFilterPlatform] = useState('all');
   const marketplaceFileRef = useRef(null);
   const inputRef = useRef(null);
+  const scanValueRef = useRef('');
+  const skipQrSubmitRef = useRef(false);
   const audioContextRef = useRef(null);
   const cameraRef = useRef(null);
   const scanProcessorRef = useRef(null);
@@ -1615,7 +1617,7 @@ function App() {
     }
 
     if (source === 'manual') {
-      setScanValue('');
+      updateScanValue('');
     }
 
     // Prevent only a true duplicate Packer scan. An Admin-only row must still
@@ -1806,7 +1808,7 @@ function App() {
       }
 
       if (source === 'camera') {
-        setScanValue(result.code);
+        updateScanValue(result.code);
       }
       setToday({ date: result.date, time: result.time });
       setRecentRows(result.rows ?? []);
@@ -1927,7 +1929,7 @@ function App() {
     }
 
     if (source === 'manual') {
-      setScanValue('');
+      updateScanValue('');
     }
 
     if (managesBusy) setBusy(true);
@@ -2021,7 +2023,7 @@ function App() {
         setDriveRecentRows([reclaimRow, ...driveRecentRows].slice(0, 50));
         setDriveTotalCount((prev) => prev + 1);
         setToday({ date: nowParts.date, time: nowParts.time });
-        if (source === 'camera') setScanValue(validation.code);
+        if (source === 'camera') updateScanValue(validation.code);
         
         // Background: re-sync to Sheet via appendAdminScanGoogle
         runAfterScanCommit(async () => {
@@ -2211,7 +2213,7 @@ function App() {
       }
 
       if (source === 'camera') {
-        setScanValue(result.code);
+        updateScanValue(result.code);
       }
       setToday({ date: result.date, time: result.time });
       setDriveRecentRows(result.rows ?? []);
@@ -2354,11 +2356,24 @@ function App() {
     void stopCamera();
   }
 
+  function updateScanValue(nextValue) {
+    const next = typeof nextValue === 'function'
+      ? nextValue(scanValueRef.current)
+      : String(nextValue ?? '');
+    scanValueRef.current = next;
+    setScanValue(next);
+  }
+
   function handleScanSubmit(event) {
     event.preventDefault();
-    const code = String(scanValue ?? '').trim();
+    if (skipQrSubmitRef.current) {
+      skipQrSubmitRef.current = false;
+      if (!scanValueRef.current.trim()) return;
+    }
+
+    const code = scanValueRef.current.trim();
     if (inputRef.current) inputRef.current.value = '';
-    setScanValue('');
+    updateScanValue('');
     window.requestAnimationFrame(() => focusScanInput({ force: true }));
 
     if (!code) {
@@ -2462,7 +2477,16 @@ function App() {
     // Keyboard-wedge scanners emit the active OS layout in `key` (Thai characters when
     // Windows is set to Thai), while `code` keeps the physical US-key position.
     event.preventDefault();
-    setScanValue((current) => `${current}${character}`);
+    const nextCode = `${scanValueRef.current}${character}`;
+    if (parseScanQrCommand(nextCode)) {
+      // Keyboard-wedge scanners normally send Enter after the QR payload. The command has
+      // already opened the correct workflow, so that Enter must not enqueue it as Tracking.
+      skipQrSubmitRef.current = true;
+      updateScanValue('');
+      applyScanQrCommand(nextCode);
+      return;
+    }
+    updateScanValue(nextCode);
   }
 
   async function stopCamera() {
@@ -3175,7 +3199,7 @@ function App() {
           setScanMethod={setScanMethod}
           setScanPopupOpen={setScanPopupOpen}
           setScanRemark={setScanRemark}
-          setScanValue={setScanValue}
+          setScanValue={updateScanValue}
           setSearchEndDate={setSearchEndDate}
           setSearchMode={setSearchMode}
           setSearchScope={setSearchScope}
@@ -3273,7 +3297,7 @@ function App() {
           setScanMethod={setScanMethod}
           setScanPopupOpen={setScanPopupOpen}
           setScanRemark={setScanRemark}
-          setScanValue={setScanValue}
+          setScanValue={updateScanValue}
           setSelectedCourier={setSelectedCourier}
           setSelectedPacker={setSelectedPacker}
           startCameraPopup={startCameraPopup}
