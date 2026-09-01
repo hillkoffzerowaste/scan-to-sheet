@@ -107,90 +107,6 @@ function WorkflowView({
             </div>
           </section>
 
-          <details className="marketplace-upload-panel secondary-panel">
-        <summary className="secondary-panel-summary">
-          <div>
-          <div className="panel-heading" id="marketplace-upload-title">
-            <FileSpreadsheet size={18} />
-            <span>อัปโหลดออเดอร์ Seller Center</span>
-          </div>
-          <p>เลือกไฟล์ .xlsx หรือ .csv จาก Shopee, Lazada และ TikTok ได้หลายไฟล์พร้อมกัน</p>
-          </div>
-          <span className="secondary-panel-label">เครื่องมือรอง</span>
-        </summary>
-        <div className="marketplace-upload-content">
-          <div className="marketplace-upload-controls">
-          <label className="field-control marketplace-filter">
-            <span>กรองแพลตฟอร์ม</span>
-            <select
-              value={marketplaceFilterPlatform}
-              onChange={(e) => setMarketplaceFilterPlatform(e.target.value)}
-              disabled={!firebaseUser || marketplaceUploadBusy}
-            >
-              <option value="all">ทุกแพลตฟอร์ม</option>
-              <option value="shopee">Shopee</option>
-              <option value="lazada">Lazada</option>
-              <option value="tiktok">TikTok</option>
-            </select>
-          </label>
-          <input
-            ref={marketplaceFileRef}
-            className="visually-hidden marketplace-file-input"
-            type="file"
-            accept=".xlsx,.csv"
-            multiple
-            onChange={uploadMarketplaceFiles}
-            aria-label="เลือกไฟล์ออเดอร์ Seller Center"
-          />
-          <button
-            className="secondary-button"
-            type="button"
-            onClick={() => marketplaceFileRef.current?.click()}
-            disabled={!firebaseUser || marketplaceUploadBusy}
-          >
-            {marketplaceUploadBusy ? <RefreshCw size={16} className="spin" /> : <Upload size={16} />}
-            <span>{marketplaceUploadBusy ? 'กำลังอัปโหลด...' : 'เลือกไฟล์ออเดอร์'}</span>
-          </button>
-          </div>
-          {marketplaceUploadResult && (
-            <div className={`marketplace-upload-result ${marketplaceUploadResult.type}`} role="status">
-              {marketplaceUploadResult.message}
-            </div>
-          )}
-        </div>
-          </details>
-
-          <details className="standards-panel secondary-panel">
-            <summary className="secondary-panel-summary">
-              <div>
-                <div className="panel-heading">
-                  <CheckCircle2 size={18} />
-                  <span>มาตรฐานการปฏิบัติงาน</span>
-                </div>
-                <p>หลักควบคุมสำหรับความถูกต้อง ตรวจสอบย้อนกลับ และคุณภาพบริการ</p>
-              </div>
-              <span className="secondary-panel-label">Quality controls</span>
-            </summary>
-            <div className="standards-grid">
-              <div className="standards-item">
-                <strong>Traceability</strong>
-                <span>Tracking, เวลา ผู้ปฏิบัติงาน ขนส่ง และสถานะต้องตรวจสอบย้อนกลับได้</span>
-              </div>
-              <div className="standards-item">
-                <strong>Quality gate</strong>
-                <span>ป้องกันรายการซ้ำ แยกสถานะผิดปกติ และยืนยันผลก่อนบันทึก</span>
-              </div>
-              <div className="standards-item">
-                <strong>Role access</strong>
-                <span>แยกขั้นตอน Packer และ Admin พร้อมยืนยันตัวตนก่อนทำรายการ</span>
-              </div>
-              <div className="standards-item">
-                <strong>Audit & recovery</strong>
-                <span>รายงาน ประวัติ และ recovery รองรับการตรวจสอบและแก้ไขอย่างมีหลักฐาน</span>
-              </div>
-            </div>
-          </details>
-
           <section className="workspace-grid">
         <aside className={`side-panel workflow-${activeTab}`}>
           <div className="panel-heading">
@@ -893,6 +809,90 @@ function WorkflowView({
           )}
         </section>
           </section>
+
+          <details className="marketplace-upload-panel secondary-panel">
+        <summary className="secondary-panel-summary">
+          <div>
+          <div className="panel-heading" id="marketplace-upload-title">
+            <FileSpreadsheet size={18} />
+            <span>อัปโหลดออเดอร์ Seller Center</span>
+          </div>
+          <p>เลือกไฟล์ .xlsx หรือ .csv จาก Shopee, Lazada และ TikTok ได้หลายไฟล์พร้อมกัน</p>
+          </div>
+          <span className="secondary-panel-label">เครื่องมือรอง</span>
+        </summary>
+        <div className="marketplace-upload-content">
+          <div className="marketplace-upload-controls">
+          <label className="field-control marketplace-filter">
+            <span>กรองแพลตฟอร์ม</span>
+            <select
+              value={marketplaceFilterPlatform}
+              onChange={(e) => setMarketplaceFilterPlatform(e.target.value)}
+              disabled={!firebaseUser || marketplaceUploadBusy}
+            >
+              <option value="all">ทุกแพลตฟอร์ม</option>
+              <option value="shopee">Shopee</option>
+              <option value="lazada">Lazada</option>
+              <option value="tiktok">TikTok</option>
+            </select>
+          </label>
+          <input
+            ref={marketplaceFileRef}
+            className="visually-hidden marketplace-file-input"
+            type="file"
+            accept=".xlsx,.csv"
+            multiple
+            onChange={uploadMarketplaceFiles}
+            aria-label="เลือกไฟล์ออเดอร์ Seller Center"
+          />
+          <button
+            className="secondary-button"
+            type="button"
+            onClick={() => marketplaceFileRef.current?.click()}
+            disabled={!firebaseUser || marketplaceUploadBusy}
+          >
+            {marketplaceUploadBusy ? <RefreshCw size={16} className="spin" /> : <Upload size={16} />}
+            <span>{marketplaceUploadBusy ? 'กำลังอัปโหลด...' : 'เลือกไฟล์ออเดอร์'}</span>
+          </button>
+          </div>
+          {marketplaceUploadResult && (
+            <div className={`marketplace-upload-result ${marketplaceUploadResult.type}`} role="status">
+              {marketplaceUploadResult.message}
+            </div>
+          )}
+        </div>
+          </details>
+
+          <details className="standards-panel secondary-panel">
+            <summary className="secondary-panel-summary">
+              <div>
+                <div className="panel-heading">
+                  <CheckCircle2 size={18} />
+                  <span>มาตรฐานการปฏิบัติงาน</span>
+                </div>
+                <p>หลักควบคุมสำหรับความถูกต้อง ตรวจสอบย้อนกลับ และคุณภาพบริการ</p>
+              </div>
+              <span className="secondary-panel-label">Quality controls</span>
+            </summary>
+            <div className="standards-grid">
+              <div className="standards-item">
+                <strong>Traceability</strong>
+                <span>Tracking, เวลา ผู้ปฏิบัติงาน ขนส่ง และสถานะต้องตรวจสอบย้อนกลับได้</span>
+              </div>
+              <div className="standards-item">
+                <strong>Quality gate</strong>
+                <span>ป้องกันรายการซ้ำ แยกสถานะผิดปกติ และยืนยันผลก่อนบันทึก</span>
+              </div>
+              <div className="standards-item">
+                <strong>Role access</strong>
+                <span>แยกขั้นตอน Packer และ Admin พร้อมยืนยันตัวตนก่อนทำรายการ</span>
+              </div>
+              <div className="standards-item">
+                <strong>Audit & recovery</strong>
+                <span>รายงาน ประวัติ และ recovery รองรับการตรวจสอบและแก้ไขอย่างมีหลักฐาน</span>
+              </div>
+            </div>
+          </details>
         </>
   );
 }
