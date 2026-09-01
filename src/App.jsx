@@ -324,7 +324,8 @@ function App() {
   const [marketplaceUploadResult, setMarketplaceUploadResult] = useState(null);
   const [marketplaceFilterPlatform, setMarketplaceFilterPlatform] = useState('all');
   const marketplaceFileRef = useRef(null);
-  const inputRef = useRef(null);
+  const mainScanInputRef = useRef(null);
+  const popupScanInputRef = useRef(null);
   const scanValueRef = useRef('');
   const skipQrSubmitRef = useRef(false);
   const audioContextRef = useRef(null);
@@ -2295,8 +2296,10 @@ function App() {
     }
   }
 
-  function focusScanInput({ force = false } = {}) {
-    const input = inputRef.current;
+  function focusScanInput({ force = false, inPopup = scanPopupOpen } = {}) {
+    // Both scan fields can exist while the popup is open. Separate refs keep closing the popup
+    // from clearing the first-page field reference before it can receive the next QR scan.
+    const input = inPopup ? popupScanInputRef.current : mainScanInputRef.current;
     if (!input || input.disabled || scanMethod !== 'manual') return;
     const activeElement = document.activeElement;
     const canFocus = force
@@ -2403,7 +2406,8 @@ function App() {
     }
 
     const code = scanValueRef.current.trim();
-    if (inputRef.current) inputRef.current.value = '';
+    const activeInput = scanPopupOpen ? popupScanInputRef.current : mainScanInputRef.current;
+    if (activeInput) activeInput.value = '';
     updateScanValue('');
     window.requestAnimationFrame(() => focusScanInput({ force: true }));
 
@@ -2508,7 +2512,7 @@ function App() {
       });
     }
     playTone('success');
-    window.setTimeout(() => focusScanInput({ force: true }), 0);
+    window.setTimeout(() => focusScanInput({ force: true, inPopup: true }), 0);
     return true;
   }
 
@@ -3200,7 +3204,7 @@ function App() {
           handleCheckMissingOrders={handleCheckMissingOrders}
           handleScanSubmit={handleScanSubmit}
           handleSearchSubmit={handleSearchSubmit}
-          inputRef={inputRef}
+          inputRef={mainScanInputRef}
           isPackerReady={isPackerReady}
           isSheetConnected={isSheetConnected}
           isSignedIn={isSignedIn}
@@ -3322,7 +3326,7 @@ function App() {
           cameraMessageType={cameraMessageType}
           handleBarcodeKeyDown={handleBarcodeKeyDown}
           handleScanSubmit={handleScanSubmit}
-          inputRef={inputRef}
+          inputRef={popupScanInputRef}
           isPackerReady={isPackerReady}
           isSignedIn={isSignedIn}
           packerOptions={packerOptions}
