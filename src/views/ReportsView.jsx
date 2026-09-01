@@ -133,6 +133,7 @@ function ReportsView({
 
           <div className="recent-header">
             <h3>สรุปตามวันที่</h3>
+            <span className="grid-count">{reportData ? `${reportData.days.length} แถว` : 'ยังไม่ได้สร้างรายงาน'}</span>
           </div>
           <div className="table-wrap report-table">
             <table>
@@ -175,6 +176,7 @@ function ReportsView({
 
           <div className="recent-header">
             <h3>รายการสินค้าตีกลับ</h3>
+            <span className="grid-count">{reportData ? `${reportData.returnedRows?.length ?? 0} แถว` : 'ยังไม่ได้สร้างรายงาน'}</span>
           </div>
           <div className="table-wrap report-table">
             <table>
@@ -215,6 +217,7 @@ function ReportsView({
 
           <div className="recent-header">
             <h3>รายการสินค้าเสียหาย</h3>
+            <span className="grid-count">{reportData ? `${reportData.damagedRows?.length ?? 0} แถว` : 'ยังไม่ได้สร้างรายงาน'}</span>
           </div>
           <div className="table-wrap report-table">
             <table>
@@ -255,6 +258,7 @@ function ReportsView({
 
           <div className="recent-header">
             <h3>รายการยกเลิก</h3>
+            <span className="grid-count">{reportData ? `${reportData.cancelledRows?.length ?? 0} แถว` : 'ยังไม่ได้สร้างรายงาน'}</span>
           </div>
           <div className="table-wrap report-table">
             <table>

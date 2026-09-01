@@ -4303,14 +4303,6 @@ tbody tr:hover {
   box-shadow: none;
 }
 
-.win-shell .primary-button,
-.win-shell .scan-submit,
-.win-shell .report-button.primary {
-  border: 1px solid var(--primary-strong);
-  border-radius: var(--radius-sm);
-  box-shadow: none;
-}
-
 /* ช่องกรอก: ขอบเป็นตัวบอกขอบเขต ไม่ใช่สีพื้น */
 .win-shell input,
 .win-shell select,
