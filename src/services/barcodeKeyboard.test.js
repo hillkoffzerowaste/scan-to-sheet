@@ -3,9 +3,11 @@ import assert from 'node:assert/strict';
 
 import { barcodeCharacterFromKeyEvent } from './barcodeKeyboard.js';
 
-test('maps physical letter keys to ASCII when the active keyboard layout emits Thai', () => {
-  assert.equal(barcodeCharacterFromKeyEvent({ code: 'KeyA', key: 'ฟ' }), 'A');
-  assert.equal(barcodeCharacterFromKeyEvent({ code: 'KeyZ', key: 'ผ' }), 'Z');
+test('preserves letter case and maps physical letter keys when the active keyboard layout emits Thai', () => {
+  assert.equal(barcodeCharacterFromKeyEvent({ code: 'KeyA', key: 'a' }), 'a');
+  assert.equal(barcodeCharacterFromKeyEvent({ code: 'KeyZ', key: 'Z', shiftKey: true }), 'Z');
+  assert.equal(barcodeCharacterFromKeyEvent({ code: 'KeyA', key: 'ฟ' }), 'a');
+  assert.equal(barcodeCharacterFromKeyEvent({ code: 'KeyZ', key: 'ผ', shiftKey: true }), 'Z');
 });
 
 test('maps digits and common tracking punctuation independently of the keyboard layout', () => {
