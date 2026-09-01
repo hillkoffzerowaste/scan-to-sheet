@@ -13,6 +13,7 @@ function Toolbar({
   busy,
   refreshAllCounts,
   openMarketplaceFile,
+  canImportMarketplace,
   focusSearch,
   handleCheckMissingOrders,
   missingBusy,
@@ -37,7 +38,7 @@ function Toolbar({
         className="win-tool-btn"
         type="button"
         onClick={openMarketplaceFile}
-        disabled={!isSignedIn}
+        disabled={!canImportMarketplace}
         title="เลือกไฟล์ออเดอร์จาก Shopee / Lazada / TikTok"
       >
         <Upload size={14} />
@@ -57,12 +58,16 @@ function Toolbar({
         </button>
       )}
 
-      <span className="win-tool-sep" />
+      {activeTab === 'packer' && (
+        <>
+          <span className="win-tool-sep" />
 
-      <button className="win-tool-btn" type="button" onClick={focusSearch} title="ไปที่ช่องค้นหาเลขพัสดุ">
-        <Search size={14} />
-        <span>ค้นหา</span>
-      </button>
+          <button className="win-tool-btn" type="button" onClick={focusSearch} title="ไปที่ช่องค้นหาเลขพัสดุ">
+            <Search size={14} />
+            <span>ค้นหา</span>
+          </button>
+        </>
+      )}
 
       <span className="win-toolbar-right">ชีตวันที่ {today?.date}</span>
     </div>

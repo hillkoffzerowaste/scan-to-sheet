@@ -3015,7 +3015,7 @@ function App() {
   return (
     <>
     <a className="skip-link" href="#main">ข้ามไปยังเนื้อหาหลัก</a>
-    <div id="main" tabIndex={-1} className={`app-shell enterprise-shell win-shell ${sidebarCollapsed ? 'collapsed' : ''}`}>
+    <div className={`app-shell enterprise-shell win-shell ${sidebarCollapsed ? 'collapsed' : ''}`}>
       <TitleBar
         user={user}
         isSignedIn={isSignedIn}
@@ -3038,13 +3038,14 @@ function App() {
           collapsed={sidebarCollapsed}
           setCollapsed={setSidebarCollapsed}
         />
-        <div className="win-main">
+        <main id="main" tabIndex={-1} className="win-main">
         <Toolbar
           activeTab={activeTab}
           isSignedIn={isSignedIn}
           busy={busy}
           refreshAllCounts={refreshAllCounts}
           openMarketplaceFile={openMarketplaceFile}
+          canImportMarketplace={Boolean(firebaseUser) && !marketplaceUploadBusy}
           focusSearch={focusSearch}
           handleCheckMissingOrders={handleCheckMissingOrders}
           missingBusy={missingBusy}
@@ -3223,7 +3224,7 @@ function App() {
           stopCamera={stopCamera}
         />
       )}
-        </div>
+        </main>
       </div>
       <StatusBar
         activeTab={activeTab}
