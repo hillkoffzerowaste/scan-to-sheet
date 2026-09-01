@@ -327,8 +327,6 @@ function App() {
   const mainScanInputRef = useRef(null);
   const popupScanInputRef = useRef(null);
   const scanValueRef = useRef('');
-  const skipQrSubmitRef = useRef(false);
-  const qrSubmitGuardTimerRef = useRef(null);
   const audioContextRef = useRef(null);
   const cameraRef = useRef(null);
   const scanProcessorRef = useRef(null);
@@ -2377,33 +2375,7 @@ function App() {
     setScanValue(next);
   }
 
-  function clearQrSubmitGuard() {
-    skipQrSubmitRef.current = false;
-    if (qrSubmitGuardTimerRef.current) {
-      window.clearTimeout(qrSubmitGuardTimerRef.current);
-      qrSubmitGuardTimerRef.current = null;
-    }
-  }
-
-  function armQrSubmitGuard() {
-    if (qrSubmitGuardTimerRef.current) window.clearTimeout(qrSubmitGuardTimerRef.current);
-    skipQrSubmitRef.current = true;
-    qrSubmitGuardTimerRef.current = window.setTimeout(() => {
-      skipQrSubmitRef.current = false;
-      qrSubmitGuardTimerRef.current = null;
-    }, 250);
-  }
-
-  function applyQrCommandFromInput(rawCode) {
-    if (!parseScanQrCommand(rawCode)) return false;
-    armQrSubmitGuard();
-    updateScanValue('');
-    applyScanQrCommand(rawCode);
-    return true;
-  }
-
   function handleScanValueChange(nextValue) {
-    if (applyQrCommandFromInput(nextValue)) return;
     updateScanValue(nextValue);
   }
 
@@ -2440,11 +2412,6 @@ function App() {
 
   function handleScanSubmit(event) {
     event.preventDefault();
-    if (skipQrSubmitRef.current) {
-      clearQrSubmitGuard();
-      if (!scanValueRef.current.trim()) return;
-    }
-
     const code = scanValueRef.current.trim();
     const activeInput = scanPopupOpen ? popupScanInputRef.current : mainScanInputRef.current;
     if (activeInput) activeInput.value = '';
@@ -2559,12 +2526,6 @@ function App() {
 
   function handleBarcodeKeyDown(event) {
     if (event.defaultPrevented) return;
-    if (event.key === 'Enter' && skipQrSubmitRef.current) {
-      // Consume the suffix Enter from the QR scanner before the browser submits the popup form.
-      event.preventDefault();
-      return;
-    }
-
     const character = barcodeCharacterFromKeyEvent(event);
     if (character === null) return;
 
@@ -2575,7 +2536,6 @@ function App() {
     // every subsequent character can make fast keyboard-wedge scanners drop part of a QR.
     if (event.target?.tagName === 'SELECT') focusScanInput({ force: true });
     const nextCode = `${scanValueRef.current}${character}`;
-    if (applyQrCommandFromInput(nextCode)) return;
     updateScanValue(nextCode);
   }
 
