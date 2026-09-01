@@ -328,6 +328,7 @@ function App() {
   const popupScanInputRef = useRef(null);
   const scanValueRef = useRef('');
   const skipQrSubmitRef = useRef(false);
+  const qrSubmitGuardTimerRef = useRef(null);
   const audioContextRef = useRef(null);
   const cameraRef = useRef(null);
   const scanProcessorRef = useRef(null);
@@ -2367,6 +2368,36 @@ function App() {
     setScanValue(next);
   }
 
+  function clearQrSubmitGuard() {
+    skipQrSubmitRef.current = false;
+    if (qrSubmitGuardTimerRef.current) {
+      window.clearTimeout(qrSubmitGuardTimerRef.current);
+      qrSubmitGuardTimerRef.current = null;
+    }
+  }
+
+  function armQrSubmitGuard() {
+    if (qrSubmitGuardTimerRef.current) window.clearTimeout(qrSubmitGuardTimerRef.current);
+    skipQrSubmitRef.current = true;
+    qrSubmitGuardTimerRef.current = window.setTimeout(() => {
+      skipQrSubmitRef.current = false;
+      qrSubmitGuardTimerRef.current = null;
+    }, 250);
+  }
+
+  function applyQrCommandFromInput(rawCode) {
+    if (!parseScanQrCommand(rawCode)) return false;
+    armQrSubmitGuard();
+    updateScanValue('');
+    applyScanQrCommand(rawCode);
+    return true;
+  }
+
+  function handleScanValueChange(nextValue) {
+    if (applyQrCommandFromInput(nextValue)) return;
+    updateScanValue(nextValue);
+  }
+
   function handlePopupCourierChange(nextCourier) {
     setSelectedCourier(nextCourier);
     setAllowAnyTrackingFormat(!COURIERS.includes(nextCourier));
@@ -2401,7 +2432,7 @@ function App() {
   function handleScanSubmit(event) {
     event.preventDefault();
     if (skipQrSubmitRef.current) {
-      skipQrSubmitRef.current = false;
+      clearQrSubmitGuard();
       if (!scanValueRef.current.trim()) return;
     }
 
@@ -2519,7 +2550,6 @@ function App() {
   function handleBarcodeKeyDown(event) {
     if (event.key === 'Enter' && skipQrSubmitRef.current) {
       // Consume the suffix Enter from the QR scanner before the browser submits the popup form.
-      skipQrSubmitRef.current = false;
       event.preventDefault();
       return;
     }
@@ -2531,14 +2561,7 @@ function App() {
     // Windows is set to Thai), while `code` keeps the physical US-key position.
     event.preventDefault();
     const nextCode = `${scanValueRef.current}${character}`;
-    if (parseScanQrCommand(nextCode)) {
-      // Keyboard-wedge scanners normally send Enter after the QR payload. The command has
-      // already opened the correct workflow, so that Enter must not enqueue it as Tracking.
-      skipQrSubmitRef.current = true;
-      updateScanValue('');
-      applyScanQrCommand(nextCode);
-      return;
-    }
+    if (applyQrCommandFromInput(nextCode)) return;
     updateScanValue(nextCode);
   }
 
@@ -3252,7 +3275,7 @@ function App() {
           setScanMethod={setScanMethod}
           setScanPopupOpen={setScanPopupOpen}
           setScanRemark={setScanRemark}
-          setScanValue={updateScanValue}
+          setScanValue={handleScanValueChange}
           setSearchEndDate={setSearchEndDate}
           setSearchMode={setSearchMode}
           setSearchScope={setSearchScope}
@@ -3350,7 +3373,7 @@ function App() {
           setScanMethod={setScanMethod}
           setScanPopupOpen={setScanPopupOpen}
           setScanRemark={setScanRemark}
-          setScanValue={updateScanValue}
+          setScanValue={handleScanValueChange}
           setSelectedCourier={handlePopupCourierChange}
           setSelectedPacker={handlePopupPackerChange}
           startCameraPopup={startCameraPopup}
