@@ -11,9 +11,9 @@ function ScanQrImage({ label, value }) {
     void QRCode.toDataURL(value, {
       errorCorrectionLevel: 'M',
       margin: 1,
-      // QR cards are deliberately capped to fit every operational code in one
-      // viewport; 320px keeps those compact cards sharp on high-density screens.
-      width: 320,
+      // Fixed column counts let cards fill their allotted workspace, so retain
+      // enough source detail for the larger QR codes on operational displays.
+      width: 512,
     }).then((nextSrc) => {
       if (!cancelled) setSrc(nextSrc);
     }).catch(() => {
