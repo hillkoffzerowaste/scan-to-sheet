@@ -41,6 +41,13 @@ test('resolves only courier and Packer QR commands that match one active dropdow
   assert.equal(resolveScanQrCommand(courier, { couriers: [] }), null);
   assert.equal(resolveScanQrCommand(courier, { couriers: ['Flash', ' flash '] }), null);
 
+  const shopee = parseScanQrCommand(createCourierQrCommand('admin', 'Shopee'));
+  assert.deepEqual(resolveScanQrCommand(shopee, { couriers: ['Shopee', 'Shopee Drop Off'] }), {
+    kind: 'courier', role: 'admin', courier: 'Shopee',
+  });
+  assert.equal(resolveScanQrCommand(shopee, { couriers: ['Shopee Drop Off'] }), null);
+  assert.equal(resolveScanQrCommand(shopee, { couriers: ['Shopee', 'SHOPEE'] }), null);
+
   const staff = parseScanQrCommand(createPackerQrCommand('muk-id'));
   assert.deepEqual(resolveScanQrCommand(staff, {
     packers: ['ยังไม่ได้เลือก', 'มุก'],
