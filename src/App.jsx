@@ -2348,7 +2348,8 @@ function App() {
     {
       label: 'เครื่องมือ',
       items: [
-        { label: 'ตรวจออเดอร์ที่หาย', onSelect: () => { void handleCheckMissingOrders(); }, disabled: !isSignedIn || missingBusy },
+        // ผลของการตรวจถูกเรนเดอร์ในแท็บ Drive ที่เดียว สั่งจากเมนูตอนอยู่แท็บอื่นจึงต้องพาไปที่นั่นก่อน
+        { label: 'ตรวจออเดอร์ที่หาย', onSelect: () => { switchTab('drive'); void handleCheckMissingOrders(); }, disabled: !isSignedIn || missingBusy },
         { label: 'ไปหน้ารายงาน', onSelect: () => switchTab('reports') },
       ],
     },
@@ -3053,6 +3054,16 @@ function App() {
           missingBusy={missingBusy}
           today={today}
         />
+
+      {/* WorkflowView เรนเดอร์แบนเนอร์เองในแท็บ packer/drive แท็บที่เหลือไม่มีใครเรนเดอร์
+          ทำให้ setStatus ของหน้ารายงาน/พนักงาน (รวมถึงข้อความ error) หายไปทั้งหมด
+          เรนเดอร์ที่นี่เฉพาะแท็บที่ขาด เพื่อไม่ให้มี .status-banner ซ้อนกันสองอัน */}
+      {!['packer', 'drive'].includes(activeTab) && (
+        <>
+          {deploymentUpdateAvailable && <DeploymentUpdateBanner />}
+          <StatusBanner status={status} />
+        </>
+      )}
 
       {['packer', 'drive'].includes(activeTab) && (
         <WorkflowView
