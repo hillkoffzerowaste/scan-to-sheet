@@ -2361,12 +2361,11 @@ function App() {
     marketplaceFileRef.current?.click();
   }
 
-  function focusSearch() {
+  function searchFromToolbar(event) {
     const panel = document.querySelector('.search-panel');
     if (panel && !panel.open) panel.open = true;
-    const field = panel?.querySelector('input');
-    field?.scrollIntoView({ block: 'center' });
-    field?.focus();
+    panel?.scrollIntoView({ block: 'nearest' });
+    void handleSearchSubmit(event);
   }
 
   function switchTab(nextTab) {
@@ -3046,7 +3045,10 @@ function App() {
           refreshAllCounts={refreshAllCounts}
           openMarketplaceFile={openMarketplaceFile}
           canImportMarketplace={Boolean(firebaseUser) && !marketplaceUploadBusy}
-          focusSearch={focusSearch}
+          searchFromToolbar={searchFromToolbar}
+          searchValue={searchValue}
+          setSearchValue={setSearchValue}
+          searchBusy={searchBusy}
           handleCheckMissingOrders={handleCheckMissingOrders}
           missingBusy={missingBusy}
           today={today}

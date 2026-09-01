@@ -14,7 +14,10 @@ function Toolbar({
   refreshAllCounts,
   openMarketplaceFile,
   canImportMarketplace,
-  focusSearch,
+  searchFromToolbar,
+  searchValue,
+  setSearchValue,
+  searchBusy,
   handleCheckMissingOrders,
   missingBusy,
   today,
@@ -59,14 +62,17 @@ function Toolbar({
       )}
 
       {activeTab === 'packer' && (
-        <>
-          <span className="win-tool-sep" />
-
-          <button className="win-tool-btn" type="button" onClick={focusSearch} title="ไปที่ช่องค้นหาเลขพัสดุ">
-            <Search size={14} />
-            <span>ค้นหา</span>
-          </button>
-        </>
+        <form className="win-tool-search" onSubmit={searchFromToolbar} role="search">
+          <Search size={14} aria-hidden="true" />
+          <input
+            type="search"
+            value={searchValue}
+            onChange={(event) => setSearchValue(event.target.value)}
+            placeholder="ค้นหาเลขพัสดุ แล้วกด Enter"
+            aria-label="ค้นหาเลขพัสดุ"
+            disabled={!isSignedIn || searchBusy}
+          />
+        </form>
       )}
 
       <span className="win-toolbar-right">ชีตวันที่ {today?.date}</span>
