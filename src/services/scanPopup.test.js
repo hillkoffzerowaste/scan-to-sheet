@@ -16,10 +16,10 @@ test('falls back to a neutral popup presentation for unknown status types', () =
   assert.deepEqual(getScanPopupStatusMeta(), { tone: 'idle', icon: 'scan' });
 });
 
-test('keeps the selected courier available and removes duplicate popup options', () => {
+test('uses only the current courier dropdown options and removes duplicates', () => {
   assert.deepEqual(
-    getScanPopupCourierOptions(['Shopee', 'Flash', 'Shopee'], 'J&T'),
-    ['Shopee', 'Flash', 'J&T'],
+    getScanPopupCourierOptions(['Shopee', 'Flash', 'Shopee']),
+    ['Shopee', 'Flash'],
   );
-  assert.deepEqual(getScanPopupCourierOptions(['Shopee', 'Flash'], 'Flash'), ['Shopee', 'Flash']);
+  assert.deepEqual(getScanPopupCourierOptions(['Shopee', 'Flash']), ['Shopee', 'Flash']);
 });

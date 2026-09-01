@@ -18,6 +18,15 @@ function decode(value) {
   }
 }
 
+function resolveUniqueOption(options, value) {
+  const normalizedValue = clean(value).toLocaleLowerCase('th');
+  if (!normalizedValue) return null;
+  const matches = options.filter((option) => (
+    clean(option).toLocaleLowerCase('th') === normalizedValue
+  ));
+  return matches.length === 1 ? matches[0] : null;
+}
+
 export function createCourierQrCommand(role, courier) {
   const normalizedRole = clean(role).toUpperCase();
   const normalizedCourier = clean(courier);
@@ -52,13 +61,13 @@ export function parseScanQrCommand(rawValue) {
   return null;
 }
 
-export function resolveScanQrCommand(command, { couriers = [], staff = [] } = {}) {
+export function resolveScanQrCommand(command, { couriers = [], packers = [], staff = [] } = {}) {
   if (!command) return null;
   if (command.kind === 'courier') {
-    // A courier QR must open the scan popup even while the live courier list is still loading.
-    // Keep the current display spelling when it is known, otherwise use the QR payload itself.
-    const courier = couriers.find((item) => clean(item).toLowerCase() === command.courier.toLowerCase());
-    return { ...command, courier: courier ?? command.courier };
+    // QR may select only one courier that is already available to the operator. This prevents
+    // an old or mistyped QR payload from creating a selection that does not exist in the list.
+    const courier = resolveUniqueOption(couriers, command.courier);
+    return courier ? { ...command, courier } : null;
   }
   if (command.kind === 'packer') {
     const activePackers = staff.filter((item) => (
@@ -71,7 +80,10 @@ export function resolveScanQrCommand(command, { couriers = [], staff = [] } = {}
     const sameNicknameCount = activePackers.filter((item) => (
       clean(item.nickname).toLocaleLowerCase('th') === packer.toLocaleLowerCase('th')
     )).length;
-    return packer && sameNicknameCount === 1 ? { ...command, packer } : null;
+    const dropdownPacker = resolveUniqueOption(packers, packer);
+    return packer && sameNicknameCount === 1 && dropdownPacker
+      ? { ...command, packer: dropdownPacker }
+      : null;
   }
   return null;
 }

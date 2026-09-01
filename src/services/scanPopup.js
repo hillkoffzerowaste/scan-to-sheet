@@ -10,6 +10,6 @@ export function getScanPopupStatusMeta(statusType) {
   return STATUS_META[statusType] ?? { tone: 'idle', icon: 'scan' };
 }
 
-export function getScanPopupCourierOptions(couriers = [], selectedCourier = '') {
-  return [...new Set([...couriers, selectedCourier].map((value) => String(value ?? '').trim()).filter(Boolean))];
+export function getScanPopupCourierOptions(couriers = []) {
+  return [...new Set(couriers.map((value) => String(value ?? '').trim()).filter(Boolean))];
 }

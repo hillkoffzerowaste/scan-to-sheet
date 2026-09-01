@@ -371,8 +371,8 @@ function App() {
     [selectedCourier, summary],
   );
   const scanPopupCourierOptions = useMemo(
-    () => getScanPopupCourierOptions(couriers, selectedCourier),
-    [couriers, selectedCourier],
+    () => getScanPopupCourierOptions(couriers),
+    [couriers],
   );
   const displayedCourierCounts = useMemo(() => {
     if (activeTab !== 'drive') {
@@ -2492,6 +2492,7 @@ function App() {
 
     const command = resolveScanQrCommand(parsed, {
       couriers,
+      packers: packerOptions,
       staff: qrPackerMembers,
     });
     if (!command) {

@@ -33,31 +33,38 @@ test('rejects malformed or unknown QR commands', () => {
   assert.equal(parseScanQrCommand('SCAN_TO_SHEET:1:ADMIN:STAFF:abc'), null);
 });
 
-test('resolves courier commands before the live courier list syncs and only active Packer staff', () => {
+test('resolves only courier and Packer QR commands that match one active dropdown option', () => {
   const courier = parseScanQrCommand(createCourierQrCommand('packer', 'Flash'));
   assert.deepEqual(resolveScanQrCommand(courier, { couriers: ['Shopee', 'Flash'] }), {
     kind: 'courier', role: 'packer', courier: 'Flash',
   });
-  assert.deepEqual(resolveScanQrCommand(courier, { couriers: [] }), {
-    kind: 'courier', role: 'packer', courier: 'Flash',
-  });
+  assert.equal(resolveScanQrCommand(courier, { couriers: [] }), null);
+  assert.equal(resolveScanQrCommand(courier, { couriers: ['Flash', ' flash '] }), null);
 
   const staff = parseScanQrCommand(createPackerQrCommand('muk-id'));
   assert.deepEqual(resolveScanQrCommand(staff, {
+    packers: ['ยังไม่ได้เลือก', 'มุก'],
     staff: [{ id: 'muk-id', nickname: 'มุก', position: 'packer', active: true }],
   }), {
     kind: 'packer', role: 'packer', staffId: 'muk-id', packer: 'มุก',
   });
   assert.equal(resolveScanQrCommand(staff, {
+    packers: ['ยังไม่ได้เลือก', 'มุก'],
     staff: [{ id: 'muk-id', nickname: 'มุก', position: 'packer', active: false }],
   }), null);
   assert.equal(resolveScanQrCommand(staff, {
+    packers: ['ยังไม่ได้เลือก', 'มุก'],
     staff: [{ id: 'muk-id', nickname: 'มุก', position: 'office', active: true }],
   }), null);
   assert.equal(resolveScanQrCommand(staff, {
+    packers: ['ยังไม่ได้เลือก', 'มุก'],
     staff: [
       { id: 'muk-id', nickname: 'มุก', position: 'packer', active: true },
       { id: 'other-id', nickname: ' มุก ', position: 'checker', active: true },
     ],
+  }), null);
+  assert.equal(resolveScanQrCommand(staff, {
+    packers: ['ยังไม่ได้เลือก'],
+    staff: [{ id: 'muk-id', nickname: 'มุก', position: 'packer', active: true }],
   }), null);
 });
