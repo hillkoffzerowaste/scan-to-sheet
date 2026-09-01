@@ -551,11 +551,11 @@ test.describe('Scan to Sheet — Shell regressions', () => {
     // พาเนล Lookup ถูกเรนเดอร์เฉพาะโหมด Packer ปุ่มค้นหาบนโหมด Drive จึงเคยกดแล้วเงียบ
     await page.getByTestId('packer-tab').click();
     await expect(page.locator('.search-panel')).toHaveCount(1);
-    await expect(page.locator('.win-toolbar .win-tool-btn', { hasText: 'ค้นหา' })).toHaveCount(1);
+    await expect(page.locator('.win-tool-search')).toHaveCount(1);
 
     await page.getByTestId('drive-tab').click();
     await expect(page.locator('.search-panel')).toHaveCount(0);
-    await expect(page.locator('.win-toolbar .win-tool-btn', { hasText: 'ค้นหา' })).toHaveCount(0);
+    await expect(page.locator('.win-tool-search')).toHaveCount(0);
   });
 
   test('menu closes when focus leaves the menu bar', async ({ page }) => {
@@ -572,6 +572,61 @@ test.describe('Scan to Sheet — Shell regressions', () => {
       const headers = page.locator('.recent-header');
       await expect(headers).toHaveCount(expected);
       await expect(headers.locator('.grid-count')).toHaveCount(expected);
+    }
+  });
+});
+
+test.describe('Scan to Sheet — Design tokens and type scale', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto(BASE_URL);
+  });
+
+  test('every token the stylesheet references actually resolves', async ({ page }) => {
+    // src/styles.css เคยพังสองครั้งจาก comment ที่ไม่ปิด ซึ่งกลืนบรรทัดประกาศ token ที่ตามมา
+    // ผลคือ `border: 2px solid var(--line-strong)` กลายเป็นค่าที่ใช้ไม่ได้ ขอบเลยหายทั้งเส้น
+    // โดยไม่มี error ให้เห็น เทสต์นี้จับที่ต้นเหตุ ไม่ใช่ที่อาการ
+    const unresolved = await page.evaluate(() => {
+      const names = new Set();
+      const walk = (list) => {
+        for (const rule of list) {
+          if (rule.style) {
+            for (const match of rule.style.cssText.matchAll(/var\((--[\w-]+)/g)) names.add(match[1]);
+          }
+          if (rule.cssRules) walk(rule.cssRules);
+        }
+      };
+      for (const sheet of document.styleSheets) {
+        let rules;
+        try { rules = sheet.cssRules; } catch { continue; }
+        walk(rules);
+      }
+      const root = getComputedStyle(document.documentElement);
+      return [...names].filter((name) => !root.getPropertyValue(name).trim()).sort();
+    });
+    expect(unresolved).toEqual([]);
+  });
+
+  test('no visible text renders below 12px in either theme', async ({ page }) => {
+    // พยัญชนะไทยมีสระบนและล่าง ที่ 10–11px สระซ้อนกันจนอ่านไม่ออกบนจอออฟฟิศ
+    for (const theme of ['light', 'dark']) {
+      await setTheme(page, theme);
+      for (const tab of ['packer', 'drive', 'reports']) {
+        await page.getByTestId(`${tab}-tab`).click();
+        await page.evaluate(() => document.querySelectorAll('details').forEach((d) => { d.open = true; }));
+        const tooSmall = await page.evaluate(() => {
+          const found = [];
+          document.querySelectorAll('.win-shell *').forEach((el) => {
+            const ownText = [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim());
+            if (!ownText) return;
+            const box = el.getBoundingClientRect();
+            if (box.width < 4 || box.height < 4) return;
+            const size = parseFloat(getComputedStyle(el).fontSize);
+            if (size < 12) found.push(`${el.className || el.tagName} ${size}px`);
+          });
+          return [...new Set(found)];
+        });
+        expect(tooSmall, `${theme}/${tab}`).toEqual([]);
+      }
     }
   });
 });
