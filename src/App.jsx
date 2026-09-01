@@ -3172,6 +3172,10 @@ function App() {
         />
       )}
 
+      {activeTab === 'staff' && !isSignedIn && (
+        <div className="win-empty-view">เข้าสู่ระบบเพื่อดูแผนผังพนักงานห้องแพ็ค</div>
+      )}
+
       {activeTab === 'staff' && isSignedIn && (
         <StaffDirectory
           firebaseUser={firebaseUser}
