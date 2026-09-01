@@ -2517,6 +2517,13 @@ function App() {
   }
 
   function handleBarcodeKeyDown(event) {
+    if (event.key === 'Enter' && skipQrSubmitRef.current) {
+      // Consume the suffix Enter from the QR scanner before the browser submits the popup form.
+      skipQrSubmitRef.current = false;
+      event.preventDefault();
+      return;
+    }
+
     const character = barcodeCharacterFromKeyEvent(event);
     if (character === null) return;
 
