@@ -169,6 +169,13 @@ firestore.rules              ต้องแก้ตามเมื่อเพ
 - `scripts/marketplace-sync/` ใช้ **firebase-admin ซึ่งข้าม security rules** เอกสารที่ worker สร้างอาจมี field ไม่ครบตามที่ `firestore.rules` บังคับ ทำให้ client เขียนทับไม่ผ่านและ batch ล้มทั้งชุด
 - เพิ่ม field ใหม่ต้องแก้ `firestore.rules` ด้วย
 
+**เปลือก Windows (`src/shell/` + `src/views/`)**
+
+- **คำสั่งบน toolbar และ menu bar ต้องมีปลายทางอยู่จริงในแท็บนั้น** — พาเนล Lookup ถูกเรนเดอร์เฉพาะโหมด Packer ปุ่ม "ค้นหา" บนโหมด Drive จึงเคยกดแล้วเงียบสนิท เพราะ `focusSearch` หา `.search-panel` ไม่เจอ ปุ่มที่กดแล้วไม่เกิดอะไรคือบั๊กในสายตาผู้ใช้
+- **เงื่อนไข `disabled` ของปุ่มบน toolbar ต้องตรงกับ guard ของฟังก์ชันที่มันเรียก** — เคยใช้ `isSignedIn` ขณะที่ `uploadMarketplaceFiles` เช็ค `firebaseUser` และไม่กันการอัปโหลดซ้อน ผลคือเลือกไฟล์ได้แต่ไม่มีอะไรเกิดขึ้นและไม่มีข้อความบอก
+- **skip link ต้องชี้ที่ `<main>` ที่ไม่มี nav อยู่ข้างใน** — เคยชี้ที่ `div` ที่ครอบทั้ง menu bar และ sidebar กดแล้วกด Tab ต่อก็เข้าเมนูเหมือนเดิม คือไม่ได้ข้ามอะไรเลย (มีเทสต์ e2e ล็อกไว้แล้วในชุด `Shell regressions`)
+- **`inputRef` ตัวเดียวถูกใช้ทั้งช่องสแกนในหน้าและช่องสแกนใน popup** ซึ่งอยู่ใน DOM พร้อมกันตอน popup เปิด ตอนปิด popup React จะเซ็ต ref เป็น `null` ทั้งที่ช่องในหน้ายังอยู่ → `focusScanInput` ไม่ทำงานจนกว่าจะ re-render ครั้งถัดไป ตอนนี้ถูกกลบด้วยนาฬิกาที่ `setToday` ทุก 1 วินาที ช่องโหว่จึงไม่เกิน 1 วิ **ยังไม่ได้แก้เพราะพิสูจน์ไม่ได้ถ้าไม่ login จริง** ถ้าจะแก้ต้องให้ ref ของ popup เคลียร์เฉพาะตอนที่ตัวเองเป็นเจ้าของ ref อยู่
+
 **Build / JSX**
 
 - **โปรเจกต์นี้ไม่มี `vite.config.js`** JSX จึงถูกแปลงด้วย esbuild แบบ classic ไม่ใช่ automatic runtime → **ทุกไฟล์ `.jsx` ต้อง `import React from 'react'` เอง** ไม่งั้นพังเป็น `ReferenceError: React is not defined` ตอน render **ไม่ใช่ตอน build** (`npm run build` ผ่านเฉยเลย) — เจอครั้งแรกตอนแยก `ReportsView` ออกจาก `App.jsx`

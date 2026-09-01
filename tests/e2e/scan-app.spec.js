@@ -514,3 +514,64 @@ test.describe('Scan to Sheet — Brand standards', () => {
     await expect(standardsPanel.locator('.standards-item').first()).toContainText('Traceability');
   });
 });
+
+/**
+ * ชุดนี้ล็อกบั๊กที่เจอตอนไล่ตรวจเปลือก Windows หลังย้ายระบบดีไซน์
+ * ทุกข้อเคยพังจริงบนหน้าจอ ไม่ใช่การกันไว้ล่วงหน้า
+ */
+test.describe('Scan to Sheet — Shell regressions', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto(BASE_URL);
+  });
+
+  test('skip link jumps past the navigation, not to the shell that contains it', async ({ page }) => {
+    // เดิม #main ชี้ที่ div ที่ครอบทั้ง menu bar และ sidebar ไว้ กดแล้วจึงไม่ได้ข้ามอะไรเลย
+    const target = await page.evaluate(() => {
+      const href = document.querySelector('.skip-link').getAttribute('href');
+      const el = document.querySelector(href);
+      return {
+        tag: el?.tagName,
+        hasSidebar: !!el?.querySelector('.win-sidebar'),
+        hasMenubar: !!el?.querySelector('.win-menubar'),
+      };
+    });
+    expect(target).toEqual({ tag: 'MAIN', hasSidebar: false, hasMenubar: false });
+
+    await page.keyboard.press('Tab');
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('Tab');
+    const landed = await page.evaluate(() => ({
+      inSidebar: !!document.activeElement?.closest('.win-sidebar'),
+      inMenubar: !!document.activeElement?.closest('.win-menubar'),
+    }));
+    expect(landed).toEqual({ inSidebar: false, inMenubar: false });
+  });
+
+  test('drive toolbar does not offer a search it cannot perform', async ({ page }) => {
+    // พาเนล Lookup ถูกเรนเดอร์เฉพาะโหมด Packer ปุ่มค้นหาบนโหมด Drive จึงเคยกดแล้วเงียบ
+    await page.getByTestId('packer-tab').click();
+    await expect(page.locator('.search-panel')).toHaveCount(1);
+    await expect(page.locator('.win-toolbar .win-tool-btn', { hasText: 'ค้นหา' })).toHaveCount(1);
+
+    await page.getByTestId('drive-tab').click();
+    await expect(page.locator('.search-panel')).toHaveCount(0);
+    await expect(page.locator('.win-toolbar .win-tool-btn', { hasText: 'ค้นหา' })).toHaveCount(0);
+  });
+
+  test('menu closes when focus leaves the menu bar', async ({ page }) => {
+    // เดิมปิดด้วย mousedown นอกแถบกับ Escape เท่านั้น กด Tab ออกไปแล้วเมนูยังกางค้างทับเนื้อหา
+    await page.locator('.win-menu-title').first().click();
+    await expect(page.locator('.win-menu-pop')).toHaveCount(1);
+    for (let i = 0; i < 4; i += 1) await page.keyboard.press('Tab');
+    await expect(page.locator('.win-menu-pop')).toHaveCount(0);
+  });
+
+  test('every grid carries its own row count', async ({ page }) => {
+    for (const [tab, expected] of [['packer', 1], ['drive', 1], ['reports', 4]]) {
+      await page.getByTestId(`${tab}-tab`).click();
+      const headers = page.locator('.recent-header');
+      await expect(headers).toHaveCount(expected);
+      await expect(headers.locator('.grid-count')).toHaveCount(expected);
+    }
+  });
+});
