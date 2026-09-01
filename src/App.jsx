@@ -2571,10 +2571,9 @@ function App() {
     // Keyboard-wedge scanners emit the active OS layout in `key` (Thai characters when
     // Windows is set to Thai), while `code` keeps the physical US-key position.
     event.preventDefault();
-    // A select can retain focus after an operator changes a courier or Packer. Route the
-    // first scanner character into the scan field before the browser's select typeahead
-    // turns that character into an unintended courier selection.
-    focusScanInput({ force: true });
+    // Move focus only for the first scanner key that arrived at a selector. Refocusing for
+    // every subsequent character can make fast keyboard-wedge scanners drop part of a QR.
+    if (event.target?.tagName === 'SELECT') focusScanInput({ force: true });
     const nextCode = `${scanValueRef.current}${character}`;
     if (applyQrCommandFromInput(nextCode)) return;
     updateScanValue(nextCode);
