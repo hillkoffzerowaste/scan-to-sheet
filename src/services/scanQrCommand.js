@@ -52,8 +52,10 @@ export function parseScanQrCommand(rawValue) {
 export function resolveScanQrCommand(command, { couriers = [], staff = [] } = {}) {
   if (!command) return null;
   if (command.kind === 'courier') {
-    const courier = couriers.find((item) => clean(item) === command.courier);
-    return courier ? { ...command, courier } : null;
+    // A courier QR must open the scan popup even while the live courier list is still loading.
+    // Keep the current display spelling when it is known, otherwise use the QR payload itself.
+    const courier = couriers.find((item) => clean(item).toLowerCase() === command.courier.toLowerCase());
+    return { ...command, courier: courier ?? command.courier };
   }
   if (command.kind === 'packer') {
     const member = staff.find((item) => clean(item.id) === command.staffId && item.active !== false);

@@ -30,9 +30,12 @@ test('rejects malformed or unknown QR commands', () => {
   assert.equal(parseScanQrCommand('SCAN_TO_SHEET:1:ADMIN:STAFF:abc'), null);
 });
 
-test('resolves only active, current couriers and Packer staff', () => {
+test('resolves courier commands before the live courier list syncs and only active Packer staff', () => {
   const courier = parseScanQrCommand(createCourierQrCommand('packer', 'Flash'));
   assert.deepEqual(resolveScanQrCommand(courier, { couriers: ['Shopee', 'Flash'] }), {
+    kind: 'courier', role: 'packer', courier: 'Flash',
+  });
+  assert.deepEqual(resolveScanQrCommand(courier, { couriers: [] }), {
     kind: 'courier', role: 'packer', courier: 'Flash',
   });
 
