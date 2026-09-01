@@ -31,8 +31,8 @@ function QrImage({ label, value, onReady }) {
 function QrCard({ id, label, detail, value, onReady }) {
   return (
     <article className="qr-print-card">
-      <p>{detail}</p>
       <h3>{label}</h3>
+      <p>{detail}</p>
       <QrImage label={label} value={value} onReady={() => onReady(id)} />
     </article>
   );
@@ -50,6 +50,10 @@ export default function QrPrintSheet({ couriers, staff, onClose }) {
     current.has(id) ? current : new Set([...current, id])
   ));
   const printReady = readyIds.size === cardCount;
+  const handlePrint = () => {
+    if (!printReady) return;
+    window.print();
+  };
 
   return (
     <div className="qr-print-overlay" role="presentation">
@@ -65,7 +69,7 @@ export default function QrPrintSheet({ couriers, staff, onClose }) {
           </button>
         </header>
         <div className="qr-print-actions">
-          <button className="primary-action" type="button" onClick={() => window.print()} disabled={!printReady}>
+          <button className="primary-action" type="button" onClick={handlePrint} disabled={!printReady}>
             <Printer size={17} /> {printReady ? 'พิมพ์ A4' : 'กำลังสร้าง QR...'}
           </button>
           <button className="secondary-button" type="button" onClick={onClose}>ปิด</button>

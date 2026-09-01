@@ -986,7 +986,9 @@ select:hover {
   html, body { background: var(--print-paper); }
   /* :has() จำกัดการซ่อนไว้เฉพาะหน้าที่มีแผ่นพิมพ์อยู่จริง ถ้าซ่อน body ทุกกรณี
      การกด Ctrl+P ที่แท็บอื่นของแอปจะได้กระดาษเปล่า */
-  body:has(.duty-print-sheet) { visibility: hidden; }
+  /* QR sheet อยู่ในหน้า Staff เดียวกัน จึงมี duty-print-sheet ใน DOM ตลอดเวลา
+     ต้องตัดกรณี QR ออก ไม่เช่นนั้นกฎพิมพ์ตารางเดิมจะซ่อนทั้งหน้าก่อน QR sheet แสดงผล */
+  body:has(.duty-print-sheet):not(:has(.qr-print-sheet)) { visibility: hidden; }
   .duty-print-sheet, .duty-print-sheet * { visibility: visible; }
   /* ความสูงเป็น mm ไม่ใช่ % : พื้นที่พิมพ์จริงของ A4 แนวนอนคือ 190mm (210 ลบ margin 10mm สองด้าน)
      แต่ถ้าผู้ใช้เปิด "Headers and footers" ของเบราว์เซอร์ เบราว์เซอร์จะกินความสูงเพิ่มอีกราว 10mm
@@ -5118,14 +5120,17 @@ tbody tr:hover {
 .qr-print-card { display: grid; justify-items: center; gap: 5px; min-height: 182px; padding: 9px; border: 1px solid var(--control-line); border-radius: var(--radius-sm); background: var(--surface); text-align: center; }
 .qr-print-card p, .qr-print-card h3 { margin: 0; overflow-wrap: anywhere; }
 .qr-print-card p { color: var(--muted); font-size: var(--ui-xs); }
-.qr-print-card h3 { color: var(--text); font-size: var(--ui-md); line-height: 1.25; }
+.qr-print-card h3 { color: var(--text); font-size: var(--ui-num); font-weight: 800; line-height: 1.2; }
 .qr-print-card img, .qr-print-loading { width: 128px; height: 128px; }
 .qr-print-card img { display: block; image-rendering: pixelated; }
 .qr-print-loading { display: grid; place-items: center; color: var(--muted); font-size: var(--ui-xs); }
 
 @media print {
   @page { size: A4 portrait; margin: 10mm; }
-  body * { visibility: hidden; }
+  /* ตารางเวรถูกเรนเดอร์ไว้ล่วงหน้าสำหรับคำสั่งพิมพ์เดิม และกฎเก่าจะเปลี่ยนเป็น display:grid
+     ตอน print เสมอ หากไม่ซ่อนเฉพาะตอนมี QR sheet ตารางจะทับ/แทรกใน preview ของ QR */
+  body:has(.qr-print-sheet) .duty-print-sheet { display: none; }
+  body:has(.qr-print-sheet) * { visibility: hidden; }
   .qr-print-overlay, .qr-print-overlay * { visibility: visible; }
   .qr-print-overlay { position: static; display: block; padding: 0; background: transparent; }
   .qr-print-dialog { width: auto; max-height: none; overflow: visible; padding: 0; border: 0; border-radius: 0; box-shadow: none; }
@@ -5134,6 +5139,8 @@ tbody tr:hover {
   .qr-print-section { gap: 8px; padding: 0; border: 0; border-radius: 0; background: transparent; break-inside: avoid; }
   .qr-print-packer-section { break-before: page; }
   .qr-print-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
-  .qr-print-card { min-height: 152px; padding: 6px; border-color: var(--control-line); break-inside: avoid; }
+  .qr-print-card { min-height: 52mm; padding: 6px; border-color: var(--control-line); break-inside: avoid; }
+  .qr-print-card h3 { font-size: 16pt; }
+  .qr-print-card p { font-size: 10pt; }
   .qr-print-card img, .qr-print-loading { width: 108px; height: 108px; }
 }
