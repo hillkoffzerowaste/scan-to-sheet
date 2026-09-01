@@ -201,6 +201,17 @@ test.describe('Scan to Sheet — Packer Tab', () => {
     await expect(qrPanel.locator('.scan-qr-card img').first()).toBeVisible();
   });
 
+  test('gives most wide-screen workspace to courier QR codes', async ({ page }) => {
+    await page.setViewportSize({ width: 1920, height: 900 });
+    const scanPanel = page.locator('.scan-panel');
+    const qrPanel = page.locator('.workspace-qr-panel');
+    const scanBox = await scanPanel.boundingBox();
+    const qrBox = await qrPanel.boundingBox();
+    expect(scanBox).not.toBeNull();
+    expect(qrBox).not.toBeNull();
+    expect(qrBox.width).toBeGreaterThan(scanBox.width * 1.5);
+  });
+
   test('packer tab is active by default', async ({ page }) => {
     const packerTab = page.getByTestId('packer-tab');
     await expect(packerTab).toHaveClass(/active/);

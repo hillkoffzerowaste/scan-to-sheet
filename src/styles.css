@@ -4568,6 +4568,14 @@ tbody tr:hover {
   background: var(--surface);
 }
 
+/* จอกว้างในห้องแพ็กใช้พื้นที่ขวาสำหรับ QR โดยตรง: ช่องสแกนจึงไม่ขยาย
+   กินพื้นที่ที่ต้องใช้ยิง QR จากหน้าจอ */
+@media (min-width: 1400px) {
+  .enterprise-shell .workspace-grid {
+    grid-template-columns: 260px minmax(400px, 1fr) minmax(480px, 2fr);
+  }
+}
+
 .scan-qr-panel > header {
   display: flex;
   align-items: center;
@@ -4639,7 +4647,7 @@ tbody tr:hover {
 
 .scan-popup-overlay.with-qr-panels {
   display: grid;
-  grid-template-columns: minmax(180px, 220px) minmax(0, 720px) minmax(180px, 220px);
+  grid-template-columns: minmax(300px, 1fr) minmax(540px, 1.25fr) minmax(300px, 1fr);
   gap: 12px;
   justify-content: center;
 }
@@ -4649,8 +4657,8 @@ tbody tr:hover {
 }
 
 .popup-qr-panel {
-  align-self: center;
-  max-height: min(80dvh, 760px);
+  align-self: stretch;
+  max-height: none;
   overflow: auto;
 }
 

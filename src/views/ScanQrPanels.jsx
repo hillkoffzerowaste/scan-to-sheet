@@ -11,7 +11,9 @@ function ScanQrImage({ label, value }) {
     void QRCode.toDataURL(value, {
       errorCorrectionLevel: 'M',
       margin: 1,
-      width: 180,
+      // QR panels expand on large operational displays, so the source image
+      // must stay sharp instead of stretching the former 180px bitmap.
+      width: 512,
     }).then((nextSrc) => {
       if (!cancelled) setSrc(nextSrc);
     }).catch(() => {
