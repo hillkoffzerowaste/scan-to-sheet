@@ -4697,10 +4697,10 @@ tbody tr:hover {
   grid-template-columns: minmax(300px, 300px) minmax(540px, 620px) minmax(300px, 300px);
 }
 
-@media (min-width: 1500px) {
-  .scan-popup-overlay.with-qr-panels.qr-layout-large {
-    grid-template-columns: minmax(320px, 340px) minmax(540px, 760px) minmax(320px, 340px);
-  }
+.scan-popup-overlay.with-qr-panels.qr-layout-large {
+  /* Grid tracks shrink to their stated minimums before the overlay can overflow,
+     so the larger preset remains usable on 1280px operational displays too. */
+  grid-template-columns: minmax(300px, 340px) minmax(540px, 760px) minmax(300px, 340px);
 }
 
 .scan-popup-overlay.with-qr-panels .scan-popup-sheet {

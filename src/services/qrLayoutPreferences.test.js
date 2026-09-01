@@ -30,3 +30,17 @@ test('QR layout preferences persist independently for workspace and popup', () =
   assert.equal(JSON.parse(storage.getItem(QR_LAYOUT_STORAGE_KEY)).workspace, 'large');
   assert.deepEqual(loadQrLayoutPreferences(storage), { workspace: 'large', popup: 'compact' });
 });
+
+test('QR layout preferences fall back safely when saved data is malformed or storage is blocked', () => {
+  const malformedStorage = createStorage('{not-json');
+  assert.deepEqual(loadQrLayoutPreferences(malformedStorage), DEFAULT_QR_LAYOUT_PREFERENCES);
+
+  const blockedStorage = {
+    getItem: () => { throw new Error('blocked'); },
+    setItem: () => { throw new Error('blocked'); },
+  };
+  assert.deepEqual(loadQrLayoutPreferences(blockedStorage), DEFAULT_QR_LAYOUT_PREFERENCES);
+  assert.deepEqual(saveQrLayoutPreferences({ workspace: 'large', popup: 'compact' }, blockedStorage), {
+    workspace: 'large', popup: 'compact',
+  });
+});

@@ -212,6 +212,21 @@ test.describe('Scan to Sheet — Packer Tab', () => {
     await expect(page.locator('.workspace-qr-panel').getByLabel('ขนาด QR หน้าแรก')).toHaveValue('standard');
   });
 
+  test('fits the large QR popup grid inside a 1280px viewport', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    const layout = await page.evaluate(() => {
+      const popup = document.createElement('div');
+      popup.className = 'scan-popup-overlay with-qr-panels qr-layout-large';
+      popup.setAttribute('aria-hidden', 'true');
+      popup.innerHTML = '<aside class="popup-qr-panel"></aside><div class="scan-popup-sheet"></div><aside class="popup-qr-panel"></aside>';
+      document.body.append(popup);
+      const dimensions = { client: popup.clientWidth, scroll: popup.scrollWidth };
+      popup.remove();
+      return dimensions;
+    });
+    expect(layout.scroll).toBeLessThanOrEqual(layout.client);
+  });
+
   test('caps wide-screen courier QR workspace to fit four codes', async ({ page }) => {
     await page.setViewportSize({ width: 1920, height: 900 });
     const qrPanel = page.locator('.workspace-qr-panel');

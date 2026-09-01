@@ -94,7 +94,12 @@ import { hasDeploymentUpdate } from './services/deploymentUpdate.js';
 import { getScanPopupCourierOptions, getScanPopupStatusMeta } from './services/scanPopup.js';
 import { parseScanQrCommand, resolveScanQrCommand } from './services/scanQrCommand.js';
 import { DEFAULT_SCAN_METHOD } from './services/scanPreferences.js';
-import { DEFAULT_QR_LAYOUT_PREFERENCES, loadQrLayoutPreferences, saveQrLayoutPreferences } from './services/qrLayoutPreferences.js';
+import {
+  DEFAULT_QR_LAYOUT_PREFERENCES,
+  loadQrLayoutPreferences,
+  normalizeQrLayoutPreferences,
+  saveQrLayoutPreferences,
+} from './services/qrLayoutPreferences.js';
 import { barcodeCharacterFromKeyEvent } from './services/barcodeKeyboard.js';
 import {
   apiResponseErrorMessage,
@@ -2311,10 +2316,12 @@ function App() {
   }
 
   function setQrLayout(scope, layout) {
-    setQrLayoutPreferences((current) => ({ ...current, [scope]: layout }));
+    if (!Object.hasOwn(DEFAULT_QR_LAYOUT_PREFERENCES, scope)) return;
+    setQrLayoutPreferences((current) => normalizeQrLayoutPreferences({ ...current, [scope]: layout }));
   }
 
   function resetQrLayout(scope) {
+    if (!Object.hasOwn(DEFAULT_QR_LAYOUT_PREFERENCES, scope)) return;
     setQrLayoutPreferences((current) => ({ ...current, [scope]: DEFAULT_QR_LAYOUT_PREFERENCES[scope] }));
   }
 

@@ -42,7 +42,13 @@ function ScanPopup({
   stopCamera,
 }) {
   return (
-        <div className={`scan-popup-overlay ${activeTab === 'packer' ? `with-qr-panels qr-layout-${qrLayout}` : ''}`} onClick={() => { setScanPopupOpen(false); void stopCamera(); }}>
+        <div
+          className={`scan-popup-overlay ${activeTab === 'packer' ? `with-qr-panels qr-layout-${qrLayout}` : ''}`}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="scan-popup-title"
+          onClick={() => { setScanPopupOpen(false); void stopCamera(); }}
+        >
           {activeTab === 'packer' && (
             <CourierQrPanel
               couriers={scanPopupCourierOptions}
@@ -56,9 +62,6 @@ function ScanPopup({
           )}
           <div
             className={`scan-popup-sheet workflow-${activeTab}`}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="scan-popup-title"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="scan-popup-header">
