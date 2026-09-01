@@ -212,6 +212,19 @@ test.describe('Scan to Sheet — Packer Tab', () => {
     expect(qrBox.width).toBeGreaterThan(scanBox.width * 1.5);
   });
 
+  test('fits all courier QR codes without scrolling on desktop screens', async ({ page }) => {
+    for (const width of [1440, 1920]) {
+      await page.setViewportSize({ width, height: 900 });
+      const qrPanel = page.locator('.workspace-qr-panel');
+      await expect(qrPanel.locator('.scan-qr-card img').first()).toBeVisible();
+      const heights = await qrPanel.evaluate((panel) => ({
+        client: panel.clientHeight,
+        scroll: panel.scrollHeight,
+      }));
+      expect(heights.scroll, `QR panel scrolls at ${width}px`).toBeLessThanOrEqual(heights.client);
+    }
+  });
+
   test('packer tab is active by default', async ({ page }) => {
     const packerTab = page.getByTestId('packer-tab');
     await expect(packerTab).toHaveClass(/active/);
