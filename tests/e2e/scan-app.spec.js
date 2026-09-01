@@ -192,6 +192,15 @@ test.describe('Scan to Sheet — Packer Tab', () => {
     expect(count).toBeGreaterThanOrEqual(6);
   });
 
+  test('shows every courier QR on the right workspace panel', async ({ page }) => {
+    const couriers = page.locator('.courier-button');
+    const qrPanel = page.locator('.workspace-qr-panel');
+    await expect(qrPanel).toBeVisible();
+    await expect(qrPanel).toContainText('QR ขนส่ง');
+    await expect(qrPanel.locator('.scan-qr-card')).toHaveCount(await couriers.count());
+    await expect(qrPanel.locator('.scan-qr-card img').first()).toBeVisible();
+  });
+
   test('packer tab is active by default', async ({ page }) => {
     const packerTab = page.getByTestId('packer-tab');
     await expect(packerTab).toHaveClass(/active/);
@@ -247,6 +256,16 @@ test.describe('Scan to Sheet — Drive Tab', () => {
     await driveTab.click();
     await expect(driveTab).toHaveClass(/active/);
     await expect(page.locator('.drive-mode-label')).toBeVisible();
+  });
+
+  test('shows every courier QR on the Admin workspace', async ({ page }) => {
+    const driveTab = page.getByTestId('drive-tab');
+    await driveTab.click();
+    const couriers = page.locator('.courier-button');
+    const qrPanel = page.locator('.workspace-qr-panel');
+    await expect(qrPanel).toBeVisible();
+    await expect(qrPanel.locator('.scan-qr-card')).toHaveCount(await couriers.count());
+    await expect(qrPanel.locator('.scan-qr-card img').first()).toBeVisible();
   });
 
   test('can switch to reports tab without showing scan workspace', async ({ page }) => {

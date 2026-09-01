@@ -3140,8 +3140,8 @@ tbody tr:hover {
      ถูกดันไปคอลัมน์ที่สองจนหน้าจอว่างเปล่า */
 
   .enterprise-shell .workspace-grid {
-    grid-template-columns: 280px minmax(0, 1fr);
-    gap: 20px;
+    grid-template-columns: 260px minmax(0, 1fr) 220px;
+    gap: 12px;
   }
 
   .enterprise-shell .search-panel,
@@ -4558,6 +4558,111 @@ tbody tr:hover {
 /* ระยะระหว่างพาเนล: 12px ของระบบเดิมทำให้เห็นข้อมูลน้อยลงหนึ่งแถวเต็มๆ ต่อหนึ่งจอ */
 .win-shell .workspace-grid,
 .win-shell .scan-header { gap: 8px; }
+
+/* QR ใช้ซ้ำจากชุดพิมพ์เดิมเพื่อให้สแกนจากหน้าจอได้โดยไม่ต้องพิมพ์กระดาษ */
+.scan-qr-panel {
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.scan-qr-panel > header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-bottom: 6px;
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 600;
+  border-bottom: 1px solid var(--line);
+}
+
+.scan-qr-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.scan-qr-card {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  text-align: center;
+}
+
+.scan-qr-card img,
+.scan-qr-loading {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: contain;
+  background: var(--surface);
+}
+
+.scan-qr-loading {
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: var(--ui-xs);
+}
+
+.scan-qr-card strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: var(--ui-xs);
+  font-weight: 600;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scan-qr-empty {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: var(--ui-xs);
+}
+
+.workspace-qr-panel {
+  align-self: start;
+  position: sticky;
+  top: 24px;
+  max-height: calc(100vh - 110px);
+  overflow: auto;
+}
+
+.scan-popup-overlay.with-qr-panels {
+  display: grid;
+  grid-template-columns: minmax(180px, 220px) minmax(0, 720px) minmax(180px, 220px);
+  gap: 12px;
+  justify-content: center;
+}
+
+.scan-popup-overlay.with-qr-panels .scan-popup-sheet {
+  width: 100%;
+}
+
+.popup-qr-panel {
+  align-self: center;
+  max-height: min(80dvh, 760px);
+  overflow: auto;
+}
+
+@media (max-width: 1199px) {
+  .scan-popup-overlay.with-qr-panels {
+    grid-template-columns: minmax(0, 720px);
+  }
+
+  .scan-popup-overlay.with-qr-panels .popup-qr-panel {
+    display: none;
+  }
+}
 
 .win-shell .side-panel,
 .win-shell .scan-panel,

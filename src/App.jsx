@@ -3333,6 +3333,7 @@ function App() {
           isPackerReady={isPackerReady}
           isSignedIn={isSignedIn}
           packerOptions={packerOptions}
+          qrPackerMembers={qrPackerMembers}
           scanFlash={scanFlash}
           scanMethod={scanMethod}
           scanPopupCourierOptions={scanPopupCourierOptions}

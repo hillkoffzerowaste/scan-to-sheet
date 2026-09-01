@@ -1,6 +1,7 @@
 import React from 'react';
 import { CAMERA_POPUP_ID, ISSUE_CUSTOMER_CANCELLED, ISSUE_RETURNED } from '../constants.js';
 import { Camera, Play, RefreshCw, ScanLine, Square } from 'lucide-react';
+import { CourierQrPanel, PackerQrPanel } from './ScanQrPanels.jsx';
 
 // แยกออกมาจาก App.jsx โดยไม่แก้ตัว JSX เลย — เป็นการย้ายโค้ดล้วน
 function ScanPopup({
@@ -16,6 +17,7 @@ function ScanPopup({
   isPackerReady,
   isSignedIn,
   packerOptions,
+  qrPackerMembers,
   scanFlash,
   scanMethod,
   scanPopupCourierOptions,
@@ -37,7 +39,10 @@ function ScanPopup({
   stopCamera,
 }) {
   return (
-        <div className="scan-popup-overlay" onClick={() => { setScanPopupOpen(false); void stopCamera(); }}>
+        <div className={`scan-popup-overlay ${activeTab === 'packer' ? 'with-qr-panels' : ''}`} onClick={() => { setScanPopupOpen(false); void stopCamera(); }}>
+          {activeTab === 'packer' && (
+            <CourierQrPanel couriers={scanPopupCourierOptions} role="packer" className="popup-qr-panel popup-qr-couriers" />
+          )}
           <div
             className={`scan-popup-sheet workflow-${activeTab}`}
             role="dialog"
@@ -186,6 +191,9 @@ function ScanPopup({
               ปิด
             </button>
           </div>
+          {activeTab === 'packer' && (
+            <PackerQrPanel packers={qrPackerMembers} className="popup-qr-panel popup-qr-packers" />
+          )}
         </div>
   );
 }

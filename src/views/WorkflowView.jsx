@@ -2,6 +2,7 @@ import React from 'react';
 import { AlertTriangle, ArrowRightLeft, Camera, CheckCircle2, ClipboardCopy, Clock3, ExternalLink, FileSpreadsheet, MonitorCheck, PackageCheck, Play, Plus, RefreshCw, ScanLine, Search, ShieldAlert, Square, Truck, Upload } from 'lucide-react';
 import { CAMERA_REGION_ID, DEFAULT_LOOKBACK_HOURS, ISSUE_CUSTOMER_CANCELLED, ISSUE_DAMAGED, ISSUE_RETURNED, PACKER_UNASSIGNED } from '../constants.js';
 import { DeploymentUpdateBanner, StatusBanner } from './StatusBanner.jsx';
+import { CourierQrPanel } from './ScanQrPanels.jsx';
 
 // แยกออกมาจาก App.jsx โดยไม่แก้ตัว JSX เลย — เป็นการย้ายโค้ดล้วน
 function WorkflowView({
@@ -816,7 +817,12 @@ function WorkflowView({
             </>
           )}
         </section>
-          </section>
+          <CourierQrPanel
+            couriers={couriers}
+            role={activeTab === 'drive' ? 'admin' : 'packer'}
+            className="workspace-qr-panel"
+          />
+      </section>
 
           <details className="marketplace-upload-panel secondary-panel">
         <summary className="secondary-panel-summary">
