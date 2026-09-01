@@ -1,35 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
-  BarChart3,
-  Camera,
-  CalendarDays,
   CheckCircle2,
-  Clock3,
-  Coffee,
-  ExternalLink,
-  FileSpreadsheet,
-  LogIn,
-  LogOut,
-  Mail,
-  Moon,
-  PackageCheck,
-  ClipboardCopy,
-  Play,
-  Printer,
-  RefreshCw,
   ScanLine,
-  Search,
-  Square,
-  Sun,
-  Truck,
-  Volume2,
-  Upload,
-  MonitorCheck,
-  ShieldAlert,
-  ArrowRightLeft,
-  Plus,
-  Users,
 } from 'lucide-react';
 import StaffDirectory from './features/staff/StaffDirectory.jsx';
 import MenuBar from './shell/MenuBar.jsx';
@@ -408,7 +381,6 @@ function App() {
   const sheetUrl = config?.master?.webViewLink;
   const requiresPacker = !getScanIssueMeta(scanRemark).isIssue && activeTab === 'packer';
   const isPackerReady = !requiresPacker || selectedPacker !== PACKER_UNASSIGNED;
-  const isDriveReady = isSignedIn && scanMethod === 'manual' ? true : isSignedIn;
   const queuedScanCount = scanQueueSnapshot.pending.length;
   const scanQueueStatusText = isSignedIn && scanMethod === 'manual' && !scannerWindowFocused
     ? 'หยุดสแกนชั่วคราว: หน้าระบบไม่ได้ active — กลับมาที่ระบบก่อนยิงบาร์โค้ด'
