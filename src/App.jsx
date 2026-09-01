@@ -2364,6 +2364,37 @@ function App() {
     setScanValue(next);
   }
 
+  function handlePopupCourierChange(nextCourier) {
+    setSelectedCourier(nextCourier);
+    setAllowAnyTrackingFormat(!COURIERS.includes(nextCourier));
+    setScanRemark('');
+    setStatus({
+      type: 'success',
+      title: `เปลี่ยนขนส่งเป็น ${nextCourier} แล้ว`,
+      message: activeTab === 'drive'
+        ? 'พร้อมสแกน Tracking เพื่อรับเข้า Drive'
+        : 'สแกน QR Packer หรือเลือก Packer แล้วสแกน Tracking ต่อได้ทันที',
+    });
+  }
+
+  function handlePopupPackerChange(nextPacker) {
+    setSelectedPacker(nextPacker);
+    setScanRemark('');
+    if (nextPacker === PACKER_UNASSIGNED) {
+      setStatus({
+        type: 'warning',
+        title: 'ยังไม่ได้เลือก Packer',
+        message: 'สแกน QR Packer หรือเลือกชื่อก่อนสแกน Tracking',
+      });
+      return;
+    }
+    setStatus({
+      type: 'success',
+      title: `เลือก Packer ${nextPacker} แล้ว`,
+      message: 'พร้อมสแกน Tracking ต่อเนื่อง',
+    });
+  }
+
   function handleScanSubmit(event) {
     event.preventDefault();
     if (skipQrSubmitRef.current) {
@@ -2441,6 +2472,16 @@ function App() {
       return true;
     }
 
+    if (command.kind === 'packer' && !scanPopupOpen) {
+      setStatus({
+        type: 'warning',
+        title: 'สแกน QR ขนส่งก่อน',
+        message: 'เริ่มจาก QR ขนส่งเพื่อเปิดหน้าสแกน แล้วสแกน QR Packer ใน popup',
+      });
+      playTone('error');
+      return true;
+    }
+
     setScanMethod('manual');
     setScanPopupOpen(true);
     setScanRemark('');
@@ -2448,6 +2489,7 @@ function App() {
     if (command.kind === 'courier') {
       setActiveTab(command.role === 'admin' ? 'drive' : 'packer');
       setSelectedCourier(command.courier);
+      if (command.role === 'packer') setSelectedPacker(PACKER_UNASSIGNED);
       setAllowAnyTrackingFormat(!COURIERS.includes(command.courier));
       setStatus({
         type: 'success',
@@ -3298,8 +3340,8 @@ function App() {
           setScanPopupOpen={setScanPopupOpen}
           setScanRemark={setScanRemark}
           setScanValue={updateScanValue}
-          setSelectedCourier={setSelectedCourier}
-          setSelectedPacker={setSelectedPacker}
+          setSelectedCourier={handlePopupCourierChange}
+          setSelectedPacker={handlePopupPackerChange}
           startCameraPopup={startCameraPopup}
           status={status}
           stopCamera={stopCamera}
