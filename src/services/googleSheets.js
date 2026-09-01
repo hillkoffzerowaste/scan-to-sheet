@@ -2113,11 +2113,19 @@ export async function appendScanGoogle({
     const crossDayMatch = await findRowsAcrossDays({ token, spreadsheetId: sheet.id, currentDate: date, code: normalizedCode, field: 'adminCode', cache: crossDayCache });
     if (crossDayMatch) {
       const currentRow = crossDayMatch.row;
+      // This search is courier-blind, so it also answers the case the Packer picked a
+      // different courier than the Admin did. A second block below used to handle that and
+      // add this remark, but it repeated the same search after this one had already
+      // returned, so it never ran and the mismatch was never written down anywhere.
+      const wrongCourier = currentRow.courier !== courier;
+      const mergedNote = wrongCourier
+        ? [note, `แพ็คเกอร์เลือกขนส่งไม่ตรงกับแอดมิน (เลือก ${courier})`].filter(Boolean).join(' | ')
+        : note;
       // Keep the Packer event date even when the row remains on the Admin's earlier tab.
       // The physical tab is resolved separately when a later Issue update needs this row.
       const mergedRow = withMarketplaceCells([
         currentRow.no, currentRow.courierNo, date, time, currentRow.courier, normalizedCode, email, packer,
-        'Success', note, currentRow.adminDate || effectiveAdminDate || crossDayMatch.date, currentRow.adminTime || effectiveAdminTime || '', currentRow.adminCode || effectiveAdminCode,
+        'Success', mergedNote, currentRow.adminDate || effectiveAdminDate || crossDayMatch.date, currentRow.adminTime || effectiveAdminTime || '', currentRow.adminCode || effectiveAdminCode,
       ], marketplaceOrder ?? marketplaceOrderFromRow(currentRow));
       // `row` is the written-back row, not the pre-merge one: isSheetSyncResultConfirmed needs
       // it to certify the write, and this was the one merge path that dropped it. Without it
@@ -2129,39 +2137,7 @@ export async function appendScanGoogle({
         .filter((row) => row.courier === currentRow.courier)
         .reverse()
         .slice(0, 20);
-      return { status: 'success', courier: currentRow.courier, selectedCourier: courier, date, time, code: normalizedCode, row: confirmedRow, rows: resultRows, sheetUrl: sheet.webViewLink, merged: true, wrongCourier: currentRow.courier !== courier, crossDay: true };
-    }
-  }
-
-  if (!duplicate && !isIssueScan) {
-    const adminMatchAnyCourier = await findRowsAcrossDays({
-      token,
-      spreadsheetId: sheet.id,
-      currentDate: date,
-      code: normalizedCode,
-      field: 'adminCode',
-      cache: crossDayCache,
-    });
-    if (adminMatchAnyCourier && adminMatchAnyCourier.row.courier !== courier) {
-      const currentRow = adminMatchAnyCourier.row;
-      const correctedNote = [currentRow.note, `แพ็คเกอร์เลือกขนส่งไม่ตรงกับแอดมิน (เลือก ${courier})`].filter(Boolean).join(' | ');
-      // This row stays on the prior tab, but its Scan Date is the Packer's event date.
-      const mergedRow = withMarketplaceCells([
-        currentRow.no, currentRow.courierNo, date, time, currentRow.courier, normalizedCode, email, packer,
-        'Success', correctedNote, currentRow.adminDate || effectiveAdminDate || adminMatchAnyCourier.date, currentRow.adminTime || effectiveAdminTime || '', currentRow.adminCode || effectiveAdminCode,
-      ], marketplaceOrder ?? marketplaceOrderFromRow(currentRow));
-      const confirmedRow = await updateDailyRow({ token, spreadsheetId: sheet.id, date: adminMatchAnyCourier.date, rowNumber: currentRow.sheetRowNumber, row: mergedRow });
-      const resultRows = adminMatchAnyCourier.parsedRows
-        .map((row) => row.sheetRowNumber === currentRow.sheetRowNumber ? rowFromSheet(mergedRow) : row)
-        .filter((row) => row.courier === currentRow.courier)
-        .reverse()
-        .slice(0, 20);
-      return {
-        status: 'success', courier: currentRow.courier, selectedCourier: courier, date, time, code: normalizedCode,
-        row: confirmedRow,
-        rows: resultRows,
-        sheetUrl: sheet.webViewLink, merged: true, wrongCourier: true, crossDay: adminMatchAnyCourier.date !== date,
-      };
+      return { status: 'success', courier: currentRow.courier, selectedCourier: courier, date, time, code: normalizedCode, row: confirmedRow, rows: resultRows, sheetUrl: sheet.webViewLink, merged: true, wrongCourier, crossDay: crossDayMatch.date !== date };
     }
   }
 

@@ -891,3 +891,76 @@ test('Late Orders writes quote the sheet name so Google can parse the range', as
     globalThis.fetch = originalFetch;
   }
 });
+
+test('a cross-day Admin merge records the courier the Packer actually picked', async () => {
+  const originalFetch = globalThis.fetch;
+  const today = '2026-08-25';
+  const yesterday = '2026-08-24';
+  const spreadsheetId = 'sheet-wrong-courier-test';
+  const code = 'TH2695488345554';
+  const sheetProperties = {
+    sheets: [
+      { properties: { sheetId: 124, title: yesterday, gridProperties: { rowCount: 1000, columnCount: 23 } } },
+      { properties: { sheetId: 125, title: today, gridProperties: { rowCount: 1000, columnCount: 23 } } },
+    ],
+  };
+  const rowsByDate = new Map([
+    // Admin filed this parcel under Shopee yesterday; the Packer picks Flash today.
+    [yesterday, [[
+      '1', '1', yesterday, '09:00:00', 'Shopee', '', '', '', 'รอแพ็ค', '',
+      yesterday, '09:00:00', code,
+    ]]],
+    [today, []],
+  ]);
+
+  const jsonResponse = (payload) => new Response(JSON.stringify(payload), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  });
+
+  globalThis.fetch = async (url, options = {}) => {
+    const decodedUrl = decodeURIComponent(String(url));
+    const method = options.method ?? 'GET';
+    const body = options.body ? JSON.parse(options.body) : null;
+    const date = [today, yesterday].find((value) => decodedUrl.includes(value));
+
+    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A1:W1') && method === 'PUT') return jsonResponse({});
+    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A:A') && method === 'GET') return jsonResponse({ values: [['No.']] });
+    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A2:W') && method === 'GET') return jsonResponse({ values: rowsByDate.get(date) ?? [] });
+    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A2') && method === 'GET') return jsonResponse({ values: [rowsByDate.get(date)?.[0] ?? []] });
+    if (decodedUrl.includes('/values:batchUpdate')) {
+      const rowUpdate = body?.data?.find((item) => item.range.includes('!A2:O2'));
+      const updateDate = date ?? [today, yesterday].find((value) => rowUpdate?.range?.includes(value));
+      if (rowUpdate && updateDate) rowsByDate.set(updateDate, [rowUpdate.values[0]]);
+      return jsonResponse({});
+    }
+    if (decodedUrl.includes(':batchUpdate')) return jsonResponse({});
+    if (decodedUrl.includes('/spreadsheets/')) return jsonResponse(sheetProperties);
+    throw new Error(`Unexpected mock request: ${method} ${decodedUrl}`);
+  };
+
+  try {
+    const result = await appendScanGoogle({
+      token: 'token',
+      config: { master: { id: spreadsheetId, webViewLink: 'https://example.test/sheet' } },
+      courier: 'Flash',
+      code,
+      email: 'packer@example.com',
+      packer: 'เบ้น',
+      scanDate: today,
+      scanTime: '10:20:30',
+    });
+
+    assert.equal(result.status, 'success');
+    assert.equal(result.wrongCourier, true);
+    assert.equal(result.courier, 'Shopee');
+    assert.equal(result.selectedCourier, 'Flash');
+    assert.equal(rowsByDate.get(today).length, 0);
+    assert.ok(
+      String(rowsByDate.get(yesterday)[0][9]).includes('แพ็คเกอร์เลือกขนส่งไม่ตรงกับแอดมิน (เลือก Flash)'),
+      rowsByDate.get(yesterday)[0][9],
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
