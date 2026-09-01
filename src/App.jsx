@@ -648,6 +648,18 @@ function App() {
   }, [isSignedIn, selectedCourier, activeTab, scanMethod, scanPopupOpen, selectedPacker]);
 
   useEffect(() => {
+    if (!isSignedIn || scanMethod !== 'manual') return () => {};
+    const routeScannerFromSelect = (event) => {
+      // Native select typeahead consumes the first scanner key before React's bubble handler
+      // can move focus. Capture it at the document boundary so the complete QR stays intact.
+      if (event.target?.tagName !== 'SELECT') return;
+      handleBarcodeKeyDown(event);
+    };
+    document.addEventListener('keydown', routeScannerFromSelect, true);
+    return () => document.removeEventListener('keydown', routeScannerFromSelect, true);
+  }, [isSignedIn, scanMethod, handleBarcodeKeyDown]);
+
+  useEffect(() => {
     if (!isSignedIn || scanMethod !== 'manual') {
       setScannerWindowFocused(true);
       return () => {};
