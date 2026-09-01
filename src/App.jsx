@@ -2545,6 +2545,7 @@ function App() {
   }
 
   function handleBarcodeKeyDown(event) {
+    if (event.defaultPrevented) return;
     if (event.key === 'Enter' && skipQrSubmitRef.current) {
       // Consume the suffix Enter from the QR scanner before the browser submits the popup form.
       event.preventDefault();
@@ -2557,6 +2558,10 @@ function App() {
     // Keyboard-wedge scanners emit the active OS layout in `key` (Thai characters when
     // Windows is set to Thai), while `code` keeps the physical US-key position.
     event.preventDefault();
+    // A select can retain focus after an operator changes a courier or Packer. Route the
+    // first scanner character into the scan field before the browser's select typeahead
+    // turns that character into an unintended courier selection.
+    focusScanInput({ force: true });
     const nextCode = `${scanValueRef.current}${character}`;
     if (applyQrCommandFromInput(nextCode)) return;
     updateScanValue(nextCode);

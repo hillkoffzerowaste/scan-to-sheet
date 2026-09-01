@@ -77,6 +77,7 @@ function ScanPopup({
               <span>ขนส่ง — เลือกก่อนสแกน</span>
               <select
                 value={selectedCourier}
+                onKeyDown={handleBarcodeKeyDown}
                 onChange={(event) => setSelectedCourier(event.target.value)}
                 disabled={!isSignedIn}
               >
@@ -123,7 +124,7 @@ function ScanPopup({
             {activeTab === 'packer' && (
               <label className="packer-control popup-packer">
                 <span>Packer — เลือกคนแพ็คก่อนสแกน</span>
-                <select value={selectedPacker} onChange={(e) => setSelectedPacker(e.target.value)} disabled={!isSignedIn || busy}>
+                <select value={selectedPacker} onKeyDown={handleBarcodeKeyDown} onChange={(e) => setSelectedPacker(e.target.value)} disabled={!isSignedIn || busy}>
                   {packerOptions.map((p) => <option key={p} value={p}>{p}</option>)}
                 </select>
               </label>

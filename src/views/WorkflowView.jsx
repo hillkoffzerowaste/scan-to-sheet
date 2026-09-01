@@ -139,6 +139,7 @@ function WorkflowView({
               <select
                 id="courier-select"
                 value={courierSelectValue}
+                onKeyDown={handleBarcodeKeyDown}
                 onChange={(event) => {
                   const value = event.target.value;
                   if (value) {
@@ -230,7 +231,7 @@ function WorkflowView({
             <div className={`issue-bar ${scanRemark ? 'active' : ''}`}>
                 <label className="packer-control">
                   <span>Packer</span>
-                  <select value={selectedPacker} onChange={(event) => setSelectedPacker(event.target.value)} disabled={!isSignedIn || busy}>
+                  <select value={selectedPacker} onKeyDown={handleBarcodeKeyDown} onChange={(event) => setSelectedPacker(event.target.value)} disabled={!isSignedIn || busy}>
                     {packerOptions.map((packer) => (
                       <option key={packer} value={packer}>
                         {packer}
