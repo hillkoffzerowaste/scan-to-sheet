@@ -5097,3 +5097,43 @@ tbody tr:hover {
 .win-shell .packer-control select {
   border: 1px solid var(--control-line);
 }
+
+/* QR operation cards are an Admin-only print artifact. Keep the dialog visually consistent with
+   the staff tools, while @media print removes all application chrome from the A4 result. */
+.staff-page-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.qr-print-overlay { position: fixed; inset: 0; z-index: 1100; display: grid; place-items: center; padding: 16px; background: color-mix(in srgb, var(--text) 58%, transparent); }
+.qr-print-dialog { width: min(1040px, 100%); max-height: calc(100vh - 32px); overflow: auto; padding: 18px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); color: var(--text); box-shadow: var(--shadow-modal); }
+.qr-print-dialog-header { display: flex; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+.qr-print-dialog-header h2, .qr-print-dialog-header p, .qr-print-section h2, .qr-print-section p { margin: 0; }
+.qr-print-dialog-header p, .qr-print-section > header p { color: var(--muted); }
+.qr-print-close { display: grid; flex: 0 0 auto; place-items: center; width: 34px; height: 34px; border: 1px solid var(--control-line); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); }
+.qr-print-close:focus-visible, .qr-print-actions button:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.qr-print-actions { display: flex; gap: 8px; margin-bottom: 16px; }
+.qr-print-sheet { display: grid; gap: 18px; }
+.qr-print-section { display: grid; gap: 10px; padding: 14px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface-soft); }
+.qr-print-section > header { display: grid; gap: 3px; padding-bottom: 9px; border-bottom: 1px solid var(--line); }
+.qr-print-section > header h2 { color: var(--primary-strong); font-size: var(--ui-lg); }
+.qr-print-subheading { margin: 4px 0 0; color: var(--text); font-size: var(--ui-md); }
+.qr-print-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.qr-print-card { display: grid; justify-items: center; gap: 5px; min-height: 182px; padding: 9px; border: 1px solid var(--control-line); border-radius: var(--radius-sm); background: var(--surface); text-align: center; }
+.qr-print-card p, .qr-print-card h3 { margin: 0; overflow-wrap: anywhere; }
+.qr-print-card p { color: var(--muted); font-size: var(--ui-xs); }
+.qr-print-card h3 { color: var(--text); font-size: var(--ui-md); line-height: 1.25; }
+.qr-print-card img, .qr-print-loading { width: 128px; height: 128px; }
+.qr-print-card img { display: block; image-rendering: pixelated; }
+.qr-print-loading { display: grid; place-items: center; color: var(--muted); font-size: var(--ui-xs); }
+
+@media print {
+  @page { size: A4 portrait; margin: 10mm; }
+  body * { visibility: hidden; }
+  .qr-print-overlay, .qr-print-overlay * { visibility: visible; }
+  .qr-print-overlay { position: static; display: block; padding: 0; background: transparent; }
+  .qr-print-dialog { width: auto; max-height: none; overflow: visible; padding: 0; border: 0; border-radius: 0; box-shadow: none; }
+  .qr-print-dialog-header, .qr-print-actions { display: none; }
+  .qr-print-sheet { gap: 12px; }
+  .qr-print-section { gap: 8px; padding: 0; border: 0; border-radius: 0; background: transparent; break-inside: avoid; }
+  .qr-print-packer-section { break-before: page; }
+  .qr-print-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .qr-print-card { min-height: 152px; padding: 6px; border-color: var(--control-line); break-inside: avoid; }
+  .qr-print-card img, .qr-print-loading { width: 108px; height: 108px; }
+}

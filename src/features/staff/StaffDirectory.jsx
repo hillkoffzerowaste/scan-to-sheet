@@ -82,6 +82,7 @@ import {
   STAFF_QUERY_LIMITS,
   uploadStaffPhoto,
 } from "./staffService.js";
+import QrPrintSheet from "./QrPrintSheet.jsx";
 
 const POSITION_LABELS = {
   leader: "หัวหน้า",
@@ -140,6 +141,7 @@ function bangkokDateKey() {
 
 export default function StaffDirectory({
   firebaseUser,
+  couriers,
   onPackerOptionsChange,
 }) {
   const [staff, setStaff] = useState([]);
@@ -172,6 +174,7 @@ export default function StaffDirectory({
   const [copying, setCopying] = useState(false);
   const [draggedStaffId, setDraggedStaffId] = useState("");
   const [savingOrder, setSavingOrder] = useState(false);
+  const [showQrPrintSheet, setShowQrPrintSheet] = useState(false);
 
   // ชนเพดาน = Firestore ตัดข้อมูลที่เหลือทิ้งเงียบๆ หน้าจอจะดูเหมือนข้อมูลครบทั้งที่ไม่ครบ
   // เตือนแบบสะสม ไม่ทับกัน: reloadBase กับ reloadDaily ทำงานพร้อมกัน อันที่เสร็จทีหลัง
@@ -757,12 +760,17 @@ export default function StaffDirectory({
           <p>รายชื่อ ช่องทางติดต่อ และหน้าที่ประจำวันของเจ้าหน้าที่</p>
         </div>
         {isAdmin && section === "directory" && (
-          <button
-            className="primary-action"
-            onClick={() => setEditingMember(EMPTY_MEMBER)}
-          >
-            <Plus size={17} /> เพิ่มพนักงาน
-          </button>
+          <div className="staff-page-actions">
+            <button className="secondary-button" type="button" onClick={() => setShowQrPrintSheet(true)}>
+              <Printer size={17} /> พิมพ์ QR จุดสแกน
+            </button>
+            <button
+              className="primary-action"
+              onClick={() => setEditingMember(EMPTY_MEMBER)}
+            >
+              <Plus size={17} /> เพิ่มพนักงาน
+            </button>
+          </div>
         )}
       </header>
       <div className="staff-section-tabs">
@@ -1483,6 +1491,13 @@ export default function StaffDirectory({
             </footer>
           </form>
         </div>
+      )}
+      {showQrPrintSheet && (
+        <QrPrintSheet
+          couriers={couriers}
+          staff={staff}
+          onClose={() => setShowQrPrintSheet(false)}
+        />
       )}
 
       {editingMember && (

@@ -168,9 +168,9 @@ function ScanPopup({
                           : 'เลือก Packer ก่อน'
                     }
                     autoComplete="off"
-                    disabled={!isSignedIn || (activeTab === 'packer' && !isPackerReady)}
+                    disabled={!isSignedIn}
                   />
-                  <button type="submit" disabled={!isSignedIn || (activeTab === 'packer' && !isPackerReady)}>
+                  <button type="submit" disabled={!isSignedIn}>
                     {scanQueueSnapshot.processing ? <RefreshCw size={18} className="spin" /> : <Play size={18} />}
                     <span>{activeTab === 'drive' ? 'รับเข้า Drive' : 'บันทึกแพ็ก'}</span>
                   </button>

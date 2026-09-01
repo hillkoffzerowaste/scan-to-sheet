@@ -11,7 +11,7 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:chromium": "playwright test --project=chromium",
-    "test:marketplace": "node --test src/features/staff/staffDirectory.test.js src/features/staff/packingSchedule.test.js scripts/marketplace-sync/normalize.test.js scripts/marketplace-sync/reconcile.test.js scripts/marketplace-sync/tracking.test.js src/services/marketplaceImport.test.js src/services/missingOrderCheck.test.js src/services/googleSheets.test.js src/services/firebaseScans.test.js src/services/scanCommit.test.js src/services/scanQueue.test.js src/services/scanPopup.test.js src/services/scanPreferences.test.js src/services/barcodeKeyboard.test.js src/services/authErrors.test.js src/services/canonicalApp.test.js src/services/orderRecovery.test.js src/services/firestorePagination.test.js src/services/firestoreQueryPlanning.test.js src/services/cameraLoader.test.js src/services/sheetSync.test.js src/services/sheetSyncReconciliation.test.js src/services/sheetRecoveryDates.test.js api/google-auth.test.js api/sheet-lock.test.js api/_auth.test.js tests/firestoreRules.test.js",
+    "test:marketplace": "node --test src/features/staff/staffDirectory.test.js src/features/staff/packingSchedule.test.js scripts/marketplace-sync/normalize.test.js scripts/marketplace-sync/reconcile.test.js scripts/marketplace-sync/tracking.test.js src/services/marketplaceImport.test.js src/services/missingOrderCheck.test.js src/services/googleSheets.test.js src/services/firebaseScans.test.js src/services/scanCommit.test.js src/services/scanQueue.test.js src/services/scanPopup.test.js src/services/scanQrCommand.test.js src/services/scanPreferences.test.js src/services/barcodeKeyboard.test.js src/services/authErrors.test.js src/services/canonicalApp.test.js src/services/orderRecovery.test.js src/services/firestorePagination.test.js src/services/firestoreQueryPlanning.test.js src/services/cameraLoader.test.js src/services/sheetSync.test.js src/services/sheetSyncReconciliation.test.js src/services/sheetRecoveryDates.test.js api/google-auth.test.js api/sheet-lock.test.js api/_auth.test.js tests/firestoreRules.test.js",
     "test:label-sync": "node --test scripts/label-sync/labelParser.test.js scripts/label-sync/matching.test.js scripts/label-sync/retryState.test.js",
     "marketplace:login": "node scripts/marketplace-sync/worker.js --login",
     "marketplace:sync": "node scripts/marketplace-sync/worker.js",
@@ -39,6 +39,7 @@
     "firebase-admin": "^14.3.0",
     "html5-qrcode": "^2.3.8",
     "lucide-react": "^0.475.0",
+    "qrcode": "^1.5.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "vite": "^6.0.11"

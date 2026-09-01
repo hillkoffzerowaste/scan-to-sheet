@@ -92,6 +92,7 @@ import { commitFallbackScan } from './services/scanCommit.js';
 import { createScanQueue } from './services/scanQueue.js';
 import { hasDeploymentUpdate } from './services/deploymentUpdate.js';
 import { getScanPopupCourierOptions, getScanPopupStatusMeta } from './services/scanPopup.js';
+import { parseScanQrCommand, resolveScanQrCommand } from './services/scanQrCommand.js';
 import { DEFAULT_SCAN_METHOD } from './services/scanPreferences.js';
 import { barcodeCharacterFromKeyEvent } from './services/barcodeKeyboard.js';
 import {
@@ -255,6 +256,7 @@ function App() {
   const [scannerWindowFocused, setScannerWindowFocused] = useState(true);
   const [selectedPacker, setSelectedPacker] = useState(PACKER_UNASSIGNED);
   const [packerOptions, setPackerOptions] = useState(DEFAULT_PACKERS);
+  const [qrPackerMembers, setQrPackerMembers] = useState([]);
   const [scanRemark, setScanRemark] = useState('');
   const [status, setStatus] = useState(() => ({
     type: GOOGLE_CLIENT_ID ? 'idle' : 'warning',
@@ -348,6 +350,11 @@ function App() {
         try {
           const next = [PACKER_UNASSIGNED, ...buildPackerOptions(members)];
           setPackerOptions(next);
+          setQrPackerMembers(members.filter((person) => (
+            person.active !== false
+            && ['leader', 'checker', 'packer'].includes(person.position)
+            && String(person.nickname ?? '').trim()
+          )));
           setSelectedPacker((current) => next.includes(current) ? current : PACKER_UNASSIGNED);
         } catch {
           // Invalid duplicate names must not replace the last valid scan options.
@@ -2360,6 +2367,18 @@ function App() {
       return;
     }
 
+    if (applyScanQrCommand(code)) return;
+
+    if (activeTab === 'packer' && !isPackerReady) {
+      setStatus({
+        type: 'warning',
+        title: 'สแกน QR Packer ก่อน',
+        message: 'สแกน QR Packer เพื่อเลือกผู้แพ็กก่อนเริ่มสแกน Tracking',
+      });
+      playTone('error');
+      return;
+    }
+
     const context = {
       activeTab,
       courier: selectedCourier,
@@ -2387,6 +2406,53 @@ function App() {
     }
 
     if (scanRemark) setScanRemark('');
+  }
+
+  function applyScanQrCommand(rawCode) {
+    const parsed = parseScanQrCommand(rawCode);
+    if (!parsed) return false;
+
+    const command = resolveScanQrCommand(parsed, {
+      couriers,
+      staff: qrPackerMembers,
+    });
+    if (!command) {
+      setStatus({
+        type: 'warning',
+        title: 'QR นี้ใช้งานไม่ได้',
+        message: 'ไม่พบขนส่งหรือ Packer ที่ active ตรงกับ QR นี้ กรุณาพิมพ์ QR ชุดใหม่',
+      });
+      playTone('error');
+      return true;
+    }
+
+    setScanMethod('manual');
+    setScanPopupOpen(true);
+    setScanRemark('');
+
+    if (command.kind === 'courier') {
+      setActiveTab(command.role === 'admin' ? 'drive' : 'packer');
+      setSelectedCourier(command.courier);
+      setAllowAnyTrackingFormat(!COURIERS.includes(command.courier));
+      setStatus({
+        type: 'success',
+        title: `เลือกขนส่ง ${command.courier} แล้ว`,
+        message: command.role === 'admin'
+          ? 'พร้อมสแกน Tracking เพื่อรับเข้า Drive'
+          : 'สแกน QR Packer ต่อ แล้วสแกน Tracking ได้ทันที',
+      });
+    } else {
+      setActiveTab('packer');
+      setSelectedPacker(command.packer);
+      setStatus({
+        type: 'success',
+        title: `เลือก Packer ${command.packer} แล้ว`,
+        message: 'พร้อมสแกน Tracking หรือสแกน QR ขนส่งเพื่อเปลี่ยนขนส่ง',
+      });
+    }
+    playTone('success');
+    window.setTimeout(() => focusScanInput({ force: true }), 0);
+    return true;
   }
 
   function handleBarcodeKeyDown(event) {
@@ -2433,6 +2499,11 @@ function App() {
     lastCameraScanRef.current = { code, time: now };
     cameraSavingRef.current = true;
     showCameraMessage(`อ่านได้: ${code}`, 'idle');
+
+    if (applyScanQrCommand(code)) {
+      await stopCamera();
+      return;
+    }
 
     if (activeTab === 'drive') {
       await saveAdminScannedCode(code, 'camera');
@@ -3165,6 +3236,7 @@ function App() {
       {activeTab === 'staff' && isSignedIn && (
         <StaffDirectory
           firebaseUser={firebaseUser}
+          couriers={couriers}
           onPackerOptionsChange={(names, memberCount) => {
             if (memberCount === 0) return;
             const next = [PACKER_UNASSIGNED, ...names];
