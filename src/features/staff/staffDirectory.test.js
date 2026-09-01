@@ -8,6 +8,7 @@ import {
   buildWorkforceSummary,
   filterDirectoryStaff,
   buildPackerOptions,
+  buildQrPackerMembers,
   copyAssignments,
   groupActiveStaff,
   mergeAssignments,
@@ -180,6 +181,18 @@ test("rejects duplicate scan nicknames across staff positions", () => {
         { nickname: " กิต ", position: "packer", active: true },
       ]),
     (error) => error.code === "STAFF_DUPLICATE_PACKER_NICKNAME"
+  );
+});
+
+test("excludes ambiguous or inactive Packer QR identities", () => {
+  assert.deepEqual(
+    buildQrPackerMembers([
+      { id: "leader-1", nickname: "กิต", position: "leader", active: true },
+      { id: "packer-1", nickname: " กิต ", position: "packer", active: true },
+      { id: "packer-2", nickname: "มุก", position: "packer", active: true },
+      { id: "packer-3", nickname: "เก่า", position: "packer", active: false },
+    ]).map((person) => person.id),
+    ["packer-2"]
   );
 });
 

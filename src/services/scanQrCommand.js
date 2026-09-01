@@ -1,5 +1,6 @@
 const QR_PREFIX = 'SCAN_TO_SHEET';
 const QR_VERSION = '1';
+const QR_PACKER_POSITIONS = new Set(['leader', 'checker', 'packer']);
 
 function clean(value) {
   return String(value ?? '').trim();
@@ -34,9 +35,11 @@ export function createPackerQrCommand(staffId) {
 
 export function parseScanQrCommand(rawValue) {
   const parts = clean(rawValue).split(':');
-  if (parts.length !== 5 || parts[0] !== QR_PREFIX || parts[1] !== QR_VERSION) return null;
+  if (parts.length !== 5 || parts[0].toUpperCase() !== QR_PREFIX || parts[1] !== QR_VERSION) return null;
 
-  const [,, role, target, encodedValue] = parts;
+  const [,, rawRole, rawTarget, encodedValue] = parts;
+  const role = rawRole.toUpperCase();
+  const target = rawTarget.toUpperCase();
   const value = clean(decode(encodedValue));
   if (!value) return null;
 
@@ -58,9 +61,17 @@ export function resolveScanQrCommand(command, { couriers = [], staff = [] } = {}
     return { ...command, courier: courier ?? command.courier };
   }
   if (command.kind === 'packer') {
-    const member = staff.find((item) => clean(item.id) === command.staffId && item.active !== false);
+    const activePackers = staff.filter((item) => (
+      item.active !== false
+      && QR_PACKER_POSITIONS.has(item.position)
+      && clean(item.nickname)
+    ));
+    const member = activePackers.find((item) => clean(item.id) === command.staffId);
     const packer = clean(member?.nickname);
-    return packer ? { ...command, packer } : null;
+    const sameNicknameCount = activePackers.filter((item) => (
+      clean(item.nickname).toLocaleLowerCase('th') === packer.toLocaleLowerCase('th')
+    )).length;
+    return packer && sameNicknameCount === 1 ? { ...command, packer } : null;
   }
   return null;
 }

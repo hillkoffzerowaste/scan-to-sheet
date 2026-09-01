@@ -14,6 +14,9 @@ test('creates and parses role-specific courier QR commands', () => {
   assert.deepEqual(parseScanQrCommand(command), {
     kind: 'courier', role: 'admin', courier: 'Shopee Drop Off',
   });
+  assert.deepEqual(parseScanQrCommand(command.toLowerCase()), {
+    kind: 'courier', role: 'admin', courier: 'shopee drop off',
+  });
 });
 
 test('creates and parses a stable Packer staff QR command', () => {
@@ -41,11 +44,20 @@ test('resolves courier commands before the live courier list syncs and only acti
 
   const staff = parseScanQrCommand(createPackerQrCommand('muk-id'));
   assert.deepEqual(resolveScanQrCommand(staff, {
-    staff: [{ id: 'muk-id', nickname: 'มุก', active: true }],
+    staff: [{ id: 'muk-id', nickname: 'มุก', position: 'packer', active: true }],
   }), {
     kind: 'packer', role: 'packer', staffId: 'muk-id', packer: 'มุก',
   });
   assert.equal(resolveScanQrCommand(staff, {
-    staff: [{ id: 'muk-id', nickname: 'มุก', active: false }],
+    staff: [{ id: 'muk-id', nickname: 'มุก', position: 'packer', active: false }],
+  }), null);
+  assert.equal(resolveScanQrCommand(staff, {
+    staff: [{ id: 'muk-id', nickname: 'มุก', position: 'office', active: true }],
+  }), null);
+  assert.equal(resolveScanQrCommand(staff, {
+    staff: [
+      { id: 'muk-id', nickname: 'มุก', position: 'packer', active: true },
+      { id: 'other-id', nickname: ' มุก ', position: 'checker', active: true },
+    ],
   }), null);
 });

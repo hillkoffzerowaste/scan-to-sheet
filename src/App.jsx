@@ -15,7 +15,7 @@ import ScanPopup from './views/ScanPopup.jsx';
 import { CAMERA_POPUP_ID, CAMERA_REGION_ID, DEFAULT_LOOKBACK_HOURS, ISSUE_CUSTOMER_CANCELLED, ISSUE_DAMAGED, ISSUE_RETURNED, PACKER_UNASSIGNED } from './constants.js';
 import { DeploymentUpdateBanner, StatusBanner } from './views/StatusBanner.jsx';
 import ReportsView from './views/ReportsView.jsx';
-import { buildPackerOptions } from './features/staff/staffDirectory.js';
+import { buildPackerOptions, buildQrPackerMembers } from './features/staff/staffDirectory.js';
 import { subscribeStaffMembers } from './features/staff/staffService.js';
 import {
   COURIERS,
@@ -350,18 +350,15 @@ function App() {
     if (!firebaseUser) return;
     return subscribeStaffMembers({
       onChange: (members) => {
-        if (members.length === 0) return;
+        setQrPackerMembers(buildQrPackerMembers(members));
         try {
           const next = [PACKER_UNASSIGNED, ...buildPackerOptions(members)];
           setPackerOptions(next);
-          setQrPackerMembers(members.filter((person) => (
-            person.active !== false
-            && ['leader', 'checker', 'packer'].includes(person.position)
-            && String(person.nickname ?? '').trim()
-          )));
           setSelectedPacker((current) => next.includes(current) ? current : PACKER_UNASSIGNED);
         } catch {
-          // Invalid duplicate names must not replace the last valid scan options.
+          // Never retain a prior list after the live roster becomes ambiguous.
+          setPackerOptions([PACKER_UNASSIGNED]);
+          setSelectedPacker(PACKER_UNASSIGNED);
         }
       },
       onError: () => {
@@ -3337,8 +3334,7 @@ function App() {
         <StaffDirectory
           firebaseUser={firebaseUser}
           couriers={couriers}
-          onPackerOptionsChange={(names, memberCount) => {
-            if (memberCount === 0) return;
+          onPackerOptionsChange={(names) => {
             const next = [PACKER_UNASSIGNED, ...names];
             setPackerOptions(next);
             setSelectedPacker((current) => next.includes(current) ? current : PACKER_UNASSIGNED);

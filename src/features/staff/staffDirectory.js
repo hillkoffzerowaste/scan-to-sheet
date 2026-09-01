@@ -155,6 +155,22 @@ export function buildPackerOptions(staff) {
   return packers;
 }
 
+export function buildQrPackerMembers(staff) {
+  const groups = groupActiveStaff(staff);
+  const members = STAFF_POSITIONS.flatMap((position) => groups[position])
+    .filter((person) => String(person.nickname ?? "").trim());
+  const counts = new Map();
+  members.forEach((person) => {
+    const nickname = String(person.nickname).trim().toLocaleLowerCase("th");
+    counts.set(nickname, (counts.get(nickname) ?? 0) + 1);
+  });
+  // The scan state stores a nickname. Excluding duplicates is safer than assigning a QR
+  // to an ambiguous person and saving a tracking number under the wrong Packer.
+  return members.filter((person) => (
+    counts.get(String(person.nickname).trim().toLocaleLowerCase("th")) === 1
+  ));
+}
+
 export function validateStaffInput(person, existingStaff = []) {
   const errors = [];
   if (!String(person.fullName ?? "").trim()) errors.push("fullName");

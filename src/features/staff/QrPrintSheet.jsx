@@ -3,6 +3,7 @@ import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import QRCode from 'qrcode';
 import { Download, X } from 'lucide-react';
+import { buildQrPackerMembers } from './staffDirectory.js';
 import { createCourierQrCommand, createPackerQrCommand } from '../../services/scanQrCommand.js';
 
 function QrImage({ label, value, onReady }) {
@@ -104,11 +105,7 @@ export default function QrPrintSheet({ couriers, staff, onClose }) {
   const [imageSources, setImageSources] = useState({});
   const [printMessage, setPrintMessage] = useState('');
   const [exportingPdf, setExportingPdf] = useState(false);
-  const packers = useMemo(() => staff.filter((person) => (
-    person.active !== false
-    && ['leader', 'checker', 'packer'].includes(person.position)
-    && String(person.nickname ?? '').trim()
-  )), [staff]);
+  const packers = useMemo(() => buildQrPackerMembers(staff), [staff]);
   const adminCards = couriers.map((courier) => ({
     id: `admin-${courier}`,
     label: courier,
