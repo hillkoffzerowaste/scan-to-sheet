@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
 import QRCode from 'qrcode';
-import { Printer, X } from 'lucide-react';
+import { Download, X } from 'lucide-react';
 import { createCourierQrCommand, createPackerQrCommand } from '../../services/scanQrCommand.js';
 
 function QrImage({ label, value, onReady }) {
@@ -54,7 +56,7 @@ function printCardMarkup(cards, imageSources) {
   `).join('');
 }
 
-function printSectionMarkup(mode, adminCards, packerCourierCards, packerCards, imageSources) {
+function pdfSectionMarkup(mode, adminCards, packerCourierCards, packerCards, imageSources) {
   if (mode === 'admin') {
     return `<section class="qr-print-section"><header><h2>Admin — รับเข้า Drive</h2><p>1. สแกน QR ขนส่ง  2. สแกน Tracking ต่อเนื่อง</p></header><div class="qr-print-grid">${printCardMarkup(adminCards, imageSources)}</div></section>`;
   }
@@ -64,6 +66,7 @@ function printSectionMarkup(mode, adminCards, packerCourierCards, packerCards, i
 export default function QrPrintSheet({ couriers, staff, onClose }) {
   const [imageSources, setImageSources] = useState({});
   const [printMessage, setPrintMessage] = useState('');
+  const [exportingPdf, setExportingPdf] = useState(false);
   const packers = useMemo(() => staff.filter((person) => (
     person.active !== false
     && ['leader', 'checker', 'packer'].includes(person.position)
@@ -92,37 +95,48 @@ export default function QrPrintSheet({ couriers, staff, onClose }) {
     current[id] === src ? current : { ...current, [id]: src }
   ));
   const printReady = Object.keys(imageSources).length === cardCount;
-  const handlePrint = (mode) => {
+  const handlePdfExport = async (mode) => {
     if (!printReady) return;
-    const printWindow = window.open('', `scan-to-sheet-qr-print-${mode}`, 'popup,width=1000,height=800');
-    if (!printWindow) {
-      setPrintMessage('เบราว์เซอร์บล็อกหน้าต่างพิมพ์ กรุณาอนุญาต popup สำหรับระบบนี้แล้วลองใหม่');
-      return;
-    }
-
-    const stylesheetLinks = [...document.querySelectorAll('link[rel="stylesheet"]')]
-      .map((link) => `<link rel="stylesheet" href="${escapeHtml(link.href)}">`)
-      .join('');
-    const printWhenReady = () => {
-      printWindow.focus();
-      printWindow.print();
-    };
-    const sheetMarkup = printSectionMarkup(
+    setExportingPdf(true);
+    setPrintMessage('กำลังสร้างไฟล์ PDF...');
+    const sheetMarkup = pdfSectionMarkup(
       mode,
       adminCards,
       packerCourierCards,
       packerCards,
       imageSources,
     );
-    printWindow.addEventListener('load', printWhenReady, { once: true });
-    printWindow.document.open();
-    printWindow.document.write(`<!doctype html>
-      <html lang="th"><head><meta charset="utf-8"><title>QR จุดสแกน</title>${stylesheetLinks}</head>
-      <body><div class="qr-print-overlay"><section class="qr-print-dialog"><div class="qr-print-sheet">
-        ${sheetMarkup}
-      </div></section></div></body></html>`);
-    printWindow.document.close();
-    setPrintMessage(`เปิดหน้า preview สำหรับพิมพ์ QR ${mode === 'admin' ? 'Admin' : 'Packer'} แล้ว`);
+    const exportSheet = document.createElement('section');
+    exportSheet.className = 'qr-pdf-export';
+    exportSheet.setAttribute('aria-hidden', 'true');
+    exportSheet.innerHTML = sheetMarkup;
+    document.body.append(exportSheet);
+
+    try {
+      await new Promise((resolve) => window.requestAnimationFrame(resolve));
+      const canvas = await html2canvas(exportSheet, {
+        backgroundColor: null,
+        scale: 2,
+        useCORS: true,
+      });
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4', compress: true });
+      const margin = 8;
+      const pageWidth = 210 - margin * 2;
+      const pageHeight = (canvas.height * pageWidth) / canvas.width;
+      if (pageHeight > 297 - margin * 2) {
+        throw new Error('QR มีจำนวนมากเกินกว่าหน้า A4 แนวตั้ง');
+      }
+      pdf.addImage(canvas.toDataURL('image/png'), 'PNG', margin, margin, pageWidth, pageHeight);
+      pdf.save(`scan-to-sheet-qr-${mode}.pdf`);
+      setPrintMessage(`ดาวน์โหลด PDF QR ${mode === 'admin' ? 'Admin' : 'Packer'} แล้ว`);
+    } catch (error) {
+      setPrintMessage(error.message === 'QR มีจำนวนมากเกินกว่าหน้า A4 แนวตั้ง'
+        ? error.message
+        : 'สร้าง PDF ไม่สำเร็จ กรุณาลองใหม่');
+    } finally {
+      exportSheet.remove();
+      setExportingPdf(false);
+    }
   };
 
   return (
@@ -132,18 +146,18 @@ export default function QrPrintSheet({ couriers, staff, onClose }) {
           <div>
             <p className="eyebrow">QR operation cards</p>
             <h2 id="qr-print-title">พิมพ์ QR สำหรับจุดสแกน</h2>
-            <p>พิมพ์ A4 แล้ววางที่จุดสแกน: เลือกชุดตาม workflow ที่ใช้งาน</p>
+            <p>ส่งออก PDF A4 แนวตั้ง แล้ววางที่จุดสแกนตาม workflow</p>
           </div>
           <button className="qr-print-close" type="button" onClick={onClose} aria-label="ปิดหน้าพิมพ์ QR">
             <X size={18} />
           </button>
         </header>
         <div className="qr-print-actions">
-          <button className="primary-action" type="button" onClick={() => handlePrint('admin')} disabled={!printReady}>
-            <Printer size={17} /> {printReady ? 'พิมพ์ Admin A4' : 'กำลังสร้าง QR...'}
+          <button className="primary-action" type="button" onClick={() => { void handlePdfExport('admin'); }} disabled={!printReady || exportingPdf}>
+            <Download size={17} /> {exportingPdf ? 'กำลังสร้าง PDF...' : printReady ? 'PDF Admin A4' : 'กำลังสร้าง QR...'}
           </button>
-          <button className="primary-action" type="button" onClick={() => handlePrint('packer')} disabled={!printReady}>
-            <Printer size={17} /> {printReady ? 'พิมพ์ Packer A4' : 'กำลังสร้าง QR...'}
+          <button className="primary-action" type="button" onClick={() => { void handlePdfExport('packer'); }} disabled={!printReady || exportingPdf}>
+            <Download size={17} /> {exportingPdf ? 'กำลังสร้าง PDF...' : printReady ? 'PDF Packer A4' : 'กำลังสร้าง QR...'}
           </button>
           <button className="secondary-button" type="button" onClick={onClose}>ปิด</button>
         </div>

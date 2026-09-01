@@ -5126,7 +5126,7 @@ tbody tr:hover {
 .qr-print-loading { display: grid; place-items: center; color: var(--muted); font-size: var(--ui-xs); }
 
 @media print {
-  @page { size: A4 landscape; margin: 10mm; }
+  @page { size: A4 portrait; margin: 10mm; }
   /* ตารางเวรถูกเรนเดอร์ไว้ล่วงหน้าสำหรับคำสั่งพิมพ์เดิม และกฎเก่าจะเปลี่ยนเป็น display:grid
      ตอน print เสมอ หากไม่ซ่อนเฉพาะตอนมี QR sheet ตารางจะทับ/แทรกใน preview ของ QR */
   body:has(.qr-print-sheet) .duty-print-sheet { display: none; }
@@ -5137,9 +5137,18 @@ tbody tr:hover {
   .qr-print-dialog-header, .qr-print-actions { display: none; }
   .qr-print-sheet { gap: 12px; }
   .qr-print-section { gap: 8px; padding: 0; border: 0; border-radius: 0; background: transparent; break-inside: avoid; }
-  .qr-print-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 5px; }
+  .qr-print-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
   .qr-print-card { min-height: 44mm; padding: 5px; border-color: var(--control-line); break-inside: avoid; }
   .qr-print-card h3 { font-size: 14pt; }
   .qr-print-card p { font-size: 9pt; }
   .qr-print-card img, .qr-print-loading { width: 108px; height: 108px; }
 }
+
+/* html2canvas ต้อง render element ที่อยู่ใน DOM จริง แต่ห้ามให้มันขยับ layout ที่ผู้ใช้กำลังทำงานอยู่ */
+.qr-pdf-export { position: fixed; inset: 0 auto auto -10000px; width: 794px; padding: 28px; background: var(--surface); color: var(--text); }
+.qr-pdf-export .qr-print-section { gap: 8px; padding: 0; border: 0; border-radius: 0; background: transparent; }
+.qr-pdf-export .qr-print-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.qr-pdf-export .qr-print-card { min-height: 135px; padding: 6px; }
+.qr-pdf-export .qr-print-card h3 { font-size: 20px; }
+.qr-pdf-export .qr-print-card p { font-size: 12px; }
+.qr-pdf-export .qr-print-card img { width: 94px; height: 94px; }
