@@ -11,7 +11,9 @@
   --surface: #ffffff;
   --surface-soft: #F9FBFB;
   --text: #1c1c1e;
-  --muted: #5c6b69;
+  /* เดิม #5c6b69 ได้ 4.90 บนพื้น chrome ซึ่งเป็นค่าที่ผ่านแบบเฉียดฉิว และไปอยู่คู่กับตัวอักษร
+     ขนาดเล็กพอดี ค่านี้ได้ 6.71–7.64 บนพื้นทั้งสี่แบบ */
+  --muted: #4A5654;
   --line: #E3E8E8;
   --line-strong: #CCD3D3;
   /* เปลือกแบบ Windows: chrome คือพื้นของ toolbar/หัวตาราง/แถบสถานะ ส่วนที่เหลือเป็นสถานะของแถว
@@ -110,6 +112,14 @@
   /* สเกลมุมโค้งของ Windows Enterprise Shell: sm สำหรับ control และป้าย · md สำหรับหน้าต่างและพาเนล
      สเกลเดิมของ Flip7 (4/8/12/16 + pill) ถูกยกเลิก — lg/xl/full ยังประกาศไว้ให้เท่ากับ md
      เพราะโค้ดเก่าบางส่วนยังอ้างถึง ห้ามใช้ในโค้ดใหม่ */
+  /* สเกลตัวอักษรของเปลือก Windows — เป็น px ไม่ใช่เศษของ rem เพราะค่าที่คำนวณจากฐาน 16px
+     ทำให้ป้ายกำกับหล่นไปถึง 10.2px พยัญชนะไทยที่มีสระบนและล่างอ่านไม่ออกที่ขนาดนั้น
+     12px คือพื้นล่างเด็ดขาดของทุกข้อความในแอป */
+  --ui-xs: 12px;
+  --ui-sm: 13px;
+  --ui-md: 14px;
+  --ui-lg: 15px;
+  --ui-num: 20px;
   --radius-sm: 3px;
   --radius-md: 4px;
   --radius-lg: var(--radius-md);
@@ -149,7 +159,7 @@
   --surface: #14201f;
   --surface-soft: #0f1918;
   --text: #f5f5f7;
-  --muted: #9aa5a3;
+  --muted: #A6B1AF;
   --line: #223330;
   --line-strong: #2f4642;
   --win-chrome: #0f1918;
@@ -3520,7 +3530,9 @@ tbody tr:hover {
   background: var(--surface-soft);
 }
 
-.enterprise-shell button:disabled,
+/* ปุ่มบนแถบหัวโปรแกรมต้องหลุดจากกฎนี้ มันนั่งบนพื้นเข้มจึงต้องใช้ตัวขาวโปร่ง
+   ไม่ใช่พื้นอ่อนของ control ที่อยู่บนพื้นขาว — เคยได้ตัวขาวบนพื้น #F9FBFB คือ 1.039 */
+.enterprise-shell button:disabled:not(.win-titlebar-btn),
 .enterprise-shell input:disabled,
 .enterprise-shell select:disabled {
   opacity: 1 !important;
@@ -4791,7 +4803,7 @@ tbody tr:hover {
   font-weight: 500;
 }
 
-.win-shell .drive-mode-label { font-size: 0.72rem; font-weight: 500; }
+.win-shell .drive-mode-label { font-size: var(--ui-xs); font-weight: 500; }
 
 /* ── หน้ารายงาน ──
    โครงเดียวกับหน้าสแกน: หัวข้อเป็นแถบ ตัวเลขเป็นกล่องเตี้ย ตารางเป็น data grid */
@@ -4811,7 +4823,7 @@ tbody tr:hover {
 .win-shell .report-panel[open] > .report-table:last-child { margin-bottom: 9px; }
 
 .win-shell .report-header { gap: 8px; margin-bottom: 0; }
-.win-shell .report-badge { min-height: 26px; padding: 0 8px; font-size: 0.72rem; }
+.win-shell .report-badge { min-height: 28px; padding: 0 9px; font-size: var(--ui-xs); }
 
 .win-shell .report-summary { gap: 6px; margin-bottom: 9px; }
 
@@ -4890,5 +4902,198 @@ tbody tr:hover {
    ได้ 1.237 และปุ่มปิดไม่มีขอบเลย พื้นของมันเทียบพื้นหน้าต่างได้ 1.039 (WCAG 1.4.11 ต้อง 3:1) */
 .win-shell .popup-cancel-btn,
 .win-shell .scan-popup-close {
+  border: 1px solid var(--control-line);
+}
+
+/* การ์ดตัวเลขทั้งหมดใช้ขอบ 1px เท่ากัน ส่วนการ์ดที่มีสถานะเก็บเส้นซ้ายไว้ที่ 3px
+   ประกาศตรงนี้เพราะกฎ border ด้านบนเป็น shorthand ที่จะกลบความกว้างของเส้นซ้าย */
+.win-shell .drive-card,
+.win-shell .missing-result-card { border-left-width: 3px; }
+
+.win-shell .workflow-guide p { color: var(--muted); }
+
+
+/* ── สเกลตัวอักษรที่ใช้จริง ────────────────────────────────────────────────────
+   ชั้นนี้อยู่ท้ายสุดเพื่อกำหนดขนาดสุดท้ายของทุกข้อความในเปลือก Windows
+   ก่อนหน้านี้ขนาดถูกเขียนเป็นเศษของ rem กระจายอยู่หลายที่ ผลรวมคือมีข้อความ 10.2–11.5px
+   อยู่ 40 กว่าจุด ซึ่งเป็นขนาดที่อ่านภาษาไทยบนจอออฟฟิศไม่ไหว
+   ────────────────────────────────────────────────────────────────────────────── */
+
+.win-shell,
+.win-shell button,
+.win-shell input,
+.win-shell select,
+.win-shell textarea {
+  font-size: var(--ui-sm);
+}
+
+/* ป้ายกำกับ ตัวเลขกำกับ และข้อความรอง — พื้นล่างของทั้งแอป */
+.win-shell .eyebrow,
+.win-shell .grid-count,
+.win-shell .secondary-panel-label,
+.win-shell .field-control span,
+.win-shell .packer-control span,
+.win-shell .operation-context-item span,
+.win-shell .metric-row span,
+.win-shell .packer-row span,
+.win-shell .drive-card span,
+.win-shell .report-summary span,
+.win-shell .report-card span,
+.win-shell .date-box span,
+.win-shell .courier-add-form small,
+.win-shell .courier-add-divider,
+.win-shell .win-statusbar,
+.win-shell thead th {
+  font-size: var(--ui-xs);
+}
+
+/* ข้อความทั่วไป: เมนู ปุ่ม รายการ ช่องข้อมูลในตาราง */
+.win-shell .win-menu-title,
+.win-shell .win-menu-pop button,
+.win-shell .win-menu-pop a,
+.win-shell .win-nav-item,
+.win-shell .win-sidebar-toggle,
+.win-shell .win-tool-btn,
+.win-shell .win-toolbar-right,
+.win-shell .secondary-button,
+.win-shell .ghost-button,
+.win-shell .report-button,
+.win-shell .text-button,
+.win-shell .recent-actions,
+.win-shell .segmented-control button,
+.win-shell .issue-bar button,
+.win-shell .issue-bar span,
+.win-shell .courier-button span,
+.win-shell .field-control input,
+.win-shell .field-control select,
+.win-shell .packer-control select,
+.win-shell .status-badge,
+.win-shell .scan-queue-status,
+.win-shell .workflow-guide p,
+.win-shell .any-format-warning,
+.win-shell .status-banner span,
+.win-shell .operation-context-item strong,
+.win-shell .secondary-panel-summary p,
+.win-shell .standards-panel > summary p,
+.win-shell .standards-item strong,
+.win-shell .standards-item span,
+.win-shell .current-courier-badge span,
+.win-shell .win-conn,
+.win-shell .win-titlebar-btn,
+.win-shell tbody td {
+  font-size: var(--ui-sm);
+}
+
+/* หัวข้อกลุ่มและหัวพาเนล */
+.win-shell .win-app-name,
+.win-shell .panel-heading,
+.win-shell .recent-header h3,
+.win-shell h3,
+.win-shell .workflow-guide strong,
+.win-shell .current-courier-badge strong,
+.win-shell .status-banner strong,
+.win-shell .date-box strong,
+.win-shell .search-heading span,
+.win-shell .scan-form label {
+  font-size: var(--ui-md);
+}
+
+.win-shell h2 { font-size: var(--ui-lg); }
+
+/* หัวข้อกลุ่มในเมนูซ้ายเป็น <h2> จึงเคยโดนกฎ h2 ดันขึ้นไป 16px ใหญ่กว่ารายการที่มันครอบ */
+.win-shell .win-nav-heading { font-size: var(--ui-xs); }
+
+/* ตัวเลขสรุปคือสิ่งที่ต้องอ่านจากระยะยืน */
+.win-shell .metric-row strong,
+.win-shell .packer-row strong,
+.win-shell .drive-card strong,
+.win-shell .report-summary strong,
+.win-shell .report-card strong {
+  font-size: var(--ui-num);
+}
+
+.win-shell .courier-button strong,
+.win-shell .win-nav-badge { font-size: var(--ui-xs); }
+
+/* ช่องยิงบาร์โค้ดต้องอ่านเลขที่ยิงเข้ามาได้จากระยะยืน จึงใหญ่กว่าทุกอย่างในหน้า */
+.win-shell .scan-input-row input { font-size: 19px; }
+.win-shell .scan-input-row input::placeholder { font-size: var(--ui-md); }
+.win-shell .scan-input-row button { font-size: var(--ui-md); }
+
+/* ── ปุ่มแบบ Windows ──
+   ทุกปุ่มที่กดได้มีขอบ 1px ที่เห็นชัด (--control-line ได้ 3.35+ ตามเกณฑ์ 1.4.11)
+   พื้นเป็น surface มุม 3px ความสูงเท่ากันทั้งแถบ ไม่มีเงาและไม่มีน้ำหนักฟอนต์เกิน 500 */
+.win-shell .win-tool-btn,
+.win-shell .secondary-button,
+.win-shell .ghost-button,
+.win-shell .report-button,
+.win-shell .segmented-control button,
+.win-shell .issue-bar button,
+.win-shell .table-action-button {
+  min-height: 30px;
+  font-weight: 500;
+  box-shadow: none;
+}
+
+.win-shell .win-tool-btn,
+.win-shell .secondary-button:not(:disabled),
+.win-shell .ghost-button:not(:disabled),
+.win-shell .report-button:not(:disabled) {
+  border: 1px solid var(--control-line);
+  background: var(--surface);
+  color: var(--text);
+}
+
+/* ขอบของช่องยิงบาร์โค้ดเคยเป็น --line-strong ซึ่งวัดได้ 1.519 — control ที่ใช้ทั้งวัน
+   กลับเป็นอันเดียวที่ขอบเขตอ่านไม่ออก ใช้ --primary (5.429) เพราะเป็นเป้าหลักของหน้านี้ */
+.win-shell .scan-input-row { border-color: var(--primary); }
+.win-shell .workflow-drive.scan-form .scan-input-row { border-color: var(--info); }
+
+/* ── ช่องค้นหาในแถบคำสั่ง ── */
+.win-shell .win-tool-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  padding: 0 8px;
+  min-height: 30px;
+  border: 1px solid var(--control-line);
+  border-radius: var(--radius-sm);
+  background: var(--field);
+}
+
+.win-shell .win-tool-search:focus-within {
+  border-color: var(--primary);
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.win-shell .win-tool-search svg { flex: none; color: var(--muted); }
+
+.win-shell .win-tool-search input {
+  width: 200px;
+  min-height: 26px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font-size: var(--ui-sm);
+}
+
+.win-shell .win-toolbar-right { margin-left: 12px; color: var(--muted); }
+
+/* ปุ่มบนแถบหัวโปรแกรมนั่งบนพื้นเข้มและมีตัวขาวทับ จึงต้องโปร่งใสเสมอ
+   ห้ามให้กฎพื้นปุ่มทั่วไปเล็ดลอดมาถมพื้นอ่อนใต้ตัวขาว (วัดได้ 1.039 คืออ่านไม่ออกเลย) */
+.win-shell .win-titlebar-btn,
+.win-shell .win-titlebar-btn:disabled {
+  background: transparent;
+  color: var(--on-topbar);
+  border-color: var(--topbar-control-line);
+}
+
+/* ช่องกรอกในกล่อง field-control ต้องมีขอบจริง ไม่ใช่แค่สีขอบ — ความกว้าง 0 ทำให้พื้นขาว
+   ของช่องอยู่บนพื้นขาวของพาเนลโดยไม่มีอะไรบอกขอบเขต (WCAG 1.4.11) */
+.win-shell .field-control input,
+.win-shell .field-control select,
+.win-shell .packer-control select {
   border: 1px solid var(--control-line);
 }
