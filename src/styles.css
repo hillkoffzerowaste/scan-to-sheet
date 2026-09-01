@@ -74,9 +74,10 @@
   /* control ที่นั่งบน --topbar-bg ต้องใช้ขอบสว่าง ค่า 0.34 เดิมได้ 2.109 (light) / 2.963 (dark)
      ตกเกณฑ์ 3:1 ทั้งสองธีม ค่านี้ได้ 3.206 / 5.418 — ไม่ต้องพลิกตามธีมเพราะ topbar เข้มทั้งคู่ */
   --topbar-control-line: rgba(255,255,255,0.55);
-  /* topbar มีตัวขาวทับ จึงต้องเข้มกว่า --primary-fill มาก ขาวบนค่านี้ได้ 6.823
-     เข้มทั้งสองธีมเพื่อให้ทุกอย่างที่นั่งบนมัน รวม pill ของ theme toggle อ่านออก */
-  --topbar-bg: #1a6561;
+  /* แถบหัวโปรแกรมเป็น chrome ของหน้าต่าง ไม่ใช่ป้ายแบรนด์ จึงเป็นเทากลางเข้มเหมือน
+     title bar ของโปรแกรมบนเดสก์ท็อป เหลือสีแบรนด์ไว้ที่ไอคอนโปรแกรมจุดเดียว
+     ขาวบนค่านี้ได้ 12.214 (เดิม teal ได้ 6.823) และ --primary-fill บนมันได้ 4.202 */
+  --topbar-bg: #31363A;
   /* Darkened from #b45f06, which measured 4.03 against its own 10% tint — the pairing used
      by every warning banner, badge and camera message, so it failed AA systemically. */
   --warning: #9c5205;
@@ -180,7 +181,8 @@
   --info-line: rgba(124,192,234,0.35);
   --field: #1d2320;
   --control-line: #637d78;
-  --topbar-bg: #0d3231;
+  /* ขาวได้ 17.552 · --primary-fill ได้ 6.039 */
+  --topbar-bg: #151A1C;
   --warning: #e8942f;
   --warning-bg: rgba(232,148,47,0.16);
   --warning-line: rgba(232,148,47,0.35);
@@ -2432,17 +2434,17 @@ tbody tr:hover {
    ของเดิม hardcode เขียว #16a34a กับม่วง #4f46e5 ซึ่งไม่มีใน token ไม่มีค่าสำหรับ dark mode
    และไม่เคยถูกวัด contrast จึงต้องมีกฎ !important ตามกดทับทีหลังทั้งชุด — ตัดวงจรนั้นที่ต้นเหตุ */
 .packer-workflow-guide {
-  border-color: var(--primary);
-  border-inline-start: 4px solid var(--primary);
-  background: var(--primary-soft);
-  color: var(--primary-strong);
+  border-color: var(--line);
+  border-inline-start: 3px solid var(--primary-strong);
+  background: var(--win-chrome);
+  color: var(--text);
 }
 
 .drive-workflow-guide {
-  border-color: var(--info-line);
-  border-inline-start: 4px solid var(--info);
-  background: var(--info-soft);
-  color: var(--info);
+  border-color: var(--line);
+  border-inline-start: 3px solid var(--info);
+  background: var(--win-chrome);
+  color: var(--text);
 }
 
 .scan-panel.workflow-packer {
@@ -2457,16 +2459,13 @@ tbody tr:hover {
   background: var(--surface);
 }
 
-.workflow-drive.current-courier-badge {
-  border-color: var(--info-line);
-  background: var(--info-soft);
-  color: var(--info);
-}
-
+/* ป้ายนี้ยืนยันสิ่งที่เลือกไว้ ไม่ใช่การกระทำ จึงเป็น chrome กลางเหมือนแถบเครื่องมือ
+   ชื่อขนส่งเป็นตัวหนาก็พอ ไม่ต้องถมสีทั้งแถบแข่งกับช่องยิงบาร์โค้ดที่อยู่ใต้มัน */
+.workflow-drive.current-courier-badge,
 .workflow-packer.current-courier-badge {
-  border-color: var(--primary);
-  background: var(--primary-soft);
-  color: var(--primary-strong);
+  border-color: var(--line);
+  background: var(--win-chrome);
+  color: var(--text);
 }
 
 .side-panel.workflow-packer .courier-button.active {
@@ -2909,16 +2908,11 @@ tbody tr:hover {
   padding: 12px 16px;
 }
 
-.enterprise-shell .packer-workflow-guide {
-  border-color: var(--primary);
-  background: var(--primary-soft);
-  color: var(--primary-strong);
-}
-
+.enterprise-shell .packer-workflow-guide,
 .enterprise-shell .drive-workflow-guide {
-  border-color: var(--info-line);
-  background: var(--info-soft);
-  color: var(--info);
+  border-color: var(--line);
+  background: var(--win-chrome);
+  color: var(--text);
 }
 
 .enterprise-shell .side-panel,
@@ -3468,10 +3462,11 @@ tbody tr:hover {
   background: rgba(255, 255, 255, 0.16) !important;
 }
 
-.enterprise-shell .workflow-guide svg,
-.enterprise-shell .current-courier-badge svg {
-  color: currentColor;
-}
+/* ไอคอนรับสีของโหมดไว้ ส่วนตัวหนังสือกลับมาเป็นสีปกติ — สีบอก "โหมดไหน" ที่จุดเล็กๆ
+   จุดเดียวก็พอ ไม่ต้องย้อมทั้งแถบ */
+.enterprise-shell .packer-workflow-guide svg { color: var(--primary-strong); }
+.enterprise-shell .drive-workflow-guide svg { color: var(--info); }
+.enterprise-shell .current-courier-badge svg { color: var(--muted); }
 
 .enterprise-shell .drive-mode-label {
   border: 1px solid var(--info-line);
@@ -3670,14 +3665,12 @@ tbody tr:hover {
 }
 
 /* ── แถบสีขอบซ้ายบอกสถานะการ์ด ──
-   Flip7: "use left-border color accents on cards for state communication"
-   ทำให้กวาดตาหาการ์ดที่ต้องเข้าไปดูได้โดยไม่ต้องอ่านตัวหนังสือ */
+   แถบนี้มีไว้ชี้ว่า "ใบไหนต้องเข้าไปดู" การใส่ให้ทุกใบเท่ากับไม่ได้ชี้อะไรเลย — หน้ารายงาน
+   เคยมีการ์ดขนส่ง 10 ใบที่ขีดเส้นสีแบรนด์เท่ากันหมด เหลือไว้เฉพาะการ์ดที่มีสถานะจริง
+   (Drive dashboard และผลตรวจออเดอร์ตกหล่น) โดยค่าเริ่มต้นเป็นเส้นกลาง */
 .enterprise-shell .drive-card,
-.enterprise-shell .missing-result-card,
-.enterprise-shell .report-card,
-.enterprise-shell .metric-row > div,
-.enterprise-shell .packer-row > div {
-  border-inline-start: 4px solid var(--primary);
+.enterprise-shell .missing-result-card {
+  border-inline-start: 3px solid var(--line-strong);
 }
 
 .enterprise-shell .drive-card.total { border-inline-start-color: var(--primary); }
@@ -3702,9 +3695,10 @@ tbody tr:hover {
   color: var(--coral);
 }
 
-/* แถบขอบซ้ายของ guide ต้องประกาศทีหลัง border-color ของกฎ enterprise ไม่งั้นถูกเกลี่ยเป็นสีเส้นปกติ */
+/* แถบขอบซ้ายของ guide ต้องประกาศทีหลัง border-color ของกฎ enterprise ไม่งั้นถูกเกลี่ยเป็นสีเส้นปกติ
+   เส้นนี้คือสิ่งเดียวที่เหลือไว้แยกโหมด Packer กับ Drive ออกจากกันในแถบนี้ */
 .enterprise-shell .packer-workflow-guide {
-  border-inline-start: 4px solid var(--primary);
+  border-inline-start: 4px solid var(--primary-strong);
 }
 
 .enterprise-shell .drive-workflow-guide {
