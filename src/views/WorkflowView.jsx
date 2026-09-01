@@ -361,7 +361,14 @@ function WorkflowView({
                       <span>หยุดกล้อง</span>
                     </button>
                   ) : (
-                    <button className="secondary-button" type="button" onClick={startCamera} disabled={busy || !isSignedIn}>
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      // ต้องห่อด้วย arrow: startCamera(regionId) รับ id ของกล่องกล้อง ถ้าส่ง
+                      // ตรง React จะยัด event เข้าไปเป็น regionId แล้ว Html5Qrcode หา element ไม่เจอ
+                      onClick={() => startCamera()}
+                      disabled={busy || !isSignedIn}
+                    >
                       <Camera size={16} />
                       <span>เปิดกล้อง</span>
                     </button>
