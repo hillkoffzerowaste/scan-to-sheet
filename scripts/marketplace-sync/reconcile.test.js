@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { chunkTrackingNumbers } from './firestore.js';
+import { chunkTrackingNumbers, upsertOrders } from './firestore.js';
 
 const order = (orderId, normalizedTrackingNo) => ({
   orderId,
@@ -55,4 +55,24 @@ test('metadata stays paired with its own tracking number', () => {
 
   assert.equal(byTracking.get('TH001').marketplaceOrderId, 'A1');
   assert.equal(byTracking.get('TH002').marketplaceOrderId, 'B2');
+});
+
+test('legacy marketplace Firestore writer fails closed before touching the database', async () => {
+  let touched = false;
+  const db = {
+    batch() {
+      touched = true;
+      return {};
+    },
+    collection() {
+      touched = true;
+      return {};
+    },
+  };
+
+  await assert.rejects(
+    upsertOrders({ db, config: {}, platform: 'shopee', orders: [], machineName: 'test' }),
+    /no longer writes Firestore/,
+  );
+  assert.equal(touched, false);
 });

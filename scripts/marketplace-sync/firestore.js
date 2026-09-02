@@ -11,6 +11,9 @@ const TRACKING_QUERY_CHUNK = 30;
 // was scanned, so ten rows per number is far above the real ratio and still bounds the read.
 const RECONCILE_MATCH_LIMIT = TRACKING_QUERY_CHUNK * 10;
 
+const LEGACY_MARKETPLACE_FIRESTORE_ERROR =
+  'Marketplace import no longer writes Firestore; use the web upload to Master Sheet.';
+
 export function chunkTrackingNumbers(orders, chunkSize = TRACKING_QUERY_CHUNK) {
   // One tracking number can arrive on several orders (split shipments, re-imports). Querying
   // per order billed a read for each repeat; dedupe first, then ask in chunks.
@@ -88,47 +91,10 @@ export async function initFirestore({ config, baseDir }) {
 }
 
 export async function upsertOrders({ db, config, platform, orders, machineName }) {
-  const collectionName = config.collections?.orders ?? 'marketplaceOrders';
-  let upserted = 0;
-  let batch = db.batch();
-  let batchSize = 0;
-
-  for (const order of orders) {
-    const docId = orderDocumentId(order);
-    if (!docId) {
-      continue;
-    }
-    batch.set(
-      db.collection(collectionName).doc(docId),
-      {
-        ...order,
-        buyerName: FieldValue.delete(),
-        rawText: FieldValue.delete(),
-        platform,
-        source: 'playwright',
-        syncMachine: machineName,
-        scrapedAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
-      },
-      { merge: true },
-    );
-    upserted += 1;
-    batchSize += 1;
-
-    if (batchSize >= MAX_BATCH_WRITES) {
-      await batch.commit();
-      batch = db.batch();
-      batchSize = 0;
-    }
-  }
-
-  if (batchSize > 0) {
-    await batch.commit();
-  }
-
-  await reconcileScannedOrders({ db, orders });
-
-  return upserted;
+  // This module used to be the scheduled marketplace writer. Keep the exported function
+  // as a hard stop so an old scheduler cannot silently recreate 74k-read/write usage by
+  // calling the module directly while the worker entrypoint is disabled.
+  throw new Error(LEGACY_MARKETPLACE_FIRESTORE_ERROR);
 }
 
 export async function setSyncStatus({ db, config, platform, status }) {

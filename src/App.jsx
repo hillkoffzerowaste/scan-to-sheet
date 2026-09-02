@@ -131,7 +131,7 @@ const SCOPES = GOOGLE_SCOPES.join(' ');
 const MARKETPLACE_IMPORT_MAX_ORDERS = 100;
 const SHEET_RECOVERY_BATCH_SIZE = 20;
 const SHEET_RECOVERY_COOLDOWN_MS = 5 * 1000;
-const SHEET_INTEGRITY_INTERVAL_MS = 10 * 60 * 1000;
+const SHEET_RECOVERY_INTERVAL_MS = 15 * 60 * 1000;
 const COUNT_REFRESH_DELAY_MS = 1000;
 const DEPLOYMENT_UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;
 
@@ -796,28 +796,13 @@ function App() {
     }
   }, [isSignedIn]);
 
-  // Auto-retry sheet sync every 5 minutes (reduces Firestore reads)
+  // Retry stranded Sheet syncs periodically, but keep the interval long enough that every
+  // open client does not repeatedly scan the same three Firestore status queries.
   useEffect(() => {
     if (!firebaseUser || !token || !config?.master?.id) return;
     const interval = setInterval(() => {
       void recoverPendingSheetSyncs();
-    }, 5 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, [firebaseUser, token, config]);
-
-  // A synced marker only proves the last write completed. Re-read a bounded part of today's
-  // ledger every 10 minutes so direct Sheet edits (including a keyboard-wedge scanner) are
-  // detected and repaired from Firestore without waiting for someone to press Recovery.
-  useEffect(() => {
-    if (!firebaseUser || !token || !config?.master?.id) return;
-    const verifyToday = () => {
-      void recoverPendingSheetSyncs({
-        includeSynced: true,
-        dates: [getBangkokParts().date],
-        routineVerification: true,
-      });
-    };
-    const interval = setInterval(verifyToday, SHEET_INTEGRITY_INTERVAL_MS);
+    }, SHEET_RECOVERY_INTERVAL_MS);
     return () => clearInterval(interval);
   }, [firebaseUser, token, config]);
 
@@ -1448,9 +1433,8 @@ function App() {
       return { busy: false, claimed: 0, synced: 0, failed: 0 };
     }
     // `showStatus` decides whether the packer sees a banner, never whether the quota gate
-    // applies. It used to guard the check itself, so all three background callers — the
-    // sign-in sweep, the 5-minute retry and the 10-minute integrity pass — ran with no
-    // cooldown at all, which is exactly the traffic this exists to space out.
+    // applies. All background and manual callers share this cooldown so a retry cannot
+    // immediately start another Sheet batch after the previous one finishes.
     const waitMs = sheetRecoveryNextAllowedAtRef.current - Date.now();
     if (waitMs > 0) {
       if (showStatus) {
