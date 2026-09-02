@@ -15,6 +15,7 @@ function ScanPopup({
   handleScanSubmit,
   inputRef,
   isPackerReady,
+  isScanReady,
   isSignedIn,
   packerOptions,
   qrPackerMembers,
@@ -26,6 +27,7 @@ function ScanPopup({
   scanPopupStatusMeta,
   scanQueueSnapshot,
   scanQueueStatusText,
+  scanReadinessMessage,
   scanRemark,
   scanValue,
   selectedCourier,
@@ -163,7 +165,7 @@ function ScanPopup({
                         <Square size={16} /><span>หยุดกล้อง</span>
                       </button>
                     ) : (
-                      <button className="secondary-button" type="button" onClick={startCameraPopup} disabled={busy || !isSignedIn}>
+                      <button className="secondary-button" type="button" onClick={startCameraPopup} disabled={busy || !isScanReady}>
                         <Camera size={16} /><span>เปิดกล้อง</span>
                       </button>
                     )}
@@ -181,16 +183,18 @@ function ScanPopup({
                     onChange={(e) => setScanValue(e.target.value)}
                     onKeyDown={handleBarcodeKeyDown}
                     placeholder={
-                      activeTab === 'drive'
+                      !isScanReady
+                        ? scanReadinessMessage
+                        : activeTab === 'drive'
                         ? 'ยิงบาร์โค้ด แล้วกด Enter เพื่อรับเข้า Drive'
                         : isPackerReady
                           ? 'ยิงบาร์โค้ด แล้วกด Enter'
                           : 'เลือก Packer ก่อน'
                     }
                     autoComplete="off"
-                    disabled={!isSignedIn}
+                    disabled={!isScanReady}
                   />
-                  <button type="submit" disabled={!isSignedIn}>
+                  <button type="submit" disabled={!isScanReady}>
                     {scanQueueSnapshot.processing ? <RefreshCw size={18} className="spin" /> : <Play size={18} />}
                     <span>{activeTab === 'drive' ? 'รับเข้า Drive' : 'บันทึกแพ็ก'}</span>
                   </button>

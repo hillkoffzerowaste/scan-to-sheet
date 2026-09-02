@@ -32,6 +32,7 @@ function WorkflowView({
   handleSearchSubmit,
   inputRef,
   isPackerReady,
+  isScanReady,
   isSheetConnected,
   isSignedIn,
   markSearchResultDamaged,
@@ -54,6 +55,7 @@ function WorkflowView({
   scanMethod,
   scanQueueSnapshot,
   scanQueueStatusText,
+  scanReadinessMessage,
   scanRemark,
   scanValue,
   searchBusy,
@@ -372,7 +374,7 @@ function WorkflowView({
                       // ต้องห่อด้วย arrow: startCamera(regionId) รับ id ของกล่องกล้อง ถ้าส่ง
                       // ตรง React จะยัด event เข้าไปเป็น regionId แล้ว Html5Qrcode หา element ไม่เจอ
                       onClick={() => startCamera()}
-                      disabled={busy || !isSignedIn}
+                      disabled={busy || !isScanReady}
                     >
                       <Camera size={16} />
                       <span>เปิดกล้อง</span>
@@ -395,18 +397,18 @@ function WorkflowView({
                   onChange={(event) => setScanValue(event.target.value)}
                   onKeyDown={handleBarcodeKeyDown}
                   placeholder={
-                    isSignedIn
+                    isScanReady
                       ? activeTab === 'drive'
                         ? 'ยิงบาร์โค้ดหรือ QR แล้วกด Enter เพื่อรับเข้า Drive'
                         : isPackerReady
                           ? 'ยิงบาร์โค้ดหรือ QR แล้วกด Enter'
                           : 'เลือก Packer ก่อนเริ่มสแกน'
-                      : 'Login with Google ก่อนเริ่มสแกน'
+                      : scanReadinessMessage
                   }
                   autoComplete="off"
-                    disabled={!isSignedIn}
+                    disabled={!isScanReady}
                 />
-                <button type="submit" disabled={!isSignedIn}>
+                <button type="submit" disabled={!isScanReady}>
                   {scanQueueSnapshot.processing ? <RefreshCw size={18} className="spin" /> : <Play size={18} />}
                   <span>{activeTab === 'drive' ? 'รับเข้า Drive' : 'บันทึกแพ็ก'}</span>
                 </button>

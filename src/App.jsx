@@ -92,8 +92,8 @@ import { commitFallbackScan } from './services/scanCommit.js';
 import { createScanQueue } from './services/scanQueue.js';
 import { hasDeploymentUpdate } from './services/deploymentUpdate.js';
 import { getScanPopupCourierOptions, getScanPopupStatusMeta } from './services/scanPopup.js';
-import { parseScanQrCommand, resolveScanQrCommand } from './services/scanQrCommand.js';
-import { DEFAULT_SCAN_METHOD } from './services/scanPreferences.js';
+import { getScanQrAnnouncement, parseScanQrCommand, resolveScanQrCommand, resolveScanQrName } from './services/scanQrCommand.js';
+import { DEFAULT_SCAN_METHOD, getScanReadinessMessage, SCAN_READINESS } from './services/scanPreferences.js';
 import {
   DEFAULT_QR_LAYOUT_PREFERENCES,
   loadQrLayoutPreferences,
@@ -259,6 +259,7 @@ function App() {
   const [addingCourier, setAddingCourier] = useState(false);
   const [courierSelectValue, setCourierSelectValue] = useState('');
   const [scanValue, setScanValue] = useState('');
+  const [scanReadiness, setScanReadiness] = useState(SCAN_READINESS.SIGNED_OUT);
   const [scannerWindowFocused, setScannerWindowFocused] = useState(true);
   const [selectedPacker, setSelectedPacker] = useState(PACKER_UNASSIGNED);
   const [packerOptions, setPackerOptions] = useState(DEFAULT_PACKERS);
@@ -351,6 +352,8 @@ function App() {
   // Firestore is the write authority whenever Firebase is configured. A Google Sheet token on
   // its own must not unlock the scanner, because its next Firestore write would be rejected.
   const isSignedIn = isFirebaseConfigured ? Boolean(firebaseUser) : isSheetConnected;
+  const isScanReady = isSignedIn && scanReadiness === SCAN_READINESS.READY;
+  const scanReadinessMessage = getScanReadinessMessage(scanReadiness);
   useEffect(() => {
     if (!firebaseUser) return;
     return subscribeStaffMembers({
@@ -395,8 +398,10 @@ function App() {
   const requiresPacker = !getScanIssueMeta(scanRemark).isIssue && activeTab === 'packer';
   const isPackerReady = !requiresPacker || selectedPacker !== PACKER_UNASSIGNED;
   const queuedScanCount = scanQueueSnapshot.pending.length;
-  const scanQueueStatusText = isSignedIn && scanMethod === 'manual' && !scannerWindowFocused
-    ? 'หยุดสแกนชั่วคราว: หน้าระบบไม่ได้ active — กลับมาที่ระบบก่อนยิงบาร์โค้ด'
+  const scanQueueStatusText = !isScanReady
+    ? scanReadinessMessage
+    : scanMethod === 'manual' && !scannerWindowFocused
+      ? 'หยุดสแกนชั่วคราว: หน้าระบบไม่ได้ active — กลับมาที่ระบบก่อนยิงบาร์โค้ด'
     : scanQueueSnapshot.processing
     ? `กำลังบันทึก ${scanQueueSnapshot.processing.code}${queuedScanCount ? ` • รอคิว ${queuedScanCount} รายการ` : ''}`
     : scanQueueSnapshot.lastResult?.status === 'error'
@@ -651,13 +656,13 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (isSignedIn && scanMethod === 'manual') {
+    if (isScanReady && scanMethod === 'manual') {
       window.setTimeout(() => focusScanInput({ force: true }), 0);
     }
-  }, [isSignedIn, selectedCourier, activeTab, scanMethod, scanPopupOpen, selectedPacker]);
+  }, [isScanReady, selectedCourier, activeTab, scanMethod, scanPopupOpen, selectedPacker]);
 
   useEffect(() => {
-    if (!isSignedIn || scanMethod !== 'manual') return () => {};
+    if (!isScanReady || scanMethod !== 'manual') return () => {};
     const routeScannerFromSelect = (event) => {
       // Native select typeahead consumes the first scanner key before React's bubble handler
       // can move focus. Capture it at the document boundary so the complete QR stays intact.
@@ -666,10 +671,10 @@ function App() {
     };
     document.addEventListener('keydown', routeScannerFromSelect, true);
     return () => document.removeEventListener('keydown', routeScannerFromSelect, true);
-  }, [isSignedIn, scanMethod, handleBarcodeKeyDown]);
+  }, [isScanReady, scanMethod, handleBarcodeKeyDown]);
 
   useEffect(() => {
-    if (!isSignedIn || scanMethod !== 'manual') {
+    if (!isScanReady || scanMethod !== 'manual') {
       setScannerWindowFocused(true);
       return () => {};
     }
@@ -688,13 +693,13 @@ function App() {
       window.removeEventListener('blur', loseScannerFocus);
       document.removeEventListener('visibilitychange', regainScannerFocus);
     };
-  }, [isSignedIn, scanMethod, activeTab, scanPopupOpen]);
+  }, [isScanReady, scanMethod, activeTab, scanPopupOpen]);
 
   useEffect(() => {
-    if (!isSignedIn || scanMethod !== 'camera') {
+    if (!isScanReady || scanMethod !== 'camera') {
       void stopCamera();
     }
-  }, [isSignedIn, scanMethod]);
+  }, [isScanReady, scanMethod]);
 
   useEffect(() => {
     if (!scanPopupOpen) return () => {};
@@ -741,6 +746,40 @@ function App() {
       refreshDriveRows();
     }
   }, [selectedCourier, today.date, isSignedIn, activeTab]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!isSignedIn) {
+      setScanReadiness(SCAN_READINESS.SIGNED_OUT);
+      return () => { cancelled = true; };
+    }
+    if (!token || !config?.master?.id) {
+      setScanReadiness(SCAN_READINESS.CHECKING);
+      return () => { cancelled = true; };
+    }
+
+    const verifyBeforeScanning = async () => {
+      setScanReadiness(SCAN_READINESS.CHECKING);
+      try {
+        if (isFirebaseConfigured) await getFirebaseUserForPrimary();
+        await fetchGoogleProfile(token);
+        if (!cancelled) setScanReadiness(SCAN_READINESS.READY);
+      } catch {
+        if (cancelled) return;
+        setScanReadiness(SCAN_READINESS.REAUTH_REQUIRED);
+        setStatus({
+          type: 'warning',
+          title: 'ยังเริ่มสแกนไม่ได้',
+          message: 'ตรวจสอบ session ไม่สำเร็จ กรุณาออกจากระบบ แล้วเข้าสู่ระบบใหม่',
+        });
+      }
+    };
+
+    void verifyBeforeScanning();
+    return () => {
+      cancelled = true;
+    };
+  }, [isSignedIn, token, config?.master?.id, firebaseUser?.uid]);
 
   useEffect(() => {
     if (!firebaseUser || !token || !config?.master?.id || sheetRecoveryRunningRef.current) return;
@@ -911,6 +950,20 @@ function App() {
       oscillator.start(startsAt);
       oscillator.stop(endsAt);
     });
+  }
+
+  function speakScanQrAnnouncement(command) {
+    const message = getScanQrAnnouncement(command);
+    if (!soundEnabled || !message || !window.speechSynthesis || !window.SpeechSynthesisUtterance) {
+      return;
+    }
+
+    // Keep confirmation aligned with the latest QR when courier and Packer are scanned quickly.
+    window.speechSynthesis.cancel();
+    const utterance = new window.SpeechSynthesisUtterance(message);
+    utterance.lang = 'th-TH';
+    utterance.rate = 1;
+    window.speechSynthesis.speak(utterance);
   }
 
   function showCameraMessage(message, type = 'idle') {
@@ -1190,6 +1243,12 @@ function App() {
 
       const session = await refreshGoogleSessionFromServer({ silent: true });
       if (!session?.accessToken || !session?.config) {
+        setScanReadiness(SCAN_READINESS.REAUTH_REQUIRED);
+        setStatus({
+          type: 'warning',
+          title: 'ต้องเข้าสู่ระบบใหม่',
+          message: 'session Google หมดอายุหรือไม่มีสิทธิ์ใช้งาน กรุณาออกจากระบบ แล้วเข้าสู่ระบบใหม่ก่อนสแกนต่อ',
+        });
         throw error;
       }
 
@@ -1600,11 +1659,11 @@ function App() {
     const scanNote = context?.remark ?? scanRemark;
     const scanAllowsAnyFormat = context?.allowAnyTrackingFormat ?? allowAnyTrackingFormat;
     const managesBusy = source !== 'queue';
-    if (!isSignedIn) {
+    if (!isScanReady) {
       setStatus({
         type: 'warning',
-        title: 'ต้องเข้าสู่ระบบก่อน',
-        message: 'กด Login with Google เพื่อบันทึกเข้า Google Sheet จริง',
+        title: 'ยังเริ่มสแกนไม่ได้',
+        message: scanReadinessMessage,
       });
       playTone('error');
       return { status: 'error' };
@@ -1923,11 +1982,11 @@ function App() {
     const scanCourier = context?.courier ?? selectedCourier;
     const scanAllowsAnyFormat = context?.allowAnyTrackingFormat ?? allowAnyTrackingFormat;
     const managesBusy = source !== 'queue';
-    if (!isSignedIn) {
+    if (!isScanReady) {
       setStatus({
         type: 'warning',
-        title: 'ต้องเข้าสู่ระบบก่อน',
-        message: 'กด Login with Google เพื่อบันทึกเข้า Google Sheet จริง',
+        title: 'ยังเริ่มสแกนไม่ได้',
+        message: scanReadinessMessage,
       });
       playTone('error');
       return { status: 'error' };
@@ -2445,6 +2504,12 @@ function App() {
       return;
     }
 
+    if (!isScanReady) {
+      setStatus({ type: 'warning', title: 'ยังเริ่มสแกนไม่ได้', message: scanReadinessMessage });
+      playTone('error');
+      return;
+    }
+
     if (applyScanQrCommand(code)) return;
 
     if (activeTab === 'packer' && !isPackerReady) {
@@ -2488,13 +2553,17 @@ function App() {
 
   function applyScanQrCommand(rawCode) {
     const parsed = parseScanQrCommand(rawCode);
-    if (!parsed) return false;
-
-    const command = resolveScanQrCommand(parsed, {
-      couriers,
-      packers: packerOptions,
-      staff: qrPackerMembers,
-    });
+    const command = parsed
+      ? resolveScanQrCommand(parsed, {
+        couriers,
+        packers: packerOptions,
+        staff: qrPackerMembers,
+      })
+      : resolveScanQrName(rawCode, {
+        couriers,
+        packers: packerOptions.filter((packer) => packer !== PACKER_UNASSIGNED),
+      });
+    if (!parsed && !command) return false;
     if (!command) {
       setStatus({
         type: 'warning',
@@ -2520,14 +2589,15 @@ function App() {
     setScanRemark('');
 
     if (command.kind === 'courier') {
-      setActiveTab(command.role === 'admin' ? 'drive' : 'packer');
+      const role = command.role ?? (activeTab === 'drive' ? 'admin' : 'packer');
+      setActiveTab(role === 'admin' ? 'drive' : 'packer');
       setSelectedCourier(command.courier);
-      if (command.role === 'packer') setSelectedPacker(PACKER_UNASSIGNED);
+      if (role === 'packer') setSelectedPacker(PACKER_UNASSIGNED);
       setAllowAnyTrackingFormat(!COURIERS.includes(command.courier));
       setStatus({
         type: 'success',
         title: `เลือกขนส่ง ${command.courier} แล้ว`,
-        message: command.role === 'admin'
+        message: role === 'admin'
           ? 'พร้อมสแกน Tracking เพื่อรับเข้า Drive'
           : 'สแกน QR Packer ต่อ แล้วสแกน Tracking ได้ทันที',
       });
@@ -2541,6 +2611,7 @@ function App() {
       });
     }
     playTone('success');
+    speakScanQrAnnouncement(command);
     window.setTimeout(() => focusScanInput({ force: true, inPopup: true }), 0);
     return true;
   }
@@ -2612,11 +2683,11 @@ function App() {
   }
 
   async function startCamera(regionId = CAMERA_REGION_ID) {
-    if (!isSignedIn) {
+    if (!isScanReady) {
       setStatus({
         type: 'warning',
-        title: 'ต้องเข้าสู่ระบบก่อน',
-        message: 'Login with Google ก่อนเปิดกล้องสแกน',
+        title: 'ยังเริ่มสแกนไม่ได้',
+        message: scanReadinessMessage,
       });
       playTone('error');
       return;
@@ -3231,6 +3302,7 @@ function App() {
           handleSearchSubmit={handleSearchSubmit}
           inputRef={mainScanInputRef}
           isPackerReady={isPackerReady}
+          isScanReady={isScanReady}
           isSheetConnected={isSheetConnected}
           isSignedIn={isSignedIn}
           markSearchResultDamaged={markSearchResultDamaged}
@@ -3253,6 +3325,7 @@ function App() {
           scanMethod={scanMethod}
           scanQueueSnapshot={scanQueueSnapshot}
           scanQueueStatusText={scanQueueStatusText}
+          scanReadinessMessage={scanReadinessMessage}
           scanRemark={scanRemark}
           scanValue={scanValue}
           searchBusy={searchBusy}
@@ -3355,6 +3428,7 @@ function App() {
           handleScanSubmit={handleScanSubmit}
           inputRef={popupScanInputRef}
           isPackerReady={isPackerReady}
+          isScanReady={isScanReady}
           isSignedIn={isSignedIn}
           packerOptions={packerOptions}
           qrPackerMembers={qrPackerMembers}
@@ -3366,6 +3440,7 @@ function App() {
           scanPopupStatusMeta={scanPopupStatusMeta}
           scanQueueSnapshot={scanQueueSnapshot}
           scanQueueStatusText={scanQueueStatusText}
+          scanReadinessMessage={scanReadinessMessage}
           scanRemark={scanRemark}
           scanValue={scanValue}
           selectedCourier={selectedCourier}

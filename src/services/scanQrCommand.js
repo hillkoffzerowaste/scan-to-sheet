@@ -27,6 +27,15 @@ function resolveUniqueOption(options, value) {
   return matches.length === 1 ? matches[0] : null;
 }
 
+function resolveUniquePacker(options, value) {
+  const normalizedValue = clean(value).toLocaleLowerCase('th');
+  if (!normalizedValue) return null;
+  const matches = options.filter((option) => (
+    clean(option).toLocaleLowerCase('th') === normalizedValue
+  ));
+  return matches.length === 1 ? matches[0] : null;
+}
+
 export function createCourierQrCommand(role, courier) {
   const normalizedRole = clean(role).toUpperCase();
   const normalizedCourier = clean(courier);
@@ -86,4 +95,28 @@ export function resolveScanQrCommand(command, { couriers = [], packers = [], sta
       : null;
   }
   return null;
+}
+
+// Some printed QR labels contain only the visible name instead of the structured
+// SCAN_TO_SHEET command. Resolve those names only when exactly one active option matches.
+export function resolveScanQrName(rawValue, { couriers = [], packers = [] } = {}) {
+  const value = clean(rawValue);
+  if (!value) return null;
+
+  const courier = resolveUniqueOption(couriers, value);
+  const packer = resolveUniquePacker(packers, value);
+  if (courier && packer) return null;
+  if (courier) return { kind: 'courier', courier };
+  if (packer) return { kind: 'packer', packer };
+  return null;
+}
+
+export function getScanQrAnnouncement(command) {
+  if (command?.kind === 'courier' && clean(command.courier)) {
+    return `เลือกขนส่ง ${clean(command.courier)} แล้ว`;
+  }
+  if (command?.kind === 'packer' && clean(command.packer)) {
+    return `เลือก Packer ${clean(command.packer)} แล้ว`;
+  }
+  return '';
 }
