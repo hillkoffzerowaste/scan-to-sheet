@@ -175,6 +175,15 @@ export function validateScanCode(courier, value, { allowAnyFormat = false } = {}
     };
   }
 
+  // A scanner fragment or concatenated label must never become one tracking code.
+  if (/\s/.test(normalizedCode)) {
+    return {
+      ok: false,
+      code: normalizedCode,
+      reason: `${normalizedCode} มีช่องว่างหรือหลายส่วน ไม่ใช่เลขพัสดุเดียว`,
+    };
+  }
+
   if (allowAnyFormat) {
     return {
       ok: true,

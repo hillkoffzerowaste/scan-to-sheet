@@ -33,6 +33,12 @@ test('rejects scanner fragments even when special tracking format is enabled', (
   assert.equal(validation.code, 'TH4KY7D');
 });
 
+test('rejects concatenated tracking tokens even when special tracking format is enabled', () => {
+  const validation = validateScanCode('KEX Lazada', 'KEXLM1004311551 1 1 ZKMS002', { allowAnyFormat: true });
+  assert.equal(validation.ok, false);
+  assert.match(validation.reason, /มีช่องว่างหรือหลายส่วน/);
+});
+
 test('rejects short tracking values during marketplace import parsing', () => {
   assert.throws(
     () => parseMarketplaceRows([
