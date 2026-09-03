@@ -13,6 +13,7 @@ import {
   where,
 } from 'firebase/firestore';
 import { firebaseAuth, firestoreDb, isFirebaseConfigured, serverTimestamp } from './firebase.js';
+import { hasMinimumTrackingLength, MIN_TRACKING_CODE_LENGTH } from './trackingValidation.js';
 import { nextCalendarDate } from './calendarDate.js';
 import { userErrorMessage } from './authErrors.js';
 import {
@@ -560,6 +561,9 @@ export async function mirrorScanToFirestore({ type, result, courier, user, packe
 
   if (!result?.code) {
     return;
+  }
+  if (!hasMinimumTrackingLength(result.code)) {
+    throw new Error(`เลขพัสดุต้องมีอย่างน้อย ${MIN_TRACKING_CODE_LENGTH} ตัวอักษร`);
   }
 
   await addDoc(collection(firestoreDb, 'scanEvents'), {

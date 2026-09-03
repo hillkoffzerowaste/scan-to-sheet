@@ -33,6 +33,16 @@ test('rejects scanner fragments even when special tracking format is enabled', (
   assert.equal(validation.code, 'TH4KY7D');
 });
 
+test('rejects short tracking values during marketplace import parsing', () => {
+  assert.throws(
+    () => parseMarketplaceRows([
+      ['orderNumber', 'sellerSku', 'trackingCode', 'createTime'],
+      ['ORDER-1', 'SKU-1', 'TH4KY7D', '2026-09-03 10:00'],
+    ]),
+    /เลขพัสดุสั้นเกินไป/,
+  );
+});
+
 test('preserves manual Buyer Name when updating an existing scan row', () => {
   const row = Array.from({ length: 23 }, (_, index) => `cell-${index}`);
   const data = buildDailyRowUpdateData('2026-07-17', 9, row);
@@ -47,15 +57,15 @@ test('writes imported marketplaceSkus when scan metadata has no items array', ()
 });
 
 test('parses and groups Lazada rows', () => {
-  const rows = [['orderNumber', 'sellerSku', 'trackingCode'], ['L1', 'SKU-A', 'LEX123'], ['L1', 'SKU-B', 'LEX123']];
+  const rows = [['orderNumber', 'sellerSku', 'trackingCode'], ['L1', 'SKU-A', 'LEX12345678'], ['L1', 'SKU-B', 'LEX12345678']];
   assert.deepEqual(groupMarketplaceRows(parseMarketplaceRows(rows))[0].marketplaceSkus, ['SKU-A', 'SKU-B']);
 });
 
 test('reads Lazada itemName and uses source rows for item quantity', () => {
   const rows = [
     ['orderNumber', 'sellerSku', 'trackingCode', 'itemName'],
-    ['L1', 'SKU-A', 'LEX123', 'Coffee Drip Bag'],
-    ['L1', 'SKU-A', 'LEX123', 'Coffee Drip Bag'],
+    ['L1', 'SKU-A', 'LEX12345678', 'Coffee Drip Bag'],
+    ['L1', 'SKU-A', 'LEX12345678', 'Coffee Drip Bag'],
   ];
   const group = groupMarketplaceRows(parseMarketplaceRows(rows))[0];
 
@@ -64,7 +74,7 @@ test('reads Lazada itemName and uses source rows for item quantity', () => {
   assert.deepEqual(group.items, [{ name: 'Coffee Drip Bag', sku: 'SKU-A', quantity: '' }]);
 
   const sheetRows = [Array(23).fill('')];
-  sheetRows[0][12] = 'LEX123';
+  sheetRows[0][12] = 'LEX12345678';
   sheetRows[0][13] = 'lazada';
   const result = buildSheetBackfillUpdates('2026-07-16', sheetRows, [group]);
   assert.deepEqual(result.data.at(-1), {
@@ -77,7 +87,7 @@ test('parses Shopee headers', () => {
   const rows = [[
     'หมายเลขคำสั่งซื้อ', 'เลขอ้างอิง SKU (SKU Reference No.)', '*หมายเลขติดตามพัสดุ',
     'สถานะการสั่งซื้อ', 'วันที่คาดว่าจะทำการจัดส่งสินค้า',
-  ], ['S1', 'SKU-S', 'TH123', 'ที่ต้องจัดส่ง', '2026-07-17 23:59']];
+  ], ['S1', 'SKU-S', 'TH1234567890', 'ที่ต้องจัดส่ง', '2026-07-17 23:59']];
   const parsed = parseMarketplaceRows(rows)[0];
   assert.equal(parsed.platform, 'shopee');
   assert.equal(parsed.sellerOrderStatus, 'ที่ต้องจัดส่ง');
@@ -124,9 +134,9 @@ test('accepts an order with SKU before its tracking number is assigned', () => {
 });
 
 test('parses TikTok BOM headers and trims tab suffixes', () => {
-  const rows = [['\uFEFFOrder ID', 'Seller SKU', 'Tracking ID'], ['T1\t', 'SKU-T', 'JT123\t']];
+  const rows = [['\uFEFFOrder ID', 'Seller SKU', 'Tracking ID'], ['T1\t', 'SKU-T', 'JT12345678\t']];
   assert.deepEqual(parseMarketplaceRows(rows)[0], {
-    platform: 'tiktok', orderId: 'T1', sku: 'SKU-T', itemName: '', quantity: '', trackingNo: 'JT123',
+    platform: 'tiktok', orderId: 'T1', sku: 'SKU-T', itemName: '', quantity: '', trackingNo: 'JT12345678',
     sellerOrderStatus: '', expectedShipAt: '', orderedAt: '',
   });
 });
@@ -134,7 +144,7 @@ test('parses TikTok BOM headers and trims tab suffixes', () => {
 test('retains product names and quantities from Seller exports with SKU', () => {
   const rows = [[
     'Order ID', 'Seller SKU', 'Tracking ID', 'Product Name', 'Quantity',
-  ], ['T1', 'SKU-T', 'JT123', 'Coffee Drip Bag', '2']];
+  ], ['T1', 'SKU-T', 'JT12345678', 'Coffee Drip Bag', '2']];
   const group = groupMarketplaceRows(parseMarketplaceRows(rows))[0];
   assert.deepEqual(group.items, [{ name: 'Coffee Drip Bag', sku: 'SKU-T', quantity: 2 }]);
   assert.deepEqual(group.marketplaceSkus, ['SKU-T']);

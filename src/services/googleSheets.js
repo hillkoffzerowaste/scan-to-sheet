@@ -1,4 +1,5 @@
 import { buildSheetBackfillUpdates, classifyLateOrder, normalizeMarketplaceTracking } from './marketplaceImport.js';
+import { hasMinimumTrackingLength, MIN_TRACKING_CODE_LENGTH } from './trackingValidation.js';
 import { findHistoricalIssueRow, findScanReconciliation, getScanIssueMeta, resolveCrossDayPackerRow } from './sheetSyncReconciliation.js';
 
 const DRIVE_API = 'https://www.googleapis.com/drive/v3';
@@ -102,7 +103,7 @@ export const COURIER_RULES = {
 // Even the opt-out path must reject scanner fragments. Real courier-specific rules
 // remain responsible for strict validation; this floor only prevents short accidental
 // reads such as "TH4KY7D" from reaching Firestore and Google Sheets.
-export const MIN_TRACKING_CODE_LENGTH = 8;
+export { MIN_TRACKING_CODE_LENGTH } from './trackingValidation.js';
 
 const CONFIG_KEY = 'scan-to-sheet-google-config-v2';
 const FOLDER_NAME = 'Scan to Sheet';
@@ -166,7 +167,7 @@ export function validateScanCode(courier, value, { allowAnyFormat = false } = {}
     };
   }
 
-  if (normalizedCode.length < MIN_TRACKING_CODE_LENGTH) {
+  if (!hasMinimumTrackingLength(normalizedCode)) {
     return {
       ok: false,
       code: normalizedCode,
@@ -1966,6 +1967,9 @@ export async function appendScanGoogle({
   adminCode = null,
 }) {
   const normalizedCode = normalizeScanCode(code);
+  if (!hasMinimumTrackingLength(normalizedCode)) {
+    throw new Error(`เลขพัสดุต้องมีอย่างน้อย ${MIN_TRACKING_CODE_LENGTH} ตัวอักษร`);
+  }
   const issueMeta = getScanIssueMeta(note);
   const isIssueScan = issueMeta.isIssue;
   const sheet = config?.master;
@@ -3178,6 +3182,9 @@ export async function batchAppendScanGoogle({ token, config, orders, repairExist
     date: order.date || todayDate,
     time: order.time || todayTime,
   }));
+  if (normalizedOrders.some((order) => !hasMinimumTrackingLength(order.normalizedCode))) {
+    throw new Error(`เลขพัสดุต้องมีอย่างน้อย ${MIN_TRACKING_CODE_LENGTH} ตัวอักษร`);
+  }
   const byDate = new Map();
   for (const order of normalizedOrders) {
     if (!byDate.has(order.date)) byDate.set(order.date, []);

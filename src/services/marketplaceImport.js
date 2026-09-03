@@ -1,3 +1,5 @@
+import { MIN_TRACKING_CODE_LENGTH } from './trackingValidation.js';
+
 function cleanCell(value) {
   return String(value ?? '').replace(/^\uFEFF/, '').replace(/\t+$/g, '').trim();
 }
@@ -236,12 +238,16 @@ export function parseMarketplaceRows(rows) {
     sellerOrderStatus: statusIndex >= 0 ? cleanCell(row[statusIndex]) : '',
     expectedShipAt: expectedShipIndex >= 0 ? normalizeMarketplaceShipDeadline(row[expectedShipIndex]) : '',
     orderedAt: orderDateIndex >= 0 ? normalizeMarketplaceOrderDate(row[orderDateIndex]) : '',
-  })).filter((row) => (
-    row.orderId
-    && (row.trackingNo || row.sku)
-    && row.orderId.toLowerCase() !== 'platform unique order id.'
-    && (!row.trackingNo || row.trackingNo.toLowerCase() !== "the order's tracking number.")
-  ));
+  })).filter((row) => {
+    const normalizedTrackingNo = normalizeMarketplaceTracking(row.trackingNo);
+    if (normalizedTrackingNo && normalizedTrackingNo.length < MIN_TRACKING_CODE_LENGTH) {
+      throw new Error(`ไฟล์ ${row.platform} แถวเลขคำสั่งซื้อ ${row.orderId} มีเลขพัสดุสั้นเกินไป กรุณาตรวจสอบว่าเป็นเลขพัสดุเต็ม`);
+    }
+    return row.orderId
+      && (row.trackingNo || row.sku)
+      && row.orderId.toLowerCase() !== 'platform unique order id.'
+      && (!row.trackingNo || row.trackingNo.toLowerCase() !== "the order's tracking number.");
+  });
 }
 
 export function groupMarketplaceRows(rows) {

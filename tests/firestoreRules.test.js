@@ -77,6 +77,24 @@ test("operational data requires an approved staff claim, not merely Firebase sig
   }
 });
 
+test('orders do not expose a broad update rule that bypasses identity checks', async () => {
+  const rules = await readRules();
+  const block = rules.match(/match \/orders\/\{orderId\} \{([\s\S]*?)\n    \}/);
+  assert.ok(block, 'orders rules must exist');
+  assert.doesNotMatch(block[1], /allow create, update:/);
+  assert.match(block[1], /request\.resource\.data\.code == resource\.data\.code/);
+  assert.match(block[1], /affectedKeys\(\)\.hasOnly/);
+});
+
+test('scan events reject short or unexpected payloads', async () => {
+  const rules = await readRules();
+  const block = rules.match(/match \/scanEvents\/\{eventId\} \{([\s\S]*?)\n    \}/);
+  assert.ok(block, 'scanEvents rules must exist');
+  assert.match(block[1], /request\.resource\.data\.keys\(\)\.hasOnly/);
+  assert.match(block[1], /request\.resource\.data\.code\.size\(\) >= 8/);
+  assert.match(block[1], /request\.resource\.data\.normalizedCode\.size\(\) >= 8/);
+});
+
 test("external operational text is never written to Sheets as a formula", async () => {
   const [sheetWriter, labelScript] = await Promise.all([readSheetWriter(), readLabelScript()]);
   assert.doesNotMatch(sheetWriter, /valueInputOption:\s*'USER_ENTERED'/);

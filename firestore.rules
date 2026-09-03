@@ -177,7 +177,14 @@ service cloud.firestore {
     match /scanEvents/{eventId} {
       allow read: if isOperationalStaff();
       allow create: if isOperationalStaff()
+        && request.resource.data.keys().hasOnly([
+          'type', 'code', 'normalizedCode', 'courier', 'status', 'date', 'time',
+          'packer', 'note', 'sheetUrl', 'merged', 'user', 'createdAt'
+        ])
         && request.resource.data.code is string
+        && request.resource.data.code.size() >= 8
+        && request.resource.data.normalizedCode is string
+        && request.resource.data.normalizedCode.size() >= 8
         && request.resource.data.courier is string
         && request.resource.data.type in ['packer', 'admin'];
       allow update, delete: if false;
@@ -185,7 +192,7 @@ service cloud.firestore {
 
     match /orders/{orderId} {
       allow read: if isOperationalStaff();
-      allow create, update: if isOperationalStaff()
+      allow create: if isOperationalStaff()
         && request.resource.data.code is string
         && request.resource.data.code.size() >= 8
         && request.resource.data.normalizedCode is string
@@ -211,13 +218,34 @@ service cloud.firestore {
       allow delete: if false;
       allow update: if isOperationalStaff()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status', 'packer', 'note', 'admin', 'packerScan', 'sheetSyncStatus',
+          'sheetSyncError', 'sheetSyncAttemptId', 'sheetSyncStartedAtIso',
+          'sheetSyncedAt', 'updatedAt', 'updatedAtIso', 'user',
+          'marketplaceOrderId', 'marketplaceSkus', 'marketplaceItems',
+          'importedFromSheet', 'importedAt'
+        ])
+        && request.resource.data.code == resource.data.code
+        && request.resource.data.normalizedCode == resource.data.normalizedCode
+        && request.resource.data.courier == resource.data.courier
+        && request.resource.data.date == resource.data.date
+        && request.resource.data.code.size() >= 8
+        && request.resource.data.normalizedCode.size() >= 8
+        && request.resource.data.status in [
+          'pending', 'packer_scanned', 'matched', 'issue', 'cancelled', 'damaged', 'returned'
+        ]
+        && request.resource.data.sheetSyncStatus in [
+          'pending', 'writing', 'verified', 'synced', 'failed'
+        ]
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny([
           'marketplaceOrderId', 'marketplaceSkus', 'marketplaceItems'
         ])
-        && request.resource.data.marketplaceOrderId is string
-        && request.resource.data.marketplaceSkus is list
-        && request.resource.data.marketplaceSkus.size() <= 100
-        && request.resource.data.marketplaceItems is list
-        && request.resource.data.marketplaceItems.size() <= 100;
+          || (
+            request.resource.data.marketplaceOrderId is string
+            && request.resource.data.marketplaceSkus is list
+            && request.resource.data.marketplaceSkus.size() <= 100
+            && request.resource.data.marketplaceItems is list
+            && request.resource.data.marketplaceItems.size() <= 100
+          ));
     }
 
     // Immutable operational history for scans and Sheet outbox transitions. It records

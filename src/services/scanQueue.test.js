@@ -57,6 +57,12 @@ test('rejects a normalized duplicate while it is queued or processing', async ()
   assert.equal(queue.enqueue({ id: '3', code: 'JT-123', context: {} }).accepted, true);
 });
 
+test('allows the same code to queue separately for Packer and Drive contexts', () => {
+  const queue = createScanQueue({ process: () => new Promise(() => {}) });
+  assert.equal(queue.enqueue({ id: '1', code: 'TH123456', context: { activeTab: 'packer', courier: 'Flash' } }).accepted, true);
+  assert.equal(queue.enqueue({ id: '2', code: 'TH123456', context: { activeTab: 'drive', courier: 'Flash' } }).accepted, true);
+});
+
 test('counts the processing job toward capacity', () => {
   const queue = createScanQueue({ process: () => new Promise(() => {}), maxSize: 2 });
 

@@ -345,6 +345,7 @@ function App() {
   const autoCheckTimerRef = useRef(null);
   const lastAutoCheckRef = useRef(0);
   const sheetRecoveryRunningRef = useRef(false);
+  const refreshRowsRequestRef = useRef(0);
   const sheetRecoveryNextAllowedAtRef = useRef(0);
 
   const isGoogleReady = isFirebaseConfigured || Boolean(GOOGLE_CLIENT_ID);
@@ -1371,17 +1372,24 @@ function App() {
       return;
     }
 
+    const requestId = ++refreshRowsRequestRef.current;
+    const requestedCourier = selectedCourier;
+    const requestedDate = today.date;
     try {
       const rows = canUseFirestorePrimary()
-        ? await getTodayRowsFirestore({ courier: selectedCourier, date: today.date })
+        ? await getTodayRowsFirestore({ courier: requestedCourier, date: requestedDate })
         : await runWithGoogleRetry((accessToken, googleConfig) =>
             getTodayRowsGoogle({
               token: accessToken,
               config: googleConfig,
-              courier: selectedCourier,
-              date: today.date,
+              courier: requestedCourier,
+              date: requestedDate,
             }),
           );
+      if (requestId !== refreshRowsRequestRef.current
+        || requestedCourier !== selectedCourier
+        || requestedDate !== today.date
+        || activeTab !== 'packer') return;
       setRecentRows(rows);
       scheduleCountRefresh();
     } catch (error) {
@@ -1398,16 +1406,21 @@ function App() {
       return;
     }
 
+    const requestId = ++refreshRowsRequestRef.current;
+    const requestedDate = today.date;
     try {
       const rows = canUseFirestorePrimary()
-        ? await getDriveRowsFirestore({ date: today.date })
+        ? await getDriveRowsFirestore({ date: requestedDate })
         : await runWithGoogleRetry((accessToken, googleConfig) =>
             getDriveRowsGoogle({
               token: accessToken,
               config: googleConfig,
-              date: today.date,
+              date: requestedDate,
             }),
           );
+      if (requestId !== refreshRowsRequestRef.current
+        || requestedDate !== today.date
+        || activeTab !== 'drive') return;
       setDriveRecentRows(rows);
       setDriveTotalCount(rows.length);
     } catch (error) {
