@@ -27,6 +27,12 @@ test('accepts a non-empty special tracking value only when the operator opts out
   assert.equal(validateScanCode('J&T', '   ', { allowAnyFormat: true }).ok, false);
 });
 
+test('rejects scanner fragments even when special tracking format is enabled', () => {
+  const validation = validateScanCode('Flash', 'TH4KY7D', { allowAnyFormat: true });
+  assert.equal(validation.ok, false);
+  assert.equal(validation.code, 'TH4KY7D');
+});
+
 test('preserves manual Buyer Name when updating an existing scan row', () => {
   const row = Array.from({ length: 23 }, (_, index) => `cell-${index}`);
   const data = buildDailyRowUpdateData('2026-07-17', 9, row);

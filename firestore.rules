@@ -187,7 +187,9 @@ service cloud.firestore {
       allow read: if isOperationalStaff();
       allow create, update: if isOperationalStaff()
         && request.resource.data.code is string
+        && request.resource.data.code.size() >= 8
         && request.resource.data.normalizedCode is string
+        && request.resource.data.normalizedCode.size() >= 8
         && request.resource.data.courier is string
         && request.resource.data.date is string
         && request.resource.data.status in [

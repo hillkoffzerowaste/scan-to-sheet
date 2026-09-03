@@ -99,6 +99,11 @@ export const COURIER_RULES = {
   },
 };
 
+// Even the opt-out path must reject scanner fragments. Real courier-specific rules
+// remain responsible for strict validation; this floor only prevents short accidental
+// reads such as "TH4KY7D" from reaching Firestore and Google Sheets.
+export const MIN_TRACKING_CODE_LENGTH = 8;
+
 const CONFIG_KEY = 'scan-to-sheet-google-config-v2';
 const FOLDER_NAME = 'Scan to Sheet';
 const MASTER_SHEET_NAME = 'Scan to Sheet Master';
@@ -158,6 +163,14 @@ export function validateScanCode(courier, value, { allowAnyFormat = false } = {}
       ok: false,
       code: normalizedCode,
       reason: 'ยังไม่มีเลขสแกน',
+    };
+  }
+
+  if (normalizedCode.length < MIN_TRACKING_CODE_LENGTH) {
+    return {
+      ok: false,
+      code: normalizedCode,
+      reason: `${normalizedCode} สั้นเกินไป ไม่ใช่เลขพัสดุที่สมบูรณ์`,
     };
   }
 
