@@ -1327,17 +1327,27 @@ async function verifyDailyRowNativeDataTypes({ token, spreadsheetId, date, rowNu
   // format is applied. Read the grid's userEnteredValue so a duplicate cannot be certified
   // merely because its tracking number is present while its timestamps remain text.
   const range = `${escapeSheetName(date)}!C${rowNumber}:L${rowNumber}`;
+  const values = await readNativeValuesForRows({ token, spreadsheetId, date, rowNumbers: [rowNumber] });
+  const rowValues = values.get(rowNumber) ?? [];
+  return [0, 1, 8, 9].every((index) => (
+    typeof rowValues[index]?.userEnteredValue?.numberValue === 'number'
+    && Number.isFinite(rowValues[index].userEnteredValue.numberValue)
+  ));
+}
+
+async function readNativeValuesForRows({ token, spreadsheetId, date, rowNumbers }) {
   const params = new URLSearchParams({
     includeGridData: 'true',
-    ranges: range,
     fields: 'sheets(data(rowData(values(userEnteredValue))))',
   });
+  const validRows = [...new Set(rowNumbers)].filter((row) => Number.isInteger(row) && row >= 2);
+  validRows.forEach((row) => params.append('ranges', `${escapeSheetName(date)}!C${row}:L${row}`));
   const data = await apiFetch(`${SHEETS_API}/${spreadsheetId}?${params}`, token);
-  const values = data.sheets?.[0]?.data?.[0]?.rowData?.[0]?.values ?? [];
-  return [0, 1, 8, 9].every((index) => (
-    typeof values[index]?.userEnteredValue?.numberValue === 'number'
-    && Number.isFinite(values[index].userEnteredValue.numberValue)
-  ));
+  const result = new Map();
+  validRows.forEach((row, index) => {
+    result.set(row, data.sheets?.[0]?.data?.[index]?.rowData?.[0]?.values ?? []);
+  });
+  return result;
 }
 
 async function batchReadDailyRows({ token, spreadsheetId, sheetNames }) {
@@ -2549,6 +2559,9 @@ export async function appendAdminScanGoogle({
   adminCode = null,
 }) {
   const normalizedCode = normalizeScanCode(code);
+  if (!hasMinimumTrackingLength(normalizedCode)) {
+    throw new Error(`เลขพัสดุต้องมีอย่างน้อย ${MIN_TRACKING_CODE_LENGTH} ตัวอักษร`);
+  }
   const sheet = config?.master;
   if (!sheet?.id) {
     throw new Error('ไม่พบ Google Sheet Master');
@@ -3523,11 +3536,22 @@ export async function batchAppendScanGoogle({ token, config, orders, repairExist
 
         const verifiedRows = (await readDailyRows({ token, spreadsheetId: sheet.id, date }))
           .map((row, index) => rowFromSheet(row, index));
+        const nativeTypeRows = await readNativeValuesForRows({
+          token,
+          spreadsheetId: sheet.id,
+          date,
+          rowNumbers: touchedRowNumbers,
+        });
         for (const item of results) {
           if (!dateOrders.includes(item.order) || item.result?.status === 'duplicate' || item.result?.crossDay) continue;
           const rowNumber = item.result?.row?.sheetRowNumber;
           if (rowNumber) {
             item.result.row = verifiedRows.find((row) => row.sheetRowNumber === rowNumber) ?? null;
+            const values = nativeTypeRows.get(rowNumber) ?? [];
+            item.result.nativeDataTypesVerified = [0, 1, 8, 9].every((index) => (
+              typeof values[index]?.userEnteredValue?.numberValue === 'number'
+              && Number.isFinite(values[index].userEnteredValue.numberValue)
+            ));
           }
         }
       }

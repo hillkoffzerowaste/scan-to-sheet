@@ -1285,6 +1285,11 @@ function App() {
 
   async function signOut() {
     signingOutRef.current = true;
+    refreshRowsRequestRef.current += 1;
+    if (refreshTimerRef.current) {
+      clearTimeout(refreshTimerRef.current);
+      refreshTimerRef.current = null;
+    }
     localStorage.setItem(LOGGED_OUT_FLAG, '1');
 
     if (firebaseAuth) {
@@ -1359,6 +1364,7 @@ function App() {
     if (refreshTimerRef.current) {
       clearTimeout(refreshTimerRef.current);
     }
+    const requestGeneration = refreshRowsRequestRef.current;
     refreshTimerRef.current = setTimeout(() => {
       refreshTimerRef.current = null;
       if (isSignedIn) {
@@ -1366,7 +1372,8 @@ function App() {
           ? fetchTodaySummaryFirestore({ couriers, date: getBangkokParts().date })
           : fetchTodaySummary({ token, config, couriers });
         summaryPromise.then((data) => {
-          if (data) {
+          if (data && requestGeneration === refreshRowsRequestRef.current
+            && isSignedIn && !signingOutRef.current) {
             setSummary(data.courierCounts);
             setPackerCounts(data.packerCounts);
           }

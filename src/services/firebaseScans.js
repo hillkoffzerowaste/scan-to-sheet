@@ -575,10 +575,15 @@ export async function mirrorScanToFirestore({ type, result, courier, user, packe
     throw new Error(`เลขพัสดุต้องมีอย่างน้อย ${MIN_TRACKING_CODE_LENGTH} ตัวอักษร`);
   }
 
-  await addDoc(collection(firestoreDb, 'scanEvents'), {
+  const normalizedCode = normalizeCode(result.code).toUpperCase();
+  const eventId = [result.date, courier, type, normalizedCode]
+    .map((value) => String(value ?? '').trim().replace(/[^A-Z0-9_-]/gi, '_'))
+    .join('__')
+    .slice(0, 500);
+  await setDoc(doc(firestoreDb, 'scanEvents', eventId), {
     type,
     code: result.code,
-    normalizedCode: normalizeCode(result.code).toUpperCase(),
+    normalizedCode,
     courier,
     status: result.status,
     date: result.date,
@@ -589,7 +594,7 @@ export async function mirrorScanToFirestore({ type, result, courier, user, packe
     merged: Boolean(result.merged),
     user: userPayload(user),
     createdAt: serverTimestamp(),
-  });
+  }, { merge: true });
 }
 
 export async function recordPackerScanPrimary({ code, courier, date, time, user, packer = '', note = '' }) {
@@ -598,6 +603,9 @@ export async function recordPackerScanPrimary({ code, courier, date, time, user,
   }
 
   const normalizedCode = normalizeCode(code).toUpperCase();
+  if (!hasMinimumTrackingLength(normalizedCode)) {
+    throw new Error(`เลขพัสดุต้องมีอย่างน้อย ${MIN_TRACKING_CODE_LENGTH} ตัวอักษร`);
+  }
   // These lookups do not depend on one another. Run them together so the scan confirmation
   // waits for one Firestore round trip rather than serial reads before its transaction.
   const [byNormalized, rawDocs, byScanEvents] = await Promise.all([
@@ -744,6 +752,9 @@ export async function recordAdminScanPrimary({ code, courier, date, time, user }
   }
 
   const normalizedCode = normalizeCode(code).toUpperCase();
+  if (!hasMinimumTrackingLength(normalizedCode)) {
+    throw new Error(`เลขพัสดุต้องมีอย่างน้อย ${MIN_TRACKING_CODE_LENGTH} ตัวอักษร`);
+  }
   const [orderCandidates, scanEventCandidates] = await Promise.all([
     getRecentOrdersByCode(normalizedCode, 50),
     getScanEventCandidates(normalizedCode, code).catch(() => []),

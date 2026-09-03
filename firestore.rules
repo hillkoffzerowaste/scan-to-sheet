@@ -220,7 +220,8 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'status', 'packer', 'note', 'admin', 'packerScan', 'sheetSyncStatus',
           'sheetSyncError', 'sheetSyncAttemptId', 'sheetSyncStartedAtIso',
-          'sheetSyncedAt', 'updatedAt', 'updatedAtIso', 'user',
+          'sheetSyncedAt', 'sheetVerifiedAt', 'sheetVerifiedAtIso', 'sheetResultStatus',
+          'sheetUrl', 'updatedAt', 'updatedAtIso', 'user',
           'marketplaceOrderId', 'marketplaceSkus', 'marketplaceItems',
           'importedFromSheet', 'importedAt'
         ])
