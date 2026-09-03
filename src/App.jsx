@@ -939,16 +939,22 @@ function App() {
 
   function speakScanQrAnnouncement(command) {
     const message = getScanQrAnnouncement(command);
-    if (!soundEnabled || !message || !window.speechSynthesis || !window.SpeechSynthesisUtterance) {
+    const synthesis = window.speechSynthesis;
+    const SpeechUtterance = window.SpeechSynthesisUtterance;
+    if (!soundEnabled || !message || !synthesis || !SpeechUtterance) {
       return;
     }
 
     // Keep confirmation aligned with the latest QR when courier and Packer are scanned quickly.
-    window.speechSynthesis.cancel();
-    const utterance = new window.SpeechSynthesisUtterance(message);
+    synthesis.cancel();
+    const utterance = new SpeechUtterance(message);
     utterance.lang = 'th-TH';
     utterance.rate = 1;
-    window.speechSynthesis.speak(utterance);
+    const thaiVoice = synthesis.getVoices().find((voice) => voice.lang.toLowerCase().startsWith('th'));
+    if (thaiVoice) utterance.voice = thaiVoice;
+    synthesis.speak(utterance);
+    // Chrome can retain a paused speech queue after a previous notification.
+    synthesis.resume();
   }
 
   function showCameraMessage(message, type = 'idle') {
