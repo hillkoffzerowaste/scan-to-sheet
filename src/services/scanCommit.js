@@ -25,8 +25,7 @@ export function getFallbackOutbox(storage) {
   return readOutbox(storage);
 }
 
-export async function commitFallbackScan({ appendToSheet, mirrorToFirestore }) {
-  const storage = arguments[0]?.storage;
+export async function commitFallbackScan({ appendToSheet, mirrorToFirestore, storage }) {
   const pending = readOutbox(storage);
   for (const item of pending) {
     try {

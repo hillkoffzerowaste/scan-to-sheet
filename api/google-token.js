@@ -39,6 +39,7 @@ export default async function handler(req, res) {
       expiresIn: tokenData.expires_in,
       profile,
       config: sheetConfig,
+      serverSession: true,
     });
   } catch (error) {
     sendError(res, {

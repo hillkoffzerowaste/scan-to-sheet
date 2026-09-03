@@ -1166,12 +1166,17 @@ function App() {
       email: profile.email ?? 'google-user',
       name: profile.name ?? 'Google User',
     };
-    saveStoredGoogleSession({
-      accessToken,
-      expiresAt: Date.now() + Math.max((data.expiresIn ?? 3600) - 60, 60) * 1000,
-      user: nextUser,
-      config: prepared,
-    });
+    if (data.serverSession === true) {
+      saveStoredGoogleSession({
+        accessToken,
+        expiresAt: Date.now() + Math.max((data.expiresIn ?? 3600) - 60, 60) * 1000,
+        user: nextUser,
+        config: prepared,
+      });
+    } else {
+      // A KV outage means there is no revocable server session; keep the bearer token in memory only.
+      clearStoredGoogleSession();
+    }
     await saveServerGoogleConfig(prepared).catch(() => {});
 
     setToken(accessToken);

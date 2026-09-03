@@ -385,6 +385,8 @@ async function repairPlaceholderRows({ token, spreadsheetId, date, parsedRows, s
       candidate.courier === row.courier
       && (candidate.sheetRowNumber ?? Infinity) <= row.sheetRowNumber
     ));
+    row.no = overallNo;
+    row.courierNo = courierRows.length;
     return {
       range: `${escapedSheet}!A${row.sheetRowNumber}:B${row.sheetRowNumber}`,
       values: [[overallNo, courierRows.length]],
@@ -3204,6 +3206,13 @@ export async function batchAppendScanGoogle({ token, config, orders, repairExist
       // b) Read existing rows once (1 read)
       const existingRows = await readDailyRows({ token, spreadsheetId: sheet.id, date });
       const existingParsed = existingRows.map((row, idx) => rowFromSheet(row, idx));
+      // Repair stranded row numbers before any recovery result can be certified as verified.
+      await repairPlaceholderRows({
+        token,
+        spreadsheetId: sheet.id,
+        date,
+        parsedRows: existingParsed,
+      });
       const workingParsed = existingParsed.slice();
       const historicalParsed = [];
       for (const historicalDate of getLookbackDates(date).slice(1)) {
