@@ -198,12 +198,23 @@ async function acquireSheetWriteLock(resource) {
       method: 'POST',
       body: JSON.stringify({ action: 'acquire', resource, lockId }),
     });
-    if (result.acquired) return async () => {
+    if (result.acquired) {
+      const renewTimer = window.setInterval(() => {
+        apiJson('/api/sheet-lock', {
+          method: 'POST',
+          body: JSON.stringify({ action: 'renew', resource, lockId }),
+        }).then((renewed) => {
+          if (!renewed.acquired) console.warn('Google Sheet lock renewal failed');
+        }).catch(() => {});
+      }, 120_000);
+      return async () => {
+        window.clearInterval(renewTimer);
       await apiJson('/api/sheet-lock', {
         method: 'POST',
         body: JSON.stringify({ action: 'release', resource, lockId }),
       }).catch(() => {});
-    };
+      };
+    }
     await new Promise((resolve) => setTimeout(resolve, result.retryAfterMs ?? 250));
   }
   throw new Error('Google Sheet กำลังถูกใช้งานอยู่ กรุณาลองอีกครั้ง');

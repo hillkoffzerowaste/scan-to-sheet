@@ -11,3 +11,9 @@ test('Sheet lock is shared by every user writing the same resource', () => {
 test('Sheet lock remains valid for a complete recovery batch', () => {
   assert.ok(LOCK_TTL_SECONDS >= 120);
 });
+
+test('Sheet lock exposes a renewal action for long-running writes', async () => {
+  const source = await (await import('node:fs/promises')).readFile(new URL('./sheet-lock.js', import.meta.url), 'utf8');
+  assert.match(source, /action === 'renew'/);
+  assert.match(source, /EXPIRE/);
+});

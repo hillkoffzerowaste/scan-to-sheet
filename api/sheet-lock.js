@@ -36,6 +36,11 @@ export default async function handler(req, res) {
     }
 
     const key = sheetLockKey(resource);
+    if (action === 'renew') {
+      const renewed = await redisCommand(['EVAL', 'if redis.call("GET", KEYS[1]) == ARGV[1] then return redis.call("EXPIRE", KEYS[1], ARGV[2]) else return 0 end', '1', key, lockId, String(LOCK_TTL_SECONDS)]);
+      sendJson(res, 200, { acquired: Number(renewed) === 1, renewed: Number(renewed) === 1 });
+      return;
+    }
     if (action === 'release') {
       const released = await redisCommand(['EVAL', 'if redis.call("GET", KEYS[1]) == ARGV[1] then return redis.call("DEL", KEYS[1]) else return 0 end', '1', key, lockId]);
       // Report whether this caller actually still held the lock. Previously this always

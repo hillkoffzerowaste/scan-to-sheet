@@ -302,9 +302,18 @@ async function getOrdersByDate(date) {
   return orders;
 }
 
+export const MAX_ORDER_QUERY_DATES = 31;
+
 async function getOrdersByDates(dates = []) {
   const queryDates = uniqueQueryDates(dates);
-  return (await Promise.all(queryDates.map((date) => getOrdersByDate(date)))).flat();
+  if (queryDates.length > MAX_ORDER_QUERY_DATES) {
+    throw new RangeError(`เลือกช่วงวันที่ได้ไม่เกิน ${MAX_ORDER_QUERY_DATES} วัน`);
+  }
+  const orders = [];
+  for (const date of queryDates) {
+    orders.push(...await getOrdersByDate(date));
+  }
+  return orders;
 }
 
 async function getOrdersByAdminScanWindow({ now = new Date(), hoursLookback = 48, pageSize = 500 } = {}) {

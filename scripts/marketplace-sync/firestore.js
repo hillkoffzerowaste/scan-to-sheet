@@ -77,8 +77,9 @@ async function reconcileScannedOrders({ db, orders }) {
 }
 
 export async function initFirestore({ config, baseDir }) {
-  const serviceAccountPath = path.resolve(baseDir, config.serviceAccountPath);
-  const serviceAccount = JSON.parse(await readFile(serviceAccountPath, 'utf8'));
+  const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT_JSON
+    ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON)
+    : JSON.parse(await readFile(path.resolve(baseDir, config.serviceAccountPath), 'utf8'));
 
   if (!getApps().length) {
     initializeApp({
