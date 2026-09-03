@@ -84,6 +84,10 @@ test('orders do not expose a broad update rule that bypasses identity checks', a
   assert.doesNotMatch(block[1], /allow create, update:/);
   assert.match(block[1], /request\.resource\.data\.code == resource\.data\.code/);
   assert.match(block[1], /affectedKeys\(\)\.hasOnly/);
+  assert.match(block[1], /'sheetVerifiedAt'/);
+  assert.match(block[1], /'sheetVerifiedAtIso'/);
+  assert.match(block[1], /'sheetResultStatus'/);
+  assert.match(block[1], /'sheetUrl'/);
 });
 
 test('scan events reject short or unexpected payloads', async () => {
