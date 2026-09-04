@@ -156,6 +156,17 @@ test.describe('Scan to Sheet — External tools', () => {
       expect(layout, `sidebar link layout at ${width}px`).toEqual({ pageOverflow: 0, textClipped: false });
     }
   });
+
+  test('opens the coffee shop grinder from the sidebar in a new tab', async ({ page }) => {
+    await page.goto(BASE_URL);
+
+    const grinderLink = page.getByTestId('coffee-shop-grinder-link');
+    await expect(grinderLink).toHaveAccessibleName('บดกาแฟหน้าร้าน');
+    await expect(grinderLink).toHaveAttribute('href', 'https://coffee-grinder-system.vercel.app/');
+    await expect(grinderLink).toHaveAttribute('target', '_blank');
+    await expect(grinderLink).toHaveAttribute('rel', /noopener/);
+    await expect(grinderLink).toHaveAttribute('rel', /noreferrer/);
+  });
 });
 
 test.describe('Scan to Sheet — Packer Tab', () => {
