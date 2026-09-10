@@ -275,6 +275,54 @@ test.describe('Scan to Sheet — Packer Tab', () => {
     await expect(input).toBeDisabled();
   });
 
+  test('keeps the primary scan path above low-frequency tools', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await expect(page.getByRole('group', { name: 'วิธีสแกน' })).toBeVisible();
+
+    const layout = await page.evaluate(() => {
+      const scanInput = document.querySelector('#scan-input');
+      const scanTools = document.querySelector('.scan-tool-panel');
+      const courierManagement = document.querySelector('.courier-management-panel');
+      const recovery = document.querySelector('.sheet-recovery-panel');
+      const issueStatus = document.querySelector('.issue-bar > span');
+      const issueStatusRange = document.createRange();
+      issueStatusRange.selectNodeContents(issueStatus);
+      const relation = Node.DOCUMENT_POSITION_FOLLOWING;
+
+      return {
+        scanTop: Math.round(scanInput.getBoundingClientRect().top),
+        scanBeforeRecovery: Boolean(scanInput.compareDocumentPosition(recovery) & relation),
+        toolsBeforeCourierManagement: Boolean(courierManagement && (scanTools.compareDocumentPosition(courierManagement) & relation)),
+        courierManagementOpen: courierManagement?.open ?? null,
+        issueStatusLines: issueStatusRange.getClientRects().length,
+      };
+    });
+
+    // ช่องยิงบาร์โค้ดเป็นงานหลักของทั้งวัน จึงต้องเห็นได้ทันทีโดยไม่เลื่อนจอ
+    expect(layout.scanTop).toBeLessThan(500);
+    expect(layout.scanBeforeRecovery).toBe(true);
+    expect(layout.toolsBeforeCourierManagement).toBe(true);
+    expect(layout.courierManagementOpen).toBe(false);
+    expect(layout.issueStatusLines).toBe(1);
+
+    const denseCourierLayout = await page.evaluate(() => {
+      const list = document.querySelector('.courier-list');
+      const example = list.querySelector('.courier-button');
+      for (let index = 0; index < 6; index += 1) list.append(example.cloneNode(true));
+      const scanTools = document.querySelector('.scan-tool-panel');
+
+      return {
+        overflowY: window.getComputedStyle(list).overflowY,
+        scanToolsBottom: Math.round(scanTools.getBoundingClientRect().bottom),
+        viewportBottom: window.innerHeight - 24,
+      };
+    });
+
+    // production มีรายชื่อขนส่งมากกว่าชุด local เครื่องมือสแกนจึงต้องไม่ถูกลิสต์ดันพ้นจอ
+    expect(denseCourierLayout.overflowY).toBe('auto');
+    expect(denseCourierLayout.scanToolsBottom).toBeLessThan(denseCourierLayout.viewportBottom);
+  });
+
   test('can select a courier', async ({ page }) => {
     const shopeeBtn = page.locator('.courier-button:has-text("Shopee")').first();
     await expect(shopeeBtn).toBeVisible();

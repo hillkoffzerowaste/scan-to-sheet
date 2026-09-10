@@ -628,16 +628,6 @@ select:hover {
   box-shadow: var(--shadow-md);
 }
 
-.current-courier-badge {
-  transition: background-color var(--dur-ui) ease, border-color var(--dur-ui) ease,
-    box-shadow var(--dur-ui) ease, color var(--dur-ui) ease,
-    transform var(--dur-press) var(--ease-bounce);
-}
-
-.current-courier-badge:hover {
-  box-shadow: none;
-}
-
 .field-control input {
   transition: background-color var(--dur-ui) ease, border-color var(--dur-ui) ease,
     box-shadow var(--dur-ui) ease, color var(--dur-ui) ease,
@@ -1603,7 +1593,6 @@ select:hover {
   color: var(--muted);
   font-size: 0.78rem;
   font-weight: 900;
-  text-transform: uppercase;
 }
 
 .packer-control select {
@@ -1767,34 +1756,6 @@ select:hover {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-}
-
-.current-courier-badge {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 18px;
-  padding: 12px 16px;
-  border: 2px solid var(--primary);
-  border-radius: var(--radius-md);
-  background: var(--primary-soft);
-  color: var(--primary-strong);
-}
-
-.current-courier-badge svg {
-  flex-shrink: 0;
-}
-
-.current-courier-badge span {
-  font-weight: 700;
-  font-size: 0.88rem;
-  opacity: 0.8;
-}
-
-.current-courier-badge strong {
-  font-size: 1.15rem;
-  font-weight: 900;
-  letter-spacing: 0.3px;
 }
 
 .scan-form {
@@ -2471,15 +2432,6 @@ tbody tr:hover {
   background: var(--surface);
 }
 
-/* ป้ายนี้ยืนยันสิ่งที่เลือกไว้ ไม่ใช่การกระทำ จึงเป็น chrome กลางเหมือนแถบเครื่องมือ
-   ชื่อขนส่งเป็นตัวหนาก็พอ ไม่ต้องถมสีทั้งแถบแข่งกับช่องยิงบาร์โค้ดที่อยู่ใต้มัน */
-.workflow-drive.current-courier-badge,
-.workflow-packer.current-courier-badge {
-  border-color: var(--line);
-  background: var(--win-chrome);
-  color: var(--text);
-}
-
 .side-panel.workflow-packer .courier-button.active {
   border-color: var(--primary);
   background: var(--primary-fill);
@@ -2958,49 +2910,6 @@ tbody tr:hover {
   background: var(--surface);
 }
 
-.enterprise-shell .current-courier-badge {
-  border-radius: var(--radius-md);
-  box-shadow: none;
-}
-
-.enterprise-shell .current-courier-badge:hover {
-  transform: none;
-  box-shadow: none;
-}
-
-.enterprise-shell .operation-context {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 8px;
-  margin-top: 10px;
-}
-
-.enterprise-shell .operation-context-item {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-  padding: 9px 10px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
-  background: var(--surface-soft);
-}
-
-.enterprise-shell .operation-context-item span {
-  color: var(--muted);
-  font-size: 0.68rem;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.enterprise-shell .operation-context-item strong {
-  overflow: hidden;
-  color: var(--text);
-  font-size: 0.82rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .enterprise-shell .metric-row > div,
 .enterprise-shell .drive-card,
 .enterprise-shell .packer-section,
@@ -3194,9 +3103,6 @@ tbody tr:hover {
     padding: 14px;
   }
 
-  .enterprise-shell .operation-context {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -3478,8 +3384,6 @@ tbody tr:hover {
    จุดเดียวก็พอ ไม่ต้องย้อมทั้งแถบ */
 .enterprise-shell .packer-workflow-guide svg { color: var(--primary-strong); }
 .enterprise-shell .drive-workflow-guide svg { color: var(--info); }
-.enterprise-shell .current-courier-badge svg { color: var(--muted); }
-
 .enterprise-shell .drive-mode-label {
   border: 1px solid var(--info-line);
   background: var(--info-soft);
@@ -4635,15 +4539,35 @@ tbody tr:hover {
   margin-top: 8px;
 }
 
-.scan-qr-card {
+.win-shell .scan-qr-card {
   display: grid;
   gap: 3px;
   min-width: 0;
   padding: 4px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--control-line);
   border-radius: var(--radius-sm);
   background: var(--surface);
+  color: var(--text);
   text-align: center;
+  transition: background-color var(--dur-ui) ease, border-color var(--dur-ui) ease;
+}
+
+.win-shell .scan-qr-card:not(:disabled):not([aria-pressed="true"]):hover { background: var(--win-row-hover); }
+
+.win-shell .scan-qr-card[aria-pressed="true"] {
+  background: var(--win-sel);
+  border-color: var(--primary-strong);
+}
+
+.win-shell .scan-qr-card:focus-visible {
+  outline: 2px solid var(--primary-strong);
+  outline-offset: -2px;
+}
+
+.scan-qr-hint {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: var(--ui-xs);
 }
 
 .scan-qr-card img,
@@ -4663,13 +4587,12 @@ tbody tr:hover {
 }
 
 .scan-qr-card strong {
-  overflow: hidden;
   color: var(--text);
   font-size: var(--ui-xs);
   font-weight: 600;
   line-height: 1.2;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .scan-qr-empty {
@@ -4783,6 +4706,17 @@ tbody tr:hover {
 /* รายการขนส่ง: ลิสต์ของโปรแกรม ไม่ใช่ตารางการ์ด */
 .win-shell .courier-list { gap: 4px; margin: 8px 0 10px; }
 
+@media (min-width: 1200px) {
+  /* production มีรายชื่อขนส่งมากกว่าชุด local จึงให้เลื่อนเฉพาะลิสต์ เพื่อคงเครื่องมือ
+     เลือกวิธีสแกนและการตั้งค่าไว้เหนือ status bar ที่ความสูงจอทำงาน 720px */
+  .win-shell .courier-list {
+    max-height: calc(100dvh - 380px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+  }
+}
+
 .win-shell .courier-button {
   min-height: 28px;
   gap: 8px;
@@ -4877,18 +4811,6 @@ tbody tr:hover {
 .win-shell .standards-item strong { font-size: 0.72rem; }
 .win-shell .standards-item span { font-size: 0.72rem; line-height: 1.35; }
 
-.win-shell .operation-context { gap: 6px; margin-top: 8px; }
-
-.win-shell .operation-context-item {
-  gap: 1px;
-  padding: 5px 8px;
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-}
-
-.win-shell .operation-context-item span { font-size: 0.64rem; font-weight: 500; }
-.win-shell .operation-context-item strong { font-size: 0.76rem; }
-
 /* หัวพาเนลสแกน */
 .win-shell .date-box {
   gap: 1px 6px;
@@ -4916,6 +4838,7 @@ tbody tr:hover {
 
 .win-shell .issue-bar button { min-height: 30px; font-size: 0.8rem; font-weight: 500; }
 .win-shell .issue-bar span { font-size: 0.74rem; font-weight: 500; }
+.win-shell .issue-bar > span { grid-column: 1 / -1; }
 .win-shell .packer-control span { font-size: 0.66rem; font-weight: 600; }
 .win-shell .packer-control select { min-height: 30px; font-weight: 500; border-radius: var(--radius-sm); }
 
@@ -4931,9 +4854,44 @@ tbody tr:hover {
 .win-shell .search-panel { gap: 8px; margin-top: 10px; padding: 8px; }
 .win-shell .search-heading span { font-size: 0.72rem; font-weight: 500; }
 
-.win-shell .courier-add-form { gap: 5px; }
+.win-shell .scan-tool-panel {
+  gap: 6px;
+  padding-top: 8px;
+}
+
+.win-shell .scan-tool-label {
+  color: var(--muted);
+  font-size: var(--ui-xs);
+  font-weight: 600;
+}
+
+.win-shell .courier-management-panel {
+  margin-top: 8px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.win-shell .courier-management-summary { padding: 6px 8px; }
+.win-shell .courier-management-summary h3 { font-size: var(--ui-sm); }
+
+.win-shell .courier-management-panel .courier-add-form {
+  gap: 5px;
+  margin: 0;
+  padding: 8px;
+}
+
+.win-shell .courier-add-form button:not(:disabled) {
+  border: 1px solid var(--primary-strong);
+  background: var(--primary-fill);
+  color: var(--on-primary);
+}
+
 .win-shell .courier-add-form small { font-size: 0.68rem; }
 .win-shell .courier-add-divider { font-size: 0.68rem; }
+
+.win-shell .scan-panel > .sheet-recovery-panel { margin-top: 10px; }
 
 /* แถบสถานะ/ข้อความแจ้งเตือน: สูง 72px คงที่ทำให้ข้อความบรรทัดเดียวกินพื้นที่เท่าตาราง 4 แถว */
 .win-shell .status-banner {
@@ -4947,23 +4905,6 @@ tbody tr:hover {
 .win-shell .status-banner strong { font-size: 0.82rem; }
 .win-shell .status-banner span { font-size: 0.74rem; }
 .win-shell .status-banner svg { width: 16px; height: 16px; }
-
-/* ป้ายบอกขนส่งที่กำลังสแกน: เดิมเป็นกล่องขอบ 2px สูง 46px ซึ่งดังพอๆ กับช่องยิงบาร์โค้ด
-   ทั้งที่เป็นแค่การยืนยันสิ่งที่เลือกไว้ ลดลงมาเป็นแถบเดียวขอบ 1px */
-.win-shell .current-courier-badge {
-  gap: 6px;
-  margin-top: 10px;
-  padding: 5px 9px;
-  border-width: 1px;
-  border-radius: var(--radius-sm);
-}
-
-.win-shell .current-courier-badge svg { width: 15px; height: 15px; }
-
-/* opacity 0.8 ทับ --primary-strong ทำให้ contrast ลดลงโดยไม่มีใครตั้งใจ — สีที่จางกว่า
-   ต้องมาจาก token ที่วัดแล้ว ไม่ใช่จากการลดความทึบของสีที่วัดไว้ค่าอื่น */
-.win-shell .current-courier-badge span { font-size: 0.78rem; font-weight: 500; opacity: 1; }
-.win-shell .current-courier-badge strong { font-size: 0.92rem; font-weight: 600; }
 
 .win-shell .scan-header h2 { font-size: 0.95rem; }
 
@@ -5105,7 +5046,6 @@ tbody tr:hover {
 .win-shell .secondary-panel-label,
 .win-shell .field-control span,
 .win-shell .packer-control span,
-.win-shell .operation-context-item span,
 .win-shell .metric-row span,
 .win-shell .packer-row span,
 .win-shell .drive-card span,
@@ -5144,12 +5084,10 @@ tbody tr:hover {
 .win-shell .workflow-guide p,
 .win-shell .any-format-warning,
 .win-shell .status-banner span,
-.win-shell .operation-context-item strong,
 .win-shell .secondary-panel-summary p,
 .win-shell .standards-panel > summary p,
 .win-shell .standards-item strong,
 .win-shell .standards-item span,
-.win-shell .current-courier-badge span,
 .win-shell .win-conn,
 .win-shell .win-titlebar-btn,
 .win-shell tbody td {
@@ -5162,7 +5100,6 @@ tbody tr:hover {
 .win-shell .recent-header h3,
 .win-shell h3,
 .win-shell .workflow-guide strong,
-.win-shell .current-courier-badge strong,
 .win-shell .status-banner strong,
 .win-shell .date-box strong,
 .win-shell .search-heading span,

@@ -17,6 +17,7 @@ function ScanPopup({
   isPackerReady,
   isScanReady,
   isSignedIn,
+  onQrSelect,
   packerOptions,
   qrPackerMembers,
   qrLayout,
@@ -60,6 +61,9 @@ function ScanPopup({
               layoutLabel="ป๊อปอัป"
               onLayoutChange={setQrLayout}
               onLayoutReset={resetQrLayout}
+              onSelect={onQrSelect}
+              selectedCourier={selectedCourier}
+              disabled={!isScanReady || busy}
             />
           )}
           <div
@@ -210,7 +214,14 @@ function ScanPopup({
             </button>
           </div>
           {activeTab === 'packer' && (
-            <PackerQrPanel packers={qrPackerMembers} className="popup-qr-panel popup-qr-packers" layout={qrLayout} />
+            <PackerQrPanel
+              packers={qrPackerMembers}
+              className="popup-qr-panel popup-qr-packers"
+              layout={qrLayout}
+              onSelect={onQrSelect}
+              selectedPacker={selectedPacker}
+              disabled={!isScanReady || busy}
+            />
           )}
         </div>
   );

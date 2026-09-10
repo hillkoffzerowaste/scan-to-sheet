@@ -4,7 +4,6 @@ import { CAMERA_REGION_ID, DEFAULT_LOOKBACK_HOURS, ISSUE_CUSTOMER_CANCELLED, ISS
 import { DeploymentUpdateBanner, StatusBanner } from './StatusBanner.jsx';
 import { CourierQrPanel } from './ScanQrPanels.jsx';
 
-// แยกออกมาจาก App.jsx โดยไม่แก้ตัว JSX เลย — เป็นการย้ายโค้ดล้วน
 function WorkflowView({
   activeTab,
   addingCourier,
@@ -44,6 +43,7 @@ function WorkflowView({
   missingResults,
   missingUISections,
   newCourierName,
+  onQrSelect,
   packerCounts,
   packerOptions,
   recentRows,
@@ -117,7 +117,7 @@ function WorkflowView({
         <aside className={`side-panel workflow-${activeTab}`}>
           <div className="panel-heading">
             <Truck size={18} />
-            <span>เลือกขนส่ง</span>
+            <span>1 เลือกขนส่ง</span>
           </div>
 
           <div className="courier-list">
@@ -139,51 +139,8 @@ function WorkflowView({
             ))}
           </div>
 
-          <form className="courier-add-form" onSubmit={(event) => { event.preventDefault(); void handleAddCourier(); }}>
-            <label htmlFor="courier-select">เพิ่มขนส่งเอง</label>
-            <div className="courier-add-row">
-              <select
-                id="courier-select"
-                value={courierSelectValue}
-                onKeyDown={handleBarcodeKeyDown}
-                onChange={(event) => {
-                  const value = event.target.value;
-                  if (value) {
-                    setSelectedCourier(value);
-                    setAllowAnyTrackingFormat(true);
-                    setScanPopupOpen(true);
-                    setScanRemark('');
-                    setCourierSelectValue('');
-                  }
-                }}
-                disabled={!firebaseUser || addingCourier}
-              >
-                <option value="">เลือกจากขนส่งที่มี...</option>
-                {couriers.map((c) => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
-            </div>
-            <div className="courier-add-divider">
-              <span>หรือพิมพ์ชื่อขนส่งใหม่</span>
-            </div>
-            <div>
-              <input
-                id="new-courier-name"
-                value={newCourierName}
-                onChange={(event) => setNewCourierName(event.target.value)}
-                placeholder="เช่น DHL"
-                maxLength={80}
-                disabled={!firebaseUser || addingCourier}
-              />
-              <button type="submit" disabled={!firebaseUser || addingCourier || !newCourierName.trim()} title="เพิ่มขนส่ง">
-                <Plus size={16} />
-              </button>
-            </div>
-            <small>ผู้ใช้ที่ลงชื่อเข้าใช้เพิ่มได้ และจะแสดงทั้งหน้าแพ็ก/Drive</small>
-          </form>
-
-          <div className="scan-tool-panel" aria-label="เลือกวิธีสแกน">
+          <div className="scan-tool-panel" role="group" aria-labelledby="scan-tool-label">
+            <span className="scan-tool-label" id="scan-tool-label">วิธีสแกน</span>
             <div className="segmented-control">
               <button
                 className={scanMethod === 'manual' ? 'active' : ''}
@@ -214,6 +171,59 @@ function WorkflowView({
               </label>
             )}
           </div>
+
+          <details className="courier-management-panel secondary-panel">
+            <summary className="courier-management-summary secondary-panel-summary">
+              <div>
+                <h3>ขนส่งเพิ่มเติม</h3>
+                <p>เลือกชื่อพิเศษหรือเพิ่มใหม่</p>
+              </div>
+              <span className="secondary-panel-label">ตั้งค่า</span>
+            </summary>
+            <form className="courier-add-form" onSubmit={(event) => { event.preventDefault(); void handleAddCourier(); }}>
+              <label htmlFor="courier-select">เลือกขนส่งเพิ่มเติม</label>
+              <div className="courier-add-row">
+                <select
+                  id="courier-select"
+                  value={courierSelectValue}
+                  onKeyDown={handleBarcodeKeyDown}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    if (value) {
+                      setSelectedCourier(value);
+                      setAllowAnyTrackingFormat(true);
+                      setScanPopupOpen(true);
+                      setScanRemark('');
+                      setCourierSelectValue('');
+                    }
+                  }}
+                  disabled={!firebaseUser || addingCourier}
+                >
+                  <option value="">เลือกจากขนส่งที่มี...</option>
+                  {couriers.map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="courier-add-divider">
+                <span>หรือพิมพ์ชื่อขนส่งใหม่</span>
+              </div>
+              <div>
+                <input
+                  id="new-courier-name"
+                  value={newCourierName}
+                  onChange={(event) => setNewCourierName(event.target.value)}
+                  placeholder="เช่น DHL"
+                  maxLength={80}
+                  disabled={!firebaseUser || addingCourier}
+                />
+                <button type="submit" disabled={!firebaseUser || addingCourier || !newCourierName.trim()} title="เพิ่มขนส่ง">
+                  <Plus size={16} />
+                </button>
+              </div>
+              <small>ผู้ใช้ที่ลงชื่อเข้าใช้เพิ่มได้ และจะแสดงทั้งหน้าแพ็ก/Drive</small>
+            </form>
+          </details>
         </aside>
 
         <section className={`scan-panel workflow-${activeTab}`}>
@@ -236,7 +246,7 @@ function WorkflowView({
           {activeTab === 'packer' && (
             <div className={`issue-bar ${scanRemark ? 'active' : ''}`}>
                 <label className="packer-control">
-                  <span>Packer</span>
+                  <span>2 เลือก Packer</span>
                   <select value={selectedPacker} onKeyDown={handleBarcodeKeyDown} onChange={(event) => setSelectedPacker(event.target.value)} disabled={!isSignedIn || busy}>
                     {packerOptions.map((packer) => (
                       <option key={packer} value={packer}>
@@ -280,77 +290,6 @@ function WorkflowView({
             </div>
           )}
 
-          <div className={`current-courier-badge workflow-${activeTab}`}>
-            <Truck size={18} />
-            <span>{activeTab === 'drive' ? 'กำลังรับเข้า Drive' : 'กำลังสแกนแพ็ก'}</span>
-            <strong>{selectedCourier}</strong>
-          </div>
-
-          <div className="operation-context" aria-label="บริบทการทำงานปัจจุบัน">
-            <div className="operation-context-item">
-              <span>Workflow</span>
-              <strong>{activeTab === 'drive' ? 'รับเข้า Drive' : 'แพ็กสินค้า'}</strong>
-            </div>
-            {activeTab === 'packer' && (
-              <div className="operation-context-item">
-                <span>Packer</span>
-                <strong>{selectedPacker}</strong>
-              </div>
-            )}
-            <div className="operation-context-item">
-              <span>โหมดสแกน</span>
-              <strong>ต่อเนื่อง</strong>
-            </div>
-            <div className="operation-context-item">
-              <span>ช่องทาง</span>
-              <strong>{scanMethod === 'camera' ? 'กล้อง' : 'เครื่องยิง / พิมพ์'}</strong>
-            </div>
-          </div>
-
-          <details className="sheet-recovery-panel secondary-panel">
-            <summary className="secondary-panel-summary">
-              <div>
-                <p className="eyebrow">Recovery</p>
-                <h3>{activeTab === 'packer' ? 'ตรวจและกู้ Packer เข้า Sheet' : 'ตรวจและกู้ Admin เข้า Sheet'}</h3>
-              </div>
-              <span className="secondary-panel-label">เครื่องมือรอง</span>
-            </summary>
-            <div className="sheet-recovery-content" aria-label="Recovery Firestore to Sheet">
-              <div className="sheet-recovery-controls">
-              <div className="range-fields">
-                <label className="field-control">
-                  <span>Recovery from</span>
-                  <input
-                    type="date"
-                    value={sheetRecoveryStartDate}
-                    onChange={(event) => setSheetRecoveryStartDate(event.target.value)}
-                  />
-                </label>
-                <label className="field-control">
-                  <span>Recovery to</span>
-                  <input
-                    type="date"
-                    value={sheetRecoveryEndDate}
-                    onChange={(event) => setSheetRecoveryEndDate(event.target.value)}
-                  />
-                </label>
-              </div>
-              </div>
-              <p>อ่านข้อมูลจาก Firestore แล้วตรวจซ้ำกับ Sheet ก่อนยืนยันสถานะ ไม่สร้างแถวซ้ำถ้ามีข้อมูลครบแล้ว</p>
-              <button
-                className="secondary-button"
-                type="button"
-                data-testid={`sheet-recovery-${activeTab}`}
-                onClick={() => { void recoverSelectedSheetRange(); }}
-                disabled={sheetRecoveryBusy || !firebaseUser || !token || !config?.master?.id}
-                title="ตรวจข้อมูล Firestore ของช่วงวันที่เลือกและเขียนเฉพาะส่วนที่ขาดลง Google Sheet"
-              >
-                {sheetRecoveryBusy ? <RefreshCw size={16} className="spin" /> : <RefreshCw size={16} />}
-                <span>{sheetRecoveryBusy ? 'กำลัง Recovery...' : 'Recovery Firestore → Sheet'}</span>
-              </button>
-            </div>
-          </details>
-
           {scanMethod === 'camera' ? (
             <div className={`camera-panel workflow-${activeTab}`}>
               <div className={`camera-stage ${cameraActive ? 'active' : ''}`}>
@@ -386,7 +325,7 @@ function WorkflowView({
           ) : (
             <form className={`scan-form workflow-${activeTab}`} onSubmit={handleScanSubmit}>
               <label htmlFor="scan-input">
-                {activeTab === 'drive' ? 'Tracking / Barcode (รับเข้า Drive)' : 'Tracking / Barcode (แพ็กสินค้า)'}
+                {activeTab === 'drive' ? '2 สแกน Tracking / Barcode' : '3 สแกน Tracking / Barcode'}
               </label>
               <div className={`scan-input-row ${scanFlash ? 'flash' : ''}`}>
                 <ScanLine size={24} />
@@ -418,6 +357,9 @@ function WorkflowView({
               </p>
             </form>
           )}
+
+          {deploymentUpdateAvailable && <DeploymentUpdateBanner />}
+          <StatusBanner status={status} />
 
           {/* Packer-only: Search, Status, Metrics, Recent, Reports */}
           {activeTab === 'packer' && (
@@ -545,9 +487,6 @@ function WorkflowView({
                 )}
               </details>
 
-              {deploymentUpdateAvailable && <DeploymentUpdateBanner />}
-              <StatusBanner status={status} />
-
               <div className="metric-row">
                 <div>
                   <span>รวมวันนี้ทั้งหมด</span>
@@ -651,9 +590,6 @@ function WorkflowView({
           {/* Drive-only: Dashboard + Missing Order Check */}
           {activeTab === 'drive' && (
             <>
-              {deploymentUpdateAvailable && <DeploymentUpdateBanner />}
-              <StatusBanner status={status} />
-
               {/* Drive Dashboard */}
               <div className="drive-dashboard">
                 <div className="drive-card total">
@@ -821,6 +757,50 @@ function WorkflowView({
               </div>
             </>
           )}
+
+          <details className="sheet-recovery-panel secondary-panel">
+            <summary className="secondary-panel-summary">
+              <div>
+                <p className="eyebrow">Recovery</p>
+                <h3>{activeTab === 'packer' ? 'ตรวจและกู้ Packer เข้า Sheet' : 'ตรวจและกู้ Admin เข้า Sheet'}</h3>
+              </div>
+              <span className="secondary-panel-label">เครื่องมือรอง</span>
+            </summary>
+            <div className="sheet-recovery-content" aria-label="Recovery Firestore to Sheet">
+              <div className="sheet-recovery-controls">
+                <div className="range-fields">
+                  <label className="field-control">
+                    <span>Recovery from</span>
+                    <input
+                      type="date"
+                      value={sheetRecoveryStartDate}
+                      onChange={(event) => setSheetRecoveryStartDate(event.target.value)}
+                    />
+                  </label>
+                  <label className="field-control">
+                    <span>Recovery to</span>
+                    <input
+                      type="date"
+                      value={sheetRecoveryEndDate}
+                      onChange={(event) => setSheetRecoveryEndDate(event.target.value)}
+                    />
+                  </label>
+                </div>
+              </div>
+              <p>อ่านข้อมูลจาก Firestore แล้วตรวจซ้ำกับ Sheet ก่อนยืนยันสถานะ ไม่สร้างแถวซ้ำถ้ามีข้อมูลครบแล้ว</p>
+              <button
+                className="secondary-button"
+                type="button"
+                data-testid={`sheet-recovery-${activeTab}`}
+                onClick={() => { void recoverSelectedSheetRange(); }}
+                disabled={sheetRecoveryBusy || !firebaseUser || !token || !config?.master?.id}
+                title="ตรวจข้อมูล Firestore ของช่วงวันที่เลือกและเขียนเฉพาะส่วนที่ขาดลง Google Sheet"
+              >
+                {sheetRecoveryBusy ? <RefreshCw size={16} className="spin" /> : <RefreshCw size={16} />}
+                <span>{sheetRecoveryBusy ? 'กำลัง Recovery...' : 'Recovery Firestore → Sheet'}</span>
+              </button>
+            </div>
+          </details>
         </section>
           <CourierQrPanel
             couriers={couriers}
@@ -830,6 +810,9 @@ function WorkflowView({
             layoutLabel="หน้าแรก"
             onLayoutChange={setQrLayout}
             onLayoutReset={resetQrLayout}
+            onSelect={onQrSelect}
+            selectedCourier={selectedCourier}
+            disabled={!isScanReady || busy}
           />
       </section>
 

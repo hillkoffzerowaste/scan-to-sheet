@@ -25,7 +25,7 @@ function ScanQrImage({ label, value }) {
 
   return src
     ? <img src={src} alt={`QR ${label}`} />
-    : <div className="scan-qr-loading" aria-label={`กำลังสร้าง QR ${label}`}>QR…</div>;
+    : <span className="scan-qr-loading" aria-label={`กำลังสร้าง QR ${label}`}>QR…</span>;
 }
 
 function ScanQrPanel({
@@ -37,6 +37,9 @@ function ScanQrPanel({
   onLayoutChange,
   onLayoutReset,
   layoutLabel,
+  onSelect,
+  selectedLabel,
+  disabled = false,
 }) {
   return (
     <aside className={`scan-qr-panel qr-layout-${layout} ${className}`} aria-label={title} onClick={(event) => event.stopPropagation()}>
@@ -60,13 +63,22 @@ function ScanQrPanel({
           </span>
         )}
       </header>
+      <p className="scan-qr-hint">คลิกหรือสแกน QR เพื่อเลือก</p>
       {items.length ? (
         <div className="scan-qr-grid">
           {items.map((item) => (
-            <article className="scan-qr-card" key={item.id}>
+            <button
+              type="button"
+              className="scan-qr-card"
+              key={item.id}
+              aria-label={`เลือก ${item.label}`}
+              aria-pressed={selectedLabel === item.label}
+              disabled={disabled || !onSelect}
+              onClick={() => onSelect(item.value)}
+            >
               <ScanQrImage label={item.label} value={item.value} />
               <strong title={item.label}>{item.label}</strong>
-            </article>
+            </button>
           ))}
         </div>
       ) : (
@@ -76,20 +88,20 @@ function ScanQrPanel({
   );
 }
 
-export function CourierQrPanel({ couriers, role, className, layout, onLayoutChange, onLayoutReset, layoutLabel }) {
+export function CourierQrPanel({ couriers, role, className, layout, onLayoutChange, onLayoutReset, layoutLabel, onSelect, selectedCourier, disabled }) {
   const items = useMemo(() => couriers.map((courier) => ({
     id: `courier-${role}-${courier}`,
     label: courier,
     value: createCourierQrCommand(role, courier),
   })), [couriers, role]);
-  return <ScanQrPanel title="QR ขนส่ง" Icon={Truck} items={items} className={className} layout={layout} onLayoutChange={onLayoutChange} onLayoutReset={onLayoutReset} layoutLabel={layoutLabel} />;
+  return <ScanQrPanel title="QR ขนส่ง" Icon={Truck} items={items} className={className} layout={layout} onLayoutChange={onLayoutChange} onLayoutReset={onLayoutReset} layoutLabel={layoutLabel} onSelect={onSelect} selectedLabel={selectedCourier} disabled={disabled} />;
 }
 
-export function PackerQrPanel({ packers, className, layout }) {
+export function PackerQrPanel({ packers, className, layout, onSelect, selectedPacker, disabled }) {
   const items = useMemo(() => packers.map((packer) => ({
     id: `packer-${packer.id}`,
     label: packer.nickname,
     value: createPackerQrCommand(packer.id),
   })), [packers]);
-  return <ScanQrPanel title="QR Packer" Icon={UserRound} items={items} className={className} layout={layout} />;
+  return <ScanQrPanel title="QR Packer" Icon={UserRound} items={items} className={className} layout={layout} onSelect={onSelect} selectedLabel={selectedPacker} disabled={disabled} />;
 }

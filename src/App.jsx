@@ -2501,6 +2501,12 @@ function App() {
     if (scanRemark) setScanRemark('');
   }
 
+  function handleQrSelect(rawCode) {
+    if (!isScanReady || busy) return;
+    updateScanValue('');
+    applyScanQrCommand(rawCode);
+  }
+
   function applyScanQrCommand(rawCode) {
     const parsed = parseScanQrCommand(rawCode);
     const command = parsed
@@ -3226,6 +3232,7 @@ function App() {
 
       {['packer', 'drive'].includes(activeTab) && (
         <WorkflowView
+          onQrSelect={handleQrSelect}
           activeTab={activeTab}
           addingCourier={addingCourier}
           allowAnyTrackingFormat={allowAnyTrackingFormat}
@@ -3368,6 +3375,7 @@ function App() {
 
       {scanPopupOpen && (
         <ScanPopup
+          onQrSelect={handleQrSelect}
           ScanPopupStatusIcon={ScanPopupStatusIcon}
           activeTab={activeTab}
           busy={busy}
