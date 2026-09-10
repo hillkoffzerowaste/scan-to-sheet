@@ -77,7 +77,7 @@ npm run build
 
 ```text
 src/App.jsx                  state ทั้งหมดของแอป + ประกอบ shell เข้ากับ view (~3,300 บรรทัด)
-src/shell/                   เปลือกแบบ Windows: TitleBar MenuBar Sidebar Toolbar StatusBar
+src/shell/                   Modern Workspace: TitleBar Sidebar Toolbar StatusBar
 src/views/                   หน้าจอ: WorkflowView (packer/drive) ReportsView ScanPopup StatusBanner
 src/constants.js             ค่าคงที่ที่ทั้ง App และ view ใช้ร่วมกัน (ISSUE_*, CAMERA_*, PACKER_UNASSIGNED)
 src/styles.css               CSS ทั้งหมด — มี :root สองชุด (light/dark) ห้ามสร้างซ้ำ (ดูข้อ 5)
@@ -98,7 +98,7 @@ firestore.rules              ต้องแก้ตามเมื่อเพ
 
 **ค่าสี ตัวเลข contrast ตาราง component และสเกลทั้งหมดอยู่ใน [DESIGN.md](DESIGN.md) ที่รากโปรเจกต์ — อ่านไฟล์นั้นก่อนแตะ CSS และแก้ค่าที่นั่นที่เดียว** หัวข้อนี้เก็บไว้เฉพาะกฎที่เคยพังจริงในโปรเจกต์นี้ ห้ามคัดลอกค่าสีหรือตัวเลขมาซ้ำที่นี่
 
-ระบบคือ **Windows Enterprise Shell**: ระบบภายในบนคอมพิวเตอร์ในออฟฟิศ ไม่ใช่หน้าเว็บ — โครงเป็น title bar / menu bar / sidebar / toolbar / data grid / status bar, **desktop-only** (ออกแบบที่ 1280px ไม่มี breakpoint มือถือ), พื้นขาว-เทาไม่มีความอุ่น, เขียวฟ้า `#2BA8A2` เป็นสีเน้นสีเดียว, ขอบ 1px มุม 3–4px, ไม่มีเงายกเว้น dropdown กับ dialog
+ระบบคือ **Modern Workspace** ตามแผนที่ผู้ใช้เลือก: แถบบนเดียว / เมนูซ้าย / หัวหน้าและคำสั่ง / พื้นที่ทำงาน / แถบสถานะ ใช้ทั้ง Packer/Admin รายงาน และพนักงาน/ตารางงาน คง popup สแกนและ QR เดิม เป็น desktop-only สีขาว–เทาและเขียวฟ้า ไม่มีเงาพาเนล สเกลทั้งหมดให้ยึด DESIGN.md
 
 > **ระบบเดิมคือ *Flip7 บนโครง Hillkoff Enterprise* (ครีม `#FFF8E7`, ปุ่ม pill, glow เงาสี, จานสี gold/coral/sky) ถูกยกเลิกแล้ว** ห้ามใช้ในโค้ดใหม่ token ของระบบเดิมยังค้างอยู่ใน `src/styles.css` และยังถูกใช้อยู่หลายจุด ให้ทยอยแทนที่ตอนที่แตะไฟล์นั้นอยู่แล้ว ห้ามไล่แก้ทั้งไฟล์เป็น commit เดียว รายละเอียดสถานะการย้ายอยู่ที่หัวกล่องของ `DESIGN.md`
 
@@ -118,7 +118,7 @@ firestore.rules              ต้องแก้ตามเมื่อเพ
 
 - คู่ **fill / on-fill**: `--primary-fill` `#2BA8A2` เป็น *พื้น* เท่านั้น มีตัวหนังสือเข้ม `--on-primary` ทับ — เป็นตัวหนังสือไม่ได้ (2.906) เป็นขอบก็ไม่ได้ (2.554 บนพื้น chrome) ตัวขาวทับก็ไม่ได้ (2.906)
 - `--primary` = เวอร์ชัน *ตัวหนังสือ/ขอบ* ของสีแบรนด์ · `--primary-strong` = ขอบปุ่มหลักและเส้นแถวที่เลือก
-- กลุ่ม `--win-*` = เปลือกแบบ Windows (chrome, เส้นตาราง, แถวสลับ, แถว hover, แถวที่เลือก) **`--win-sel` บอกสถานะ "เลือกอยู่" ด้วยตัวเองไม่ได้ (1.215) ต้องมีเส้น `--win-sel-line` คู่เสมอ**
+- กลุ่ม `--win-*` = token ชื่อเดิมที่ Modern Workspace ใช้ต่อ (chrome, เส้นตาราง, แถวสลับ, แถว hover, แถวที่เลือก) **`--win-sel` บอกสถานะ "เลือกอยู่" ด้วยตัวเองไม่ได้ (1.215) ต้องมีเส้น `--win-sel-line` คู่เสมอ**
 - `--on-danger` (ขาวบนแดง) และ `--on-topbar` (ขาวบนแถบเข้ม) แยกไว้ เพราะการฝัง `color: #fff` ตรงๆ คือสิ่งที่พังทันทีตอนพื้นเปลี่ยนสี
 - `--control-line` = ขอบของ control ทุกชนิด ต้องได้ 3:1 (`--line-strong` ได้ 1.519 และ `--win-grid-line` ได้ 1.180 ใช้เป็นขอบ control ไม่ได้ทั้งคู่)
 - token ของระบบเดิมที่ **เลิกใช้แล้ว**: `--glow-*`, `--shadow-card`, `--accent-fill`, `--coral-fill`, `--info-fill`, `--radius-lg/xl/full`, `--ease-bounce` และ `--field` แบบครีม
@@ -169,9 +169,9 @@ firestore.rules              ต้องแก้ตามเมื่อเพ
 - `scripts/marketplace-sync/` ใช้ **firebase-admin ซึ่งข้าม security rules** เอกสารที่ worker สร้างอาจมี field ไม่ครบตามที่ `firestore.rules` บังคับ ทำให้ client เขียนทับไม่ผ่านและ batch ล้มทั้งชุด
 - เพิ่ม field ใหม่ต้องแก้ `firestore.rules` ด้วย
 
-**เปลือก Windows (`src/shell/` + `src/views/`)**
+**Modern Workspace (`src/shell/` + `src/views/`)**
 
-- **คำสั่งบน toolbar และ menu bar ต้องมีปลายทางอยู่จริงในแท็บนั้น** — พาเนล Lookup ถูกเรนเดอร์เฉพาะโหมด Packer ปุ่ม "ค้นหา" บนโหมด Drive จึงเคยกดแล้วเงียบสนิท เพราะ `focusSearch` หา `.search-panel` ไม่เจอ ปุ่มที่กดแล้วไม่เกิดอะไรคือบั๊กในสายตาผู้ใช้
+- **คำสั่งบนแถบประจำหน้าและเครื่องมือเพิ่มเติมต้องมีปลายทางอยู่จริงในแท็บนั้น** — พาเนล Lookup ถูกเรนเดอร์เฉพาะโหมด Packer ปุ่ม "ค้นหา" บนโหมด Drive จึงเคยกดแล้วเงียบสนิท เพราะ `focusSearch` หา `.search-panel` ไม่เจอ ปุ่มที่กดแล้วไม่เกิดอะไรคือบั๊กในสายตาผู้ใช้
 - **เงื่อนไข `disabled` ของปุ่มบน toolbar ต้องตรงกับ guard ของฟังก์ชันที่มันเรียก** — เคยใช้ `isSignedIn` ขณะที่ `uploadMarketplaceFiles` เช็ค `firebaseUser` และไม่กันการอัปโหลดซ้อน ผลคือเลือกไฟล์ได้แต่ไม่มีอะไรเกิดขึ้นและไม่มีข้อความบอก
 - **skip link ต้องชี้ที่ `<main>` ที่ไม่มี nav อยู่ข้างใน** — เคยชี้ที่ `div` ที่ครอบทั้ง menu bar และ sidebar กดแล้วกด Tab ต่อก็เข้าเมนูเหมือนเดิม คือไม่ได้ข้ามอะไรเลย (มีเทสต์ e2e ล็อกไว้แล้วในชุด `Shell regressions`)
 - **`inputRef` ตัวเดียวถูกใช้ทั้งช่องสแกนในหน้าและช่องสแกนใน popup** ซึ่งอยู่ใน DOM พร้อมกันตอน popup เปิด ตอนปิด popup React จะเซ็ต ref เป็น `null` ทั้งที่ช่องในหน้ายังอยู่ → `focusScanInput` ไม่ทำงานจนกว่าจะ re-render ครั้งถัดไป ตอนนี้ถูกกลบด้วยนาฬิกาที่ `setToday` ทุก 1 วินาที ช่องโหว่จึงไม่เกิน 1 วิ **ยังไม่ได้แก้เพราะพิสูจน์ไม่ได้ถ้าไม่ login จริง** ถ้าจะแก้ต้องให้ ref ของ popup เคลียร์เฉพาะตอนที่ตัวเองเป็นเจ้าของ ref อยู่

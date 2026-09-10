@@ -26,6 +26,7 @@ function Toolbar({
 
   return (
     <div className="win-toolbar">
+      <h2 className="workspace-page-title">{activeTab === 'drive' ? 'รับเข้า Drive (Admin)' : 'แพ็กสินค้า (Packer)'}</h2>
       <button
         className="win-tool-btn"
         type="button"

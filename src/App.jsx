@@ -5,7 +5,6 @@ import {
   ScanLine,
 } from 'lucide-react';
 import StaffDirectory from './features/staff/StaffDirectory.jsx';
-import MenuBar from './shell/MenuBar.jsx';
 import Sidebar from './shell/Sidebar.jsx';
 import StatusBar from './shell/StatusBar.jsx';
 import TitleBar from './shell/TitleBar.jsx';
@@ -2348,35 +2347,6 @@ function App() {
     if (canFocus) input.focus({ preventScroll: true });
   }
 
-  // เมนูบาร์ผูกกับคำสั่งที่มีอยู่แล้วเท่านั้น หัวข้อที่ไม่มีรายการใดใช้ได้จะถูกซ่อนโดย MenuBar เอง
-  const shellMenus = [
-    {
-      label: 'แฟ้ม',
-      items: [
-        sheetUrl && { label: 'เปิด Master Sheet', href: sheetUrl },
-        { label: 'ออกจากระบบ', onSelect: () => { void signOut(); }, disabled: !isSignedIn },
-      ],
-    },
-    {
-      label: 'มุมมอง',
-      items: [
-        { label: 'รีเฟรชข้อมูลวันนี้', onSelect: () => { void refreshAllCounts(); }, disabled: !isSignedIn },
-        { label: sidebarCollapsed ? 'ขยายเมนูซ้าย' : 'ยุบเมนูซ้าย', onSelect: () => setSidebarCollapsed((value) => !value) },
-        { separator: true },
-        { label: theme === 'dark' ? 'ใช้โหมดสว่าง' : 'ใช้โหมดมืด', onSelect: () => setTheme(theme === 'dark' ? 'light' : 'dark') },
-        { label: soundEnabled ? 'ปิดเสียงแจ้งเตือน' : 'เปิดเสียงแจ้งเตือน', onSelect: () => setSoundEnabled((value) => !value) },
-      ],
-    },
-    {
-      label: 'เครื่องมือ',
-      items: [
-        // ผลของการตรวจถูกเรนเดอร์ในแท็บ Drive ที่เดียว สั่งจากเมนูตอนอยู่แท็บอื่นจึงต้องพาไปที่นั่นก่อน
-        { label: 'ตรวจออเดอร์ที่หาย', onSelect: () => { switchTab('drive'); void handleCheckMissingOrders(); }, disabled: !isSignedIn || missingBusy },
-        { label: 'ไปหน้ารายงาน', onSelect: () => switchTab('reports') },
-      ],
-    },
-  ];
-
   // แถบคำสั่งอยู่นอกพาเนล จึงต้องเปิด <details> ที่ห่อ control นั้นไว้ก่อน ไม่งั้นกดแล้วเงียบ
   function openMarketplaceFile() {
     const panel = document.querySelector('.marketplace-upload-panel');
@@ -3193,8 +3163,10 @@ function App() {
         setTheme={setTheme}
         soundEnabled={soundEnabled}
         setSoundEnabled={setSoundEnabled}
+        refreshAllCounts={refreshAllCounts}
+        checkMissingOrders={() => { switchTab('drive'); void handleCheckMissingOrders(); }}
+        missingBusy={missingBusy}
       />
-      <MenuBar menus={shellMenus} />
       <div className="win-body">
         <Sidebar
           activeTab={activeTab}

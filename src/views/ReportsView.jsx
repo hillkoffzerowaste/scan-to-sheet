@@ -1,7 +1,7 @@
 import React from 'react';
 import { BarChart3, CalendarDays, ClipboardCopy, RefreshCw, Upload } from 'lucide-react';
 
-// แยกออกมาจาก App.jsx โดยไม่แก้ตัว JSX เลย — เป็นการย้ายโค้ดล้วน
+// Dedicated report workspace; filters and report data keep their existing handlers.
 function ReportsView({
   activeTab,
   isSignedIn,
@@ -24,17 +24,16 @@ function ReportsView({
   couriers,
 }) {
   return (
-        <details className="report-panel secondary-panel" open={activeTab === 'reports'}>
-          <summary className="report-header secondary-panel-summary">
+        <section className="report-panel" aria-labelledby="report-title">
+          <header className="report-header">
             <div>
-              <p className="eyebrow">Reports</p>
-              <h2>รายงานสแกน</h2>
+              <h2 id="report-title">รายงานสแกน</h2>
             </div>
             <div className="report-badge">
               <BarChart3 size={18} />
               <span>{reportData ? `${reportData.total} รายการ` : 'รอสร้างรายงาน'}</span>
             </div>
-          </summary>
+          </header>
 
           <div className="report-controls">
             <div className="segmented-control">
@@ -83,7 +82,7 @@ function ReportsView({
 
             <button className="secondary-button report-button" type="button" onClick={backfillSelectedReportRange} disabled={!isSignedIn || backfillBusy}>
               {backfillBusy ? <RefreshCw size={16} className="spin" /> : <Upload size={16} />}
-              <span>Import Sheet to Firestore</span>
+              <span>นำเข้าจาก Sheet เข้า Firestore</span>
             </button>
 
             <button className="ghost-button report-button" type="button" onClick={copyReport} disabled={!reportData}>
@@ -296,7 +295,7 @@ function ReportsView({
               </tbody>
             </table>
           </div>
-        </details>
+        </section>
   );
 }
 

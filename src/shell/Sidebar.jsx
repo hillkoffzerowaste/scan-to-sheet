@@ -18,6 +18,7 @@ function NavItem({ active, icon: Icon, label, badge, testId, onClick, collapsed 
       type="button"
       data-testid={testId}
       aria-current={active ? 'page' : undefined}
+      aria-label={collapsed ? label : undefined}
       onClick={onClick}
       title={collapsed ? label : undefined}
     >
@@ -82,6 +83,7 @@ function Sidebar({ activeTab, switchTab, missingAlertBadge, collapsed, setCollap
             href={href}
             target="_blank"
             rel="noopener noreferrer"
+            aria-label={collapsed ? label : undefined}
             title={collapsed ? label : undefined}
           >
             <Icon size={16} className="win-nav-icon" />

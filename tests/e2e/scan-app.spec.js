@@ -181,8 +181,8 @@ test.describe('Scan to Sheet — Packer Tab', () => {
     await expect(page.locator('h1')).toBeVisible();
   });
 
-  test('shows Login with Google when not signed in', async ({ page }) => {
-    const loginBtn = page.locator('.win-titlebar-btn', { hasText: /Login with Google|OAuth Client ID/ });
+  test('shows Google sign-in when not signed in', async ({ page }) => {
+    const loginBtn = page.getByTestId('google-sign-in');
     await expect(loginBtn).toBeVisible();
   });
 
@@ -688,12 +688,12 @@ test.describe('Scan to Sheet — Shell regressions', () => {
     await expect(page.locator('.win-tool-search')).toHaveCount(0);
   });
 
-  test('menu closes when focus leaves the menu bar', async ({ page }) => {
+  test('global tools close when focus leaves the disclosure', async ({ page }) => {
     // เดิมปิดด้วย mousedown นอกแถบกับ Escape เท่านั้น กด Tab ออกไปแล้วเมนูยังกางค้างทับเนื้อหา
-    await page.locator('.win-menu-title').first().click();
-    await expect(page.locator('.win-menu-pop')).toHaveCount(1);
+    await page.locator('.app-tools-menu summary').click();
+    await expect(page.locator('.app-tools-popover')).toBeVisible();
     for (let i = 0; i < 4; i += 1) await page.keyboard.press('Tab');
-    await expect(page.locator('.win-menu-pop')).toHaveCount(0);
+    await expect(page.locator('.app-tools-popover')).toBeHidden();
   });
 
   test('every grid carries its own row count', async ({ page }) => {

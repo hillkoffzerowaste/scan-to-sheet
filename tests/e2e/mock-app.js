@@ -1,0 +1,81 @@
+import { expect } from '@playwright/test';
+
+// Run the real App and QR components with external services replaced at their module
+// boundaries. No production session or operational data is needed for click/scan parity.
+async function mockModule(page, path, exports) {
+  await page.route(`**${path}*`, async (route) => {
+    if (new URL(route.request().url()).searchParams.has('qr-original')) return route.continue();
+    await route.fulfill({ contentType: 'text/javascript', body: `export * from '${path}?qr-original';\n${exports}` });
+  });
+}
+
+export async function openSignedInApp(page, { staffAdmin = true } = {}) {
+  await page.route('**/*', (route) => {
+    const url = new URL(route.request().url());
+    if (url.hostname !== 'localhost' && url.hostname !== '127.0.0.1') return route.abort();
+    return route.continue();
+  });
+  await page.addInitScript(() => { window.qrTestWrites = []; });
+  await mockModule(page, '/src/services/firebase.js', `
+    export const isFirebaseConfigured = true;
+    const user = { uid: 'qr-test-user', email: 'qr-test@example.invalid', getIdToken: async () => 'test-id-token' };
+    export const firebaseAuth = { currentUser: user };
+    export const onAuthStateChanged = (_auth, callback) => { callback(user); return () => {}; };
+    export const getRedirectResult = async () => null;
+  `);
+  await mockModule(page, '/src/features/staff/staffService.js', `
+    const members = [
+      { id: 'qr-a', employeeId: 'A01', fullName: 'พนักงานทดสอบ A', nickname: 'คนแพ็ค A', position: 'packer', active: true, sortOrder: 1 },
+      { id: 'qr-b', employeeId: 'B02', fullName: 'พนักงานทดสอบ B', nickname: 'คนแพ็ค B', position: 'packer', active: true, sortOrder: 2 }
+    ];
+    export const getStaffAdminStatus = async () => ${staffAdmin};
+    export const listStaffMembers = async () => members;
+    export const listDutyTypes = async () => [{ id: 'packing', name: 'แพ็คสินค้า', active: true }];
+    export const listWeeklyDuties = async () => [];
+    export const listStaffPrivateNotes = async () => new Map();
+    export const listStaffPrivateContacts = async () => new Map();
+    export const getPackingRoomNotice = async () => 'ข้อมูลจำลองสำหรับตรวจหน้าจอ';
+    export const listDailyAssignments = async () => [];
+    export const listDutyOverrides = async () => [];
+    export const listDailyStatuses = async () => [];
+    export const getDailyLead = async () => null;
+    export const subscribeStaffMembers = ({ onChange }) => {
+      onChange([
+        { id: 'qr-a', nickname: 'คนแพ็ค A', position: 'packer', active: true, sortOrder: 1 },
+        { id: 'qr-b', nickname: 'คนแพ็ค B', position: 'packer', active: true, sortOrder: 2 }
+      ]);
+      return () => {};
+    };
+  `);
+  await mockModule(page, '/src/services/firebaseScans.js', `
+    export const getScanReportFirestore = async ({ couriers, dates }) => {
+      window.reportTestDates = dates;
+      return { total: dates.length, cancelledTotal: 0, returnedTotal: 0, damagedTotal: 0,
+        couriers: couriers.map(courier => ({ courier, count: courier === 'Flash' ? dates.length : 0 })),
+        days: dates.map(date => ({ date, total: 1, couriers: couriers.map(courier => ({ courier, count: courier === 'Flash' ? 1 : 0 })) })),
+        returnedRows: [], damagedRows: [], cancelledRows: [] };
+    };
+    export const canUseFirestorePrimary = () => true;
+    export const upsertFirebaseUser = async () => {};
+    export const subscribeCouriers = ({ defaultCouriers, onChange }) => { onChange(defaultCouriers); return () => {}; };
+    export const fetchTodaySummaryFirestore = async ({ couriers }) => ({ courierCounts: couriers.map(courier => ({ courier, count: 0 })), packerCounts: [] });
+    export const getTodayRowsFirestore = async () => [];
+    export const getDriveRowsFirestore = async () => [];
+    export const getSheetRecoveryCandidates = async () => ({ candidates: [], limited: false });
+    export const checkMissingOrdersFirestore = async () => null;
+    export const recordPackerScanPrimary = async (data) => { window.qrTestWrites.push(data); throw new Error('Unexpected scan write'); };
+    export const recordAdminScanPrimary = async (data) => { window.qrTestWrites.push(data); throw new Error('Unexpected scan write'); };
+  `);
+  await mockModule(page, '/src/services/googleSheets.js', `
+    export const fetchGoogleProfile = async () => ({ email: 'qr-test@example.invalid' });
+    export const ensureGoogleSheetOrganization = async () => {};
+    export const colorAllHistoricalSheetsGoogle = async () => {};
+  `);
+  await page.route('**/api/**', (route) => route.fulfill({ json: {
+    accessToken: 'test-access-token', expiresIn: 3600,
+    profile: { email: 'qr-test@example.invalid' }, config: { master: { id: 'qr-test-sheet' } },
+  } }));
+  await page.goto('/');
+  await expect(page.locator('#scan-input')).toBeEnabled();
+  await expect(page.locator('.workspace-qr-panel .scan-qr-card').first()).toBeEnabled();
+}

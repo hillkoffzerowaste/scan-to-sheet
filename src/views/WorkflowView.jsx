@@ -105,14 +105,6 @@ function WorkflowView({
 }) {
   return (
         <>
-          <section className={`workflow-guide ${activeTab === 'drive' ? 'drive-workflow-guide' : 'packer-workflow-guide'}`}>
-            {activeTab === 'drive' ? <Upload size={24} /> : <PackageCheck size={24} />}
-            <div>
-              <strong>{activeTab === 'drive' ? 'รับเข้า Drive' : 'แพ็กสินค้า'}</strong>
-              <p>{activeTab === 'drive' ? 'สแกนรับพัสดุเข้าระบบก่อนส่งให้ Packer แพ็กสินค้า' : 'สแกนพัสดุหลังแพ็กเสร็จ เพื่อบันทึกผู้แพ็กและสถานะ'}</p>
-            </div>
-          </section>
-
           <section className={`workspace-grid qr-layout-${qrLayout}`}>
         <aside className={`side-panel workflow-${activeTab}`}>
           <div className="panel-heading">
