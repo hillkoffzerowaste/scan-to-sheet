@@ -30,7 +30,7 @@ export function shouldReconcileSheetOnRescan(order, scanType) {
   );
 }
 
-export function prioritizeSheetSyncCandidates({ failed = [], pending = [], maxRows = 20 }) {
+export function prioritizeSheetSyncCandidates({ failed = [], pending = [], maxRows = Infinity }) {
   return [...failed, ...pending].slice(0, Math.max(0, maxRows));
 }
 

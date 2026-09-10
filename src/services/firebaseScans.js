@@ -48,7 +48,7 @@ const PENDING_BADGE_SCAN_LIMIT = 500;
 // "bounded": a bad import or a runaway retry can leave far more documents on a date than a
 // warehouse ships, and the daily reads run on a timer. Paging to a declared ceiling keeps
 // the cost knowable, and hitting it is logged rather than silently truncated.
-const DAILY_ORDER_SCAN_LIMIT = 3000;
+export const DAILY_ORDER_SCAN_LIMIT = 3000;
 
 // Custom couriers are added by hand from the UI; a few dozen is the realistic ceiling.
 const COURIER_SCAN_LIMIT = 200;

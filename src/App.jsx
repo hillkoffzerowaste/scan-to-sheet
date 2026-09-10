@@ -79,6 +79,7 @@ import {
   upsertFirebaseUser,
   addCourier,
   claimRecoverableSheetSyncs,
+  DAILY_ORDER_SCAN_LIMIT,
   subscribeCouriers,
 } from './services/firebaseScans.js';
 import {
@@ -129,7 +130,10 @@ const GOOGLE_SCOPES = [
 ];
 const SCOPES = GOOGLE_SCOPES.join(' ');
 const MARKETPLACE_IMPORT_MAX_ORDERS = 100;
-const SHEET_RECOVERY_BATCH_SIZE = 20;
+// One manual recovery pass covers the same bounded daily window used by Firestore reads.
+// Google Sheets still groups work by date inside batchAppendScanGoogle, so this does not
+// create an unbounded collection query or force the operator to repeat the button every 20 rows.
+const SHEET_RECOVERY_MAX_ROWS = DAILY_ORDER_SCAN_LIMIT;
 const SHEET_RECOVERY_COOLDOWN_MS = 5 * 1000;
 const SHEET_RECOVERY_INTERVAL_MS = 15 * 60 * 1000;
 const COUNT_REFRESH_DELAY_MS = 1000;
@@ -1497,7 +1501,7 @@ function App() {
     let claimedOrders = [];
     try {
       const orders = await claimRecoverableSheetSyncs({
-        maxRows: SHEET_RECOVERY_BATCH_SIZE,
+        maxRows: SHEET_RECOVERY_MAX_ROWS,
         includeSynced,
         role,
         dates,
@@ -1606,7 +1610,7 @@ function App() {
             : {
                 type: 'success',
                 title: 'อัปเดต Sheet แล้ว',
-                message: `ซิงก์ออเดอร์ค้างสำเร็จ ${synced} รายการ${orders.length === SHEET_RECOVERY_BATCH_SIZE ? ' หากยังมีรายการค้าง ให้กดอีกครั้ง' : ''}`,
+                message: `ซิงก์ออเดอร์ค้างสำเร็จ ${synced} รายการ${orders.length === SHEET_RECOVERY_MAX_ROWS ? ' หากยังมีรายการค้าง ให้กดอีกครั้ง' : ''}`,
               },
         );
       }

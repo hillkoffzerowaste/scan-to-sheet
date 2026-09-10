@@ -370,6 +370,13 @@ function marketplaceCells(order) {
   ];
 }
 
+function hasNativeDailyDateTimeValues(values = []) {
+  return [0, 1, 8, 9].every((index) => (
+    typeof values[index]?.userEnteredValue?.numberValue === 'number'
+    && Number.isFinite(values[index].userEnteredValue.numberValue)
+  ));
+}
+
 const PLACEHOLDER_PREFIX = '_TEMP_';
 
 function isPlaceholderNo(value) {
@@ -1335,13 +1342,9 @@ async function verifyDailyRowNativeDataTypes({ token, spreadsheetId, date, rowNu
   // The Values API renders both native numbers and legacy text identically when a date/time
   // format is applied. Read the grid's userEnteredValue so a duplicate cannot be certified
   // merely because its tracking number is present while its timestamps remain text.
-  const range = `${escapeSheetName(date)}!C${rowNumber}:L${rowNumber}`;
   const values = await readNativeValuesForRows({ token, spreadsheetId, date, rowNumbers: [rowNumber] });
   const rowValues = values.get(rowNumber) ?? [];
-  return [0, 1, 8, 9].every((index) => (
-    typeof rowValues[index]?.userEnteredValue?.numberValue === 'number'
-    && Number.isFinite(rowValues[index].userEnteredValue.numberValue)
-  ));
+  return hasNativeDailyDateTimeValues(rowValues);
 }
 
 async function readNativeValuesForRows({ token, spreadsheetId, date, rowNumbers }) {
@@ -3545,23 +3548,42 @@ export async function batchAppendScanGoogle({ token, config, orders, repairExist
 
         const verifiedRows = (await readDailyRows({ token, spreadsheetId: sheet.id, date }))
           .map((row, index) => rowFromSheet(row, index));
-        const nativeTypeRows = await readNativeValuesForRows({
-          token,
-          spreadsheetId: sheet.id,
-          date,
-          rowNumbers: touchedRowNumbers,
-        });
         for (const item of results) {
           if (!dateOrders.includes(item.order) || item.result?.status === 'duplicate' || item.result?.crossDay) continue;
           const rowNumber = item.result?.row?.sheetRowNumber;
           if (rowNumber) {
             item.result.row = verifiedRows.find((row) => row.sheetRowNumber === rowNumber) ?? null;
-            const values = nativeTypeRows.get(rowNumber) ?? [];
-            item.result.nativeDataTypesVerified = [0, 1, 8, 9].every((index) => (
-              typeof values[index]?.userEnteredValue?.numberValue === 'number'
-              && Number.isFinite(values[index].userEnteredValue.numberValue)
-            ));
           }
+        }
+      }
+
+      // Every result must be read-verified before Firestore is marked as verified. This also
+      // covers duplicate rows: no values write is needed, but their date/time cells can still
+      // be legacy text and must be proven native before recovery removes the retry state.
+      const nativeVerificationTargets = new Map();
+      for (const item of results) {
+        if (!dateOrders.includes(item.order)
+          || typeof item.result?.nativeDataTypesVerified === 'boolean') continue;
+        const row = item.result?.row;
+        const rowNumber = row?.sheetRowNumber;
+        if (!Number.isInteger(rowNumber) || rowNumber < 2) continue;
+        const rowDate = row._sheetDate || date;
+        if (!nativeVerificationTargets.has(rowDate)) nativeVerificationTargets.set(rowDate, new Set());
+        nativeVerificationTargets.get(rowDate).add(rowNumber);
+      }
+      for (const [verificationDate, rowNumbers] of nativeVerificationTargets) {
+        const nativeTypeRows = await readNativeValuesForRows({
+          token,
+          spreadsheetId: sheet.id,
+          date: verificationDate,
+          rowNumbers: [...rowNumbers],
+        });
+        for (const item of results) {
+          if (!dateOrders.includes(item.order) || typeof item.result?.nativeDataTypesVerified === 'boolean') continue;
+          const row = item.result?.row;
+          if ((row?._sheetDate || date) !== verificationDate) continue;
+          const values = nativeTypeRows.get(row?.sheetRowNumber) ?? [];
+          item.result.nativeDataTypesVerified = hasNativeDailyDateTimeValues(values);
         }
       }
 

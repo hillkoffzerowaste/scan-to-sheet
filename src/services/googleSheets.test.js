@@ -20,6 +20,7 @@ import {
   isInstantWithinLookback,
   syncLateOrdersGoogle,
 } from './googleSheets.js';
+import { isSheetSyncResultConfirmed } from './sheetSyncReconciliation.js';
 
 test('missing-order lookback includes the Bangkok boundary day but filters exact row times', () => {
   const now = new Date('2026-08-31T15:00:00.000Z'); // 22:00 Bangkok
@@ -790,6 +791,66 @@ test('batch recovery repairs an existing row whose Status does not match Firesto
     assert.equal(outcome.result.status, 'success');
     assert.equal(outcome.result.row.status, 'Success');
     assert.equal(storedRows[0][8], 'Success');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('batch recovery read-verifies an existing duplicate before certifying it', async () => {
+  const originalFetch = globalThis.fetch;
+  const date = '2026-08-07';
+  const spreadsheetId = 'sheet-duplicate-verification-test';
+  const sheetProperties = {
+    sheets: [{ properties: { sheetId: 458, title: date, gridProperties: { rowCount: 1000, columnCount: 23 } } }],
+  };
+  const storedRows = [[
+    '1', '1', date, '10:00:00', 'Shopee', 'TH1234567890', 'packer@example.com', 'เบ้น', 'Success', '',
+    date, '09:00:00', 'TH1234567890', '', '', '', '', '', '', '', '', '', '',
+  ]];
+  const jsonResponse = (payload) => new Response(JSON.stringify(payload), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  });
+
+  globalThis.fetch = async (url, options = {}) => {
+    const decodedUrl = decodeURIComponent(String(url));
+    const method = options.method ?? 'GET';
+    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A1:W1') && method === 'PUT') return jsonResponse({});
+    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A2:W') && method === 'GET') return jsonResponse({ values: storedRows });
+    if (decodedUrl.includes('includeGridData=true')) {
+      const values = Array.from({ length: 10 }, (_, index) => (
+        [0, 1, 8, 9].includes(index)
+          ? { userEnteredValue: { numberValue: index + 1 } }
+          : {}
+      ));
+      return jsonResponse({ sheets: [{ data: [{ rowData: [{ values }] }] }] });
+    }
+    if (decodedUrl.includes('/spreadsheets/')) return jsonResponse(sheetProperties);
+    throw new Error(`Unexpected mock request: ${method} ${decodedUrl}`);
+  };
+
+  try {
+    const [outcome] = await batchAppendScanGoogle({
+      token: 'token',
+      config: { master: { id: spreadsheetId, webViewLink: 'https://example.test/sheet' } },
+      repairExisting: true,
+      orders: [{
+        code: 'TH1234567890',
+        courier: 'Shopee',
+        date,
+        time: '10:00:00',
+        email: 'packer@example.com',
+        packer: 'เบ้น',
+        isPacker: true,
+        adminDate: date,
+        adminTime: '09:00:00',
+        adminCode: 'TH1234567890',
+      }],
+    });
+
+    assert.equal(outcome.result.status, 'duplicate');
+    assert.equal(outcome.result.nativeDataTypesVerified, true);
+    assert.equal(isSheetSyncResultConfirmed(outcome.result), true);
   } finally {
     globalThis.fetch = originalFetch;
   }
