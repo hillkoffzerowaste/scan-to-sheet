@@ -1890,6 +1890,7 @@ function App() {
         try {
           const marketplaceOrder = await marketplaceOrderPromise;
           result = await commitFallbackScan({
+            context: { type: 'packer', courier: scanCourier, user: scanUser, packer: packerName, note: scanNote },
             appendToSheet: () => runWithGoogleRetry((accessToken, googleConfig) =>
               appendScanGoogle({
                 token: accessToken,
@@ -1902,14 +1903,7 @@ function App() {
                 marketplaceOrder,
               }),
             { sheetWrite: true }),
-            mirrorToFirestore: (sheetResult) => mirrorScanToFirestore({
-              type: 'packer',
-              result: sheetResult,
-              courier: scanCourier,
-              user: scanUser,
-              packer: packerName,
-              note: scanNote,
-            }),
+            mirrorToFirestore: (sheetResult, context) => mirrorScanToFirestore({ ...context, result: sheetResult }),
           });
         } catch (sheetError) {
           throw sheetError;
@@ -2299,6 +2293,7 @@ function App() {
         try {
           const marketplaceOrder = await marketplaceOrderPromise;
           result = await commitFallbackScan({
+            context: { type: 'admin', courier: scanCourier, user: scanUser, packer: '', note: '' },
             appendToSheet: () => runWithGoogleRetry((accessToken, googleConfig) =>
               appendAdminScanGoogle({
                 token: accessToken,
@@ -2309,12 +2304,7 @@ function App() {
                 marketplaceOrder,
               }),
             { sheetWrite: true }),
-            mirrorToFirestore: (sheetResult) => mirrorScanToFirestore({
-              type: 'admin',
-              result: sheetResult,
-              courier: scanCourier,
-              user: scanUser,
-            }),
+            mirrorToFirestore: (sheetResult, context) => mirrorScanToFirestore({ ...context, result: sheetResult }),
           });
         } catch (sheetError) {
           throw sheetError;
