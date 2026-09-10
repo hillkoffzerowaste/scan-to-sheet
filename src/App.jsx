@@ -78,8 +78,8 @@ import {
   searchScansFirestore,
   upsertFirebaseUser,
   addCourier,
-  claimRecoverableSheetSyncs,
-  DAILY_ORDER_SCAN_LIMIT,
+  getSheetRecoveryCandidates,
+  claimSheetRecoveryOrder,
   subscribeCouriers,
 } from './services/firebaseScans.js';
 import {
@@ -111,7 +111,7 @@ import {
 } from './services/authErrors.js';
 import { shouldPollMissingOrders } from './services/missingCheckPolicy.js';
 import { getSheetRecoveryDates } from './services/sheetRecoveryDates.js';
-import { buildSheetSyncFailureUpdates, isSheetSyncVerified } from './services/sheetSync.js';
+import { runSheetRecovery, isSheetSyncVerified, requireSheetSyncAcknowledgement } from './services/sheetSync.js';
 import {
   getAdminScanTiming,
   getPackerDuplicateMessage,
@@ -130,10 +130,8 @@ const GOOGLE_SCOPES = [
 ];
 const SCOPES = GOOGLE_SCOPES.join(' ');
 const MARKETPLACE_IMPORT_MAX_ORDERS = 100;
-// One manual recovery pass covers the same bounded daily window used by Firestore reads.
-// Google Sheets still groups work by date inside batchAppendScanGoogle, so this does not
-// create an unbounded collection query or force the operator to repeat the button every 20 rows.
-const SHEET_RECOVERY_MAX_ROWS = DAILY_ORDER_SCAN_LIMIT;
+// Manual recovery drains the selected snapshot; background work stays quota-bounded.
+const SHEET_RECOVERY_BATCH_SIZE = 20;
 const SHEET_RECOVERY_COOLDOWN_MS = 5 * 1000;
 const SHEET_RECOVERY_INTERVAL_MS = 15 * 60 * 1000;
 const COUNT_REFRESH_DELAY_MS = 1000;
@@ -1495,147 +1493,80 @@ function App() {
     sheetRecoveryRunningRef.current = true;
     setSheetRecoveryBusy(true);
     if (showStatus) setDriveSyncBusy(true);
-    let synced = 0;
-    let failed = 0;
-    let claimedCount = 0;
-    let claimedOrders = [];
+    let progress = { considered: 0, claimed: 0, synced: 0, failed: 0, skipped: 0 };
     try {
-      const orders = await claimRecoverableSheetSyncs({
-        maxRows: SHEET_RECOVERY_MAX_ROWS,
-        includeSynced,
-        role,
-        dates,
-        recordAudit: !routineVerification,
+      const { candidates, limited } = await getSheetRecoveryCandidates({
+        maxRows: SHEET_RECOVERY_BATCH_SIZE, includeSynced, role, dates,
       });
-      claimedOrders = orders;
-      claimedCount = orders.length;
-      if (orders.length) {
-        sheetRecoveryNextAllowedAtRef.current = Date.now() + SHEET_RECOVERY_COOLDOWN_MS;
-      }
-      if (orders.length === 0) {
-        if (showStatus) {
-          setStatus({ type: 'success', title: 'ไม่มีรายการค้าง', message: 'ข้อมูลใน Sheet ครบแล้ว ไม่มีออเดอร์ที่ต้องอัปเดต' });
-        }
-        return { busy: false, claimed: 0, synced: 0, failed: 0 };
-      }
-
-      // Build batch order list
-      const batchOrders = orders.map((order) => {
-        const isPacker = Boolean(order.packerScan?.scannedAt);
-        const timing = getAdminScanTiming(order, {
-          fallbackDate: getBangkokParts().date,
-          fallbackTime: getBangkokParts().time,
+      if (!candidates.length) {
+        if (showStatus) setStatus({
+          type: 'warning', title: 'ไม่พบรายการที่กู้คืนได้ในรอบนี้',
+          message: 'อาจไม่มีรายการในช่วงที่เลือก หรือรายการกำลังถูกเขียนโดยเครื่องอื่น ยังไม่ได้ยืนยันว่า Sheet ครบทั้งหมด',
         });
-        const hasAdmin = Boolean(order.admin?.scannedAt);
-        return {
-          id: order.id,
-          code: order.code || order.normalizedCode,
-          courier: order.courier,
-          date: timing.sheetDate,
-          time: timing.sheetTime,
-          email: order.packerScan?.scannedBy?.email || order.admin?.scannedBy?.email || order.user?.email || user.email,
-          packer: order.packerScan?.packer ?? order.packer ?? '',
-          note: order.packerScan?.note ?? order.note ?? '',
-          isPacker,
-          adminDate: hasAdmin ? timing.adminDate : '',
-          adminTime: hasAdmin ? timing.adminTime : '',
-          adminCode: hasAdmin ? (order.code || order.normalizedCode) : '',
-          marketplaceOrder: null, // Will be overridden below if found
-        };
-      });
-
-      // Pre-fetch marketplace metadata if possible (best effort, non-blocking)
-      const marketplaceResults = await Promise.all(
-        batchOrders.map((bo) => findMarketplaceOrderForScan(bo.code).catch(() => null)),
-      );
-      batchOrders.forEach((bo, i) => {
-        if (marketplaceResults[i]) bo.marketplaceOrder = marketplaceResults[i];
-      });
-
-      // Move claimed outbox entries to `writing` before the Google request. A stale writing
-      // entry remains claimable, so a browser close cannot strand an order permanently.
-      await Promise.all(orders.map((order) => (
-        markSheetSyncWriting({
-          orderId: order.id,
-          attemptId: order.sheetSyncAttemptId,
-          recordAudit: !routineVerification,
-        }).catch(() => false)
-      )));
-
-      // Execute one batch call
-      const results = await runWithGoogleRetry((accessToken, googleConfig) =>
-        batchAppendScanGoogle({ token: accessToken, config: googleConfig, orders: batchOrders, repairExisting: true }),
-        { sheetWrite: true },
-      );
-
-      // Mark individual results
-      const markOperations = [];
-      for (let i = 0; i < results.length; i++) {
-        const { order: batchOrder, result, error } = results[i];
-        const firestoreOrder = orders.find((order) => order.id === batchOrder?.id) ?? orders[i];
-        if (result && isSheetSyncResultConfirmed(result)) {
-          synced += 1;
-          markOperations.push(markSheetSyncResult({
-            orderId: firestoreOrder.id,
-            attemptId: firestoreOrder.sheetSyncAttemptId,
-            ok: true,
-            result,
-            recordAudit: !routineVerification || Boolean(result.repaired),
-          }).catch(() => {}));
-        } else {
-          failed += 1;
-          markOperations.push(markSheetSyncResult({
-            orderId: firestoreOrder.id,
-            attemptId: firestoreOrder.sheetSyncAttemptId,
-            ok: false,
-            // Name the role from the order itself: `role` may be 'both' for a mixed batch,
-            // and result.isPacker reflects what was actually attempted for this row.
-            error: error || new Error(`ซิงก์เป็นชุดแล้วแต่ยืนยันแถว ${(result?.isPacker ?? batchOrder?.isPacker) ? 'Packer' : 'Admin'} ใน Google Sheet ไม่ได้`),
-            recordAudit: !routineVerification,
-          }).catch(() => {}));
-        }
+        return { busy: false, ...progress, limited };
       }
-      await Promise.all(markOperations);
-
+      sheetRecoveryNextAllowedAtRef.current = Date.now() + SHEET_RECOVERY_COOLDOWN_MS;
+      const outcome = await runSheetRecovery({
+        candidates,
+        batchSize: SHEET_RECOVERY_BATCH_SIZE,
+        claim: (candidate) => claimSheetRecoveryOrder({ candidate, includeSynced, role, recordAudit: !routineVerification }),
+        markWriting: (order) => markSheetSyncWriting({
+          orderId: order.id, attemptId: order.sheetSyncAttemptId, recordAudit: !routineVerification,
+        }),
+        write: async (orders) => {
+          const batchOrders = await Promise.all(orders.map(async (order) => {
+            const isPacker = Boolean(order.packerScan?.scannedAt);
+            const timing = getAdminScanTiming(order);
+            const hasAdmin = Boolean(order.admin?.scannedAt);
+            const code = order.code || order.normalizedCode;
+            return {
+              id: order.id, code, courier: order.courier,
+              date: timing.sheetDate, time: timing.sheetTime,
+              email: order.packerScan?.scannedBy?.email || order.admin?.scannedBy?.email || order.user?.email || user.email,
+              packer: order.packerScan?.packer ?? order.packer ?? '',
+              note: order.packerScan?.note ?? order.note ?? '',
+              isPacker,
+              adminDate: hasAdmin ? timing.adminDate : '',
+              adminTime: hasAdmin ? timing.adminTime : '',
+              adminCode: hasAdmin ? code : '',
+              marketplaceOrder: await findMarketplaceOrderForScan(code).catch(() => null),
+            };
+          }));
+          return runWithGoogleRetry((accessToken, googleConfig) => batchAppendScanGoogle({
+            token: accessToken, config: googleConfig, orders: batchOrders, repairExisting: true,
+          }), { sheetWrite: true });
+        },
+        isConfirmed: isSheetSyncResultConfirmed,
+        markResult: (order, update) => markSheetSyncResult({
+          orderId: order.id, attemptId: order.sheetSyncAttemptId, ...update,
+          recordAudit: !routineVerification || Boolean(update.result?.repaired),
+        }),
+        onProgress: (state) => {
+          progress = state;
+          if (showStatus) setStatus({
+            type: 'warning', title: 'กำลังตรวจและกู้คืน Sheet',
+            message: `ตรวจแล้ว ${state.considered}/${candidates.length} รายการ · ยืนยันสำเร็จ ${state.synced} รายการ`,
+          });
+        },
+      });
       scheduleCountRefresh();
       if (showStatus) {
-        if (role === 'packer') {
-          await refreshSelectedCourierRows().catch(() => {});
-        } else {
-          await refreshDriveRows().catch(() => {});
-        }
-        setStatus(
-          failed > 0
-            ? { type: 'warning', title: 'อัปเดต Sheet ยังไม่ครบ', message: `ซิงก์สำเร็จ ${synced} รายการ, ยังไม่สำเร็จ ${failed} รายการ` }
-            : {
-                type: 'success',
-                title: 'อัปเดต Sheet แล้ว',
-                message: `ซิงก์ออเดอร์ค้างสำเร็จ ${synced} รายการ${orders.length === SHEET_RECOVERY_MAX_ROWS ? ' หากยังมีรายการค้าง ให้กดอีกครั้ง' : ''}`,
-              },
-        );
+        if (role === 'packer') await refreshSelectedCourierRows().catch(() => {});
+        else await refreshDriveRows().catch(() => {});
+        const incomplete = outcome.failed > 0 || outcome.skipped > 0 || limited;
+        setStatus({
+          type: incomplete ? 'warning' : 'success',
+          title: incomplete ? 'ตรวจและกู้คืน Sheet ยังไม่ครบ' : 'ตรวจและกู้คืนรายการที่พบแล้ว',
+          message: `ตรวจ ${outcome.considered} รายการ · ยืนยันสำเร็จ ${outcome.synced} · ไม่สำเร็จ ${outcome.failed} · ข้ามรายการที่กำลังเขียน ${outcome.skipped}${limited ? ' · พบขีดจำกัดการอ่านข้อมูล ผลตรวจยังไม่ครอบคลุมทั้งหมด' : ''}`,
+        });
       }
-      return { busy: false, claimed: orders.length, synced, failed };
+      return { busy: false, ...outcome, limited };
     } catch (error) {
-      const failureUpdates = buildSheetSyncFailureUpdates(claimedOrders, error);
-      await Promise.all(failureUpdates.map(({ orderId, attemptId, error: syncError }) => (
-        markSheetSyncResult({
-          orderId,
-          attemptId,
-          ok: false,
-          error: syncError,
-          recordAudit: !routineVerification,
-        }).catch(() => {})
-      )));
-      failed = Math.max(failed, failureUpdates.length);
-      if (showStatus) {
-        setStatus({ type: 'error', title: 'อัปเดต Sheet ไม่สำเร็จ', message: userErrorMessage(error, 'อัปเดต Google Sheet ไม่สำเร็จ กรุณาลองใหม่') });
-      }
-      return {
-        busy: false,
-        claimed: claimedCount,
-        synced,
-        failed: Math.max(failed, claimedCount - synced),
-      };
+      if (showStatus) setStatus({
+        type: 'error', title: 'ตรวจและกู้คืน Sheet ไม่สำเร็จ',
+        message: userErrorMessage(error, 'อ่านข้อมูลสำหรับกู้คืนไม่สำเร็จ กรุณาลองใหม่'),
+      });
+      return { busy: false, ...progress, error: true };
     } finally {
       sheetRecoveryRunningRef.current = false;
       setSheetRecoveryBusy(false);
@@ -1829,10 +1760,10 @@ function App() {
         runAfterScanCommit(async () => {
           let backgroundResult = result;
           try {
-            await markSheetSyncWriting({
+            requireSheetSyncAcknowledgement(await markSheetSyncWriting({
               orderId: firestorePrimary.id,
               attemptId: firestorePrimary.sheetSyncAttemptId,
-            }).catch(() => false);
+            }));
             const marketplaceOrder = await marketplaceOrderPromise;
             // If admin scanned first, include admin K-M data so Sheet row gets admin columns
             const adminData = firestorePrimary?.admin?.scannedAt
@@ -1859,7 +1790,7 @@ function App() {
               // This is the Packer commit path; the guard used to name the Admin row.
               throw new Error('Google Sheet แจ้งว่าซ้ำ แต่ยืนยันแถว Packer ไม่ได้');
             }
-            await markSheetSyncResult({ orderId: firestorePrimary.id, attemptId: firestorePrimary.sheetSyncAttemptId, ok: true, result: sheetResult }).catch(() => {});
+            requireSheetSyncAcknowledgement(await markSheetSyncResult({ orderId: firestorePrimary.id, attemptId: firestorePrimary.sheetSyncAttemptId, ok: true, result: sheetResult }));
             backgroundResult = { ...result, ...sheetResult, sheetSyncStatus: 'verified' };
           } catch (sheetError) {
             await markSheetSyncResult({ orderId: firestorePrimary.id, attemptId: firestorePrimary.sheetSyncAttemptId, ok: false, error: sheetError }).catch(() => {});
@@ -2131,10 +2062,10 @@ function App() {
         // Background: re-sync to Sheet via appendAdminScanGoogle
         runAfterScanCommit(async () => {
           try {
-            await markSheetSyncWriting({
+            requireSheetSyncAcknowledgement(await markSheetSyncWriting({
               orderId: order.id,
               attemptId: order.sheetSyncAttemptId || '',
-            }).catch(() => false);
+            }));
             const marketplaceOrder = await findMarketplaceOrderForScan(validation.code).catch(() => null);
             const sheetResult = await runWithGoogleRetry((accessToken, googleConfig) =>
               appendAdminScanGoogle({
@@ -2153,14 +2084,13 @@ function App() {
             if (!isSheetSyncResultConfirmed(sheetResult)) {
               throw new Error('Google Sheet แจ้งว่าซ้ำ แต่ยืนยันแถว Admin ไม่ได้');
             }
-            await markSheetSyncResult({
+            requireSheetSyncAcknowledgement(await markSheetSyncResult({
               orderId: order.id,
-              // A fabricated attempt id can never equal the stored one, and
-              // markSheetSyncResult silently no-ops on a mismatch. Empty skips the check.
+              // Keep the stored attempt identity; even an empty legacy id must match.
               attemptId: order.sheetSyncAttemptId || '',
               ok: true,
               result: sheetResult,
-            }).catch(() => {});
+            }));
           } catch (sheetError) {
             await markSheetSyncResult({
               orderId: order.id,
@@ -2223,10 +2153,10 @@ function App() {
         runAfterScanCommit(async () => {
           let backgroundResult = result;
           try {
-            await markSheetSyncWriting({
+            requireSheetSyncAcknowledgement(await markSheetSyncWriting({
               orderId: firestorePrimary.id,
               attemptId: firestorePrimary.sheetSyncAttemptId,
-            }).catch(() => false);
+            }));
             const marketplaceOrder = await marketplaceOrderPromise;
             const adminScanTiming = getAdminScanTiming(
               firestorePrimary?.existing ?? firestorePrimary,
@@ -2270,7 +2200,7 @@ function App() {
               // only when a Packer scan already exists, otherwise it writes the Admin row.
               throw new Error(`Google Sheet แจ้งว่าซ้ำ แต่ยืนยันแถว ${hasPackerScan ? 'Packer' : 'Admin'} ไม่ได้`);
             }
-            await markSheetSyncResult({ orderId: firestorePrimary.id, attemptId: firestorePrimary.sheetSyncAttemptId, ok: true, result: sheetResult }).catch(() => {});
+            requireSheetSyncAcknowledgement(await markSheetSyncResult({ orderId: firestorePrimary.id, attemptId: firestorePrimary.sheetSyncAttemptId, ok: true, result: sheetResult }));
             backgroundResult = { ...result, ...sheetResult, sheetSyncStatus: 'verified' };
           } catch (sheetError) {
             await markSheetSyncResult({ orderId: firestorePrimary.id, attemptId: firestorePrimary.sheetSyncAttemptId, ok: false, error: sheetError }).catch(() => {});

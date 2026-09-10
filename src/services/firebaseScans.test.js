@@ -74,13 +74,6 @@ test('manual recovery does not truncate a daily candidate list at the legacy 20-
   );
 });
 
-test('the Recovery button requests the full bounded daily window', async () => {
-  const appSource = await readFile(new URL('../App.jsx', import.meta.url), 'utf8');
-  assert.match(appSource, /const SHEET_RECOVERY_MAX_ROWS = DAILY_ORDER_SCAN_LIMIT/);
-  assert.match(appSource, /maxRows: SHEET_RECOVERY_MAX_ROWS/);
-  assert.doesNotMatch(appSource, /SHEET_RECOVERY_BATCH_SIZE = 20/);
-});
-
 test('manual Sheet recovery includes synced orders when the selected scan exists', () => {
   assert.equal(shouldIncludeInManualSheetRecovery({
     code: 'TH123',

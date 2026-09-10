@@ -12,6 +12,29 @@ import {
   shouldBlockPackerScan,
 } from './sheetSyncReconciliation.js';
 
+test('recovery requires both recorded scan roles and native timestamps before confirmation', () => {
+  const order = {
+    code: 'TH123',
+    packerScan: { scannedAt: '2026-09-09T13:53:35', packer: 'P1', note: '' },
+    admin: { scannedAt: '2026-09-09T14:00:00' },
+  };
+  const result = { status: 'success', code: 'TH123', isPacker: true, nativeDataTypesVerified: true,
+    row: { code: 'TH123', status: 'Success', date: '2026-09-09', time: '13:53:35', packer: 'P1', note: '',
+      adminCode: 'TH123', adminDate: '2026-09-09', adminTime: '14:00:00' } };
+  assert.equal(isSheetSyncResultConfirmed(result, order), true);
+  assert.equal(isSheetSyncResultConfirmed({ ...result, row: { ...result.row, adminCode: '' } }, order), false);
+  assert.equal(isSheetSyncResultConfirmed({ ...result, nativeDataTypesVerified: false }, order), false);
+  assert.equal(isSheetSyncResultConfirmed({ ...result, row: { ...result.row, time: '13:00:00' } }, order), false);
+  assert.equal(isSheetSyncResultConfirmed({ ...result, status: 'duplicate', row: { ...result.row, status: 'รอแพ็ค' } }, order), false);
+});
+
+test('Admin confirmation cannot fall back to the Packer tracking column', () => {
+  assert.equal(isSheetSyncResultConfirmed({
+    status: 'admin_matched', code: 'TH123', isPacker: false,
+    row: { code: 'TH123', adminCode: '', status: 'Success' },
+  }), false);
+});
+
 test('classifies returned scans as historical Sheet updates', () => {
   assert.deepEqual(getScanIssueMeta('สินค้าตีกลับ'), {
     isIssue: true,

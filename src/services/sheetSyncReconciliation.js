@@ -107,15 +107,38 @@ export function getAdminScanTiming(order, { fallbackDate = '', fallbackTime = ''
   };
 }
 
-export function isSheetSyncResultConfirmed(result) {
+export function isSheetSyncResultConfirmed(result, expectedOrder = null) {
   if (!result) return false;
 
   const row = result.row;
   const isPacker = typeof result.isPacker === 'boolean'
     ? result.isPacker
     : !['admin_scan', 'admin_matched'].includes(result.status);
-  const rowCode = isPacker ? row?.code : (row?.adminCode || row?.code);
+  const rowCode = isPacker ? row?.code : row?.adminCode;
   if (!row || normalizeCode(rowCode) !== normalizeCode(result.code)) return false;
+
+  if (expectedOrder) {
+    const code = normalizeCode(expectedOrder.code || expectedOrder.normalizedCode);
+    if (!code || code !== normalizeCode(result.code)) return false;
+    if (result.nativeDataTypesVerified !== true && row.nativeDataTypesVerified !== true) return false;
+    const sameTime = (actual, expected) => {
+      const normalize = (value) => String(value ?? '').split(':').map((part) => part.padStart(2, '0')).join(':');
+      return normalize(actual) === normalize(expected);
+    };
+    if (expectedOrder.packerScan?.scannedAt) {
+      const parts = scanParts(expectedOrder.packerScan.scannedAt);
+      const note = expectedOrder.packerScan.note ?? expectedOrder.note ?? '';
+      const packer = String(expectedOrder.packerScan.packer ?? expectedOrder.packer ?? '').trim();
+      if (normalizeCode(row.code) !== code || row.date !== parts.date || !sameTime(row.time, parts.time)) return false;
+      if (row.status !== getScanIssueMeta(note).sheetStatus) return false;
+      if (packer && String(row.packer ?? '').trim() !== packer) return false;
+      if (note && !String(row.note ?? '').includes(note)) return false;
+    }
+    if (expectedOrder.admin?.scannedAt) {
+      const parts = scanParts(expectedOrder.admin.scannedAt);
+      if (normalizeCode(row.adminCode) !== code || row.adminDate !== parts.date || !sameTime(row.adminTime, parts.time)) return false;
+    }
+  }
 
   // A duplicate performs no logical write, but it may have been left by a legacy client with
   // date/time values stored as text. The Google Sheets grid read must prove native types before

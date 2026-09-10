@@ -370,11 +370,24 @@ function marketplaceCells(order) {
   ];
 }
 
-function hasNativeDailyDateTimeValues(values = []) {
-  return [0, 1, 8, 9].every((index) => (
-    typeof values[index]?.userEnteredValue?.numberValue === 'number'
-    && Number.isFinite(values[index].userEnteredValue.numberValue)
-  ));
+function hasNativeDailyDateTimeValues(values = [], row = null) {
+  const numberAt = (index) => values[index]?.userEnteredValue?.numberValue;
+  const hasValue = (index) => {
+    const value = values[index]?.userEnteredValue;
+    return value && Object.values(value).some((cell) => cell !== '');
+  };
+  const validPair = (dateIndex, timeIndex, expectedDate, expectedTime) => {
+    const date = numberAt(dateIndex);
+    const time = numberAt(timeIndex);
+    if (!isGoogleSheetsDateSerial(date) || !isGoogleSheetsTimeSerial(time)) return false;
+    return !row || (date === googleSheetsDateSerial(expectedDate)
+      && Math.abs(time - googleSheetsTimeSerial(expectedTime)) < 1e-9);
+  };
+  if (!validPair(0, 1, row?.date, row?.time)) return false;
+  // K/L are legitimately empty until an Admin scans. Midnight (0) is a native time.
+  const needsAdminPair = Boolean(row?.adminCode || row?.adminDate || row?.adminTime)
+    || hasValue(8) || hasValue(9);
+  return !needsAdminPair || validPair(8, 9, row?.adminDate, row?.adminTime);
 }
 
 const PLACEHOLDER_PREFIX = '_TEMP_';
@@ -1338,27 +1351,42 @@ async function readDailyRow({ token, spreadsheetId, date, rowNumber }) {
   return rowFromSheet(data.values?.[0] ?? [], rowNumber - 2);
 }
 
-async function verifyDailyRowNativeDataTypes({ token, spreadsheetId, date, rowNumber }) {
+async function verifyDailyRowNativeDataTypes({ token, spreadsheetId, date, rowNumber, row }) {
   // The Values API renders both native numbers and legacy text identically when a date/time
   // format is applied. Read the grid's userEnteredValue so a duplicate cannot be certified
   // merely because its tracking number is present while its timestamps remain text.
   const values = await readNativeValuesForRows({ token, spreadsheetId, date, rowNumbers: [rowNumber] });
   const rowValues = values.get(rowNumber) ?? [];
-  return hasNativeDailyDateTimeValues(rowValues);
+  return hasNativeDailyDateTimeValues(rowValues, row);
 }
 
 async function readNativeValuesForRows({ token, spreadsheetId, date, rowNumbers }) {
-  const params = new URLSearchParams({
-    includeGridData: 'true',
-    fields: 'sheets(data(rowData(values(userEnteredValue))))',
-  });
   const validRows = [...new Set(rowNumbers)].filter((row) => Number.isInteger(row) && row >= 2);
-  validRows.forEach((row) => params.append('ranges', `${escapeSheetName(date)}!C${row}:L${row}`));
-  const data = await apiFetch(`${SHEETS_API}/${spreadsheetId}?${params}`, token);
   const result = new Map();
-  validRows.forEach((row, index) => {
-    result.set(row, data.sheets?.[0]?.data?.[index]?.rowData?.[0]?.values ?? []);
-  });
+  // Keep both the URL and the response bounded during recovery of a large outbox.
+  for (let offset = 0; offset < validRows.length;) {
+    const params = new URLSearchParams({
+      includeGridData: 'true',
+      fields: 'sheets(data(startRow,rowData(values(userEnteredValue))))',
+    });
+    const chunk = [];
+    while (offset < validRows.length && chunk.length < 50) {
+      const row = validRows[offset];
+      const next = new URLSearchParams(params);
+      next.append('ranges', `${escapeSheetName(date)}!C${row}:L${row}`);
+      if (chunk.length && `${SHEETS_API}/${spreadsheetId}?${next}`.length > 8000) break;
+      params.append('ranges', `${escapeSheetName(date)}!C${row}:L${row}`);
+      chunk.push(row);
+      offset += 1;
+    }
+    const data = await apiFetch(`${SHEETS_API}/${spreadsheetId}?${params}`, token);
+    const grids = data.sheets?.[0]?.data ?? [];
+    chunk.forEach((row, index) => {
+      const grid = grids.find((entry) => entry.startRow === row - 1)
+        ?? (grids[index]?.startRow === undefined ? grids[index] : null);
+      result.set(row, grid?.rowData?.[0]?.values ?? []);
+    });
+  }
   return result;
 }
 
@@ -1514,11 +1542,11 @@ async function updateDailyRow({ token, spreadsheetId, date, rowNumber, row }) {
   const spreadsheet = await getSpreadsheet(token, spreadsheetId);
   const sheetId = spreadsheet.sheets?.find((sheet) => sheet.properties.title === date)?.properties.sheetId;
   if (sheetId) await applyStatusCellColors({ token, spreadsheetId, date, sheetId, rowNumbers: [rowNumber] });
-  const [confirmedRow, nativeDataTypesVerified] = await Promise.all([
-    readDailyRow({ token, spreadsheetId, date, rowNumber }),
-    verifyDailyRowNativeDataTypes({ token, spreadsheetId, date, rowNumber }),
-  ]);
-  return { ...confirmedRow, nativeDataTypesVerified };
+  const confirmedRow = await readDailyRow({ token, spreadsheetId, date, rowNumber });
+  const nativeDataTypesVerified = await verifyDailyRowNativeDataTypes({
+    token, spreadsheetId, date, rowNumber, row: confirmedRow,
+  });
+  return { ...confirmedRow, _sheetDate: date, nativeDataTypesVerified };
 }
 
 export async function backfillMarketplaceOrdersGoogle({ token, config, groups }) {
@@ -3226,11 +3254,11 @@ export async function batchAppendScanGoogle({ token, config, orders, repairExist
   for (const [date, dateOrders] of byDate) {
     try {
       // a) Ensure the daily worksheet exists (1 read + optional create)
-      await ensureDailyWorksheet({ token, spreadsheetId: sheet.id, date });
+      const worksheet = await ensureDailyWorksheet({ token, spreadsheetId: sheet.id, date });
 
       // b) Read existing rows once (1 read)
       const existingRows = await readDailyRows({ token, spreadsheetId: sheet.id, date });
-      const existingParsed = existingRows.map((row, idx) => rowFromSheet(row, idx));
+      const existingParsed = existingRows.map((row, idx) => ({ ...rowFromSheet(row, idx), _sheetDate: date }));
       // Repair stranded row numbers before any recovery result can be certified as verified.
       await repairPlaceholderRows({
         token,
@@ -3248,6 +3276,24 @@ export async function batchAppendScanGoogle({ token, config, orders, repairExist
         );
       }
       const reconciliationRows = [...workingParsed, ...historicalParsed];
+      const existingNativeRows = new Map();
+      if (repairExisting) {
+        const targets = new Map();
+        for (const order of dateOrders) {
+          const match = findScanReconciliation(reconciliationRows, {
+            courier: order.courier, code: order.normalizedCode, isPacker: order.isPacker, packerName: order.packer,
+          });
+          if (match.action !== 'skip') continue;
+          const rowDate = match.row._sheetDate;
+          if (!targets.has(rowDate)) targets.set(rowDate, new Set());
+          targets.get(rowDate).add(match.row.sheetRowNumber);
+        }
+        for (const [rowDate, rowNumbers] of targets) {
+          existingNativeRows.set(rowDate, await readNativeValuesForRows({
+            token, spreadsheetId: sheet.id, date: rowDate, rowNumbers: [...rowNumbers],
+          }));
+        }
+      }
 
       // c) Build placeholder rows and batch-append all at once (1 write)
       const placeholders = [];
@@ -3266,23 +3312,30 @@ export async function batchAppendScanGoogle({ token, config, orders, repairExist
         if (reconciliation.action === 'skip') {
           const currentRow = reconciliation.row;
           if (repairExisting) {
+            const repairedStatus = !isPacker && currentRow.code ? currentRow.status : expectedStatus;
             const repairedRow = withMarketplaceCells([
               currentRow.no,
               currentRow.courierNo,
-              currentRow.date,
-              currentRow.time,
+              currentRow.date || date,
+              currentRow.time || order.time,
               currentRow.courier,
               currentRow.code,
               currentRow.email,
               currentRow.packer,
-              expectedStatus,
+              repairedStatus,
               currentRow.note,
-              currentRow.adminDate,
-              currentRow.adminTime,
-              currentRow.adminCode,
+              currentRow.adminDate || adminDate || (!isPacker ? date : ''),
+              currentRow.adminTime || adminTime || (!isPacker ? order.time : ''),
+              currentRow.adminCode || adminCode || (!isPacker ? normalizedCode : ''),
             ], order.marketplaceOrder ?? marketplaceOrderFromRow(currentRow));
-            const needsRepair = String(currentRow.status ?? '').trim() !== expectedStatus
-              || String(currentRow.note ?? '') !== String(repairedRow[9] ?? '');
+            repairedRow[22] = currentRow.syncStatus ?? '';
+            const nativeValues = existingNativeRows.get(currentRow._sheetDate)?.get(currentRow.sheetRowNumber) ?? [];
+            const needsRepair = String(currentRow.status ?? '').trim() !== repairedStatus
+              || String(currentRow.note ?? '') !== String(repairedRow[9] ?? '')
+              || [2, 3, 10, 11, 12].some((index) => (
+                String(dailyCellsFromParsedRow(currentRow)[index] ?? '') !== String(repairedRow[index] ?? '')
+              ))
+              || (!isPlaceholderNo(currentRow.no) && !hasNativeDailyDateTimeValues(nativeValues, currentRow));
             if (!needsRepair) {
               results.push({
                 order,
@@ -3293,7 +3346,7 @@ export async function batchAppendScanGoogle({ token, config, orders, repairExist
                   time: order.time,
                   code: normalizedCode,
                   isPacker: Boolean(isPacker),
-                  row: reconciliation.row,
+                  row: currentRow,
                   rows: existingParsed.filter((row) => row.courier === courier).reverse().slice(0, 20),
                   sheetUrl: sheet.webViewLink,
                 },
@@ -3301,7 +3354,10 @@ export async function batchAppendScanGoogle({ token, config, orders, repairExist
               continue;
             }
             let confirmedRow = null;
-            if (currentRow._sheetDate && currentRow._sheetDate !== date) {
+            const pendingIndex = placeholderMeta.findIndex((item) => item.placeholder === currentRow.no);
+            if (pendingIndex !== -1) {
+              placeholders[pendingIndex] = repairedRow;
+            } else if (currentRow._sheetDate && currentRow._sheetDate !== date) {
               confirmedRow = await updateDailyRow({
                 token,
                 spreadsheetId: sheet.id,
@@ -3324,13 +3380,13 @@ export async function batchAppendScanGoogle({ token, config, orders, repairExist
             results.push({
               order,
               result: {
-                status: resultStatus,
+                status: !isPacker && currentRow.code ? 'admin_matched' : resultStatus,
                 courier,
                 date,
                 time: order.time,
                 code: normalizedCode,
                 isPacker: Boolean(isPacker),
-                row: confirmedRow ?? rowFromSheet(repairedRow, currentRow.sheetRowNumber - 2),
+                row: confirmedRow ?? { ...rowFromSheet(repairedRow, currentRow.sheetRowNumber - 2), _sheetDate: currentRow._sheetDate },
                 rows: [],
                 sheetUrl: sheet.webViewLink,
                 repaired: true,
@@ -3390,7 +3446,10 @@ export async function batchAppendScanGoogle({ token, config, orders, repairExist
                 currentRow.adminCode || adminCode || '',
               ], order.marketplaceOrder ?? marketplaceOrderFromRow(currentRow));
           let confirmedRow = null;
-          if (currentRow._sheetDate && currentRow._sheetDate !== date) {
+          const pendingIndex = placeholderMeta.findIndex((item) => item.placeholder === currentRow.no);
+          if (pendingIndex !== -1) {
+            placeholders[pendingIndex] = mergedRow;
+          } else if (currentRow._sheetDate && currentRow._sheetDate !== date) {
             confirmedRow = await updateDailyRow({
               token,
               spreadsheetId: sheet.id,
@@ -3418,7 +3477,8 @@ export async function batchAppendScanGoogle({ token, config, orders, repairExist
               date,
               time: order.time,
               code: normalizedCode,
-              row: confirmedRow ?? rowFromSheet(mergedRow, currentRow.sheetRowNumber - 2),
+              isPacker: Boolean(isPacker),
+              row: confirmedRow ?? { ...rowFromSheet(mergedRow, currentRow.sheetRowNumber - 2), _sheetDate: currentRow._sheetDate },
               rows: [],
               sheetUrl: sheet.webViewLink,
               merged: true,
@@ -3428,7 +3488,7 @@ export async function batchAppendScanGoogle({ token, config, orders, repairExist
           continue;
         }
 
-        const hasAdmin = Boolean(adminCode);
+        const hasAdmin = Boolean(adminCode) || !isPacker;
         const placeholder = `_TEMP_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
         const status = expectedStatus;
         const placeholderRow = withMarketplaceCells([
@@ -3438,7 +3498,7 @@ export async function batchAppendScanGoogle({ token, config, orders, repairExist
           status, note || '',
           hasAdmin ? (adminDate || date) : '',
           hasAdmin ? (adminTime || order.time) : '',
-          hasAdmin ? adminCode : '',
+          hasAdmin ? (adminCode || normalizedCode) : '',
         ], order.marketplaceOrder ?? null);
         placeholders.push(placeholderRow);
         placeholderMeta.push({ order, placeholder, isPacker });
@@ -3448,20 +3508,19 @@ export async function batchAppendScanGoogle({ token, config, orders, repairExist
         });
       }
 
-      // c.2) Compute next row from column A and write via PUT only for new rows.
+      // AppendCells chooses the last occupied row on the server, including rows with blank A.
+      // A client-computed PUT can overwrite a trailing manual row or a concurrent append.
       if (placeholders.length > 0) {
-        const colARange = `${escapeSheetName(date)}!A:A`;
-        const colAData = await apiFetch(
-          `${SHEETS_API}/${sheet.id}/values/${encodeURIComponent(colARange)}?majorDimension=COLUMNS`,
-          token,
-        );
-        const existingColA = colAData.values?.[0] ?? [];
-        const startRow = existingColA.length + 1;
-        const writeRange = `${escapeSheetName(date)}!A${startRow}:${sheetEndColumn()}${startRow + placeholders.length - 1}`;
         await apiFetch(
-          `${SHEETS_API}/${sheet.id}/values/${encodeURIComponent(writeRange)}?valueInputOption=RAW`,
+          `${SHEETS_API}/${sheet.id}:batchUpdate`,
           token,
-          { method: 'PUT', body: JSON.stringify({ values: placeholders }) },
+          { method: 'POST', body: JSON.stringify({ requests: [{ appendCells: {
+            sheetId: worksheet.sheetId,
+            fields: 'userEnteredValue',
+            rows: placeholders.map((row) => ({ values: normalizeDailyRawCells(row).map((value) => ({
+              userEnteredValue: typeof value === 'number' ? { numberValue: value } : { stringValue: String(value ?? '') },
+            })) })),
+          } }] }) },
         );
         didWriteSheet = true;
       }
@@ -3501,21 +3560,16 @@ export async function batchAppendScanGoogle({ token, config, orders, repairExist
         );
         const concurrentDuplicate = concurrentCodes.length > 1;
 
-        const { normalizedCode, courier, email, packer, note, adminDate, adminTime, adminCode } = order;
+        const { normalizedCode, courier, note } = order;
         const issueMeta = isPacker ? getScanIssueMeta(note) : null;
-        const expectedStatus = isPacker ? issueMeta.sheetStatus : 'รอแพ็ค';
         const resultStatus = isPacker ? issueMeta.resultStatus : 'admin_scan';
-        const hasAdmin = Boolean(adminCode);
-        const correctedRow = withMarketplaceCells([
-          correctNo, correctCourierNo, date, order.time, courier,
-          isPacker ? normalizedCode : '', email,
-          isPacker ? (packer || '') : '',
-          concurrentDuplicate ? 'Duplicate' : expectedStatus,
-          concurrentDuplicate ? 'Duplicate (concurrent scan)' : (note || ''),
-          hasAdmin ? (adminDate || date) : '',
-          hasAdmin ? (adminTime || order.time) : '',
-          hasAdmin ? adminCode : '',
-        ], order.marketplaceOrder ?? null);
+        const correctedRow = [...placeholders[i]];
+        correctedRow[0] = correctNo;
+        correctedRow[1] = correctCourierNo;
+        if (concurrentDuplicate) {
+          correctedRow[8] = 'Duplicate';
+          correctedRow[9] = 'Duplicate (concurrent scan)';
+        }
 
         const data = buildDailyRowUpdateData(date, rowNumber, correctedRow);
         batchData.push(...data);
@@ -3529,8 +3583,9 @@ export async function batchAppendScanGoogle({ token, config, orders, repairExist
             date,
             time: order.time,
             code: normalizedCode,
+            isPacker: Boolean(isPacker),
             count: courierRows.length,
-            row: rowFromSheet(correctedRow, rowNumber - 2),
+            row: { ...rowFromSheet(correctedRow, rowNumber - 2), _sheetDate: date },
             rows: [],
             sheetUrl: sheet.webViewLink,
           },
@@ -3546,14 +3601,23 @@ export async function batchAppendScanGoogle({ token, config, orders, repairExist
         );
         didWriteSheet = true;
 
-        const verifiedRows = (await readDailyRows({ token, spreadsheetId: sheet.id, date }))
-          .map((row, index) => rowFromSheet(row, index));
+      }
+
+      // Read every physical tab again, including no-write duplicates. Reconciliation may
+      // contain provisional rows or rows removed by another operator since the first read.
+      const readbackDates = new Set(results.filter((item) => dateOrders.includes(item.order) && item.result?.row)
+        .map((item) => item.result.row._sheetDate || date));
+      for (const rowDate of readbackDates) {
+        const verifiedRows = (await readDailyRows({ token, spreadsheetId: sheet.id, date: rowDate }))
+          .map((row, index) => ({ ...rowFromSheet(row, index), _sheetDate: rowDate }));
         for (const item of results) {
-          if (!dateOrders.includes(item.order) || item.result?.status === 'duplicate' || item.result?.crossDay) continue;
-          const rowNumber = item.result?.row?.sheetRowNumber;
-          if (rowNumber) {
-            item.result.row = verifiedRows.find((row) => row.sheetRowNumber === rowNumber) ?? null;
-          }
+          if (!dateOrders.includes(item.order) || !item.result?.row || (item.result.row._sheetDate || date) !== rowDate) continue;
+          const previous = item.result.row;
+          const rowNumber = isPlaceholderNo(previous.no)
+            ? currentParsed.find((row) => row.no === previous.no)?.sheetRowNumber
+            : previous.sheetRowNumber;
+          item.result.row = verifiedRows.find((row) => row.sheetRowNumber === rowNumber) ?? null;
+          if (!item.result.row) item.result.nativeDataTypesVerified = false;
         }
       }
 
@@ -3579,11 +3643,11 @@ export async function batchAppendScanGoogle({ token, config, orders, repairExist
           rowNumbers: [...rowNumbers],
         });
         for (const item of results) {
-          if (!dateOrders.includes(item.order) || typeof item.result?.nativeDataTypesVerified === 'boolean') continue;
+          if (!dateOrders.includes(item.order) || !item.result || typeof item.result.nativeDataTypesVerified === 'boolean') continue;
           const row = item.result?.row;
           if ((row?._sheetDate || date) !== verificationDate) continue;
           const values = nativeTypeRows.get(row?.sheetRowNumber) ?? [];
-          item.result.nativeDataTypesVerified = hasNativeDailyDateTimeValues(values);
+          item.result.nativeDataTypesVerified = hasNativeDailyDateTimeValues(values, row);
         }
       }
 

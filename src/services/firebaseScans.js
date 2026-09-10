@@ -18,7 +18,8 @@ import { nextCalendarDate } from './calendarDate.js';
 import { userErrorMessage } from './authErrors.js';
 import {
   isSheetSyncClaimable,
-  prioritizeSheetSyncCandidates,
+  canApplySheetSyncResult,
+  collectManualSheetRecoveryCandidates,
   shouldIncludeInManualSheetRecovery,
   shouldReconcileSheetOnRescan,
   isSheetSyncVerified,
@@ -388,7 +389,7 @@ async function getPendingOrdersForMissingCheck(pageSize = 500) {
   }
 }
 
-async function getPackerOrdersByScanDate(date) {
+async function getPackerOrdersByScanDate(date, { strict = false } = {}) {
   if (!canWriteFirestore()) {
     return [];
   }
@@ -417,6 +418,7 @@ async function getPackerOrdersByScanDate(date) {
     warnIfCapped(`packer scans for ${date}`, orders.length, DAILY_ORDER_SCAN_LIMIT);
     return orders;
   } catch (error) {
+    if (strict) throw error;
     // Keep the Packer screen usable when the nested-field query is temporarily
     // unavailable (for example during an index/rules rollout). The daily
     // order query is already used by the rows view, so use it as a safe
@@ -430,7 +432,7 @@ async function getPackerOrdersByScanDate(date) {
   }
 }
 
-async function getAdminOrdersByScanDate(date) {
+async function getAdminOrdersByScanDate(date, { strict = false } = {}) {
   if (!canWriteFirestore()) {
     return [];
   }
@@ -459,6 +461,7 @@ async function getAdminOrdersByScanDate(date) {
     warnIfCapped(`admin scans for ${date}`, orders.length, DAILY_ORDER_SCAN_LIMIT);
     return orders;
   } catch (error) {
+    if (strict) throw error;
     console.warn('Admin summary query failed; using daily-order fallback:', error);
     const orders = await getOrdersByDate(date);
     return orders.filter((order) => {
@@ -870,7 +873,7 @@ export async function markSheetSyncWriting({ orderId: id, attemptId = '', record
     const snap = await transaction.get(ref);
     if (!snap.exists()) return false;
     const current = snap.data();
-    if (attemptId && current.sheetSyncAttemptId !== attemptId) return false;
+    if (String(current.sheetSyncAttemptId ?? '') !== String(attemptId ?? '')) return false;
     if (isSheetSyncVerified(current)) return false;
     transaction.update(ref, {
       sheetSyncStatus: 'writing',
@@ -901,7 +904,7 @@ export async function markSheetSyncResult({ orderId: id, attemptId = '', ok, res
     const snap = await transaction.get(ref);
     if (!snap.exists()) return false;
     const current = snap.data();
-    if (attemptId && current.sheetSyncAttemptId !== attemptId) return false;
+    if (!canApplySheetSyncResult(current, { attemptId, ok })) return false;
     const nextStatus = ok ? 'verified' : 'failed';
     const safeError = ok ? '' : userErrorMessage(error, 'ซิงก์ Google Sheet ไม่สำเร็จ');
     transaction.update(ref, {
@@ -938,83 +941,62 @@ export async function markSheetSyncResult({ orderId: id, attemptId = '', ok, res
   });
 }
 
-export async function claimRecoverableSheetSyncs({
+export async function getSheetRecoveryCandidates({
   maxRows = 20,
   includeSynced = false,
   role = 'both',
   dates = [],
-  recordAudit = true,
 } = {}) {
-  if (!canWriteFirestore()) return [];
-  let candidates;
+  if (!canWriteFirestore()) throw Object.assign(new Error('กรุณาเข้าสู่ระบบ Firebase ก่อนกู้คืนข้อมูล'), { code: 'FIREBASE_AUTH_REQUIRED' });
   if (includeSynced) {
-    const recoveryDates = [...new Set(dates.filter(Boolean))];
-    const dateOrders = await getOrdersByDates(recoveryDates);
-    const scanDateOrders = role === 'admin'
-      ? []
-      : (await Promise.all(recoveryDates.map((date) => getPackerOrdersByScanDate(date)))).flat();
-    const adminScanOrders = role === 'packer'
-      ? []
-      : await getOrdersByAdminScanWindow({ hoursLookback: 48, pageSize: Math.min(100, maxRows * 5) }).catch(() => []);
-    const byId = new Map([...dateOrders, ...scanDateOrders, ...adminScanOrders].map((order) => [order.id, order]));
-    const eligible = [...byId.values()].filter((order) => shouldIncludeInManualSheetRecovery(order, role));
-    const failed = eligible.filter((order) => order.sheetSyncStatus === 'failed');
-    const pending = eligible.filter((order) => order.sheetSyncStatus === 'pending');
-    // Rotate routine verification across the whole day: the least recently read-back row
-    // goes first, so the first 20 document ids are not the only rows checked forever.
-    const verified = eligible
-      .filter((order) => isSheetSyncVerified(order))
-      .sort((left, right) => {
-        const leftAt = new Date(left.sheetVerifiedAtIso ?? 0).getTime() || 0;
-        const rightAt = new Date(right.sheetVerifiedAtIso ?? 0).getTime() || 0;
-        return leftAt - rightAt;
-      });
-    candidates = [...prioritizeSheetSyncCandidates({ failed, pending, maxRows }), ...verified]
-      .filter((order, index, list) => list.findIndex((item) => item.id === order.id) === index)
-      .slice(0, Math.max(0, maxRows));
-  } else {
-    const statuses = ['failed', 'pending', 'writing'];
-    const snapshots = await Promise.all(statuses.map((status) => getDocs(query(
-      collection(firestoreDb, 'orders'), where('sheetSyncStatus', '==', status), limit(maxRows),
-    ))));
-    candidates = prioritizeSheetSyncCandidates({
-      failed: snapshots[0]?.docs,
-      pending: [...(snapshots[1]?.docs ?? []), ...(snapshots[2]?.docs ?? [])],
-      maxRows,
+    const recoveryDates = uniqueQueryDates(dates);
+    if (!recoveryDates.length || recoveryDates.length > MAX_ORDER_QUERY_DATES) {
+      throw Object.assign(new RangeError(`เลือกช่วงวันที่ได้ตั้งแต่ 1 ถึง ${MAX_ORDER_QUERY_DATES} วัน`), { code: 'SHEET_RECOVERY_DATE_RANGE' });
+    }
+    return collectManualSheetRecoveryCandidates({
+      dates: recoveryDates, role, cap: DAILY_ORDER_SCAN_LIMIT,
+      readDate: getOrdersByDate,
+      readPacker: (date) => getPackerOrdersByScanDate(date, { strict: true }),
+      readAdmin: (date) => getAdminOrdersByScanDate(date, { strict: true }),
     });
   }
-  const claimed = [];
+  const statuses = ['failed', 'pending', 'writing'];
+  const snapshots = await Promise.all(statuses.map((status) => getDocs(query(
+    collection(firestoreDb, 'orders'), where('sheetSyncStatus', '==', status), limit(maxRows),
+  ))));
+  const candidates = snapshots.flatMap((snap) => snap.docs.map((item) => ({ id: item.id, ...item.data() })))
+    .filter((order) => isSheetSyncClaimable(order)).slice(0, maxRows);
+  return { candidates, limited: snapshots.some((snap) => snap.size >= maxRows) };
+}
 
-  for (const candidate of candidates) {
-    const ref = candidate.ref ?? doc(firestoreDb, 'orders', candidate.id);
-    const attemptId = newSheetSyncAttemptId();
-    const order = await runTransaction(firestoreDb, async (transaction) => {
-      const snap = await transaction.get(ref);
-      if (!snap.exists()) return null;
-      const current = snap.data();
-      const manualSyncedClaim = includeSynced
-        && isSheetSyncVerified(current)
-        && shouldIncludeInManualSheetRecovery({ id: ref.id, ...current }, role);
-      if (manualSyncedClaim ? false : !isSheetSyncClaimable(current)) return null;
-      transaction.update(ref, {
-        ...pendingSheetSyncFields(attemptId),
-        updatedAt: serverTimestamp(),
-        updatedAtIso: nowIso(),
-      });
-      if (recordAudit) {
-        addOrderAuditInTransaction(transaction, {
-          orderId: ref.id,
-          order: current,
-          type: 'sheet_sync_pending',
-          detail: { attemptId, recovery: true },
-        });
-      }
-      return { id: ref.id, ...current, sheetSyncAttemptId: attemptId, sheetSyncStatus: 'pending' };
+export async function claimSheetRecoveryOrder({ candidate, includeSynced = false, role = 'both', recordAudit = true }) {
+  if (!canWriteFirestore()) throw Object.assign(new Error('กรุณาเข้าสู่ระบบ Firebase ก่อนกู้คืนข้อมูล'), { code: 'FIREBASE_AUTH_REQUIRED' });
+  const ref = candidate.ref ?? doc(firestoreDb, 'orders', candidate.id);
+  const attemptId = newSheetSyncAttemptId();
+  return runTransaction(firestoreDb, async (transaction) => {
+    const snap = await transaction.get(ref);
+    if (!snap.exists()) return null;
+    const current = snap.data();
+    const manualSyncedClaim = includeSynced
+      && isSheetSyncVerified(current)
+      && shouldIncludeInManualSheetRecovery({ id: ref.id, ...current }, role);
+    if (includeSynced && !shouldIncludeInManualSheetRecovery(current, role)) return null;
+    if (!manualSyncedClaim && !isSheetSyncClaimable(current)) return null;
+    transaction.update(ref, {
+      ...pendingSheetSyncFields(attemptId),
+      updatedAt: serverTimestamp(),
+      updatedAtIso: nowIso(),
     });
-    if (order) claimed.push(order);
-  }
-
-  return claimed;
+    if (recordAudit) {
+      addOrderAuditInTransaction(transaction, {
+        orderId: ref.id,
+        order: current,
+        type: 'sheet_sync_pending',
+        detail: { attemptId, recovery: true },
+      });
+    }
+    return { id: ref.id, ...current, sheetSyncAttemptId: attemptId, sheetSyncStatus: 'pending' };
+  });
 }
 
 function courierDocId(name) {

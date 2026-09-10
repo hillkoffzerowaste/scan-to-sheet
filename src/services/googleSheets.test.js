@@ -22,6 +22,265 @@ import {
 } from './googleSheets.js';
 import { isSheetSyncResultConfirmed } from './sheetSyncReconciliation.js';
 
+// Only the HTTP boundary is replaced: keep reconciliation, RAW conversion and readback real.
+function recoverySheet(t, initialRows, hooks = {}) {
+  const originalFetch = globalThis.fetch;
+  const rowsByDate = new Map(Object.entries(structuredClone(initialRows)));
+  const titles = [...rowsByDate.keys()];
+  const writes = [];
+  const gridRequests = [];
+  const reads = new Map();
+  const json = (payload) => new Response(JSON.stringify(payload), {
+    status: 200, headers: { 'Content-Type': 'application/json' },
+  });
+  const columnIndex = (letters) => [...letters].reduce((n, c) => n * 26 + c.charCodeAt(0) - 64, 0) - 1;
+  const parseRange = (range) => {
+    const match = range.match(/^'([^']+)'!([A-Z]+)(\d*)(?::([A-Z]+)(\d*))?$/);
+    assert.ok(match, range);
+    return { date: match[1], col: columnIndex(match[2]), start: Number(match[3]) || 1,
+      endCol: columnIndex(match[4] || match[2]), end: Number(match[5]) || (match[4] ? Infinity : Number(match[3])) };
+  };
+  const formatted = (value, column) => {
+    if (typeof value !== 'number') return value;
+    if ([2, 10].includes(column)) return new Date(Date.UTC(1899, 11, 30) + value * 86400000).toISOString().slice(0, 10);
+    if ([3, 11].includes(column)) return new Date(Math.round(value * 86400) * 1000).toISOString().slice(11, 19);
+    return String(value);
+  };
+  const write = (range, values) => {
+    const { date, col, start } = parseRange(range);
+    if (start === 1) return;
+    const rows = rowsByDate.get(date);
+    values.forEach((cells, offset) => {
+      const index = start - 2 + offset;
+      while (rows.length <= index) rows.push([]);
+      cells.forEach((value, cell) => { if (value !== null) rows[index][col + cell] = value; });
+    });
+  };
+  globalThis.fetch = async (url, options = {}) => {
+    const parsed = new URL(url);
+    const path = decodeURIComponent(parsed.pathname);
+    const method = options.method || 'GET';
+    const body = options.body ? JSON.parse(options.body) : null;
+    if (parsed.searchParams.get('includeGridData') === 'true') {
+      const ranges = parsed.searchParams.getAll('ranges');
+      gridRequests.push({ ranges, length: String(url).length });
+      hooks.beforeGrid?.({ rowsByDate, ranges });
+      return json({ sheets: [{ data: ranges.map((range) => {
+        const { date, start, col, endCol } = parseRange(range);
+        const row = rowsByDate.get(date)?.[start - 2] || [];
+        const values = Array.from({ length: endCol - col + 1 }, (_, index) => {
+          const value = row[col + index];
+          return value === undefined || value === '' ? {} : {
+            userEnteredValue: { [typeof value === 'number' ? 'numberValue' : 'stringValue']: value },
+          };
+        });
+        return { startRow: start - 1, startColumn: col, rowData: [{ values }] };
+      }) }] });
+    }
+    if (path.includes('/values/')) {
+      const range = path.split('/values/')[1];
+      const { date, col, start, end, endCol } = parseRange(range);
+      if (method === 'PUT') {
+        if (start === 1) return json({});
+        writes.push({ range, values: body.values });
+        hooks.beforeAppend?.({ rowsByDate });
+        write(range, body.values);
+        hooks.afterAppend?.({ rowsByDate });
+        return json({});
+      }
+      const count = (reads.get(date) || 0) + 1;
+      reads.set(date, count);
+      hooks.beforeRead?.({ rowsByDate, date, count, range });
+      const rows = rowsByDate.get(date) || [];
+      if (range.endsWith('!A:A')) {
+        const values = ['No.', ...rows.map((row) => row[0] ?? '')];
+        while (values.at(-1) === '') values.pop();
+        return json({ values: [values] });
+      }
+      const values = rows.slice(start - 2, Number.isFinite(end) ? end - 1 : undefined)
+        .map((row) => Array.from({ length: endCol - col + 1 }, (_, i) => formatted(row[col + i] ?? '', col + i)));
+      return json({ values });
+    }
+    if (path.endsWith('/values:batchUpdate')) {
+      assert.equal(body.valueInputOption, 'RAW');
+      writes.push(...body.data);
+      if (!hooks.dropUpdates) body.data.forEach(({ range, values }) => write(range, values));
+      hooks.afterUpdate?.({ rowsByDate, data: body.data });
+      return json({});
+    }
+    if (path.endsWith(':batchUpdate')) {
+      for (const request of body.requests || []) {
+        if (!request.appendCells) continue;
+        hooks.beforeAppend?.({ rowsByDate });
+        const { sheetId, rows, fields } = request.appendCells;
+        assert.equal(fields, 'userEnteredValue');
+        const stored = rowsByDate.get(titles[sheetId - 100]);
+        rows.forEach(({ values }) => stored.push(values.map(({ userEnteredValue: value }) => value?.numberValue ?? value?.stringValue ?? '')));
+        hooks.afterAppend?.({ rowsByDate });
+      }
+      return json({});
+    }
+    if (method === 'GET' && path.includes('/spreadsheets/')) {
+      return json({ sheets: titles.map((title, i) => ({ properties: {
+        sheetId: 100 + i, title, gridProperties: { rowCount: 1000, columnCount: 23 },
+      } })) });
+    }
+    throw new Error(`Unexpected Sheets request: ${method} ${path}`);
+  };
+  t.after(() => { globalThis.fetch = originalFetch; });
+  return { rowsByDate, writes, gridRequests, run: (orders, repairExisting = true) => batchAppendScanGoogle({
+    token: 'test-token', config: { master: { id: `recovery-${t.name}`, webViewLink: 'https://example.test/sheet' } },
+    orders, repairExisting,
+  }) };
+}
+
+const recoveryDate = '2026-08-25';
+const recoveryCode = '001234567890123456';
+const recoveryOrder = (fields = {}) => ({
+  code: recoveryCode, courier: 'Shopee', date: recoveryDate, time: '12:00:00',
+  email: 'packer@example.test', packer: 'Ben', isPacker: true, ...fields,
+});
+const recoveryRow = (cells = {}) => Object.assign([
+  1, 1, 46259, 0.5, 'Shopee', recoveryCode, 'packer@example.test', 'Ben', 'Success', '',
+  '', '', '', '', '', 'Manual buyer', '', '', '', '', 'ส่งออกแล้ว', 'ไม่ใช่', 'verified',
+], cells);
+
+test('batch native verification accepts Packer-only rows with empty Admin dates and midnight', async (t) => {
+  const sheet = recoverySheet(t, { [recoveryDate]: [recoveryRow({ 3: 0 })] });
+  const [item] = await sheet.run([recoveryOrder({ time: '00:00:00' })], false);
+  assert.equal(item.error, undefined);
+  assert.equal(item.result.nativeDataTypesVerified, true);
+  assert.equal(item.result.isPacker, true);
+});
+
+test('batch recovery fills missing Admin fields from the order and preserves buyer P', async (t) => {
+  const sheet = recoverySheet(t, { [recoveryDate]: [recoveryRow()] });
+  const [item] = await sheet.run([recoveryOrder({ adminCode: recoveryCode, adminDate: recoveryDate, adminTime: '09:00:00' })]);
+  assert.equal(item.error, undefined);
+  assert.equal(item.result.row.adminCode, recoveryCode);
+  assert.equal(item.result.row.adminTime, '09:00:00');
+  assert.equal(item.result.nativeDataTypesVerified, true);
+  assert.deepEqual(sheet.rowsByDate.get(recoveryDate)[0].slice(10, 13), [46259, 0.375, recoveryCode]);
+  assert.equal(sheet.rowsByDate.get(recoveryDate)[0][15], 'Manual buyer');
+});
+
+test('batch Admin retry preserves packed status and original Admin time', async (t) => {
+  const sheet = recoverySheet(t, { [recoveryDate]: [recoveryRow({ 10: 46259, 11: 0.375, 12: recoveryCode })] });
+  const [item] = await sheet.run([recoveryOrder({ isPacker: false, adminCode: recoveryCode, adminDate: recoveryDate, adminTime: '11:00:00' })]);
+  assert.equal(item.error, undefined);
+  assert.equal(item.result.row.status, 'Success');
+  assert.equal(item.result.row.adminTime, '09:00:00');
+  assert.equal(item.result.isPacker, false);
+  assert.equal(item.result.nativeDataTypesVerified, true);
+});
+
+test('batch recovery converts legacy duplicate timestamps to RAW numbers without changing tracking', async (t) => {
+  const sheet = recoverySheet(t, { [recoveryDate]: [recoveryRow({ 0: '1', 1: '1', 2: recoveryDate, 3: '12:00:00' })] });
+  const [item] = await sheet.run([recoveryOrder()]);
+  assert.equal(item.error, undefined);
+  assert.equal(item.result.nativeDataTypesVerified, true);
+  assert.deepEqual(sheet.rowsByDate.get(recoveryDate)[0].slice(0, 6), [1, 1, 46259, 0.5, 'Shopee', recoveryCode]);
+  assert.equal(item.result.row.buyerName, 'Manual buyer');
+});
+
+test('batch native verification splits large recovery reads into bounded requests', async (t) => {
+  const orders = Array.from({ length: 125 }, (_, i) => recoveryOrder({ code: `TH${String(i).padStart(12, '0')}` }));
+  const sheet = recoverySheet(t, { [recoveryDate]: orders.map((order, i) => recoveryRow({ 0: i + 1, 1: i + 1, 5: order.code, 10: 46259, 11: 0.375, 12: order.code })) });
+  const items = await sheet.run(orders, false);
+  assert.equal(items.length, 125);
+  assert.ok(items.every((item) => item.result?.nativeDataTypesVerified === true));
+  assert.ok(sheet.gridRequests.length >= 3);
+  assert.ok(sheet.gridRequests.every(({ ranges, length }) => ranges.length <= 50 && length <= 8000));
+});
+
+test('batch missing placeholder fails only its order while duplicates still get native verification', async (t) => {
+  const sheet = recoverySheet(t, { [recoveryDate]: [recoveryRow({ 10: 46259, 11: 0.375, 12: recoveryCode })] }, {
+    afterAppend: ({ rowsByDate }) => { rowsByDate.set(recoveryDate, rowsByDate.get(recoveryDate).filter((row) => !String(row[0]).startsWith('_TEMP_'))); },
+  });
+  const items = await sheet.run([recoveryOrder(), recoveryOrder({ code: 'TH999999999999' })], false);
+  assert.equal(items.find((item) => item.order.code === recoveryCode).result?.nativeDataTypesVerified, true);
+  const missing = items.find((item) => item.order.code === 'TH999999999999');
+  assert.equal(missing.result, null);
+  assert.ok(missing.error);
+});
+
+test('batch cross-day merge verifies the physical tab and explicitly returns its role', async (t) => {
+  const yesterday = '2026-08-24';
+  const sheet = recoverySheet(t, { [recoveryDate]: [], [yesterday]: [recoveryRow({ 2: 46258, 5: '', 7: '', 8: 'รอแพ็ค', 10: 46258, 11: 0.375, 12: recoveryCode })] });
+  const [item] = await sheet.run([recoveryOrder()]);
+  assert.equal(item.error, undefined);
+  assert.equal(item.result.row._sheetDate, yesterday);
+  assert.equal(item.result.nativeDataTypesVerified, true);
+  assert.equal(item.result.isPacker, true);
+  assert.equal(item.result.row.code, recoveryCode);
+});
+
+test('batch append preserves trailing occupied rows even when column A is empty', async (t) => {
+  const manual = ['', '', '', '', '', '', '', '', '', '', '', '', '', '', '', 'Keep this buyer'];
+  const sheet = recoverySheet(t, { [recoveryDate]: [recoveryRow(), manual] });
+  const [item] = await sheet.run([recoveryOrder({ code: 'TH999999999999' })]);
+  assert.equal(item.error, undefined);
+  assert.deepEqual(sheet.rowsByDate.get(recoveryDate)[1], manual);
+  assert.equal(item.result.row.sheetRowNumber, 4);
+  assert.equal(item.result.nativeDataTypesVerified, true);
+  assert.equal(item.result.isPacker, true);
+});
+
+test('batch append cannot overwrite another row arriving after its initial read', async (t) => {
+  let inserted = false;
+  const other = recoveryRow({ 0: 2, 1: 2, 5: 'TH888888888888' });
+  const sheet = recoverySheet(t, { [recoveryDate]: [recoveryRow()] }, {
+    beforeAppend: ({ rowsByDate }) => {
+      if (inserted) return;
+      inserted = true;
+      rowsByDate.get(recoveryDate).push(structuredClone(other));
+    },
+  });
+  const [item] = await sheet.run([recoveryOrder({ code: 'TH999999999999' })]);
+  assert.equal(item.error, undefined);
+  assert.deepEqual(sheet.rowsByDate.get(recoveryDate)[1], other);
+  assert.equal(item.result.row.sheetRowNumber, 4);
+});
+
+test('batch duplicate readback cannot retain a row removed since reconciliation', async (t) => {
+  const sheet = recoverySheet(t, { [recoveryDate]: [recoveryRow({ 10: 46259, 11: 0.375, 12: recoveryCode })] }, {
+    beforeRead: ({ rowsByDate, count }) => { if (count >= 3) rowsByDate.set(recoveryDate, []); },
+  });
+  const [item] = await sheet.run([recoveryOrder()], false);
+  assert.equal(item.result?.row ?? null, null);
+  assert.notEqual(item.result?.nativeDataTypesVerified, true);
+});
+
+test('batch repeated order uses final readback instead of its synthesized placeholder', async (t) => {
+  const sheet = recoverySheet(t, { [recoveryDate]: [] });
+  const items = await sheet.run([recoveryOrder(), recoveryOrder()]);
+  assert.equal(sheet.rowsByDate.get(recoveryDate).length, 1);
+  for (const item of items) {
+    assert.equal(item.error, undefined);
+    assert.equal(item.result.row.no, '1');
+    assert.equal(item.result.row.code, recoveryCode);
+    assert.equal(item.result.nativeDataTypesVerified, true);
+    assert.equal(item.result.isPacker, true);
+  }
+});
+
+test('batch leaves failed RAW repairs unverified when Google returns legacy text again', async (t) => {
+  const sheet = recoverySheet(t, { [recoveryDate]: [recoveryRow({ 2: recoveryDate, 3: '12:00:00', 8: 'Issue' })] }, { dropUpdates: true });
+  const [item] = await sheet.run([recoveryOrder()]);
+  assert.notEqual(item.result?.nativeDataTypesVerified, true);
+  assert.equal(item.result?.row?.status, 'Issue');
+});
+
+test('batch native verification rejects partial Admin pairs and invalid numeric dates', async (t) => {
+  const orders = [recoveryOrder(), recoveryOrder({ code: 'TH999999999999' })];
+  const sheet = recoverySheet(t, { [recoveryDate]: [
+    recoveryRow({ 10: 46259, 11: '', 12: recoveryCode }),
+    recoveryRow({ 0: 2, 1: 2, 2: 0, 5: orders[1].code, 10: 46259, 11: 0.375, 12: orders[1].code }),
+  ] });
+  const items = await sheet.run(orders, false);
+  assert.ok(items.every((item) => item.result?.nativeDataTypesVerified === false));
+});
+
 test('missing-order lookback includes the Bangkok boundary day but filters exact row times', () => {
   const now = new Date('2026-08-31T15:00:00.000Z'); // 22:00 Bangkok
   const lookbackMs = 48 * 60 * 60 * 1000;
@@ -820,7 +1079,7 @@ test('batch recovery read-verifies an existing duplicate before certifying it', 
     if (decodedUrl.includes('includeGridData=true')) {
       const values = Array.from({ length: 10 }, (_, index) => (
         [0, 1, 8, 9].includes(index)
-          ? { userEnteredValue: { numberValue: index + 1 } }
+          ? { userEnteredValue: { numberValue: ({ 0: 46241, 1: 10 / 24, 8: 46241, 9: 9 / 24 })[index] } }
           : {}
       ));
       return jsonResponse({ sheets: [{ data: [{ rowData: [{ values }] }] }] });
