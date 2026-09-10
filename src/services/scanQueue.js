@@ -19,7 +19,7 @@ export function createScanQueue({ process, onStateChange = () => {}, maxSize = 1
   let failed = 0;
   let results = [];
   let disposed = false;
-  let drainPromise = null;
+  let draining = false;
 
   function getSnapshot() {
     return {
@@ -62,7 +62,7 @@ export function createScanQueue({ process, onStateChange = () => {}, maxSize = 1
       results = [queueResult, ...results].slice(0, 20);
       notify();
     }
-    drainPromise = null;
+    draining = false;
   }
 
   function enqueue(job) {
@@ -81,7 +81,11 @@ export function createScanQueue({ process, onStateChange = () => {}, maxSize = 1
     pending.push(queuedJob);
     pendingCodes.add(pendingKey(queuedJob));
     notify();
-    if (!drainPromise) drainPromise = drain();
+    if (!draining) {
+      // process can throw before drain reaches an await, so mark it active before calling it.
+      draining = true;
+      void drain();
+    }
     return { accepted: true, reason: null, job: queuedJob };
   }
 

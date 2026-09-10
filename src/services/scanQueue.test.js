@@ -96,3 +96,39 @@ test('continues with the next scan after a processing error', async () => {
   assert.equal(failedResult.job.code, 'A');
   assert.equal(failedResult.error.message, 'offline');
 });
+
+test('restarts after a synchronous processing throw and allows the failed scan to retry', async () => {
+  const failure = new Error('offline');
+  let shouldFail = true;
+  const processed = [];
+  const queue = createScanQueue({
+    process: (job) => {
+      processed.push(job.code);
+      if (shouldFail) {
+        shouldFail = false;
+        throw failure;
+      }
+      return { status: 'success', code: job.code };
+    },
+  });
+
+  assert.equal(queue.enqueue({ id: '1', code: 'A', context: {} }).accepted, true);
+  await waitFor(() => queue.getSnapshot().completed === 1);
+  assert.equal(queue.getSnapshot().lastResult.error, failure);
+
+  assert.equal(queue.enqueue({ id: '2', code: 'B', context: {} }).accepted, true);
+  assert.equal(queue.enqueue({ id: '3', code: 'A', context: {} }).accepted, true);
+  await waitFor(() => queue.getSnapshot().completed === 3);
+
+  assert.deepEqual(processed, ['A', 'B', 'A']);
+  const snapshot = queue.getSnapshot();
+  assert.equal(snapshot.failed, 1);
+  assert.equal(snapshot.processing, null);
+  assert.deepEqual(snapshot.pending, []);
+  assert.deepEqual(snapshot.results.map(({ job, status }) => ({ id: job.id, status })), [
+    { id: '3', status: 'success' },
+    { id: '2', status: 'success' },
+    { id: '1', status: 'error' },
+  ]);
+  assert.deepEqual(snapshot.lastResult.result, { status: 'success', code: 'A' });
+});
