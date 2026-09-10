@@ -30,6 +30,8 @@ import { getScanEventDate } from './scanRow.js';
 import {
   getMissingOrderQueryFilters,
   getMissingOrderQueryWindow,
+  collectScanReportOrders,
+  parseBangkokScanTimestamp,
   uniqueQueryDates,
 } from './firestoreQueryPlanning.js';
 
@@ -1230,12 +1232,13 @@ export async function searchScansFirestore({ query: searchQuery, couriers = [], 
 
 export async function getScanReportFirestore({ couriers = [], dates }) {
   const uniqueDates = [...new Set(dates)].filter(Boolean).sort();
-  const orders = (await getOrdersByDates(uniqueDates)).filter((order) => {
-    const eventDate = order.packerScan?.scannedAt?.split('T')[0]
-      || order.admin?.scannedAt?.split('T')[0]
-      || order.date;
-    return uniqueDates.includes(eventDate);
+  const { orders, limited } = await collectScanReportOrders({
+    dates: uniqueDates, cap: DAILY_ORDER_SCAN_LIMIT,
+    readDate: getOrdersByDate,
+    readPacker: (date) => getPackerOrdersByScanDate(date, { strict: true }),
+    readAdmin: (date) => getAdminOrdersByScanDate(date, { strict: true }),
   });
+  if (limited) throw Object.assign(new Error('ข้อมูลรายงานถึงขีดจำกัดการอ่าน ยังยืนยันยอดรวมทั้งหมดไม่ได้ กรุณาให้ผู้ดูแลตรวจสอบ'), { code: 'REPORT_READ_LIMIT' });
   const dayMap = new Map(uniqueDates.map((date) => [date, {
     ...reportDay(date),
     couriers: couriers.map((courier) => ({ courier, count: 0 })),
@@ -1313,7 +1316,7 @@ export async function checkMissingOrdersFirestore({
   for (const order of orders) {
     if (courier && order.courier !== courier) continue;
     if (!order.admin?.scannedAt) continue;
-    const adminMs = new Date(order.admin.scannedAt).getTime();
+    const adminMs = parseBangkokScanTimestamp(order.admin.scannedAt);
     if (Number.isFinite(adminMs) && now - adminMs > lookbackMs) continue;
     const row = orderToRow(order, order.id);
 
