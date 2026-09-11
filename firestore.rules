@@ -279,6 +279,27 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // กระดานกลางระหว่างเครื่องที่สแกนกับรีโมทบนมือถือ — เอกสารใบเดียว ไม่ใช่คิวคำสั่ง
+    // เขียนได้ทุกคนที่เป็นพนักงานปฏิบัติการ (ไม่ใช่แค่ Admin) เพราะคนแพ็คต้องกดเปลี่ยนเอง
+    match /scanRemoteControl/{controlId} {
+      allow read: if isOperationalStaff();
+      allow create, update: if isOperationalStaff()
+        && controlId == 'current'
+        && request.resource.data.keys().hasOnly([
+          'courier', 'packer', 'origin', 'updatedAt', 'updatedByUid'
+        ])
+        && request.resource.data.courier is string
+        && request.resource.data.courier.size() > 0
+        && request.resource.data.courier.size() <= 80
+        && request.resource.data.packer is string
+        && request.resource.data.packer.size() > 0
+        && request.resource.data.packer.size() <= 80
+        && request.resource.data.origin in ['remote', 'desktop']
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.updatedByUid == request.auth.uid;
+      allow delete: if false;
+    }
+
     match /couriers/{courierId} {
       allow read: if isOperationalStaff();
       allow create, update: if isStaffAdmin()

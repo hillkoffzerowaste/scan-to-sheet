@@ -124,3 +124,30 @@ test("weekly duty deletion refuses a truncated override cleanup", async () => {
     "the cap guard must run before destructive writes",
   );
 });
+
+test("the remote control board is one document that any operational staff member can write", async () => {
+  // If this ever narrows to isStaffAdmin() the phone remote dies silently for the packers,
+  // who are the only people who actually use it.
+  const rules = await readRules();
+  const block = rules.match(/match \/scanRemoteControl\/\{controlId\} \{([\s\S]*?)\n    \}/);
+
+  assert.ok(block, "scanRemoteControl rules must exist");
+  assert.match(block[1], /allow read: if isOperationalStaff\(\);/);
+  assert.match(block[1], /allow create, update: if isOperationalStaff\(\)/);
+  assert.doesNotMatch(block[1], /isStaffAdmin\(\)/);
+  assert.match(block[1], /controlId == 'current'/);
+  assert.match(block[1], /allow delete: if false;/);
+});
+
+test("a remote control write carries exactly five keys, a server timestamp and the caller's uid", async () => {
+  const rules = await readRules();
+  const block = rules.match(/match \/scanRemoteControl\/\{controlId\} \{([\s\S]*?)\n    \}/);
+  const hasOnly = block[1].match(/hasOnly\(\[([\s\S]*?)\]\)/);
+
+  assert.ok(hasOnly, "the payload must be pinned with hasOnly");
+  const keys = hasOnly[1].match(/'([^']+)'/g).map((item) => item.slice(1, -1));
+  assert.deepEqual(keys.sort(), ['courier', 'origin', 'packer', 'updatedAt', 'updatedByUid']);
+  assert.match(block[1], /request\.resource\.data\.origin in \['remote', 'desktop'\]/);
+  assert.match(block[1], /request\.resource\.data\.updatedAt == request\.time/);
+  assert.match(block[1], /request\.resource\.data\.updatedByUid == request\.auth\.uid/);
+});
