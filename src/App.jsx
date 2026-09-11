@@ -108,6 +108,13 @@ import {
   scanErrorMessage,
   userErrorMessage,
 } from './services/authErrors.js';
+import { subscribeRemoteControl, writeRemoteControl } from './services/remoteControl.js';
+import {
+  REMOTE_ORIGIN_DESKTOP,
+  remoteControlSignature,
+  shouldApplyRemoteControlDoc,
+  shouldWriteRemoteControl,
+} from './services/remoteControlRules.js';
 import { shouldPollMissingOrders } from './services/missingCheckPolicy.js';
 import { getSheetRecoveryDates } from './services/sheetRecoveryDates.js';
 import { runSheetRecovery, isSheetSyncVerified, requireSheetSyncAcknowledgement } from './services/sheetSync.js';
@@ -135,6 +142,10 @@ const SHEET_RECOVERY_COOLDOWN_MS = 5 * 1000;
 const SHEET_RECOVERY_INTERVAL_MS = 15 * 60 * 1000;
 const COUNT_REFRESH_DELAY_MS = 1000;
 const DEPLOYMENT_UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;
+// ธงปิดได้ทันทีที่ Vercel ถ้าการ sync จากรีโมทก่อกวนหน้างาน โดยไม่ต้อง rollback
+const REMOTE_CONTROL_ENABLED = import.meta.env.VITE_REMOTE_CONTROL_ENABLED !== 'false';
+// รวมการตั้ง state สองตัวติดกัน (คำสั่ง QR, การ normalize ตอนบูต) ให้เหลือ write เดียว
+const REMOTE_CONTROL_WRITE_DEBOUNCE_MS = 600;
 
 const EMPTY_USER = {
   email: 'ยังไม่ได้เข้าสู่ระบบ',
@@ -276,6 +287,8 @@ function App() {
   const [selectedPacker, setSelectedPacker] = useState(PACKER_UNASSIGNED);
   const [packerOptions, setPackerOptions] = useState(DEFAULT_PACKERS);
   const [qrPackerMembers, setQrPackerMembers] = useState([]);
+  // การเปลี่ยนที่มาจากรีโมทบนมือถือแจ้งที่แถบสถานะล่างเท่านั้น ไม่เด้ง banner ทับงานที่คนหน้าคอมทำอยู่
+  const [remoteControlHint, setRemoteControlHint] = useState(null);
   const [scanRemark, setScanRemark] = useState('');
   const [status, setStatus] = useState(() => ({
     type: GOOGLE_CLIENT_ID ? 'idle' : 'warning',
@@ -346,6 +359,10 @@ function App() {
   const marketplaceFileRef = useRef(null);
   const mainScanInputRef = useRef(null);
   const popupScanInputRef = useRef(null);
+  const remoteControlCouriersRef = useRef(COURIERS);
+  const remoteControlPackersRef = useRef(DEFAULT_PACKERS);
+  const lastAppliedRemoteSignatureRef = useRef(null);
+  const remoteControlReadyRef = useRef(false);
   const scanValueRef = useRef('');
   const audioContextRef = useRef(null);
   const cameraRef = useRef(null);
@@ -654,6 +671,53 @@ function App() {
       onError: (error) => console.warn('Courier list sync failed:', error),
     });
   }, [firebaseUser]);
+
+  // รายชื่อที่ใช้ตรวจคำสั่งจากรีโมทเก็บไว้ใน ref ไม่ใช่ dependency เพราะถ้าใส่ใน deps
+  // listener จะ detach/attach ใหม่ทุกครั้งที่รายชื่อขนส่งหรือพนักงานเปลี่ยน = เสีย read ฟรี
+  useEffect(() => {
+    remoteControlCouriersRef.current = couriers;
+  }, [couriers]);
+
+  useEffect(() => {
+    remoteControlPackersRef.current = packerOptions;
+  }, [packerOptions]);
+
+  useEffect(() => {
+    if (!REMOTE_CONTROL_ENABLED || !firebaseUser) return () => {};
+    return subscribeRemoteControl({
+      onChange: (data) => {
+        const applied = shouldApplyRemoteControlDoc({
+          data,
+          myOrigin: REMOTE_ORIGIN_DESKTOP,
+          knownCouriers: remoteControlCouriersRef.current,
+          knownPackers: remoteControlPackersRef.current,
+          lastAppliedSignature: lastAppliedRemoteSignatureRef.current,
+        });
+        if (!applied) return;
+        applyRemoteSelection(applied);
+      },
+      onError: (error) => console.warn('Remote control sync failed:', error),
+    });
+  }, [firebaseUser]);
+
+  // เขียนค่ากลับเมื่อคนกดเปลี่ยนที่คอมเอง เพื่อให้มือถือเห็นสถานะจริง
+  useEffect(() => {
+    if (!REMOTE_CONTROL_ENABLED || !firebaseUser) return () => {};
+    // ข้ามรันแรก ไม่งั้นค่า default COURIERS[0] ตอนเปิดคอมจะเขียนทับค่าที่มือถือเพิ่งตั้งไว้
+    if (!remoteControlReadyRef.current) {
+      remoteControlReadyRef.current = true;
+      return () => {};
+    }
+    const next = { courier: selectedCourier, packer: selectedPacker };
+    if (!shouldWriteRemoteControl({ next, lastAppliedSignature: lastAppliedRemoteSignatureRef.current })) {
+      return () => {};
+    }
+    const timer = window.setTimeout(() => {
+      writeRemoteControl({ ...next, origin: REMOTE_ORIGIN_DESKTOP, uid: firebaseUser.uid })
+        .catch((error) => console.warn('Remote control mirror failed:', error));
+    }, REMOTE_CONTROL_WRITE_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [selectedCourier, selectedPacker, firebaseUser]);
 
   useEffect(() => {
     const queue = createScanQueue({
@@ -2379,6 +2443,16 @@ function App() {
     updateScanValue(nextValue);
   }
 
+  // คำสั่งจากมือถือต้องเปลี่ยนค่าเงียบ ๆ: ไม่เด้ง banner และไม่แย่ง focus ช่องสแกนที่คนกำลังยิงอยู่
+  // จึงไม่เรียก setStatus และไม่เรียก focusScanInput ที่นี่
+  function applyRemoteSelection({ courier, packer, signature }) {
+    lastAppliedRemoteSignatureRef.current = signature;
+    setSelectedCourier(courier);
+    setAllowAnyTrackingFormat(!COURIERS.includes(courier));
+    if (packer) setSelectedPacker(packer);
+    setRemoteControlHint({ courier, packer, at: Date.now() });
+  }
+
   function handlePopupCourierChange(nextCourier) {
     setSelectedCourier(nextCourier);
     setAllowAnyTrackingFormat(!COURIERS.includes(nextCourier));
@@ -3396,6 +3470,7 @@ function App() {
         scanQueueSnapshot={scanQueueSnapshot}
         selectedPacker={selectedPacker}
         today={today}
+        remoteControlHint={remoteControlHint}
       />
     </div>
     </>
