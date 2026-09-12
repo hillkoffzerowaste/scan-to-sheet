@@ -176,6 +176,15 @@ firestore.rules              ต้องแก้ตามเมื่อเพ
 - **skip link ต้องชี้ที่ `<main>` ที่ไม่มี nav อยู่ข้างใน** — เคยชี้ที่ `div` ที่ครอบทั้ง menu bar และ sidebar กดแล้วกด Tab ต่อก็เข้าเมนูเหมือนเดิม คือไม่ได้ข้ามอะไรเลย (มีเทสต์ e2e ล็อกไว้แล้วในชุด `Shell regressions`)
 - **`inputRef` ตัวเดียวถูกใช้ทั้งช่องสแกนในหน้าและช่องสแกนใน popup** ซึ่งอยู่ใน DOM พร้อมกันตอน popup เปิด ตอนปิด popup React จะเซ็ต ref เป็น `null` ทั้งที่ช่องในหน้ายังอยู่ → `focusScanInput` ไม่ทำงานจนกว่าจะ re-render ครั้งถัดไป ตอนนี้ถูกกลบด้วยนาฬิกาที่ `setToday` ทุก 1 วินาที ช่องโหว่จึงไม่เกิน 1 วิ **ยังไม่ได้แก้เพราะพิสูจน์ไม่ได้ถ้าไม่ login จริง** ถ้าจะแก้ต้องให้ ref ของ popup เคลียร์เฉพาะตอนที่ตัวเองเป็นเจ้าของ ref อยู่
 
+**PWA / รีโมทบนมือถือ**
+
+- `/remote` เป็น React tree แยก เลือกใน `src/main.jsx` ก่อน render และโหลดด้วย dynamic `import()` — เครื่องที่สแกนจึงไม่ดาวน์โหลด bundle ของรีโมท และ CSS ของรีโมทไม่เข้าไปในหน้าเดสก์ท็อป (ถ้าเปลี่ยนเป็น static import เทสต์ token จะแดงทันที เพราะ `--remote-touch` ประกาศใน scope `.remote-app`)
+- **`public/remote-sw.js` ต้องเป็น network-first ห้ามมีเส้นทาง cache-first** — `public/sw.js` เดิมเสิร์ฟจาก cache ก่อน network ทำให้เครื่องที่สแกนรันบันเดิลเก่าเงียบสนิท จนต้องใส่โค้ด unregister ทุกครั้งที่บูต (คอมมิต `e1b980b`) ไฟล์นั้นถูกลบไปแล้ว ห้ามเอากลับมา
+- โค้ด unregister ใน `src/main.jsx` **ต้องกรอง scope `/remote` ออก** ไม่งั้นการเปิดหน้าแอปหลักบนมือถือเครื่องเดียวกันจะฆ่า service worker ของรีโมททิ้ง
+- ชื่อ cache ของรีโมทห้ามขึ้นต้นด้วย `scan-to-sheet-` เพราะ `src/main.jsx` ลบ cache ที่ prefix นั้นทุกบูต
+- ฟังก์ชันที่ effect เรียกตอน render **ห้ามโยน error แบบ synchronous เมื่อ Firestore ยังไม่พร้อม** — `subscribeRemoteControl` เคยทำแบบนั้นแล้วทำให้ `<App>` ทั้งตัวพังบนเครื่องที่ไม่ได้ตั้งค่า Firebase
+- ถ้า Vercel ตั้ง `GOOGLE_OAUTH_REDIRECT_URI` ไว้ ปลายทาง `/remote` จะถูกปฏิเสธด้วย `OAUTH_REDIRECT_INVALID` (`api/google-oauth-start.js:13`) หน้ารีโมทจะเด้งไปล็อกอินที่ `/` แล้วกลับมาเอง — ต้องเพิ่ม `https://<โดเมน>/remote` ใน Authorized redirect URIs ของ Google Cloud Console ด้วย
+
 **Build / JSX**
 
 - **โปรเจกต์นี้ไม่มี `vite.config.js`** JSX จึงถูกแปลงด้วย esbuild แบบ classic ไม่ใช่ automatic runtime → **ทุกไฟล์ `.jsx` ต้อง `import React from 'react'` เอง** ไม่งั้นพังเป็น `ReferenceError: React is not defined` ตอน render **ไม่ใช่ตอน build** (`npm run build` ผ่านเฉยเลย) — เจอครั้งแรกตอนแยก `ReportsView` ออกจาก `App.jsx`
