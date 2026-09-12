@@ -79,3 +79,46 @@ export async function openSignedInApp(page, { staffAdmin = true } = {}) {
   await expect(page.locator('#scan-input')).toBeEnabled();
   await expect(page.locator('.workspace-qr-panel .scan-qr-card').first()).toBeEnabled();
 }
+
+// The remote screen is its own tree with its own service boundaries: Firebase Auth, the courier
+// and staff lists, and the shared control document. Writes land in window.remoteTestWrites so a
+// test can prove that an echo of its own command produces no second write.
+export async function openRemoteApp(page, { board = null } = {}) {
+  await page.route('**/*', (route) => {
+    const url = new URL(route.request().url());
+    if (url.hostname !== 'localhost' && url.hostname !== '127.0.0.1') return route.abort();
+    return route.continue();
+  });
+  await page.addInitScript(() => { window.remoteTestWrites = []; });
+  await mockModule(page, '/src/services/firebase.js', `
+    export const isFirebaseConfigured = true;
+    const user = { uid: 'remote-test-user', email: 'remote-test@example.invalid' };
+    export const firebaseAuth = { currentUser: user };
+    export const onAuthStateChanged = (_auth, callback) => { callback(user); return () => {}; };
+    export const signInWithCredential = async () => ({ user });
+    export const GoogleAuthProvider = { credential: () => ({}) };
+  `);
+  await mockModule(page, '/src/services/firebaseScans.js', `
+    export const subscribeCouriers = ({ defaultCouriers, onChange }) => { onChange(defaultCouriers); return () => {}; };
+  `);
+  await mockModule(page, '/src/features/staff/staffService.js', `
+    export const subscribeStaffMembers = ({ onChange }) => {
+      onChange([
+        { id: 'remote-a', nickname: 'คนแพ็ค A', position: 'packer', active: true, sortOrder: 1 },
+        { id: 'remote-b', nickname: 'คนแพ็ค B', position: 'packer', active: true, sortOrder: 2 }
+      ]);
+      return () => {};
+    };
+  `);
+  await mockModule(page, '/src/services/remoteControl.js', `
+    export const subscribeRemoteControl = ({ onChange }) => {
+      window.remotePushBoard = onChange;
+      onChange(${JSON.stringify(board)});
+      return () => {};
+    };
+    export const writeRemoteControl = async (payload) => { window.remoteTestWrites.push(payload); };
+  `);
+  await page.goto('/remote');
+  // รอจนผ่านหน้าเข้าสู่ระบบแล้วจริง ๆ ไม่ใช่แค่ .remote-app ปรากฏ ซึ่งเป็นจริงตั้งแต่หน้ายังไม่ล็อกอิน
+  await expect(page.locator('.remote-grid .remote-choice').first()).toBeVisible();
+}

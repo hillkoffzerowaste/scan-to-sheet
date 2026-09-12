@@ -18,7 +18,6 @@ import '@fontsource/kanit/thai-600.css';
 import '@fontsource/kanit/thai-700.css';
 import '@fontsource/kanit/thai-800.css';
 import App from './App.jsx';
-import RemoteApp from './remote/RemoteApp.jsx';
 import './styles.css';
 import { getCanonicalAppRedirect } from './services/canonicalApp.js';
 import { isRemoteRoute } from './services/remoteRoute.js';
@@ -37,11 +36,15 @@ if (canonicalRedirect) {
     navigator.serviceWorker.register('/remote-sw.js', { scope: '/remote' }).catch(() => {});
   }
 
-  createRoot(document.getElementById('root')).render(
-    <React.StrictMode>
-      <RemoteApp />
-    </React.StrictMode>,
-  );
+  // โหลดแยก bundle: เครื่องที่สแกนไม่ต้องดาวน์โหลดหน้ารีโมท และหน้ารีโมทไม่ลาก CSS ของ shell
+  // เดสก์ท็อปมาด้วย (ตัวแปร --remote-touch ประกาศใน scope .remote-app ไม่ใช่ :root)
+  import('./remote/RemoteApp.jsx').then(({ default: RemoteApp }) => {
+    createRoot(document.getElementById('root')).render(
+      <React.StrictMode>
+        <RemoteApp />
+      </React.StrictMode>,
+    );
+  });
 } else {
   if ('serviceWorker' in navigator) {
     // Registrations are cleared here because an earlier cache-first worker served a stale bundle

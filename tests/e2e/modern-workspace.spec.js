@@ -132,3 +132,10 @@ for (const theme of ['light', 'dark']) {
     expect(await page.evaluate(() => window.qrTestWrites)).toEqual([]);
   });
 }
+
+test('the root path still loads the desktop shell after the remote route was added', async ({ page }) => {
+  // isRemoteRoute must not match "/" — a startsWith check would have taken the whole app away.
+  await openSignedInApp(page);
+  await expect(page.locator('.win-titlebar')).toHaveCount(1);
+  await expect(page.locator('.remote-app')).toHaveCount(0);
+});

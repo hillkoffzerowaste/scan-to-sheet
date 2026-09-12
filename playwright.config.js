@@ -20,6 +20,14 @@ export default defineConfig({
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
+      testIgnore: /remote-.*\.spec\.js/,
+    },
+    // รีโมทเป็น surface เดียวที่ไม่ใช่ desktop-only จึงมี project ของตัวเอง — ห้ามเอา viewport
+    // มือถือกลับเข้า project chromium เพราะชุด "Desktop layout" ตรวจ 1280/1440/1920
+    {
+      name: 'remote',
+      testMatch: /remote-.*\.spec\.js/,
+      use: { ...devices['Pixel 5'] },
     },
     // project 'Mobile Chrome' (Pixel 5) ถูกถอดออกพร้อมกับการย้ายมาใช้ Windows Enterprise Shell
     // ซึ่งเป็น desktop-only — ความกว้างที่ต้องคุ้มครองย้ายไปอยู่ในชุด "Desktop layout"

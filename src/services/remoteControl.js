@@ -16,6 +16,12 @@ function remoteControlDoc() {
 }
 
 export function subscribeRemoteControl({ onChange, onError }) {
+  // Effects call this during render. Throwing here would take down the whole app on a device
+  // where Firestore is not configured, which is a far worse failure than losing the remote.
+  if (!firestoreDb) {
+    onError?.(Object.assign(new Error('ยังไม่ได้ตั้งค่า Firebase'), { code: 'FIREBASE_NOT_CONFIGURED' }));
+    return () => {};
+  }
   return onSnapshot(
     remoteControlDoc(),
     (snapshot) => onChange(snapshot.exists() ? snapshot.data() : null),
