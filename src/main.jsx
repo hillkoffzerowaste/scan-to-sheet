@@ -18,18 +18,34 @@ import '@fontsource/kanit/thai-600.css';
 import '@fontsource/kanit/thai-700.css';
 import '@fontsource/kanit/thai-800.css';
 import App from './App.jsx';
+import RemoteApp from './remote/RemoteApp.jsx';
 import './styles.css';
 import { getCanonicalAppRedirect } from './services/canonicalApp.js';
+import { isRemoteRoute } from './services/remoteRoute.js';
 
 const PRIMARY_APP_URL = import.meta.env.VITE_PRIMARY_APP_URL || 'https://scan-to-sheet-ten.vercel.app';
 const canonicalRedirect = getCanonicalAppRedirect(window.location, PRIMARY_APP_URL);
 
 if (canonicalRedirect) {
   window.location.replace(canonicalRedirect);
+} else if (isRemoteRoute(window.location)) {
+  const manifestLink = document.querySelector('link[rel="manifest"]');
+  if (manifestLink) manifestLink.setAttribute('href', '/remote.webmanifest');
+
+  createRoot(document.getElementById('root')).render(
+    <React.StrictMode>
+      <RemoteApp />
+    </React.StrictMode>,
+  );
 } else {
   if ('serviceWorker' in navigator) {
+    // Registrations are cleared here because an earlier cache-first worker served a stale bundle
+    // to the scanning desktop without any sign (e1b980b). The remote screen has its own
+    // network-first worker, so its scope must survive someone opening the desktop app.
     navigator.serviceWorker.getRegistrations?.()
-      .then((registrations) => Promise.all(registrations.map((registration) => registration.unregister())))
+      .then((registrations) => Promise.all(registrations
+        .filter((registration) => !/\/remote\/?$/.test(registration.scope))
+        .map((registration) => registration.unregister())))
       .catch(() => {});
   }
 

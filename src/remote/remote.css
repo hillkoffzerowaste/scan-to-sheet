@@ -1,0 +1,146 @@
+/* หน้าเดียวสำหรับมือถือ ใช้ token ชุดเดียวกับแอปหลักทั้งหมด (ประกาศไว้ที่ต้น src/styles.css)
+   ตัวแปรที่มีเฉพาะที่นี่ประกาศใน scope ของ .remote-app ไม่ใช่ :root ชุดที่สาม */
+.remote-app {
+  --remote-touch: 44px;
+  display: block;
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 16px 16px 32px;
+  background: var(--page);
+  color: var(--text);
+  min-height: 100vh;
+  box-sizing: border-box;
+}
+
+.remote-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.remote-header h1 {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.remote-link {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.remote-link-on {
+  color: var(--primary);
+}
+
+.remote-now {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  padding: 12px;
+  margin-bottom: 16px;
+}
+
+.remote-now-label,
+.remote-now-note {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.remote-now-value {
+  margin: 4px 0 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.remote-now-note {
+  margin-top: 4px;
+}
+
+.remote-section-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+  margin: 16px 0 8px;
+}
+
+.remote-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.remote-choice,
+.remote-signin {
+  min-height: var(--remote-touch);
+  padding: 10px 12px;
+  border: 1px solid var(--control-line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+  cursor: pointer;
+  transition: background-color var(--dur-press) ease, border-color var(--dur-press) ease;
+}
+
+.remote-choice-on {
+  /* พื้นสีแบรนด์คู่กับตัวหนังสือเข้ม --on-primary เสมอ: --primary-fill เป็นสีตัวหนังสือหรือสีขอบไม่ได้ */
+  background: var(--primary-fill);
+  border-color: var(--primary-strong);
+  color: var(--on-primary);
+  font-weight: 600;
+}
+
+.remote-choice:active,
+.remote-signin:active {
+  transform: scale(0.97);
+}
+
+.remote-choice:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+
+.remote-choice:focus-visible,
+.remote-signin:focus-visible {
+  outline: 2px solid var(--primary-strong);
+  outline-offset: 2px;
+}
+
+.remote-signin {
+  display: block;
+  width: 100%;
+  margin-top: 16px;
+  background: var(--primary-fill);
+  border-color: var(--primary-strong);
+  color: var(--on-primary);
+  font-weight: 600;
+}
+
+.remote-empty,
+.remote-foot {
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.remote-foot {
+  margin-top: 20px;
+}
+
+.remote-message {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  font-size: 14px;
+  margin: 0 0 12px;
+}
+
+.remote-message-error {
+  border-color: var(--danger-line);
+  background: var(--danger-bg);
+  color: var(--danger);
+}
