@@ -32,6 +32,11 @@ if (canonicalRedirect) {
   const manifestLink = document.querySelector('link[rel="manifest"]');
   if (manifestLink) manifestLink.setAttribute('href', '/remote.webmanifest');
 
+  if ('serviceWorker' in navigator) {
+    // scope แคบไว้ที่ /remote เท่านั้น เพื่อไม่ให้ worker ตัวนี้ไปคุมหน้าแอปบนเครื่องที่สแกน
+    navigator.serviceWorker.register('/remote-sw.js', { scope: '/remote' }).catch(() => {});
+  }
+
   createRoot(document.getElementById('root')).render(
     <React.StrictMode>
       <RemoteApp />

@@ -1,0 +1,43 @@
+{
+  "id": "/remote",
+  "name": "รีโมทสแกน HILLKOFF",
+  "short_name": "รีโมทสแกน",
+  "description": "เลือกขนส่งและคนแพ็คให้เครื่องที่สแกนอยู่ จากมือถือ",
+  "start_url": "/remote",
+  "scope": "/remote",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F3F6F6",
+  "theme_color": "#058581",
+  "lang": "th",
+  "categories": [
+    "business",
+    "productivity"
+  ],
+  "icons": [
+    {
+      "src": "/icons/icon-192.webp",
+      "type": "image/webp",
+      "sizes": "192x192",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.webp",
+      "type": "image/webp",
+      "sizes": "512x512",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-192.webp",
+      "type": "image/webp",
+      "sizes": "192x192",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/icon-512.webp",
+      "type": "image/webp",
+      "sizes": "512x512",
+      "purpose": "maskable"
+    }
+  ]
+}
