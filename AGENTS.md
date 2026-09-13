@@ -185,7 +185,7 @@ firestore.rules              ต้องแก้ตามเมื่อเพ
 - โค้ด unregister ใน `src/main.jsx` **ต้องกรอง scope `/remote` ออก** ไม่งั้นการเปิดหน้าแอปหลักบนมือถือเครื่องเดียวกันจะฆ่า service worker ของรีโมททิ้ง
 - ชื่อ cache ของรีโมทห้ามขึ้นต้นด้วย `scan-to-sheet-` เพราะ `src/main.jsx` ลบ cache ที่ prefix นั้นทุกบูต
 - ฟังก์ชันที่ effect เรียกตอน render **ห้ามโยน error แบบ synchronous เมื่อ Firestore ยังไม่พร้อม** — `subscribeRemoteControl` เคยทำแบบนั้นแล้วทำให้ `<App>` ทั้งตัวพังบนเครื่องที่ไม่ได้ตั้งค่า Firebase
-- ถ้า Vercel ตั้ง `GOOGLE_OAUTH_REDIRECT_URI` ไว้ ปลายทาง `/remote` จะถูกปฏิเสธด้วย `OAUTH_REDIRECT_INVALID` (`api/google-oauth-start.js:13`) หน้ารีโมทจะเด้งไปล็อกอินที่ `/` แล้วกลับมาเอง — ต้องเพิ่ม `https://<โดเมน>/remote` ใน Authorized redirect URIs ของ Google Cloud Console ด้วย
+- **`https://scan-to-sheet-ten.vercel.app/remote` ถูกเพิ่มใน Authorized redirect URIs ของ Google Cloud Console แล้ว และทดสอบล็อกอินจากมือถือผ่านแล้ว** (2026-09-13) ถ้าย้ายโดเมนหรือเพิ่มโดเมนใหม่ต้องเพิ่ม `/remote` ของโดเมนนั้นด้วย — ไม่งั้น `api/google-oauth-start.js:13` จะตอบ `OAUTH_REDIRECT_INVALID` แล้วหน้ารีโมทจะตกไปใช้ทางสำรองคือเด้งไปล็อกอินที่ `/` แล้วกลับมาเอง (ช้ากว่าเพราะแอปเดสก์ท็อปบูตหนึ่งรอบบนมือถือ และยังไม่เคยถูกใช้จริง)
 
 **Build / JSX**
 
