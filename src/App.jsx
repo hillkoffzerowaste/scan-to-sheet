@@ -111,6 +111,7 @@ import {
 import { subscribeRemoteControl, writeRemoteControl } from './services/remoteControl.js';
 import {
   REMOTE_ORIGIN_DESKTOP,
+  remoteControlDocId,
   remoteControlSignature,
   shouldApplyRemoteControlDoc,
   shouldWriteRemoteControl,
@@ -362,7 +363,7 @@ function App() {
   const remoteControlCouriersRef = useRef(COURIERS);
   const remoteControlPackersRef = useRef(DEFAULT_PACKERS);
   const lastAppliedRemoteSignatureRef = useRef(null);
-  const remoteControlReadyRef = useRef(false);
+  const remoteControlTabRef = useRef(null);
   const scanValueRef = useRef('');
   const audioContextRef = useRef(null);
   const cameraRef = useRef(null);
@@ -682,12 +683,17 @@ function App() {
     remoteControlPackersRef.current = packerOptions;
   }, [packerOptions]);
 
+  // ผูกกับแท็บที่เปิดอยู่: โหมด Packer และ Drive ใช้ selectedCourier ตัวเดียวกัน กระดานจึงต้องแยกใบ
+  // การ attach ใหม่ตอนสลับแท็บทำให้ได้ค่าล่าสุดของโหมดนั้นทันที (1 read) โดยไม่ต้องเก็บค่าค้างไว้เอง
   useEffect(() => {
-    if (!REMOTE_CONTROL_ENABLED || !firebaseUser) return () => {};
+    if (!REMOTE_CONTROL_ENABLED || !firebaseUser || !remoteControlDocId(activeTab)) return () => {};
+    lastAppliedRemoteSignatureRef.current = null;
     return subscribeRemoteControl({
+      tab: activeTab,
       onChange: (data) => {
         const applied = shouldApplyRemoteControlDoc({
           data,
+          tab: activeTab,
           myOrigin: REMOTE_ORIGIN_DESKTOP,
           knownCouriers: remoteControlCouriersRef.current,
           knownPackers: remoteControlPackersRef.current,
@@ -698,14 +704,15 @@ function App() {
       },
       onError: (error) => console.warn('Remote control sync failed:', error),
     });
-  }, [firebaseUser]);
+  }, [firebaseUser, activeTab]);
 
-  // เขียนค่ากลับเมื่อคนกดเปลี่ยนที่คอมเอง เพื่อให้มือถือเห็นสถานะจริง
+  // เขียนค่ากลับเมื่อคนกดเปลี่ยนที่คอมเอง เพื่อให้มือถือเห็นสถานะจริง — เฉพาะกระดานของแท็บที่เปิดอยู่
   useEffect(() => {
-    if (!REMOTE_CONTROL_ENABLED || !firebaseUser) return () => {};
-    // ข้ามรันแรก ไม่งั้นค่า default COURIERS[0] ตอนเปิดคอมจะเขียนทับค่าที่มือถือเพิ่งตั้งไว้
-    if (!remoteControlReadyRef.current) {
-      remoteControlReadyRef.current = true;
+    if (!REMOTE_CONTROL_ENABLED || !firebaseUser || !remoteControlDocId(activeTab)) return () => {};
+    // รันแรกของแต่ละแท็บไม่ใช่การเลือกของคน: ตอนเปิดคอมเป็นค่า default COURIERS[0] และตอนสลับ
+    // แท็บเป็นค่าที่ค้างมาจากแท็บก่อน ทั้งสองกรณีจะไปทับค่าที่รีโมทเพิ่งตั้งไว้
+    if (remoteControlTabRef.current !== activeTab) {
+      remoteControlTabRef.current = activeTab;
       return () => {};
     }
     const next = { courier: selectedCourier, packer: selectedPacker };
@@ -713,11 +720,11 @@ function App() {
       return () => {};
     }
     const timer = window.setTimeout(() => {
-      writeRemoteControl({ ...next, origin: REMOTE_ORIGIN_DESKTOP, uid: firebaseUser.uid })
+      writeRemoteControl({ ...next, tab: activeTab, origin: REMOTE_ORIGIN_DESKTOP, uid: firebaseUser.uid })
         .catch((error) => console.warn('Remote control mirror failed:', error));
     }, REMOTE_CONTROL_WRITE_DEBOUNCE_MS);
     return () => window.clearTimeout(timer);
-  }, [selectedCourier, selectedPacker, firebaseUser]);
+  }, [selectedCourier, selectedPacker, firebaseUser, activeTab]);
 
   useEffect(() => {
     const queue = createScanQueue({

@@ -35,6 +35,42 @@
   color: var(--primary);
 }
 
+.remote-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.remote-tab {
+  min-height: var(--remote-touch);
+  padding: 10px 12px;
+  border: 1px solid var(--control-line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+  cursor: pointer;
+  transition: background-color var(--dur-press) ease, border-color var(--dur-press) ease;
+}
+
+.remote-tab-on {
+  background: var(--primary-fill);
+  border-color: var(--primary-strong);
+  color: var(--on-primary);
+  font-weight: 600;
+}
+
+.remote-tab:active {
+  transform: scale(0.97);
+}
+
+.remote-tab:focus-visible {
+  outline: 2px solid var(--primary-strong);
+  outline-offset: 2px;
+}
+
 .remote-now {
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);

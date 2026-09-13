@@ -125,7 +125,7 @@ test("weekly duty deletion refuses a truncated override cleanup", async () => {
   );
 });
 
-test("the remote control board is one document that any operational staff member can write", async () => {
+test("the remote control board is one document per workspace that any operational staff member can write", async () => {
   // If this ever narrows to isStaffAdmin() the phone remote dies silently for the packers,
   // who are the only people who actually use it.
   const rules = await readRules();
@@ -135,7 +135,7 @@ test("the remote control board is one document that any operational staff member
   assert.match(block[1], /allow read: if isOperationalStaff\(\);/);
   assert.match(block[1], /allow create, update: if isOperationalStaff\(\)/);
   assert.doesNotMatch(block[1], /isStaffAdmin\(\)/);
-  assert.match(block[1], /controlId == 'current'/);
+  assert.match(block[1], /controlId in \['packer', 'drive'\]/);
   assert.match(block[1], /allow delete: if false;/);
 });
 

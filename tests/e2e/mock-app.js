@@ -83,7 +83,7 @@ export async function openSignedInApp(page, { staffAdmin = true } = {}) {
 // The remote screen is its own tree with its own service boundaries: Firebase Auth, the courier
 // and staff lists, and the shared control document. Writes land in window.remoteTestWrites so a
 // test can prove that an echo of its own command produces no second write.
-export async function openRemoteApp(page, { board = null } = {}) {
+export async function openRemoteApp(page, { boards = {} } = {}) {
   await page.route('**/*', (route) => {
     const url = new URL(route.request().url());
     if (url.hostname !== 'localhost' && url.hostname !== '127.0.0.1') return route.abort();
@@ -111,9 +111,11 @@ export async function openRemoteApp(page, { board = null } = {}) {
     };
   `);
   await mockModule(page, '/src/services/remoteControl.js', `
-    export const subscribeRemoteControl = ({ onChange }) => {
+    const boards = ${JSON.stringify(boards)};
+    export const subscribeRemoteControl = ({ tab, onChange }) => {
+      window.remoteSubscribedTab = tab;
       window.remotePushBoard = onChange;
-      onChange(${JSON.stringify(board)});
+      onChange(boards[tab] ?? null);
       return () => {};
     };
     export const writeRemoteControl = async (payload) => { window.remoteTestWrites.push(payload); };

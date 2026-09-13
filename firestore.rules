@@ -279,12 +279,14 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // กระดานกลางระหว่างเครื่องที่สแกนกับรีโมทบนมือถือ — เอกสารใบเดียว ไม่ใช่คิวคำสั่ง
+    // กระดานกลางระหว่างเครื่องที่สแกนกับรีโมทบนมือถือ — ใบเดียวต่อโหมด ไม่ใช่คิวคำสั่ง
+    // แยก packer กับ drive เพราะทั้งสองโหมดใช้ selectedCourier ตัวเดียวกัน ถ้ารวมกระดานกัน
+    // ห้องแพ็คจะเปลี่ยนขนส่งให้เครื่อง Admin ที่กำลังรับเข้า Drive อยู่โดยไม่มีใครรู้
     // เขียนได้ทุกคนที่เป็นพนักงานปฏิบัติการ (ไม่ใช่แค่ Admin) เพราะคนแพ็คต้องกดเปลี่ยนเอง
     match /scanRemoteControl/{controlId} {
       allow read: if isOperationalStaff();
       allow create, update: if isOperationalStaff()
-        && controlId == 'current'
+        && controlId in ['packer', 'drive']
         && request.resource.data.keys().hasOnly([
           'courier', 'packer', 'origin', 'updatedAt', 'updatedByUid'
         ])

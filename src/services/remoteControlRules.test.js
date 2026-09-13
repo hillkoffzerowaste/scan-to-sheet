@@ -3,9 +3,11 @@ import assert from 'node:assert/strict';
 
 import { PACKER_UNASSIGNED } from '../constants.js';
 import {
+  REMOTE_CONTROL_TABS,
   REMOTE_ORIGIN_DESKTOP,
   REMOTE_ORIGIN_REMOTE,
   normalizeRemoteControlPayload,
+  remoteControlDocId,
   remoteControlSignature,
   shouldApplyRemoteControlDoc,
   shouldWriteRemoteControl,
@@ -119,4 +121,33 @@ test('a payload is trimmed, capped and given a packer before it reaches the rule
   assert.throws(() => normalizeRemoteControlPayload({ courier: '   ', packer: 'กิต' }), {
     code: 'REMOTE_CONTROL_COURIER_REQUIRED',
   });
+});
+
+test('each workspace has its own board and nothing else can name one', () => {
+  // Packer and Drive share one selectedCourier on the desktop. A single board would have let
+  // the packing room retarget the courier under an Admin receiving parcels into Drive.
+  assert.deepEqual(REMOTE_CONTROL_TABS, ['packer', 'drive']);
+  assert.equal(remoteControlDocId('packer'), 'packer');
+  assert.equal(remoteControlDocId('drive'), 'drive');
+  for (const tab of ['reports', 'staff', 'current', '', undefined, null, '../orders']) {
+    assert.equal(remoteControlDocId(tab), null, `${tab} must not address a board`);
+  }
+});
+
+test('the Drive board never carries a packer', () => {
+  // Drive does not record one (requiresPacker is packer-mode only), but the rules demand a
+  // non-empty string, so it is pinned to the unassigned marker instead of leaking a name.
+  assert.deepEqual(
+    normalizeRemoteControlPayload({ courier: 'Flash', packer: 'กิต', tab: 'drive' }),
+    { courier: 'Flash', packer: PACKER_UNASSIGNED },
+  );
+  const applied = shouldApplyRemoteControlDoc({
+    data: { courier: 'Flash', packer: 'กิต', origin: REMOTE_ORIGIN_REMOTE },
+    tab: 'drive',
+    myOrigin: REMOTE_ORIGIN_DESKTOP,
+    knownCouriers: COURIERS,
+    knownPackers: PACKERS,
+  });
+  assert.equal(applied.courier, 'Flash');
+  assert.equal(applied.packer, null);
 });

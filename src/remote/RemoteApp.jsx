@@ -13,6 +13,7 @@ import {
 } from '../services/firebase.js';
 import { subscribeRemoteControl, writeRemoteControl } from '../services/remoteControl.js';
 import {
+  REMOTE_CONTROL_TAB_USES_PACKER,
   REMOTE_ORIGIN_REMOTE,
   remoteControlSignature,
 } from '../services/remoteControlRules.js';
@@ -23,6 +24,11 @@ const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 // ถ้า Vercel ตั้ง GOOGLE_OAUTH_REDIRECT_URI ไว้ ปลายทาง /remote จะถูกปฏิเสธด้วย code นี้
 // ทางสำรองคือไปล็อกอินที่หน้าหลักแล้วเด้งกลับมาเอง
 const REDIRECT_FALLBACK_FLAG = 'scan-to-sheet-remote-login-v1';
+// ห้องแพ็คเป็นค่าเริ่มต้น เพราะเป็นงานที่ใช้รีโมทจริงเกือบทั้งวัน
+const TABS = [
+  { id: 'packer', label: 'ห้องแพ็ค' },
+  { id: 'drive', label: 'ลง Drive' },
+];
 
 async function apiJson(url, body) {
   const response = await fetch(url, {
@@ -62,6 +68,7 @@ function RemoteApp() {
   const [user, setUser] = useState(null);
   const [couriers, setCouriers] = useState(COURIERS);
   const [packers, setPackers] = useState([PACKER_UNASSIGNED]);
+  const [tab, setTab] = useState('packer');
   const [board, setBoard] = useState(null);
   const [pending, setPending] = useState(null);
   const [message, setMessage] = useState(null);
@@ -132,7 +139,12 @@ function RemoteApp() {
 
   useEffect(() => {
     if (!user) return () => {};
+    // สลับแท็บ = ฟังกระดานอีกใบ ค่าที่ค้างจากแท็บก่อนต้องไม่แสดงเป็นค่าปัจจุบันของแท็บใหม่
+    setBoard(null);
+    setPending(null);
+    pendingSignatureRef.current = null;
     return subscribeRemoteControl({
+      tab,
       onChange: (data) => {
         setConnected(true);
         if (!data) return;
@@ -149,7 +161,7 @@ function RemoteApp() {
         console.warn('Remote control sync failed:', error);
       },
     });
-  }, [user]);
+  }, [user, tab]);
 
   async function signIn() {
     if (!GOOGLE_CLIENT_ID) {
@@ -179,7 +191,7 @@ function RemoteApp() {
     pendingSignatureRef.current = signature;
     setPending(next);
     setMessage(null);
-    writeRemoteControl({ ...next, origin: REMOTE_ORIGIN_REMOTE, uid: user.uid })
+    writeRemoteControl({ ...next, tab, origin: REMOTE_ORIGIN_REMOTE, uid: user.uid })
       .catch((error) => {
         pendingSignatureRef.current = null;
         setPending(null);
@@ -189,6 +201,7 @@ function RemoteApp() {
 
   const currentCourier = pending?.courier ?? board?.courier ?? null;
   const currentPacker = pending?.packer ?? board?.packer ?? PACKER_UNASSIGNED;
+  const usesPacker = REMOTE_CONTROL_TAB_USES_PACKER[tab];
 
   if (authState === 'unconfigured') {
     return (
@@ -224,9 +237,28 @@ function RemoteApp() {
         </span>
       </header>
 
+      <div className="remote-tabs" role="tablist" aria-label="โหมดที่ควบคุม">
+        {TABS.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            role="tab"
+            aria-selected={item.id === tab}
+            className={item.id === tab ? 'remote-tab remote-tab-on' : 'remote-tab'}
+            onClick={() => setTab(item.id)}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+
       <section className="remote-now">
-        <p className="remote-now-label">กำลังสแกนที่เครื่องคอม</p>
-        <p className="remote-now-value">{currentCourier ?? 'ยังไม่มีข้อมูล'} · {currentPacker}</p>
+        <p className="remote-now-label">
+          {tab === 'drive' ? 'กำลังรับเข้า Drive ที่เครื่องคอม' : 'กำลังสแกนที่เครื่องคอม'}
+        </p>
+        <p className="remote-now-value">
+          {currentCourier ?? 'ยังไม่มีข้อมูล'}{usesPacker ? ` · ${currentPacker}` : ''}
+        </p>
         {pending && <p className="remote-now-note">กำลังส่งคำสั่ง…</p>}
       </section>
 
@@ -247,7 +279,8 @@ function RemoteApp() {
         ))}
       </div>
 
-      <h2 className="remote-section-title">คนแพ็ค</h2>
+      {usesPacker && <h2 className="remote-section-title">คนแพ็ค</h2>}
+      {usesPacker && (
       <div className="remote-grid">
         {packers.map((packer) => (
           <button
@@ -262,6 +295,7 @@ function RemoteApp() {
           </button>
         ))}
       </div>
+      )}
 
       <p className="remote-foot">
         {board?.origin === 'desktop' ? 'ค่าล่าสุดตั้งจากเครื่องคอม' : board ? 'ค่าล่าสุดตั้งจากมือถือ' : 'รอค่าจากเครื่องคอม'}
