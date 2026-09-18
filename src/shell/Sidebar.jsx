@@ -9,6 +9,7 @@ const EXTERNAL_TOOLS = [
   { label: 'พิมพ์ใบเช็ค ใบปะหน้า', icon: Printer, testId: 'label-checker-link', href: 'https://barcode-checker-ashy.vercel.app/' },
   { label: 'เบิกออก/รับเข้ากาแฟถัง', icon: Coffee, testId: 'coffee-stock-link', href: 'https://script.google.com/a/macros/hillkoff.com/s/AKfycbxETrRx_gJBuVTdl2MUaumr5Pem4LzahebQ6HZzrknPOr-PPCPmJHQ0I9f-p-kYJB-J/exec' },
   { label: 'บดกาแฟหน้าร้าน', icon: Coffee, testId: 'coffee-shop-grinder-link', href: 'https://coffee-grinder-system.vercel.app/' },
+  { label: 'ตรวจนับสต็อกกาแฟ', icon: Coffee, testId: 'coffee-stock-count-link', href: 'https://script.google.com/macros/s/AKfycbyulSX89Q-eXvcd33QypMp8uP2_PrqjGjpBiYre_j2rJDXg74dNqGQ44jBgU1N_WNIXnA/exec' },
 ];
 
 function NavItem({ active, icon: Icon, label, badge, testId, onClick, collapsed }) {
