@@ -8,6 +8,7 @@ outputFiles:
       - dist
       - server.js
       - api
+      - package.json
 
 env:
   - variable: GOOGLE_CLIENT_SECRET
