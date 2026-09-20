@@ -5,9 +5,9 @@
 ## Tech stack
 
 - Frontend: React 19 + Vite 6, `html5-qrcode` สำหรับสแกนด้วยกล้อง
-- Backend/API: Vercel Serverless Functions (`api/`) สำหรับ Google OAuth และ sheet lock
+- Backend/API: Node HTTP server (`server.js`) เสิร์ฟเว็บแอพและเรียก API handlers ใน `api/`; เป้าหมาย production คือ Firebase App Hosting
 - ข้อมูล: Google Sheets (Master sheet และ `Marketplace Orders`) + Firebase/Firestore (สแกนล่าสุด, sync status)
-- Session/lock storage: Vercel KV หรือ Upstash Redis (REST API)
+- Session/lock storage: Upstash Redis (REST API)
 - Mobile: Capacitor (Android)
 - Marketplace sync: Playwright worker (Node.js) สำหรับ TikTok Shop, Shopee, Lazada Seller Center
 - Label-address sync: Google Apps Script (แยกจากเว็บแอพ)
@@ -45,7 +45,7 @@
 
 ```text
 scan to sheet/
-  api/                      Vercel serverless functions (Google OAuth, session, sheet lock)
+  api/                      API handlers สำหรับ Google OAuth, session และ sheet lock
   android/                  Capacitor Android project
   apps-script/label-sync/   Google Apps Script: จับคู่ที่อยู่ผู้รับจากใบปะหน้า
   docs/                     เอกสารสรุปโปรเจกต์และ workflow
@@ -149,7 +149,6 @@ VITE_GOOGLE_CLIENT_ID=...
 GOOGLE_CLIENT_ID=...
 GOOGLE_CLIENT_SECRET=...
 OAUTH_TRANSACTION_SECRET=... # อย่างน้อย 32 ตัวอักษร, server-only
-GOOGLE_OAUTH_REDIRECT_URI=https://scan-to-sheet-ten.vercel.app/
 
 VITE_FIREBASE_API_KEY=...
 VITE_FIREBASE_AUTH_DOMAIN=...
@@ -158,13 +157,15 @@ VITE_FIREBASE_STORAGE_BUCKET=...
 VITE_FIREBASE_MESSAGING_SENDER_ID=...
 VITE_FIREBASE_APP_ID=...
 VITE_FIREBASE_MEASUREMENT_ID=...
-VITE_FIREBASE_HOSTING_URL=...
-
 KV_REST_API_URL=...
 KV_REST_API_TOKEN=...
 ```
 
-`KV_REST_API_URL` / `KV_REST_API_TOKEN` มาจาก Vercel KV หรือ Upstash Redis ใช้สำหรับเก็บ session และ sheet lock ฝั่ง API
+`VITE_FIREBASE_*` และ `VITE_GOOGLE_CLIENT_ID` ใช้ตอน build ส่วน `GOOGLE_CLIENT_SECRET`, `OAUTH_TRANSACTION_SECRET`, `KV_REST_API_URL` และ `KV_REST_API_TOKEN` เป็นค่า server-only ที่เก็บใน Secret Manager เมื่อ deploy ด้วย App Hosting
+
+ไม่ต้องตั้ง `GOOGLE_OAUTH_REDIRECT_URI` ใน App Hosting เพราะ backend ตรวจ origin จาก request เพื่อรองรับทั้งหน้า `/` และ `/remote`
+
+`KV_REST_API_URL` / `KV_REST_API_TOKEN` มาจาก Upstash Redis ใช้สำหรับเก็บ session และ sheet lock ฝั่ง API
 
 ## Run locally
 
@@ -187,7 +188,15 @@ npm run build              # ตรวจ production build ก่อน deploy
 
 ## Deploy
 
-### Vercel (เว็บแอพหลัก + API)
+### Firebase App Hosting (เว็บแอพ + API)
+
+App Hosting ใช้ `apphosting.yaml` สำหรับคำสั่ง build/run และอ้าง secret จาก Secret Manager ส่วนค่า `VITE_*` ต้องตั้งใน Environment ของ backend ให้พร้อมตอน build
+
+สร้าง backend จาก Firebase Console > App Hosting โดยเชื่อม GitHub repository นี้ เลือก live branch ที่มี `apphosting.yaml` และปิด automatic rollout ชั่วคราวจนตั้งค่า Environment และ Secret Manager ครบก่อน จากนั้นเปิด rollout เพื่อ deploy
+
+Backend ใช้ `npm run build` และ `node server.js`; server เดียวกันเสิร์ฟไฟล์ Vite ที่ build แล้วและ API เดิมใต้ `/api/*`
+
+### Vercel (เดิม/สำรองระหว่างย้าย)
 
 ตั้ง Environment Variable ใน Vercel:
 
@@ -196,7 +205,6 @@ VITE_GOOGLE_CLIENT_ID=...
 GOOGLE_CLIENT_ID=...
 GOOGLE_CLIENT_SECRET=...
 OAUTH_TRANSACTION_SECRET=...
-GOOGLE_OAUTH_REDIRECT_URI=https://scan-to-sheet-ten.vercel.app/
 VITE_FIREBASE_API_KEY=...
 VITE_FIREBASE_AUTH_DOMAIN=...
 VITE_FIREBASE_PROJECT_ID=...
@@ -217,13 +225,15 @@ firebase deploy --only firestore:rules,storage --project hillkoff-twin-oganizati
 
 คำสั่งนี้ deploy สิทธิ์ Firestore และ Storage เท่านั้น ควรรันเมื่อแก้ `firestore.rules` หรือ `storage.rules`
 
-### Firebase Hosting (redirect ไป Vercel)
+### Firebase Hosting (โดเมนเดิม)
 
 ```bash
 npm run firebase:deploy    # build + deploy hosting
 npm run firebase:preview   # build + deploy preview channel (7 วัน)
 npm run firebase:serve     # build + รันผ่าน emulator ในเครื่อง
 ```
+
+Firebase Hosting แบบ static ยัง redirect ไป Vercel ระหว่างตรวจ App Hosting; เปลี่ยนปลายทางหลังตรวจหน้า `/`, `/remote`, API และ Google OAuth บน backend ใหม่ครบแล้วเท่านั้น
 
 Hosting site `hillkoff-twin-oganization` ตั้งค่าให้ redirect ไปเว็บ Production หลักที่ `https://scan-to-sheet-ten.vercel.app` คำสั่งในส่วนนี้ไม่ได้ deploy Firestore หรือ Storage rules
 
@@ -295,7 +305,7 @@ npm run marketplace:dashboard         # เปิด dashboard ที่ http://
 ## Security
 
 - ห้าม commit `.env`, `firebase-service-account.json`, `scripts/marketplace-sync/config.json`, browser profile, log, screenshot ของ marketplace worker และไฟล์สำรองข้อมูลใน `.codex-tmp` (อยู่ใน `.gitignore` แล้ว)
-- Session และ sheet lock เก็บผ่าน Vercel KV/Upstash Redis ฝั่ง server เท่านั้น ไม่เก็บ token ฝั่ง client
+- Session และ sheet lock เก็บผ่าน Upstash Redis ฝั่ง server เท่านั้น ไม่เก็บ token ฝั่ง client
 - Firestore ควบคุมสิทธิ์ผ่าน `firestore.rules` และรูปพนักงานควบคุมสิทธิ์ผ่าน `storage.rules`
 - ข้อมูลติดต่อฉบับเต็มเก็บใน `staffPrivateContacts` ซึ่งอ่านได้เฉพาะ Admin ส่วน `staffMembers` เก็บเฉพาะค่าที่ปกปิดแล้ว
 - `firebase-service-account.json` และ credential อื่นต้องใช้งานฝั่ง server เท่านั้น ห้ามฝังใน frontend หรือ commit เข้า Git

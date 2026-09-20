@@ -296,7 +296,7 @@ function App() {
     title: GOOGLE_CLIENT_ID ? 'พร้อมเชื่อม Google' : 'ต้องใส่ OAuth Client ID',
     message: GOOGLE_CLIENT_ID
       ? 'เข้าสู่ระบบด้วย Google ก่อนเริ่มสแกนจริง'
-      : 'เพิ่ม VITE_GOOGLE_CLIENT_ID ใน Vercel Environment Variables แล้ว deploy ใหม่',
+      : 'เพิ่ม VITE_GOOGLE_CLIENT_ID ใน Environment Variables ของ hosting แล้ว deploy ใหม่',
   }));
   const [deploymentUpdateAvailable, setDeploymentUpdateAvailable] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -1061,12 +1061,12 @@ function App() {
       return;
     }
 
-    // Server-side OAuth flow (works on Vercel and any custom domain)
+    // Server-side OAuth flow also supports the Firebase App Hosting domain.
     if (!GOOGLE_CLIENT_ID) {
       setStatus({
         type: 'warning',
         title: 'ยังไม่ได้ใส่ OAuth Client ID',
-        message: 'ตั้งค่า VITE_GOOGLE_CLIENT_ID บน Vercel แล้ว deploy ใหม่ก่อนใช้งานจริง',
+        message: 'ตั้งค่า VITE_GOOGLE_CLIENT_ID ใน Environment Variables ของ hosting แล้ว deploy ใหม่ก่อนใช้งานจริง',
       });
       return;
     }
@@ -1210,7 +1210,7 @@ function App() {
         setStatus({
           type: 'success',
           title: 'ต่ออายุ Login แล้ว',
-          message: 'ดึง session จาก Vercel KV สำเร็จ',
+          message: 'ดึง session สำเร็จ',
         });
       }
       return session;

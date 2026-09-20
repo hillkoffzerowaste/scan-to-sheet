@@ -1,0 +1,28 @@
+scripts:
+  buildCommand: npm run build
+  runCommand: node server.js
+
+outputFiles:
+  serverApp:
+    include:
+      - dist
+      - server.js
+      - api
+
+env:
+  - variable: GOOGLE_CLIENT_SECRET
+    secret: GOOGLE_CLIENT_SECRET
+    availability:
+      - RUNTIME
+  - variable: OAUTH_TRANSACTION_SECRET
+    secret: OAUTH_TRANSACTION_SECRET
+    availability:
+      - RUNTIME
+  - variable: KV_REST_API_URL
+    secret: KV_REST_API_URL
+    availability:
+      - RUNTIME
+  - variable: KV_REST_API_TOKEN
+    secret: KV_REST_API_TOKEN
+    availability:
+      - RUNTIME
