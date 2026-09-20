@@ -51,7 +51,7 @@ export function getRequiredGoogleEnv(postedClientId) {
 export async function redisCommand(command) {
   const { url, token } = getRedisConfig();
   if (!url || !token) {
-    throw new Error('Missing Vercel KV REST environment variables');
+    throw new Error('Missing Upstash Redis REST environment variables');
   }
 
   const response = await fetchWithTimeout(`${url}/pipeline`, {

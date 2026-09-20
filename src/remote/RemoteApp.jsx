@@ -21,7 +21,7 @@ import { REMOTE_ROUTE_PATH } from '../services/remoteRoute.js';
 import './remote.css';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-// ถ้า Vercel ตั้ง GOOGLE_OAUTH_REDIRECT_URI ไว้ ปลายทาง /remote จะถูกปฏิเสธด้วย code นี้
+// ถ้าตั้ง GOOGLE_OAUTH_REDIRECT_URI เป็น path อื่น ปลายทาง /remote จะถูกปฏิเสธด้วย code นี้
 // ทางสำรองคือไปล็อกอินที่หน้าหลักแล้วเด้งกลับมาเอง
 const REDIRECT_FALLBACK_FLAG = 'scan-to-sheet-remote-login-v1';
 // ห้องแพ็คเป็นค่าเริ่มต้น เพราะเป็นงานที่ใช้รีโมทจริงเกือบทั้งวัน

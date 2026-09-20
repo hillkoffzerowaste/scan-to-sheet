@@ -22,7 +22,7 @@ import './styles.css';
 import { getCanonicalAppRedirect } from './services/canonicalApp.js';
 import { isRemoteRoute } from './services/remoteRoute.js';
 
-const PRIMARY_APP_URL = import.meta.env.VITE_PRIMARY_APP_URL || 'https://scan-to-sheet-ten.vercel.app';
+const PRIMARY_APP_URL = import.meta.env.VITE_PRIMARY_APP_URL || 'https://scan-to-sheet--hillkoff-twin-oganization.asia-southeast1.hosted.app';
 const canonicalRedirect = getCanonicalAppRedirect(window.location, PRIMARY_APP_URL);
 
 if (canonicalRedirect) {

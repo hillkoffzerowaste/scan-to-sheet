@@ -92,10 +92,15 @@ Application type: Web application
 Authorized JavaScript origins:
   http://127.0.0.1:5173
   https://scan-to-sheet-ten.vercel.app
+  https://scan-to-sheet--hillkoff-twin-oganization.asia-southeast1.hosted.app
 
 Authorized redirect URIs:
   http://127.0.0.1:5173/
+  http://127.0.0.1:5173/remote
   https://scan-to-sheet-ten.vercel.app/
+  https://scan-to-sheet-ten.vercel.app/remote
+  https://scan-to-sheet--hillkoff-twin-oganization.asia-southeast1.hosted.app/
+  https://scan-to-sheet--hillkoff-twin-oganization.asia-southeast1.hosted.app/remote
 ```
 
 เปิด API:

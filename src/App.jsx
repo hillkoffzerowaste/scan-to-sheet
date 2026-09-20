@@ -143,7 +143,7 @@ const SHEET_RECOVERY_COOLDOWN_MS = 5 * 1000;
 const SHEET_RECOVERY_INTERVAL_MS = 15 * 60 * 1000;
 const COUNT_REFRESH_DELAY_MS = 1000;
 const DEPLOYMENT_UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;
-// ธงปิดได้ทันทีที่ Vercel ถ้าการ sync จากรีโมทก่อกวนหน้างาน โดยไม่ต้อง rollback
+// ปิดธงจาก hosting environment ได้ทันทีถ้าการ sync จากรีโมทก่อกวนหน้างาน โดยไม่ต้อง rollback
 const REMOTE_CONTROL_ENABLED = import.meta.env.VITE_REMOTE_CONTROL_ENABLED !== 'false';
 // รวมการตั้ง state สองตัวติดกัน (คำสั่ง QR, การ normalize ตอนบูต) ให้เหลือ write เดียว
 const REMOTE_CONTROL_WRITE_DEBOUNCE_MS = 600;

@@ -11,6 +11,10 @@ outputFiles:
       - package.json
 
 env:
+  - variable: VITE_PRIMARY_APP_URL
+    value: https://scan-to-sheet--hillkoff-twin-oganization.asia-southeast1.hosted.app
+    availability:
+      - BUILD
   - variable: GOOGLE_CLIENT_SECRET
     secret: GOOGLE_CLIENT_SECRET
     availability:
