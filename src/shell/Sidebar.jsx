@@ -1,16 +1,16 @@
 import React from 'react';
-import { BarChart3, ChevronsLeft, ChevronsRight, Coffee, ExternalLink, MonitorCheck, PackageCheck, Printer, Truck, Upload, Users } from 'lucide-react';
+import { BarChart3, ChevronsLeft, ChevronsRight, Coffee, ExternalLink, MonitorCheck, PackageCheck, Printer, Truck, Upload, Users, Wrench } from 'lucide-react';
+import { EXTERNAL_TOOL_TEST_IDS } from '../features/externalTools/externalToolsConfig.js';
 
-// เมนูซ้ายแบบ Explorer: งานภายในเป็นปุ่มสลับหน้า ส่วนเครื่องมือภายนอกเป็นลิงก์ที่มีไอคอนกำกับชัด
-// จัดกลุ่มเพื่อให้เห็นทันทีว่าอันไหนคือหน้าที่อยู่ในโปรแกรม อันไหนคือของนอกโปรแกรม
-const EXTERNAL_TOOLS = [
-  { label: 'ระบบส่งของ', icon: Truck, testId: 'delivery-system-link', href: 'https://repo-rho-livid.vercel.app/' },
-  { label: 'จัดการส่งของผิด', icon: MonitorCheck, testId: 'wrong-delivery-link', href: 'https://script.google.com/a/macros/hillkoff.com/s/AKfycbxQENSgzP-0IzDX0J_pY2g9HoMlCKMaNQYJlnxPbudqELr79oKdwYpoNflqrSAfsgw2/exec' },
-  { label: 'พิมพ์ใบเช็ค ใบปะหน้า', icon: Printer, testId: 'label-checker-link', href: 'https://barcode-checker-ashy.vercel.app/' },
-  { label: 'เบิกออก/รับเข้ากาแฟถัง', icon: Coffee, testId: 'coffee-stock-link', href: 'https://script.google.com/a/macros/hillkoff.com/s/AKfycbxETrRx_gJBuVTdl2MUaumr5Pem4LzahebQ6HZzrknPOr-PPCPmJHQ0I9f-p-kYJB-J/exec' },
-  { label: 'บดกาแฟหน้าร้าน', icon: Coffee, testId: 'coffee-shop-grinder-link', href: 'https://coffee-grinder-system.vercel.app/' },
-  { label: 'ตรวจนับสต็อกกาแฟ', icon: Coffee, testId: 'coffee-stock-count-link', href: 'https://script.google.com/macros/s/AKfycbyulSX89Q-eXvcd33QypMp8uP2_PrqjGjpBiYre_j2rJDXg74dNqGQ44jBgU1N_WNIXnA/exec' },
-];
+// เมนูซ้ายแยกหน้าภายในกับลิงก์ที่ผู้ใช้เปิดในแท็บใหม่
+const EXTERNAL_TOOL_ICONS = {
+  'delivery-system': Truck,
+  'wrong-delivery': MonitorCheck,
+  'label-checker': Printer,
+  'coffee-stock': Coffee,
+  'coffee-shop-grinder': Coffee,
+  'coffee-stock-count': Coffee,
+};
 
 function NavItem({ active, icon: Icon, label, badge, testId, onClick, collapsed }) {
   return (
@@ -30,7 +30,15 @@ function NavItem({ active, icon: Icon, label, badge, testId, onClick, collapsed 
   );
 }
 
-function Sidebar({ activeTab, switchTab, missingAlertBadge, collapsed, setCollapsed }) {
+function Sidebar({
+  activeTab,
+  switchTab,
+  missingAlertBadge,
+  collapsed,
+  setCollapsed,
+  externalToolsGroups = [],
+  canManageExternalTools = false,
+}) {
   return (
     <nav className="win-sidebar" aria-label="เมนูหลัก">
       <div className="win-nav-group">
@@ -74,25 +82,44 @@ function Sidebar({ activeTab, switchTab, missingAlertBadge, collapsed, setCollap
         />
       </div>
 
-      <div className="win-nav-group">
-        <h2 className="win-nav-heading">เครื่องมือภายนอก</h2>
-        {EXTERNAL_TOOLS.map(({ label, icon: Icon, href, testId }) => (
-          <a
-            key={href}
-            className="win-nav-item external"
-            data-testid={testId}
-            href={href}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label={collapsed ? label : undefined}
-            title={collapsed ? label : undefined}
-          >
-            <Icon size={16} className="win-nav-icon" />
-            <span className="win-nav-label">{label}</span>
-            <ExternalLink size={12} className="win-nav-external" aria-hidden="true" />
-          </a>
-        ))}
-      </div>
+      {canManageExternalTools && (
+        <div className="win-nav-group">
+          <h2 className="win-nav-heading">จัดการ</h2>
+          <NavItem
+            active={activeTab === 'external-tools-settings'}
+            icon={Wrench}
+            label="ตั้งค่าเครื่องมือภายนอก"
+            testId="external-tools-settings-tab"
+            onClick={() => switchTab('external-tools-settings')}
+            collapsed={collapsed}
+          />
+        </div>
+      )}
+
+      {externalToolsGroups.map((group) => (
+        <div className="win-nav-group" key={group.id}>
+          <h2 className="win-nav-heading">{group.name}</h2>
+          {group.links.map((link) => {
+            const Icon = EXTERNAL_TOOL_ICONS[link.id] ?? ExternalLink;
+            return (
+              <a
+                key={link.id}
+                className="win-nav-item external"
+                data-testid={EXTERNAL_TOOL_TEST_IDS[link.id]}
+                href={link.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={collapsed ? link.label : undefined}
+                title={collapsed ? link.label : undefined}
+              >
+                <Icon size={16} className="win-nav-icon" />
+                <span className="win-nav-label">{link.label}</span>
+                <ExternalLink size={12} className="win-nav-external" aria-hidden="true" />
+              </a>
+            );
+          })}
+        </div>
+      ))}
 
       <button
         className="win-sidebar-toggle"

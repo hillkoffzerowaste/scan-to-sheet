@@ -5,6 +5,9 @@ import {
   ScanLine,
 } from 'lucide-react';
 import StaffDirectory from './features/staff/StaffDirectory.jsx';
+import ExternalToolsSettings from './features/externalTools/ExternalToolsSettings.jsx';
+import { DEFAULT_EXTERNAL_TOOLS_CONFIG } from './features/externalTools/externalToolsConfig.js';
+import { saveExternalToolsConfig, subscribeExternalTools } from './features/externalTools/externalToolsService.js';
 import Sidebar from './shell/Sidebar.jsx';
 import StatusBar from './shell/StatusBar.jsx';
 import TitleBar from './shell/TitleBar.jsx';
@@ -15,7 +18,7 @@ import { CAMERA_POPUP_ID, CAMERA_REGION_ID, DEFAULT_LOOKBACK_HOURS, ISSUE_CUSTOM
 import { DeploymentUpdateBanner, StatusBanner } from './views/StatusBanner.jsx';
 import ReportsView from './views/ReportsView.jsx';
 import { buildPackerOptions, buildQrPackerMembers } from './features/staff/staffDirectory.js';
-import { subscribeStaffMembers } from './features/staff/staffService.js';
+import { getStaffAdminStatus, subscribeStaffMembers } from './features/staff/staffService.js';
 import {
   COURIERS,
   appendScanGoogle,
@@ -276,6 +279,10 @@ function App() {
   const [token, setToken] = useState(null);
   const [user, setUser] = useState(EMPTY_USER);
   const [firebaseUser, setFirebaseUser] = useState(null);
+  const [staffAdminStatus, setStaffAdminStatus] = useState(null);
+  const [externalToolsConfig, setExternalToolsConfig] = useState(DEFAULT_EXTERNAL_TOOLS_CONFIG);
+  const [externalToolsLoadStatus, setExternalToolsLoadStatus] = useState('ready');
+  const [externalToolsSaving, setExternalToolsSaving] = useState(false);
   const [config, setConfig] = useState(() => loadGoogleConfig());
   const [selectedCourier, setSelectedCourier] = useState(COURIERS[0]);
   const [couriers, setCouriers] = useState(COURIERS);
@@ -383,8 +390,57 @@ function App() {
   // Firestore is the write authority whenever Firebase is configured. A Google Sheet token on
   // its own must not unlock the scanner, because its next Firestore write would be rejected.
   const isSignedIn = isFirebaseConfigured ? Boolean(firebaseUser) : isSheetConnected;
+  const canManageExternalTools = staffAdminStatus?.uid === firebaseUser?.uid && staffAdminStatus?.isAdmin === true;
   const isScanReady = isSignedIn && scanReadiness === SCAN_READINESS.READY;
   const scanReadinessMessage = getScanReadinessMessage(scanReadiness);
+  useEffect(() => {
+    const uid = firebaseUser?.uid;
+    if (!uid) {
+      setStaffAdminStatus(null);
+      return undefined;
+    }
+
+    let disposed = false;
+    setStaffAdminStatus(null);
+    getStaffAdminStatus(uid)
+      .then((isAdmin) => {
+        if (!disposed) setStaffAdminStatus({ uid, isAdmin });
+      })
+      .catch(() => {
+        if (!disposed) setStaffAdminStatus({ uid, isAdmin: false });
+      });
+
+    return () => {
+      disposed = true;
+    };
+  }, [firebaseUser?.uid]);
+
+  useEffect(() => {
+    if (!firebaseUser?.uid) {
+      setExternalToolsConfig(DEFAULT_EXTERNAL_TOOLS_CONFIG);
+      setExternalToolsLoadStatus('ready');
+      return undefined;
+    }
+
+    let disposed = false;
+    setExternalToolsLoadStatus('loading');
+    const unsubscribe = subscribeExternalTools({
+      onChange: (nextConfig) => {
+        if (disposed) return;
+        setExternalToolsConfig(nextConfig);
+        setExternalToolsLoadStatus('ready');
+      },
+      onError: () => {
+        if (!disposed) setExternalToolsLoadStatus('error');
+      },
+    });
+
+    return () => {
+      disposed = true;
+      unsubscribe?.();
+    };
+  }, [firebaseUser?.uid]);
+
   useEffect(() => {
     if (!firebaseUser) return;
     return subscribeStaffMembers({
@@ -2432,7 +2488,26 @@ function App() {
     void handleSearchSubmit(event);
   }
 
+  async function saveExternalTools(nextConfig) {
+    if (!canManageExternalTools || !firebaseUser?.uid) {
+      throw Object.assign(new Error('ต้องเข้าสู่ระบบ Firebase ในฐานะ Admin'), { code: 'EXTERNAL_TOOLS_AUTH_REQUIRED' });
+    }
+    if (externalToolsLoadStatus !== 'ready') {
+      throw Object.assign(new Error('อ่านการตั้งค่าร่วมไม่สำเร็จ'), { code: 'EXTERNAL_TOOLS_READ_FAILED' });
+    }
+
+    setExternalToolsSaving(true);
+    try {
+      const saved = await saveExternalToolsConfig(nextConfig, firebaseUser);
+      setExternalToolsConfig(saved);
+      return saved;
+    } finally {
+      setExternalToolsSaving(false);
+    }
+  }
+
   function switchTab(nextTab) {
+    if (nextTab === 'external-tools-settings' && !canManageExternalTools) return;
     setActiveTab(nextTab);
     setScanPopupOpen(false);
     void stopCamera();
@@ -3255,6 +3330,8 @@ function App() {
           missingAlertBadge={missingAlertBadge}
           collapsed={sidebarCollapsed}
           setCollapsed={setSidebarCollapsed}
+          externalToolsGroups={externalToolsConfig.groups}
+          canManageExternalTools={canManageExternalTools}
         />
         <main id="main" tabIndex={-1} className="win-main">
         <Toolbar
@@ -3423,6 +3500,15 @@ function App() {
             setPackerOptions(next);
             setSelectedPacker((current) => next.includes(current) ? current : PACKER_UNASSIGNED);
           }}
+        />
+      )}
+
+      {activeTab === 'external-tools-settings' && canManageExternalTools && (
+        <ExternalToolsSettings
+          config={externalToolsConfig}
+          loadStatus={externalToolsLoadStatus}
+          saving={externalToolsSaving}
+          onSave={saveExternalTools}
         />
       )}
 

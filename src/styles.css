@@ -5308,3 +5308,113 @@ tbody tr:hover {
 .qr-pdf-export .qr-print-card h3 { font-size: 20px; }
 .qr-pdf-export .qr-print-card p { font-size: 12px; }
 .qr-pdf-export .qr-print-card img { width: 94px; height: 94px; }
+
+.win-shell .external-tools-settings {
+  display: grid;
+  gap: var(--space-layout);
+  min-width: 0;
+  color: var(--text);
+}
+
+.win-shell .external-tools-settings-header,
+.win-shell .external-tools-group-header,
+.win-shell .external-tools-settings-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-layout);
+}
+
+.win-shell .external-tools-settings-header h1 {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--ui-lg);
+}
+
+.win-shell .external-tools-settings-header p,
+.win-shell .external-tools-settings-notice {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--ui-sm);
+}
+
+.win-shell .external-tools-settings-notice {
+  padding: var(--space-layout);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.win-shell .external-tools-settings-notice.error { color: var(--danger); }
+.win-shell .external-tools-settings-notice.success { color: var(--success); }
+
+.win-shell .external-tools-groups,
+.win-shell .external-tools-group,
+.win-shell .external-tools-links {
+  display: grid;
+  gap: var(--space-layout);
+  min-width: 0;
+}
+
+.win-shell .external-tools-group {
+  padding: var(--space-layout);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.win-shell .external-tools-field {
+  display: grid;
+  gap: var(--space-layout);
+  min-width: 0;
+}
+
+.win-shell .external-tools-field label {
+  color: var(--muted);
+  font-size: var(--ui-sm);
+}
+
+.win-shell .external-tools-field input {
+  width: 100%;
+  min-width: 0;
+  min-height: var(--control-height);
+  padding: 0 var(--space-layout);
+  color: var(--text);
+  background: var(--surface);
+  font: inherit;
+  font-size: var(--ui-sm);
+}
+
+.win-shell .external-tools-link {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto;
+  align-items: end;
+  gap: var(--space-layout);
+  min-width: 0;
+}
+
+.win-shell .external-tools-delete,
+.win-shell .external-tools-delete-link,
+.win-shell .external-tools-add-link,
+.win-shell .external-tools-settings-actions > button,
+.win-shell .external-tools-save {
+  display: inline-flex;
+  width: auto;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-layout);
+  white-space: nowrap;
+}
+
+.win-shell .external-tools-delete,
+.win-shell .external-tools-delete-link { color: var(--danger); }
+
+.win-shell .external-tools-settings-actions {
+  color: var(--muted);
+  font-size: var(--ui-sm);
+}
+
+.win-shell .external-tools-settings :focus-visible {
+  outline: 2px solid var(--primary-strong);
+  outline-offset: 2px;
+}

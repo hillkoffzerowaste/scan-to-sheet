@@ -9,13 +9,13 @@ async function mockModule(page, path, exports) {
   });
 }
 
-export async function openSignedInApp(page, { staffAdmin = true } = {}) {
+export async function openSignedInApp(page, { staffAdmin = true, externalToolsConfig = null, externalToolsReadError = false } = {}) {
   await page.route('**/*', (route) => {
     const url = new URL(route.request().url());
     if (url.hostname !== 'localhost' && url.hostname !== '127.0.0.1') return route.abort();
     return route.continue();
   });
-  await page.addInitScript(() => { window.qrTestWrites = []; });
+  await page.addInitScript(({ config, readError }) => { window.qrTestWrites = []; window.externalToolsConfig = config; window.externalToolsReadError = readError; window.externalToolsWrites = []; }, { config: externalToolsConfig, readError: externalToolsReadError });
   await mockModule(page, '/src/services/firebase.js', `
     export const isFirebaseConfigured = true;
     const user = { uid: 'qr-test-user', email: 'qr-test@example.invalid', getIdToken: async () => 'test-id-token' };
@@ -45,6 +45,23 @@ export async function openSignedInApp(page, { staffAdmin = true } = {}) {
         { id: 'qr-b', nickname: 'คนแพ็ค B', position: 'packer', active: true, sortOrder: 2 }
       ]);
       return () => {};
+    };
+  `);
+      await mockModule(page, '/src/features/externalTools/externalToolsService.js', `
+    import { DEFAULT_EXTERNAL_TOOLS_CONFIG } from '/src/features/externalTools/externalToolsConfig.js';
+    export const subscribeExternalTools = ({ onChange, onError }) => {
+      if (window.externalToolsReadError) {
+        onError?.({ code: 'EXTERNAL_TOOLS_READ_FAILED', message: 'อ่านการตั้งค่าไม่สำเร็จ' });
+      } else {
+        const config = window.externalToolsConfig ?? DEFAULT_EXTERNAL_TOOLS_CONFIG;
+        onChange(config, { source: window.externalToolsConfig ? 'firestore' : 'default' });
+      }
+      return () => {};
+    };
+    export const saveExternalToolsConfig = async (config) => {
+      window.externalToolsWrites.push(config);
+      window.externalToolsConfig = config;
+      return config;
     };
   `);
   await mockModule(page, '/src/services/firebaseScans.js', `
