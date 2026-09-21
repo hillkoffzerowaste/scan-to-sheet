@@ -151,3 +151,18 @@ test("a remote control write carries exactly five keys, a server timestamp and t
   assert.match(block[1], /request\.resource\.data\.updatedAt == request\.time/);
   assert.match(block[1], /request\.resource\.data\.updatedByUid == request\.auth\.uid/);
 });
+
+test("external tool settings are shared for staff and writable only by Admin", async () => {
+  const rules = await readRules();
+  const block = rules.match(/match \/staffSettings\/externalTools \{([\s\S]*?)\n    \}/);
+
+  assert.ok(block, "externalTools settings rules must exist");
+  assert.match(block[1], /allow read: if isOperationalStaff\(\);/);
+  assert.match(block[1], /allow create, update: if isStaffAdmin\(\)/);
+  assert.match(block[1], /request\.resource\.data\.keys\(\)\.hasOnly/);
+  assert.match(block[1], /request\.resource\.data\.groups is list/);
+  assert.match(block[1], /request\.resource\.data\.groups\.size\(\) <= 10/);
+  assert.match(block[1], /request\.resource\.data\.updatedAt == request\.time/);
+  assert.match(block[1], /request\.resource\.data\.updatedByUid == request\.auth\.uid/);
+  assert.match(block[1], /allow delete: if false;/);
+});
