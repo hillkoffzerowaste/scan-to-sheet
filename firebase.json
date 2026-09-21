@@ -16,8 +16,8 @@
     ],
     "redirects": [
       {
-        "source": "**",
-        "destination": "https://scan-to-sheet-ten.vercel.app",
+        "source": "/:path*",
+        "destination": "https://scan-to-sheet--hillkoff-twin-oganization.asia-southeast1.hosted.app/:path",
         "type": 301
       }
     ]
