@@ -281,6 +281,7 @@ function App() {
   const [firebaseUser, setFirebaseUser] = useState(null);
   const [staffAdminStatus, setStaffAdminStatus] = useState(null);
   const [externalToolsConfig, setExternalToolsConfig] = useState(DEFAULT_EXTERNAL_TOOLS_CONFIG);
+  const [externalToolsVersion, setExternalToolsVersion] = useState(null);
   const [externalToolsLoadStatus, setExternalToolsLoadStatus] = useState('ready');
   const [externalToolsSaving, setExternalToolsSaving] = useState(false);
   const [config, setConfig] = useState(() => loadGoogleConfig());
@@ -418,6 +419,7 @@ function App() {
   useEffect(() => {
     if (!firebaseUser?.uid) {
       setExternalToolsConfig(DEFAULT_EXTERNAL_TOOLS_CONFIG);
+      setExternalToolsVersion(null);
       setExternalToolsLoadStatus('ready');
       return undefined;
     }
@@ -425,10 +427,11 @@ function App() {
     let disposed = false;
     setExternalToolsLoadStatus('loading');
     const unsubscribe = subscribeExternalTools({
-      onChange: (nextConfig) => {
+      onChange: (nextConfig, metadata = {}) => {
         if (disposed) return;
         setExternalToolsConfig(nextConfig);
-        setExternalToolsLoadStatus('ready');
+        if (metadata.ready) setExternalToolsVersion(metadata.version);
+        setExternalToolsLoadStatus(metadata.ready ? 'ready' : 'loading');
       },
       onError: () => {
         if (!disposed) setExternalToolsLoadStatus('error');
@@ -2488,7 +2491,7 @@ function App() {
     void handleSearchSubmit(event);
   }
 
-  async function saveExternalTools(nextConfig) {
+  async function saveExternalTools(nextConfig, expectedVersion) {
     if (!canManageExternalTools || !firebaseUser?.uid) {
       throw Object.assign(new Error('ต้องเข้าสู่ระบบ Firebase ในฐานะ Admin'), { code: 'EXTERNAL_TOOLS_AUTH_REQUIRED' });
     }
@@ -2498,8 +2501,9 @@ function App() {
 
     setExternalToolsSaving(true);
     try {
-      const saved = await saveExternalToolsConfig(nextConfig, firebaseUser);
-      setExternalToolsConfig(saved);
+      const saved = await saveExternalToolsConfig(nextConfig, firebaseUser, expectedVersion);
+      setExternalToolsConfig(saved.config);
+      setExternalToolsVersion(saved.version);
       return saved;
     } finally {
       setExternalToolsSaving(false);
@@ -3506,6 +3510,7 @@ function App() {
       {activeTab === 'external-tools-settings' && canManageExternalTools && (
         <ExternalToolsSettings
           config={externalToolsConfig}
+          version={externalToolsVersion}
           loadStatus={externalToolsLoadStatus}
           saving={externalToolsSaving}
           onSave={saveExternalTools}

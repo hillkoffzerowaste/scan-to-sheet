@@ -130,6 +130,61 @@ test('Admin can rename groups, edit and remove links, and add groups and links',
   expect(await page.evaluate(() => window.externalToolsWrites)).toHaveLength(3);
 });
 
+test('a remote Admin update blocks a dirty draft until the latest settings are loaded', async ({ page }) => {
+  const initial = configWithExistingGroup();
+  await openSignedInApp(page, { externalToolsConfig: initial });
+  await page.getByTestId('external-tools-settings-tab').click();
+  await page.getByTestId('external-tools-group-name-external-tools').fill('ร่างจากเครื่องนี้');
+
+  const remoteConfig = {
+    groups: [...initial.groups, { id: 'remote-group', name: 'หมวดจากอีกเครื่อง', links: [] }],
+  };
+  await page.evaluate((config) => window.externalToolsEmit(config, 'revision-from-other-admin'), remoteConfig);
+
+  await expect(page.getByTestId('external-tools-save')).toBeDisabled();
+  await expect(page.locator('[data-error-code="EXTERNAL_TOOLS_CONFLICT"]')).toBeVisible();
+  const acceptReload = page.waitForEvent('dialog').then((dialog) => dialog.accept());
+  await Promise.all([
+    acceptReload,
+    page.getByRole('button', { name: 'โหลดค่าล่าสุด' }).click(),
+  ]);
+
+  await expect(page.getByTestId('external-tools-group-name-external-tools')).toHaveValue('เครื่องมือภายนอก');
+  await expect(page.getByTestId('external-tools-group-name-remote-group')).toHaveValue('หมวดจากอีกเครื่อง');
+  await expect(page.getByTestId('external-tools-save')).toBeDisabled();
+  expect(await page.evaluate(() => window.externalToolsWrites)).toEqual([]);
+});
+
+test('a server conflict prevents saving before the remote snapshot reaches the UI', async ({ page }) => {
+  const initial = configWithExistingGroup();
+  await openSignedInApp(page, { externalToolsConfig: initial });
+  await page.getByTestId('external-tools-settings-tab').click();
+  await page.getByTestId('external-tools-group-name-external-tools').fill('ร่างเก่าจากเครื่องนี้');
+
+  const remoteConfig = {
+    groups: [...initial.groups, { id: 'remote-race-group', name: 'หมวดที่บันทึกระหว่างทาง', links: [] }],
+  };
+  await page.evaluate((config) => {
+    window.externalToolsConfig = config;
+    window.externalToolsRevision = 'revision-from-racing-admin';
+  }, remoteConfig);
+
+  await page.getByTestId('external-tools-save').click();
+  await expect(page.locator('[data-error-code="EXTERNAL_TOOLS_CONFLICT"]')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'โหลดค่าล่าสุด' })).toBeDisabled();
+  expect(await page.evaluate(() => window.externalToolsWrites)).toEqual([]);
+
+  await page.evaluate((config) => window.externalToolsEmit(config, 'revision-from-racing-admin'), remoteConfig);
+  const acceptReload = page.waitForEvent('dialog').then((dialog) => dialog.accept());
+  await Promise.all([
+    acceptReload,
+    page.getByRole('button', { name: 'โหลดค่าล่าสุด' }).click(),
+  ]);
+  await expect(page.getByTestId('external-tools-group-name-external-tools')).toHaveValue('เครื่องมือภายนอก');
+  await expect(page.getByTestId('external-tools-group-name-remote-race-group')).toHaveValue('หมวดที่บันทึกระหว่างทาง');
+  expect(await page.evaluate(() => window.externalToolsWrites)).toEqual([]);
+});
+
 test('invalid URLs show a stable validation code without writing', async ({ page }) => {
   await openSignedInApp(page);
   await page.getByTestId('external-tools-settings-tab').click();

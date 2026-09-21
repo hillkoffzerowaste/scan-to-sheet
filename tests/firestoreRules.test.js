@@ -162,6 +162,8 @@ test("external tool settings are shared for staff and writable only by Admin", a
   assert.match(block[1], /request\.resource\.data\.keys\(\)\.hasOnly/);
   assert.match(block[1], /request\.resource\.data\.groups is list/);
   assert.match(block[1], /request\.resource\.data\.groups\.size\(\) <= 10/);
+  assert.match(block[1], /request\.resource\.data\.revision is string/);
+  assert.match(block[1], /request\.resource\.data\.revision\.size\(\) <= 80/);
   assert.match(block[1], /request\.resource\.data\.updatedAt == request\.time/);
   assert.match(block[1], /request\.resource\.data\.updatedByUid == request\.auth\.uid/);
   assert.match(block[1], /allow delete: if false;/);

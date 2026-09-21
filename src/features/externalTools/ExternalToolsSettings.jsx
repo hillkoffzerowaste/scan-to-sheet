@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Plus, Save, Trash2 } from 'lucide-react';
 import { validateExternalToolsConfig } from './externalToolsConfig.js';
 
@@ -15,6 +15,12 @@ function createId() {
   return globalThis.crypto.randomUUID();
 }
 
+function versionsMatch(left, right) {
+  return Boolean(left && right)
+    && left.exists === right.exists
+    && left.revision === right.revision;
+}
+
 function getUserError(error) {
   if (error?.code === 'EXTERNAL_TOOLS_INVALID') {
     return { code: error.code, message: 'ตรวจสอบชื่อหมวดและข้อมูลลิงก์ให้ครบถ้วนก่อนบันทึก' };
@@ -25,24 +31,38 @@ function getUserError(error) {
   if (error?.code === 'EXTERNAL_TOOLS_READ_FAILED') {
     return { code: error.code, message: 'อ่านการตั้งค่าร่วมไม่สำเร็จ จึงปิดการแก้ไขและบันทึกไว้ก่อน' };
   }
+  if (error?.code === 'EXTERNAL_TOOLS_CONFLICT') {
+    return { code: error.code, message: 'มี Admin อีกเครื่องบันทึกการตั้งค่าใหม่แล้ว กำลังรอข้อมูลล่าสุดจากเซิร์ฟเวอร์' };
+  }
   return {
     code: typeof error?.code === 'string' ? error.code : 'EXTERNAL_TOOLS_SAVE_FAILED',
     message: 'บันทึกการตั้งค่าไม่สำเร็จ โปรดลองอีกครั้ง',
   };
 }
 
-function ExternalToolsSettings({ config, loadStatus, saving, onSave }) {
+function ExternalToolsSettings({ config, version, loadStatus, saving, onSave }) {
   const [draft, setDraft] = useState(() => copyConfig(config));
   const [dirty, setDirty] = useState(false);
+  const [conflict, setConflict] = useState(false);
   const [feedback, setFeedback] = useState(null);
-  const disabled = loadStatus !== 'ready' || saving;
+  const baseVersionRef = useRef(version);
+  const disabled = loadStatus !== 'ready' || saving || conflict;
   const linkCount = draft.groups.reduce((count, group) => count + group.links.length, 0);
+  const hasNewerVersion = Boolean(version) && !versionsMatch(version, baseVersionRef.current);
 
   useEffect(() => {
-    if (!dirty) setDraft(copyConfig(config));
-  }, [config, dirty]);
+    if (saving) return;
+    if (!dirty) {
+      setDraft(copyConfig(config));
+      baseVersionRef.current = version;
+      setConflict(false);
+      return;
+    }
+    if (version && !versionsMatch(version, baseVersionRef.current)) setConflict(true);
+  }, [config, dirty, saving, version]);
 
   function updateDraft(update) {
+    if (!dirty) baseVersionRef.current = version;
     setDraft((current) => update(current));
     setDirty(true);
     setFeedback(null);
@@ -97,19 +117,38 @@ function ExternalToolsSettings({ config, loadStatus, saving, onSave }) {
     }));
   }
 
+  function reloadLatest() {
+    if (!hasNewerVersion || saving) return;
+    const confirmed = !dirty || window.confirm('โหลดค่าล่าสุดและละทิ้งการแก้ไขที่ยังไม่ได้บันทึกใช่หรือไม่?');
+    if (!confirmed) return;
+    setDraft(copyConfig(config));
+    baseVersionRef.current = version;
+    setDirty(false);
+    setConflict(false);
+    setFeedback(null);
+  }
+
   async function handleSubmit(event) {
     event.preventDefault();
     if (disabled || !dirty) return;
 
     try {
       const normalized = validateExternalToolsConfig(draft);
-      const saved = await onSave(normalized);
-      setDraft(copyConfig(saved ?? normalized));
+      const saved = await onSave(normalized, baseVersionRef.current);
+      const savedConfig = saved?.config ?? saved ?? normalized;
+      setDraft(copyConfig(savedConfig));
+      if (saved?.version) baseVersionRef.current = saved.version;
       setDirty(false);
+      setConflict(false);
       setFeedback({ type: 'success', message: 'บันทึกการตั้งค่าแล้ว ทุกเครื่องจะเห็นรายการใหม่นี้' });
     } catch (error) {
       const userError = getUserError(error);
-      setFeedback({ type: 'error', ...userError });
+      if (error?.code === 'EXTERNAL_TOOLS_CONFLICT') {
+        setConflict(true);
+        setFeedback(null);
+      } else {
+        setFeedback({ type: 'error', ...userError });
+      }
     }
   }
 
@@ -139,6 +178,16 @@ function ExternalToolsSettings({ config, loadStatus, saving, onSave }) {
         <p className="external-tools-settings-notice error" data-error-code="EXTERNAL_TOOLS_READ_FAILED" role="alert">
           อ่านการตั้งค่าร่วมไม่สำเร็จ จึงปิดการแก้ไขและบันทึกไว้ก่อน
         </p>
+      )}
+      {conflict && (
+        <div className="external-tools-settings-notice error" data-error-code="EXTERNAL_TOOLS_CONFLICT" role="alert">
+          <p>{hasNewerVersion
+            ? 'การตั้งค่าบนเซิร์ฟเวอร์เปลี่ยนหลังจากเริ่มแก้ไข กรุณาโหลดค่าล่าสุดก่อนบันทึก'
+            : 'มี Admin อีกเครื่องบันทึกการตั้งค่าใหม่แล้ว กำลังรอข้อมูลล่าสุดจากเซิร์ฟเวอร์'}</p>
+          <button className="ghost-button" type="button" onClick={reloadLatest} disabled={!hasNewerVersion || saving}>
+            โหลดค่าล่าสุด
+          </button>
+        </div>
       )}
       {feedback && (
         <p className={'external-tools-settings-notice ' + feedback.type} data-error-code={feedback.code} role={feedback.type === 'error' ? 'alert' : 'status'}>

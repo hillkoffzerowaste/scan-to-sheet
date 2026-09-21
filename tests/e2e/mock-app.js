@@ -55,19 +55,41 @@ export async function openSignedInApp(page, { staffAdmin = true, externalToolsCo
         onError?.({ code: 'EXTERNAL_TOOLS_READ_FAILED', message: 'อ่านการตั้งค่าไม่สำเร็จ' });
       } else {
         const config = window.externalToolsConfig ?? DEFAULT_EXTERNAL_TOOLS_CONFIG;
-        onChange(config, { source: window.externalToolsConfig ? 'firestore' : 'default' });
+        const version = { exists: Boolean(window.externalToolsConfig), revision: window.externalToolsRevision ?? null };
+        onChange(config, { source: window.externalToolsConfig ? 'firestore' : 'default', ready: true, version });
         subscribers.push(onChange);
+        window.externalToolsEmit = (nextConfig, revision) => {
+          window.externalToolsConfig = nextConfig;
+          window.externalToolsRevision = revision;
+          const nextVersion = { exists: true, revision };
+          subscribers.forEach((subscriber) => subscriber(nextConfig, { source: 'firestore', ready: true, version: nextVersion }));
+        };
       }
       return () => {
         const index = subscribers.indexOf(onChange);
         if (index >= 0) subscribers.splice(index, 1);
       };
     };
-    export const saveExternalToolsConfig = async (config) => {
+    export const saveExternalToolsConfig = async (config, user, expectedVersion) => {
+      const currentVersion = {
+        exists: Boolean(window.externalToolsConfig),
+        revision: window.externalToolsRevision ?? null,
+      };
+      if (currentVersion.exists !== expectedVersion?.exists || currentVersion.revision !== expectedVersion?.revision) {
+        throw { code: 'EXTERNAL_TOOLS_CONFLICT', message: 'มี Admin อีกเครื่องบันทึกการตั้งค่าใหม่แล้ว' };
+      }
       window.externalToolsWrites.push(config);
       window.externalToolsConfig = config;
-      subscribers.forEach((onChange) => onChange(config, { source: 'firestore' }));
-      return config;
+      const version = { exists: true, revision: 'revision-' + window.externalToolsWrites.length };
+      window.externalToolsRevision = version.revision;
+      subscribers.forEach((onChange) => onChange(config, { source: 'firestore', ready: true, version }));
+      window.externalToolsEmit = (nextConfig, revision) => {
+        window.externalToolsConfig = nextConfig;
+        window.externalToolsRevision = revision;
+        const nextVersion = { exists: true, revision };
+        subscribers.forEach((subscriber) => subscriber(nextConfig, { source: 'firestore', ready: true, version: nextVersion }));
+      };
+      return { config, version };
     };
   `);
   await mockModule(page, '/src/services/firebaseScans.js', `
