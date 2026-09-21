@@ -53,7 +53,10 @@
     "@playwright/test": "^1.61.1",
     "playwright": "^1.61.1"
   },
-  "overrides": {
+  "engines": {
+    "npm": "11.12.1"
+  },
+"overrides": {
     "gaxios": {
       "uuid": "^11.1.1"
     },
