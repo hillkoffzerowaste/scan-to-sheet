@@ -5311,6 +5311,7 @@ tbody tr:hover {
 
 .win-shell .external-tools-settings {
   display: grid;
+  margin-top: var(--space-layout);
   gap: var(--space-layout);
   min-width: 0;
   color: var(--text);

@@ -89,9 +89,10 @@ for (const theme of ['light', 'dark']) {
     await setTheme(page, theme);
     for (const width of [1280, 1440, 1920]) {
       await page.setViewportSize({ width, height: width === 1280 ? 720 : 900 });
-      for (const tab of ['packer', 'drive', 'reports', 'staff']) {
+      for (const tab of ['packer', 'drive', 'reports', 'external-tools-settings', 'staff']) {
         await page.getByTestId(`${tab}-tab`).click();
         if (tab === 'staff') await expect(page.locator('.staff-card')).toHaveCount(2);
+        if (tab === 'external-tools-settings') await expect(page.locator('.external-tools-settings')).toBeVisible();
         if (tab === 'reports') {
           await page.getByRole('button', { name: 'สร้างรายงาน', exact: true }).click();
           await expect(page.locator('.report-badge')).toContainText('1 รายการ');

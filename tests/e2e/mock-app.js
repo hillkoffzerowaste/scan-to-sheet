@@ -47,20 +47,26 @@ export async function openSignedInApp(page, { staffAdmin = true, externalToolsCo
       return () => {};
     };
   `);
-      await mockModule(page, '/src/features/externalTools/externalToolsService.js', `
+  await mockModule(page, '/src/features/externalTools/externalToolsService.js', `
     import { DEFAULT_EXTERNAL_TOOLS_CONFIG } from '/src/features/externalTools/externalToolsConfig.js';
+    const subscribers = [];
     export const subscribeExternalTools = ({ onChange, onError }) => {
       if (window.externalToolsReadError) {
         onError?.({ code: 'EXTERNAL_TOOLS_READ_FAILED', message: 'อ่านการตั้งค่าไม่สำเร็จ' });
       } else {
         const config = window.externalToolsConfig ?? DEFAULT_EXTERNAL_TOOLS_CONFIG;
         onChange(config, { source: window.externalToolsConfig ? 'firestore' : 'default' });
+        subscribers.push(onChange);
       }
-      return () => {};
+      return () => {
+        const index = subscribers.indexOf(onChange);
+        if (index >= 0) subscribers.splice(index, 1);
+      };
     };
     export const saveExternalToolsConfig = async (config) => {
       window.externalToolsWrites.push(config);
       window.externalToolsConfig = config;
+      subscribers.forEach((onChange) => onChange(config, { source: 'firestore' }));
       return config;
     };
   `);

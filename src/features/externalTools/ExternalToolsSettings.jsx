@@ -15,17 +15,20 @@ function createId() {
   return globalThis.crypto.randomUUID();
 }
 
-function getUserErrorMessage(error) {
+function getUserError(error) {
   if (error?.code === 'EXTERNAL_TOOLS_INVALID') {
-    return 'ตรวจสอบชื่อหมวดและข้อมูลลิงก์ให้ครบถ้วนก่อนบันทึก';
+    return { code: error.code, message: 'ตรวจสอบชื่อหมวดและข้อมูลลิงก์ให้ครบถ้วนก่อนบันทึก' };
   }
   if (error?.code === 'EXTERNAL_TOOLS_AUTH_REQUIRED') {
-    return 'ต้องเข้าสู่ระบบ Firebase ในฐานะ Admin เพื่อบันทึกการตั้งค่า';
+    return { code: error.code, message: 'ต้องเข้าสู่ระบบ Firebase ในฐานะ Admin เพื่อบันทึกการตั้งค่า' };
   }
   if (error?.code === 'EXTERNAL_TOOLS_READ_FAILED') {
-    return 'อ่านการตั้งค่าร่วมไม่สำเร็จ จึงปิดการแก้ไขและบันทึกไว้ก่อน';
+    return { code: error.code, message: 'อ่านการตั้งค่าร่วมไม่สำเร็จ จึงปิดการแก้ไขและบันทึกไว้ก่อน' };
   }
-  return 'บันทึกการตั้งค่าไม่สำเร็จ โปรดลองอีกครั้ง';
+  return {
+    code: typeof error?.code === 'string' ? error.code : 'EXTERNAL_TOOLS_SAVE_FAILED',
+    message: 'บันทึกการตั้งค่าไม่สำเร็จ โปรดลองอีกครั้ง',
+  };
 }
 
 function ExternalToolsSettings({ config, loadStatus, saving, onSave }) {
@@ -105,7 +108,8 @@ function ExternalToolsSettings({ config, loadStatus, saving, onSave }) {
       setDirty(false);
       setFeedback({ type: 'success', message: 'บันทึกการตั้งค่าแล้ว ทุกเครื่องจะเห็นรายการใหม่นี้' });
     } catch (error) {
-      setFeedback({ type: 'error', message: getUserErrorMessage(error) });
+      const userError = getUserError(error);
+      setFeedback({ type: 'error', ...userError });
     }
   }
 
@@ -132,12 +136,12 @@ function ExternalToolsSettings({ config, loadStatus, saving, onSave }) {
         <p className="external-tools-settings-notice" role="status">กำลังอ่านการตั้งค่าร่วม</p>
       )}
       {loadStatus === 'error' && (
-        <p className="external-tools-settings-notice error" role="alert">
+        <p className="external-tools-settings-notice error" data-error-code="EXTERNAL_TOOLS_READ_FAILED" role="alert">
           อ่านการตั้งค่าร่วมไม่สำเร็จ จึงปิดการแก้ไขและบันทึกไว้ก่อน
         </p>
       )}
       {feedback && (
-        <p className={'external-tools-settings-notice ' + feedback.type} role={feedback.type === 'error' ? 'alert' : 'status'}>
+        <p className={'external-tools-settings-notice ' + feedback.type} data-error-code={feedback.code} role={feedback.type === 'error' ? 'alert' : 'status'}>
           {feedback.message}
         </p>
       )}
