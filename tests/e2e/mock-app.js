@@ -61,6 +61,7 @@ export async function openSignedInApp(page, { staffAdmin = true } = {}) {
     export const fetchTodaySummaryFirestore = async ({ couriers }) => ({ courierCounts: couriers.map(courier => ({ courier, count: 0 })), packerCounts: [] });
     export const getTodayRowsFirestore = async () => [];
     export const getDriveRowsFirestore = async () => [];
+    export const getOrdersByNormalizedCodes = async () => [];
     export const getSheetRecoveryCandidates = async () => ({ candidates: [], limited: false });
     export const checkMissingOrdersFirestore = async () => null;
     export const recordPackerScanPrimary = async (data) => { window.qrTestWrites.push(data); throw new Error('Unexpected scan write'); };
@@ -70,6 +71,7 @@ export async function openSignedInApp(page, { staffAdmin = true } = {}) {
     export const fetchGoogleProfile = async () => ({ email: 'qr-test@example.invalid' });
     export const ensureGoogleSheetOrganization = async () => {};
     export const colorAllHistoricalSheetsGoogle = async () => {};
+    export const listMarketplaceOrdersGoogle = async () => [];
   `);
   await page.route('**/api/**', (route) => route.fulfill({ json: {
     accessToken: 'test-access-token', expiresIn: 3600,

@@ -266,6 +266,31 @@ async function getRecentOrdersByCode(normalizedCode, maxRows = 10) {
   return snap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
 }
 
+const FIRESTORE_IN_QUERY_MAX = 30;
+
+export async function getOrdersByNormalizedCodes({ codes = [], maxRows = 100 } = {}) {
+  if (!canWriteFirestore()) return [];
+  const normalizedCodes = [...new Set(codes.map((code) => normalizeCode(code)).filter(Boolean))];
+  if (!normalizedCodes.length) return [];
+
+  const chunks = [];
+  for (let index = 0; index < normalizedCodes.length; index += FIRESTORE_IN_QUERY_MAX) {
+    chunks.push(normalizedCodes.slice(index, index + FIRESTORE_IN_QUERY_MAX));
+  }
+  const finiteMaxRows = Math.max(1, Math.min(Number(maxRows) || 100, 100));
+  const perChunkLimit = Math.max(1, Math.min(100, Math.ceil(finiteMaxRows / chunks.length)));
+  const snapshots = await Promise.all(chunks.map((chunk) => getDocs(query(
+    collection(firestoreDb, 'orders'),
+    where('normalizedCode', 'in', chunk),
+    limit(perChunkLimit),
+  ))));
+  const byId = new Map();
+  snapshots.flatMap((snapshot) => snapshot.docs).forEach((docSnap) => {
+    if (!byId.has(docSnap.id)) byId.set(docSnap.id, { id: docSnap.id, ...docSnap.data() });
+  });
+  return [...byId.values()];
+}
+
 function reportDay(date) {
   return {
     date,
