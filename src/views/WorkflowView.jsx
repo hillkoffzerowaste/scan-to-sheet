@@ -3,13 +3,6 @@ import { AlertTriangle, ArrowRightLeft, Camera, CheckCircle2, ClipboardCopy, Clo
 import { CAMERA_REGION_ID, DEFAULT_LOOKBACK_HOURS, ISSUE_CUSTOMER_CANCELLED, ISSUE_DAMAGED, ISSUE_RETURNED, PACKER_UNASSIGNED } from '../constants.js';
 import { DeploymentUpdateBanner, StatusBanner } from './StatusBanner.jsx';
 import { CourierQrPanel } from './ScanQrPanels.jsx';
-import {
-  marketplaceDisplayTracking,
-  marketplaceQueueActionLabel,
-  marketplaceQueueBadgeClass,
-  marketplaceQueueItemText,
-  marketplaceQueueStateLabel,
-} from '../services/marketplaceQueue.js';
 
 function WorkflowView({
   activeTab,
@@ -44,17 +37,12 @@ function WorkflowView({
   markSearchResultDamaged,
   marketplaceFileRef,
   marketplaceFilterPlatform,
-  marketplaceQueueBusy,
-  marketplaceQueueError,
-  marketplaceQueueRows,
   marketplaceUploadBusy,
   marketplaceUploadResult,
   missingBusy,
   missingResults,
   missingUISections,
   newCourierName,
-  onRefreshMarketplaceQueue,
-  onSelectMarketplaceOrder,
   onQrSelect,
   packerCounts,
   packerOptions,
@@ -533,85 +521,6 @@ function WorkflowView({
                   </div>
                 </div>
               )}
-
-              <section className="marketplace-queue-panel" aria-label="ออเดอร์จาก Store สำหรับเช็คสินค้า">
-                <div className="marketplace-queue-header">
-                  <div>
-                    <p className="eyebrow">Store → ห้องแพ็ค</p>
-                    <h3>ออเดอร์จาก Store สำหรับเช็คสินค้า</h3>
-                  </div>
-                  <button
-                    className="text-button refresh-button"
-                    type="button"
-                    onClick={onRefreshMarketplaceQueue}
-                    disabled={marketplaceQueueBusy || !isSignedIn}
-                    title="รีเฟรชออเดอร์จาก Store และสถานะคิวคนขับ"
-                  >
-                    <RefreshCw size={14} className={marketplaceQueueBusy ? 'spin' : ''} />
-                    <span>รีเฟรช</span>
-                  </button>
-                </div>
-                <p className="marketplace-queue-help">
-                  Store นำออเดอร์เข้าแล้ว ห้องแพ็คดึงมาเช็คก่อนได้เลย ใช้ขนส่งและ Packer ที่เลือกอยู่ด้านบน
-                </p>
-                <div className="marketplace-queue-summary">
-                  <span>ทั้งหมด {marketplaceQueueRows?.length ?? 0} รายการ</span>
-                  <span>อยู่คิวคนขับ {marketplaceQueueRows?.filter((row) => ['driver_queue', 'matched'].includes(row.queueState)).length ?? 0} รายการ</span>
-                </div>
-                {marketplaceQueueError && (
-                  <div className="marketplace-queue-error" role="alert">{marketplaceQueueError}</div>
-                )}
-                <div className="table-wrap marketplace-queue-table">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>แพลตฟอร์ม</th>
-                        <th>Order ID</th>
-                        <th>Tracking</th>
-                        <th>สินค้า / SKU</th>
-                        <th>สถานะคิว</th>
-                        <th>คำสั่ง</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {marketplaceQueueBusy && marketplaceQueueRows?.length === 0 ? (
-                        <tr><td colSpan="6" className="empty-cell">กำลังโหลดออเดอร์จาก Store...</td></tr>
-                      ) : !isSignedIn ? (
-                        <tr><td colSpan="6" className="empty-cell">เข้าสู่ระบบเพื่อโหลดออเดอร์จาก Store</td></tr>
-                      ) : marketplaceQueueRows?.length === 0 ? (
-                        <tr><td colSpan="6" className="empty-cell">ยังไม่มีออเดอร์จาก Store ที่นำเข้าไว้</td></tr>
-                      ) : (
-                        marketplaceQueueRows.map((row) => {
-                          const actionLabel = marketplaceQueueActionLabel(row.queueState);
-                          return (
-                            <tr key={`${row.key || row.orderId}-${row.trackingNo}`}>
-                              <td>{row.platform || '-'}</td>
-                              <td>{row.orderId || '-'}</td>
-                              <td className="code-cell">{marketplaceDisplayTracking(row)}</td>
-                              <td className="marketplace-item-cell" title={marketplaceQueueItemText(row)}>{marketplaceQueueItemText(row)}</td>
-                              <td><span className={`status-badge ${marketplaceQueueBadgeClass(row.queueState)}`}>{marketplaceQueueStateLabel(row.queueState)}</span></td>
-                              <td>
-                                {row.canPackerCheck ? (
-                                  <button
-                                    className="table-action-button"
-                                    type="button"
-                                    onClick={() => onSelectMarketplaceOrder(row)}
-                                    disabled={marketplaceQueueBusy}
-                                  >
-                                    {actionLabel}
-                                  </button>
-                                ) : (
-                                  <span className="marketplace-queue-action-label">{actionLabel || '-'}</span>
-                                )}
-                              </td>
-                            </tr>
-                          );
-                        })
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </section>
 
               <div className="recent-header">
                 <h3>รายการล่าสุด</h3>
