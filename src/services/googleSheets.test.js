@@ -13,6 +13,7 @@ import {
   doesBangkokDateOverlapLookback,
   findCancellationRow,
   findMarketplaceOrderGoogle,
+  listMarketplaceOrdersGoogle,
   getDailySheetPropertiesForMarketplaceBackfill,
   upsertMarketplaceOrdersGoogle,
   updateScanIssueGoogle,
@@ -433,6 +434,37 @@ test('Marketplace Orders lookup returns one exact normalized tracking match', as
     assert.equal(order.orderId, 'ORDER-3');
     assert.deepEqual(order.marketplaceSkus, ['SKU-3']);
     assert.equal(order.status, 'READY');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('Marketplace Orders list is capped and shows newest orders first', async () => {
+  const originalFetch = globalThis.fetch;
+  const spreadsheetId = 'marketplace-orders-list-test';
+  const jsonResponse = (payload) => new Response(JSON.stringify(payload), {
+    status: 200, headers: { 'Content-Type': 'application/json' },
+  });
+  globalThis.fetch = async (url, options = {}) => {
+    const decodedUrl = decodeURIComponent(String(url));
+    const method = options.method ?? 'GET';
+    if (decodedUrl.includes(`/spreadsheets/${spreadsheetId}?fields=`)) {
+      return jsonResponse({ sheets: [{ properties: { sheetId: 705, title: 'Marketplace Orders', gridProperties: { rowCount: 1000, columnCount: 12 } } }] });
+    }
+    if (decodedUrl.includes("'Marketplace Orders'!A2:L") && method === 'GET') {
+      return jsonResponse({ values: [
+        ['shopee__OLD', 'THOLD1234', 'THOLD1234', 'shopee', 'OLD', '[]', '[]', '1', 'READY', '', '2026-08-20 08:00:00', ''],
+        ['shopee__NEW', 'THNEW1234', 'THNEW1234', 'shopee', 'NEW', '[]', '[]', '1', 'READY', '', '2026-08-22 08:00:00', ''],
+      ] });
+    }
+    throw new Error(`Unexpected request: ${method} ${decodedUrl}`);
+  };
+  try {
+    const orders = await listMarketplaceOrdersGoogle({
+      token: 'token', config: { master: { id: spreadsheetId } }, limit: 1,
+    });
+    assert.equal(orders.length, 1);
+    assert.equal(orders[0].orderId, 'NEW');
   } finally {
     globalThis.fetch = originalFetch;
   }

@@ -823,6 +823,18 @@ export async function findMarketplaceOrderGoogle({ token, config, trackingNo }) 
   return catalog.byTracking.get(normalizedTrackingNo) ?? null;
 }
 
+export async function listMarketplaceOrdersGoogle({ token, config, limit = 100, force = false }) {
+  const spreadsheetId = config?.master?.id;
+  if (!spreadsheetId) return [];
+  const catalog = await readMarketplaceOrdersGoogle({ token, spreadsheetId, force });
+  const maxRows = Math.max(0, Math.min(Number(limit) || 0, 100));
+  const sortKey = (order) => String(order.orderedAt || order.expectedShipAt || order.updatedAt || '');
+  return catalog.orders
+    .slice()
+    .sort((left, right) => sortKey(right).localeCompare(sortKey(left)))
+    .slice(0, maxRows);
+}
+
 export async function upsertMarketplaceOrdersGoogle({ token, config, groups, max = Infinity }) {
   const spreadsheetId = config?.master?.id;
   if (!spreadsheetId) throw new Error('ไม่พบ Google Sheet Master');
