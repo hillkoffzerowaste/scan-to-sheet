@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   CalendarDays,
-  ClipboardList,
   Copy,
   GripVertical,
   Mail,
@@ -145,6 +144,8 @@ function bangkokDateKey() {
 export default function StaffDirectory({
   firebaseUser,
   couriers,
+  activeModuleId = "directory",
+  activePlanningModuleId = "plan",
   onPackerOptionsChange,
 }) {
   const [staff, setStaff] = useState([]);
@@ -155,7 +156,7 @@ export default function StaffDirectory({
   const [dailyStatuses, setDailyStatuses] = useState(new Map());
   const [dailyLeadId, setDailyLeadId] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
-  const [section, setSection] = useState("directory");
+  const section = activeModuleId;
   const [scheduleView, setScheduleView] = useState("day");
   const [editingWeeklyDuty, setEditingWeeklyDuty] = useState(null);
   const [substituting, setSubstituting] = useState(null);
@@ -776,19 +777,6 @@ export default function StaffDirectory({
           </div>
         )}
       </header>
-      <div className="staff-section-tabs" aria-label="โมดูลบริหารทีมงาน">
-        {STAFF_WORKSPACE_MODULE.modules.map((module) => (
-          <button
-            key={module.id}
-            aria-current={section === module.id ? "page" : undefined}
-            className={section === module.id ? "active" : ""}
-            onClick={() => setSection(module.id)}
-          >
-            {module.id === "directory" ? <Users size={17} /> : module.id === "schedule" ? <CalendarDays size={17} /> : <ClipboardList size={17} />}
-            {module.label}
-          </button>
-        ))}
-      </div>
       {message && (
         <div className="staff-message" role="status">
           {message}
@@ -1449,6 +1437,7 @@ export default function StaffDirectory({
           staff={staff}
           isAdmin={isAdmin}
           firebaseUser={firebaseUser}
+          activeChildId={activePlanningModuleId}
           onMessage={setMessage}
         />
       )}

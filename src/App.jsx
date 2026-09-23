@@ -352,6 +352,8 @@ function App() {
   const [reportBusy, setReportBusy] = useState(false);
   const [reportData, setReportData] = useState(null);
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [staffModuleId, setStaffModuleId] = useState('directory');
+  const [staffPlanningModuleId, setStaffPlanningModuleId] = useState('plan');
   const [driveRecentRows, setDriveRecentRows] = useState([]);
   const [driveTotalCount, setDriveTotalCount] = useState(0);
   const [driveSyncBusy, setDriveSyncBusy] = useState(false);
@@ -3360,6 +3362,10 @@ function App() {
           externalToolsGroups={externalToolsConfig.groups}
           sidebarTextSize={externalToolsConfig.sidebarTextSize}
           canManageExternalTools={canManageExternalTools}
+          staffModuleId={staffModuleId}
+          staffPlanningModuleId={staffPlanningModuleId}
+          onStaffModuleChange={setStaffModuleId}
+          onStaffPlanningModuleChange={setStaffPlanningModuleId}
         />
         <main id="main" tabIndex={-1} className="win-main">
         <Toolbar
@@ -3545,6 +3551,8 @@ function App() {
         <StaffDirectory
           firebaseUser={firebaseUser}
           couriers={couriers}
+          activeModuleId={staffModuleId}
+          activePlanningModuleId={staffPlanningModuleId}
           onPackerOptionsChange={(names) => {
             const next = [PACKER_UNASSIGNED, ...names];
             setPackerOptions(next);

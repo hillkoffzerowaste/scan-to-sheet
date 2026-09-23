@@ -4160,6 +4160,17 @@ tbody tr:hover {
 
 .win-nav-group { padding-block: 4px; }
 
+.win-staff-tree {
+  display: grid;
+  gap: 1px;
+  margin: 1px 0 4px;
+}
+
+.win-nav-tree-caret { flex: none; transition: transform var(--dur-ui) ease; }
+.win-nav-tree-caret.expanded { transform: rotate(180deg); }
+.win-nav-child { padding-left: 26px; font-size: 0.76rem; }
+.win-nav-grandchild { padding-left: 38px; font-size: 0.73rem; }
+
 .win-nav-heading {
   margin: 6px 12px 4px;
   font-size: 0.62rem;
@@ -4235,7 +4246,8 @@ tbody tr:hover {
 /* เมนูยุบ: เหลือเฉพาะไอคอน ป้ายนับยังต้องเห็นเพราะมันคือเหตุผลที่ต้องกดเข้าไป */
 .win-shell.collapsed .win-nav-label,
 .win-shell.collapsed .win-nav-heading,
-.win-shell.collapsed .win-nav-external { display: none; }
+.win-shell.collapsed .win-nav-external,
+.win-shell.collapsed .win-nav-tree-caret { display: none; }
 .win-shell.collapsed .win-nav-item,
 .win-shell.collapsed .win-sidebar-toggle { justify-content: center; padding-inline: 0; }
 .win-shell.collapsed .win-nav-badge { position: absolute; margin-left: 22px; }
@@ -6085,6 +6097,9 @@ tbody tr:hover {
   font-weight: 400;
   transition: none;
 }
+
+.wireframe-shell .win-nav-child { padding-left: 25px; }
+.wireframe-shell .win-nav-grandchild { padding-left: 37px; }
 
 .wireframe-shell .win-sidebar.sidebar-text-small .win-nav-item,
 .wireframe-shell .win-sidebar.sidebar-text-small .win-nav-heading,

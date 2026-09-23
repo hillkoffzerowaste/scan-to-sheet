@@ -1,6 +1,7 @@
 import React from 'react';
-import { BarChart3, ChevronsLeft, ChevronsRight, Coffee, ExternalLink, LayoutDashboard, MonitorCheck, PackageCheck, Printer, Truck, Upload, Users, Wrench } from 'lucide-react';
+import { BarChart3, ChevronDown, ChevronsLeft, ChevronsRight, Coffee, ExternalLink, LayoutDashboard, MonitorCheck, PackageCheck, Printer, Truck, Upload, Users, Wrench } from 'lucide-react';
 import { EXTERNAL_TOOL_TEST_IDS } from '../features/externalTools/externalToolsConfig.js';
+import { STAFF_WORKSPACE_MODULE } from '../features/staff/staffModules.js';
 
 // เมนูซ้ายแบบ Explorer: งานภายในเป็นปุ่มสลับหน้า ส่วนเครื่องมือภายนอกเป็นลิงก์ที่มีไอคอนกำกับชัด
 // จัดกลุ่มเพื่อให้เห็นทันทีว่าอันไหนคือหน้าที่อยู่ในโปรแกรม อันไหนคือของนอกโปรแกรม
@@ -31,7 +32,30 @@ function NavItem({ active, icon: Icon, label, badge, testId, onClick, collapsed 
   );
 }
 
-function Sidebar({ activeTab, switchTab, missingAlertBadge, collapsed, setCollapsed, externalToolsGroups = [], sidebarTextSize = 'normal', canManageExternalTools = false }) {
+function Sidebar({ activeTab, switchTab, missingAlertBadge, collapsed, setCollapsed, externalToolsGroups = [], sidebarTextSize = 'normal', canManageExternalTools = false, staffModuleId = 'directory', staffPlanningModuleId = 'plan', onStaffModuleChange = () => {}, onStaffPlanningModuleChange = () => {} }) {
+  const [staffExpanded, setStaffExpanded] = React.useState(false);
+  const [planningExpanded, setPlanningExpanded] = React.useState(false);
+
+  function openStaffModule(moduleId) {
+    onStaffModuleChange(moduleId);
+    setStaffExpanded(true);
+    switchTab('staff');
+  }
+
+  function toggleStaffNavigation() {
+    if (collapsed) setCollapsed(false);
+    setStaffExpanded((expanded) => activeTab === 'staff' ? !expanded : true);
+    switchTab('staff');
+  }
+
+  function openStaffPlanningModule(childId) {
+    onStaffModuleChange('planning');
+    onStaffPlanningModuleChange(childId);
+    setStaffExpanded(true);
+    setPlanningExpanded(true);
+    switchTab('staff');
+  }
+
   return (
     <nav className={`win-sidebar sidebar-text-${sidebarTextSize}`} aria-label="เมนูหลัก">
       <div className="win-nav-group">
@@ -77,14 +101,61 @@ function Sidebar({ activeTab, switchTab, missingAlertBadge, collapsed, setCollap
           onClick={() => switchTab('reports')}
           collapsed={collapsed}
         />
-        <NavItem
-          active={activeTab === 'staff'}
-          icon={Users}
-          label="แผนผังพนักงานห้องแพ็ค"
-          testId="staff-tab"
-          onClick={() => switchTab('staff')}
-          collapsed={collapsed}
-        />
+        <button
+          className={`win-nav-item ${activeTab === 'staff' ? 'active' : ''}`}
+          type="button"
+          data-testid="staff-tab"
+          aria-current={activeTab === 'staff' ? 'page' : undefined}
+          aria-expanded={!collapsed && staffExpanded}
+          aria-controls="staff-module-navigation"
+          aria-label={collapsed ? 'แผนผังพนักงานห้องแพ็ค' : undefined}
+          title={collapsed ? 'แผนผังพนักงานห้องแพ็ค' : undefined}
+          onClick={toggleStaffNavigation}
+        >
+          <Users size={16} className="win-nav-icon" />
+          <span className="win-nav-label">แผนผังพนักงานห้องแพ็ค</span>
+          <ChevronDown size={14} className={`win-nav-tree-caret ${staffExpanded ? 'expanded' : ''}`} aria-hidden="true" />
+        </button>
+        {!collapsed && staffExpanded && (
+          <div className="win-staff-tree" id="staff-module-navigation">
+            {STAFF_WORKSPACE_MODULE.modules.map((module) => {
+              const hasChildren = Boolean(module.children?.length);
+              const moduleActive = staffModuleId === module.id;
+              return (
+                <React.Fragment key={module.id}>
+                  <button
+                    type="button"
+                    className={`win-nav-item win-nav-child ${moduleActive ? 'active' : ''}`}
+                    data-testid={`staff-module-${module.id}`}
+                    aria-current={moduleActive && !hasChildren ? 'page' : undefined}
+                    aria-expanded={hasChildren ? planningExpanded : undefined}
+                    onClick={() => {
+                      openStaffModule(module.id);
+                      if (hasChildren) {
+                        setPlanningExpanded((expanded) => staffModuleId === module.id ? !expanded : true);
+                      }
+                    }}
+                  >
+                    <span className="win-nav-label">{module.label}</span>
+                    {hasChildren && <ChevronDown size={13} className={`win-nav-tree-caret ${planningExpanded ? 'expanded' : ''}`} aria-hidden="true" />}
+                  </button>
+                  {hasChildren && planningExpanded && module.children.map((child) => (
+                    <button
+                      key={child.id}
+                      type="button"
+                      className={`win-nav-item win-nav-child win-nav-grandchild ${staffModuleId === module.id && staffPlanningModuleId === child.id ? 'active' : ''}`}
+                      data-testid={`staff-submodule-${child.id}`}
+                      aria-current={staffModuleId === module.id && staffPlanningModuleId === child.id ? 'page' : undefined}
+                      onClick={() => openStaffPlanningModule(child.id)}
+                    >
+                      <span className="win-nav-label">{child.label}</span>
+                    </button>
+                  ))}
+                </React.Fragment>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {canManageExternalTools && (

@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from "react";
-import { BookOpen, ClipboardList } from "lucide-react";
 import {
   listStaffSops,
   listWorkPlanTasks,
@@ -15,8 +14,7 @@ const CHILD_MODULES = {
   sops: SopLibrary,
 };
 
-export default function WorkPlanningModule({ date, staff, isAdmin, firebaseUser, onMessage }) {
-  const [activeChildId, setActiveChildId] = useState(PLANNING_MODULES[0].id);
+export default function WorkPlanningModule({ date, staff, isAdmin, firebaseUser, activeChildId = PLANNING_MODULES[0].id, onChildChange, onMessage }) {
   const [sops, setSops] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -66,9 +64,6 @@ export default function WorkPlanningModule({ date, staff, isAdmin, firebaseUser,
       <header className="staff-module-header">
         <div><p className="eyebrow">โมดูลย่อย · แผนปฏิบัติงาน</p><h3 id="work-planning-title">แผนงานและ SOP</h3><p>จัดลำดับงานของวันที่เลือก และติดตามตาม SOP ฉบับที่เริ่มใช้จริง</p></div>
       </header>
-      <nav className="staff-submodule-tabs" aria-label="ส่วนย่อยของแผนงาน">
-        {PLANNING_MODULES.map((module) => <button key={module.id} className={activeChildId === module.id ? "active" : ""} aria-current={activeChildId === module.id ? "page" : undefined} onClick={() => setActiveChildId(module.id)}>{module.id === "plan" ? <ClipboardList size={16} /> : <BookOpen size={16} />}{module.label}</button>)}
-      </nav>
       {error && <div className="staff-module-alert" role="status">{error}</div>}
       {loading ? <p className="staff-module-empty">กำลังโหลดข้อมูล…</p> : <ActiveChild
         date={date}
