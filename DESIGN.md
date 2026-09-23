@@ -1,34 +1,34 @@
-# DESIGN.md — Modern Windows Wireframe
+# DESIGN.md — Modern Windows Workspace
 
 ระบบดีไซน์ของ scan-to-sheet เป็นแหล่งอ้างอิงเดียวของสี สเกล component และเกณฑ์ตรวจ UI ทุกค่าต้องประกาศเป็น CSS variable ใน `src/styles.css` ไม่ hardcode ที่จุดใช้งาน ปัจจุบัน shell desktop ใช้ขอบเขต `.wireframe-shell` และ token กลุ่ม `--wire-*` เป็นภาษาภาพหลัก
 
 ## 1. หลักการและขอบเขต
 
-Modern Windows wireframe ใช้กับ Packer/Admin รายงาน และพนักงาน/ตารางงาน โดยเน้นการอ่านข้อมูลและคำสั่งภายในมากกว่าการตกแต่ง แต่คง popup สแกน พฤติกรรม QR และระบบบันทึกเดิม ไม่เปลี่ยน API, Firestore schema หรือ Sheet
+Modern Windows workspace ใช้กับ Packer/Admin รายงาน และพนักงาน/ตารางงาน โดยเน้นการอ่านข้อมูลและคำสั่งภายในมากกว่าการตกแต่ง แต่คง popup สแกน พฤติกรรม QR และระบบบันทึกเดิม ไม่เปลี่ยน API, Firestore schema หรือ Sheet
 
 - Desktop-only: ตรวจที่ 1280/1440/1920px และให้ช่องสแกนเห็นได้ที่ 1280×720 ไม่มีการเพิ่ม mobile layout
 - แถบบนเดียว 56px; เมนูซ้าย 224px ยุบเหลือ 64px; หัวหน้าและคำสั่งอยู่ด้วยกัน; แถบสถานะล่าง 24px
 - สีระบบเป็นเทา–น้ำเงินแบบ Windows รุ่นใหม่และมี dark mode; สีสถานะใช้เพื่อสื่อความหมายเท่านั้น
-- ทุก panel/control ใช้เส้น 1px ที่เห็นได้ พื้นทึบ และตัวบ่งชี้รายการที่เลือกชัดเจน ใช้มุมโค้งเล็กน้อยแทนกรอบแข็งแบบ Classic แต่ยังไม่ใช้เงาหรือพื้น tint เป็นตัวสื่อสารเพียงอย่างเดียว
-- ปุ่มสูงขั้นต่ำ 36px; มุมทั้งหมดใช้ `--wire-radius: 4px`; ระยะห่างหลัก 16px
+- ทุก panel/control ใช้เส้น 1px ที่เห็นได้ พื้นทึบ และตัวบ่งชี้รายการที่เลือกชัดเจน ใช้มุมโค้งเล็กน้อยแทนกรอบแข็งแบบเดิม แต่ยังไม่ใช้เงาหรือพื้น tint เป็นตัวสื่อสารเพียงอย่างเดียว
+- ปุ่มสูงขั้นต่ำ 36px; มุมทั้งหมดใช้ `--wire-radius: 6px`; ระยะห่างหลัก 16px
 - ไม่มี hover lift, gradient หรือ glassmorphism; shadow อนุญาตเฉพาะ dialog/dropdown
 - `.wireframe-shell` คือขอบเขตหน้าตาปัจจุบัน ส่วนชื่อ class `win-*` และ `enterprise-shell` ยังเก็บไว้เป็น compatibility hooks และ DOM contract
 - CSS เก่ายังมีอยู่ ให้แก้กฎต้นทางที่เกี่ยวข้อง ไม่ซ้อน `!important` หรือเพิ่มชุด override ทั้งระบบ
 - รูปแบบพิมพ์ตารางเวรและ QR ต้องรักษาโครงกระดาษ ไม่รับขนาด control หรือเปลือกหน้าจอใหม่
 
-### Classic wireframe tokens
+### Modern Windows workspace tokens
 
 | token | light | dark | ใช้ที่ |
 |---|---|---|---|
-| `--wire-window` | `#e9eef4` | `#18212b` | พื้น workspace และ shell |
-| `--wire-face` | `#dfe6ee` | `#263342` | toolbar, sidebar, control |
-| `--wire-paper` | `#ffffff` | `#111820` | panel, table, input |
-| `--wire-titlebar` | `#224f80` | `#1b4f83` | topbar แบบ classic ที่ปรับให้ร่วมสมัยขึ้น |
-| `--wire-selection` | `#255f9e` | `#2f6fbb` | รายการ/ปุ่มที่เลือก |
-| `--wire-control-line` | `#60758a` | `#b2c0cc` | ขอบ control |
-| `--wire-text` | `#17212b` | `#f2f6fa` | ตัวหนังสือหลัก |
-| `--wire-muted` | `#425466` | `#c3cfda` | label และข้อความรอง |
-| `--wire-radius` | `4px` | `4px` | มุมทุก component ใน shell |
+| `--wire-window` | `#f4f7fb` | `#1a2430` | พื้น workspace และ shell |
+| `--wire-face` | `#e9eef5` | `#253445` | toolbar, sidebar, control |
+| `--wire-paper` | `#ffffff` | `#111a23` | panel, table, input |
+| `--wire-titlebar` | `#315a84` | `#1f4f7b` | topbar แบบ Windows รุ่นใหม่ |
+| `--wire-selection` | `#d9e9f7` | `#3c78b2` | รายการ/ปุ่มที่เลือก |
+| `--wire-control-line` | `#71869a` | `#9bb1c5` | ขอบ control |
+| `--wire-text` | `#1d2733` | `#edf4fb` | ตัวหนังสือหลัก |
+| `--wire-muted` | `#4c5a6a` | `#b8c6d4` | label และข้อความรอง |
+| `--wire-radius` | `6px` | `6px` | มุมทุก component ใน shell |
 
 ตาราง token กลุ่ม Modern/teal ด้านล่างยังคงไว้เพื่อ compatibility และประวัติการย้ายระบบ แต่ห้ามใช้เป็นค่าใหม่ใน `.wireframe-shell`
 

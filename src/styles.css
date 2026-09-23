@@ -130,27 +130,27 @@
   --ease-bounce: cubic-bezier(0.34, 1.35, 0.64, 1);
   --dur-press: 0.12s;
   --dur-ui: 0.18s;
-  /* Modern Windows wireframe palette. Keep it separate from the legacy Modern Workspace
+  /* Modern Windows workspace palette. Keep it separate from the legacy Modern Workspace
      tokens so the operational shell can change visual language without changing data states. */
-  --wire-window: #e9eef4;
-  --wire-face: #dfe6ee;
+  --wire-window: #f4f7fb;
+  --wire-face: #e9eef5;
   --wire-paper: #ffffff;
-  --wire-titlebar: #224f80;
+  --wire-titlebar: #315a84;
   --wire-titlebar-text: #ffffff;
-  --wire-text: #17212b;
-  --wire-muted: #425466;
-  --wire-line: #9eacba;
-  --wire-line-dark: #657789;
-  --wire-control-line: #60758a;
-  --wire-light: #ffffff;
-  --wire-selection: #255f9e;
-  --wire-selection-text: #ffffff;
-  --wire-focus: #1c5d9d;
+  --wire-text: #1d2733;
+  --wire-muted: #4c5a6a;
+  --wire-line: #c7d2df;
+  --wire-line-dark: #6c8093;
+  --wire-control-line: #71869a;
+  --wire-light: #f8fbff;
+  --wire-selection: #d9e9f7;
+  --wire-selection-text: #193a5b;
+  --wire-focus: #2b6fa8;
   --wire-success: #176b42;
   --wire-warning: #815500;
   --wire-danger: #8f2d2d;
   --wire-info: #245b8e;
-  --wire-radius: 4px;
+  --wire-radius: 6px;
   /* Paper tokens. Deliberately absent from the dark block: a printed roster is always ink on
      white, so printing from dark mode must not carry the dark surfaces onto the page. */
   --print-paper: #ffffff;
@@ -238,25 +238,25 @@
   --glow-accent: 0 2px 14px rgba(255,210,63,0.35);
   --glow-coral: 0 2px 14px rgba(239,108,74,0.42);
   --glow-info: 0 2px 14px rgba(93,173,226,0.38);
-  --wire-window: #18212b;
-  --wire-face: #263342;
-  --wire-paper: #111820;
-  --wire-titlebar: #1b4f83;
+  --wire-window: #1a2430;
+  --wire-face: #253445;
+  --wire-paper: #111a23;
+  --wire-titlebar: #1f4f7b;
   --wire-titlebar-text: #ffffff;
-  --wire-text: #f2f6fa;
-  --wire-muted: #c3cfda;
-  --wire-line: #566777;
-  --wire-line-dark: #a1b1c0;
-  --wire-control-line: #b2c0cc;
-  --wire-light: #eef3f7;
-  --wire-selection: #2f6fbb;
+  --wire-text: #edf4fb;
+  --wire-muted: #b8c6d4;
+  --wire-line: #465a6e;
+  --wire-line-dark: #9bb1c5;
+  --wire-control-line: #9bb1c5;
+  --wire-light: #f2f7fc;
+  --wire-selection: #3c78b2;
   --wire-selection-text: #ffffff;
   --wire-focus: #c5ddf7;
-  --wire-success: #80d8a6;
-  --wire-warning: #ffd18a;
-  --wire-danger: #ff9f9f;
-  --wire-info: #9fd0ff;
-  --wire-radius: 4px;
+  --wire-success: #62d08f;
+  --wire-warning: #f3c36c;
+  --wire-danger: #ff9696;
+  --wire-info: #87c7f5;
+  --wire-radius: 6px;
 }
 
 * {
