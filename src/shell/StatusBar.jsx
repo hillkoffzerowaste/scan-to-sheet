@@ -1,7 +1,7 @@
 import React from 'react';
 
 // แถบสถานะล่างจอ: ตัวเลขที่ต้องเห็นตลอดเวลาโดยไม่ต้องเลื่อนหา
-function StatusBar({ activeTab, isSignedIn, totalTodayCount, scanQueueSnapshot, selectedPacker, today, remoteControlHint }) {
+function StatusBar({ activeTab, isSignedIn, totalTodayCount, scanQueueSnapshot, selectedPacker, remoteControlHint }) {
   // pending เป็น array ของงานที่รอ ส่วน processing เป็นงานที่กำลังเขียนอยู่ (หรือ null)
   const pending = (scanQueueSnapshot?.pending?.length ?? 0) + (scanQueueSnapshot?.processing ? 1 : 0);
   const failed = scanQueueSnapshot?.failed ?? 0;
@@ -38,7 +38,6 @@ function StatusBar({ activeTab, isSignedIn, totalTodayCount, scanQueueSnapshot, 
       <span className="win-statusbar-right">
         <span className="win-statusbar-item">Packer: <b>{selectedPacker}</b></span>
         <span className={`win-statusbar-item win-statusbar-connection ${isSignedIn ? 'online' : 'offline'}`}>Google Sheet: <b>{isSignedIn ? 'เชื่อมต่อแล้ว' : 'ยังไม่เชื่อม'}</b></span>
-        <span className="win-statusbar-item">{today?.date}</span>
       </span>
     </div>
   );

@@ -139,6 +139,10 @@ for (const theme of ['light', 'dark']) {
             buttons.every((button) => button.scrollWidth <= button.clientWidth + 1)
           ));
           expect(issueButtonsFit, `${theme}/${width}/packer issue buttons`).toBe(true);
+          const metricColumns = await page.locator('.scan-panel .metric-row').evaluate((row) => (
+            getComputedStyle(row).gridTemplateColumns.split(' ').length
+          ));
+          expect(metricColumns, `${theme}/${width}/packer metric columns`).toBe(width < 1700 ? 2 : 4);
         }
         const clipped = await page.locator('.win-nav-label, .segmented-control button span, .scan-qr-card strong').evaluateAll(nodes => nodes.filter(el => el.checkVisibility() && el.scrollWidth > el.clientWidth + 1).map(el => el.textContent));
         expect(clipped).toEqual([]);

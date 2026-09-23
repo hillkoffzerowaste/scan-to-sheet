@@ -4615,6 +4615,13 @@ tbody tr:hover {
   }
 }
 
+/* จอกลาง: ให้ค่าตัวชี้วัดมีพื้นที่พอสำหรับชื่อยาว โดยไม่บีบช่องสแกนหรือ QR */
+@media (min-width: 1200px) and (max-width: 1699px) {
+  .wireframe-shell .scan-panel .metric-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .scan-qr-panel > header {
   display: flex;
   flex-wrap: wrap;

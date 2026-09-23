@@ -3612,7 +3612,6 @@ function App() {
         totalTodayCount={totalTodayCount}
         scanQueueSnapshot={scanQueueSnapshot}
         selectedPacker={selectedPacker}
-        today={today}
         remoteControlHint={remoteControlHint}
       />
     </div>
