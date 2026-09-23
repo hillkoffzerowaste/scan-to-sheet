@@ -172,12 +172,12 @@ test.describe('Scan to Sheet — External tools', () => {
 test.describe('Scan to Sheet — Packer Tab', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto(BASE_URL);
+    await page.getByTestId('packer-tab').click();
   });
 
   test('renders app shell and title', async ({ page }) => {
     await expect(page.locator('.win-shell')).toBeVisible();
-    await expect(page.locator('.win-app-name')).toContainText('Scan to Sheet');
-    await expect(page.locator('.win-app-name')).toContainText('HILLKOFF');
+    await expect(page.locator('.win-app-name')).toHaveText('HILLKOFF WMS');
     await expect(page.locator('h1')).toBeVisible();
   });
 
@@ -218,6 +218,7 @@ test.describe('Scan to Sheet — Packer Tab', () => {
     await layoutSelect.selectOption('compact');
     await expect(qrPanel).toHaveClass(/qr-layout-compact/);
     await page.reload();
+    await page.getByTestId('packer-tab').click();
     await expect(page.locator('.workspace-qr-panel').getByLabel('ขนาด QR หน้าแรก')).toHaveValue('compact');
     await page.locator('.workspace-qr-panel').getByRole('button', { name: 'คืนค่า QR หน้าแรก' }).click();
     await expect(page.locator('.workspace-qr-panel').getByLabel('ขนาด QR หน้าแรก')).toHaveValue('standard');
@@ -264,9 +265,10 @@ test.describe('Scan to Sheet — Packer Tab', () => {
     }
   });
 
-  test('packer tab is active by default', async ({ page }) => {
-    const packerTab = page.getByTestId('packer-tab');
-    await expect(packerTab).toHaveClass(/active/);
+  test('dashboard is active by default', async ({ page }) => {
+    await page.goto(BASE_URL);
+    await expect(page.getByTestId('dashboard-tab')).toHaveAttribute('aria-current', 'page');
+    await expect(page.locator('#dashboard-title')).toHaveText('ศูนย์ควบคุมงาน');
   });
 
   test('scan input is disabled until login', async ({ page }) => {
@@ -436,6 +438,7 @@ const setTheme = async (page, theme) => {
 test.describe('Scan to Sheet — Theme & Layout', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto(BASE_URL);
+    await page.getByTestId('packer-tab').click();
   });
 
   test('theme toggle switches dark/light', async ({ page }) => {
@@ -600,6 +603,7 @@ test.describe('Scan to Sheet — Desktop layout', () => {
     test(`shell holds together at ${width}px`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 });
       await page.goto(BASE_URL);
+      await page.getByTestId('packer-tab').click();
 
       await expect(page.locator('.win-shell')).toBeVisible();
       await expect(page.locator('h1')).toBeVisible();
@@ -633,6 +637,7 @@ test.describe('Scan to Sheet — Desktop layout', () => {
 test.describe('Scan to Sheet — Brand standards', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto(BASE_URL);
+    await page.getByTestId('packer-tab').click();
   });
 
   test('exposes operational quality controls without adding scan actions', async ({ page }) => {

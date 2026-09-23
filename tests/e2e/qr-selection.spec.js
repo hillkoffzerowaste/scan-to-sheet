@@ -64,6 +64,7 @@ test('Admin workspace QR click opens the Admin scanner', async ({ page }) => {
 
 test('signed-out QR cards remain scannable images but cannot change the workflow by clicking', async ({ page }) => {
   await page.goto('/');
+  await page.getByTestId('packer-tab').click();
   const card = page.locator('.workspace-qr-panel .scan-qr-card').first();
   await expect(card).toBeDisabled();
   await expect(card.locator('img')).toBeVisible();

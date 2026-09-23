@@ -14,6 +14,7 @@ import ScanPopup from './views/ScanPopup.jsx';
 import { CAMERA_POPUP_ID, CAMERA_REGION_ID, DEFAULT_LOOKBACK_HOURS, ISSUE_CUSTOMER_CANCELLED, ISSUE_DAMAGED, ISSUE_RETURNED, PACKER_UNASSIGNED } from './constants.js';
 import { DeploymentUpdateBanner, StatusBanner } from './views/StatusBanner.jsx';
 import ReportsView from './views/ReportsView.jsx';
+import DashboardView from './views/DashboardView.jsx';
 import { buildPackerOptions, buildQrPackerMembers } from './features/staff/staffDirectory.js';
 import { subscribeStaffMembers } from './features/staff/staffService.js';
 import {
@@ -348,7 +349,7 @@ function App() {
   const [reportMonth, setReportMonth] = useState(() => getBangkokParts().date.slice(0, 7));
   const [reportBusy, setReportBusy] = useState(false);
   const [reportData, setReportData] = useState(null);
-  const [activeTab, setActiveTab] = useState('packer');
+  const [activeTab, setActiveTab] = useState('dashboard');
   const [driveRecentRows, setDriveRecentRows] = useState([]);
   const [driveTotalCount, setDriveTotalCount] = useState(0);
   const [driveSyncBusy, setDriveSyncBusy] = useState(false);
@@ -840,6 +841,8 @@ function App() {
       refreshSelectedCourierRows();
     } else if (activeTab === 'drive') {
       refreshDriveRows();
+    } else if (activeTab === 'dashboard') {
+      refreshAllCounts();
     }
   }, [selectedCourier, today.date, isSignedIn, activeTab]);
 
@@ -1468,6 +1471,24 @@ function App() {
     if (data) {
       setSummary(data.courierCounts);
       setPackerCounts(data.packerCounts);
+    }
+
+    if (activeTab === 'dashboard') {
+      const date = getBangkokParts().date;
+      const [courierRows, driveRows] = await Promise.all([
+        canUseFirestorePrimary()
+          ? getTodayRowsFirestore({ courier: selectedCourier, date }).catch(() => [])
+          : runWithGoogleRetry((t, c) =>
+              getTodayRowsGoogle({ token: t, config: c, courier: selectedCourier, date }),
+            ).catch(() => []),
+        canUseFirestorePrimary()
+          ? getDriveRowsFirestore({ date }).catch(() => [])
+          : runWithGoogleRetry((t, c) => getDriveRowsGoogle({ token: t, config: c, date })).catch(() => []),
+      ]);
+      setRecentRows(courierRows);
+      setDriveRecentRows(driveRows);
+      setDriveTotalCount(driveRows.length);
+      return;
     }
 
     if (activeTab === 'packer') {
@@ -3359,6 +3380,28 @@ function App() {
           {deploymentUpdateAvailable && <DeploymentUpdateBanner />}
           <StatusBanner status={status} />
         </>
+      )}
+
+      {activeTab === 'dashboard' && (
+        <DashboardView
+          dashboardSummary={dashboardSummary}
+          driveRecentRows={driveRecentRows}
+          driveTotalCount={driveTotalCount}
+          handleCheckMissingOrders={handleCheckMissingOrders}
+          isSheetConnected={isSheetConnected}
+          isSignedIn={isSignedIn}
+          missingAlertBadge={missingAlertBadge}
+          missingBusy={missingBusy}
+          packerCounts={packerCounts}
+          recentRows={recentRows}
+          refreshAllCounts={refreshAllCounts}
+          scanQueueSnapshot={scanQueueSnapshot}
+          selectedCourier={selectedCourier}
+          summary={summary}
+          switchTab={switchTab}
+          today={today}
+          totalTodayCount={totalTodayCount}
+        />
       )}
 
       {['packer', 'drive'].includes(activeTab) && (

@@ -13,7 +13,15 @@ function StatusBar({ activeTab, isSignedIn, totalTodayCount, scanQueueSnapshot, 
       timeZone: 'Asia/Bangkok',
     })
     : null;
-  const modeLabel = activeTab === 'drive' ? 'รับเข้า Drive' : activeTab === 'reports' ? 'รายงาน' : activeTab === 'staff' ? 'พนักงาน' : 'แพ็กสินค้า';
+  const modeLabel = activeTab === 'dashboard'
+    ? 'ศูนย์ควบคุมงาน'
+    : activeTab === 'drive'
+      ? 'รับเข้า Drive'
+      : activeTab === 'reports'
+        ? 'รายงาน'
+        : activeTab === 'staff'
+          ? 'พนักงาน'
+          : 'แพ็กสินค้า';
 
   return (
     <div className="win-statusbar">

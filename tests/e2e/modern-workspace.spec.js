@@ -19,6 +19,29 @@ async function audit(page, label) {
   expect(await page.locator('.win-main').evaluate(el => el.scrollWidth - el.clientWidth), `${label}: main overflow`).toBe(0);
 }
 
+test('dashboard is the default workspace and signed-out users see an empty state', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByTestId('dashboard-tab')).toHaveAttribute('aria-current', 'page');
+  await expect(page.locator('.win-app-name')).toHaveText('HILLKOFF WMS');
+  await expect(page.locator('#dashboard-title')).toHaveText('ศูนย์ควบคุมงาน');
+  await expect(page.locator('.wms-dashboard-login-state')).toContainText('เข้าสู่ระบบเพื่อดูข้อมูลจริง');
+  await expect(page.getByTestId('google-sign-in')).toBeVisible();
+});
+
+test('dashboard uses the signed-in data surface and navigates to both workspaces', async ({ page }) => {
+  await openSignedInApp(page, { startTab: 'dashboard' });
+  await expect(page.locator('.wms-kpi-grid')).toBeVisible();
+  await expect(page.locator('.wms-empty-state')).toContainText('ยังไม่มีรายการในขอบเขตนี้');
+
+  await page.getByTestId('packer-tab').click();
+  await expect(page.locator('.workspace-page-title')).toContainText('Packer');
+  await page.getByTestId('drive-tab').click();
+  await expect(page.locator('.workspace-page-title')).toContainText('Admin');
+  await page.getByTestId('dashboard-tab').click();
+  await expect(page.locator('#dashboard-title')).toHaveText('ศูนย์ควบคุมงาน');
+  expect(await page.evaluate(() => window.qrTestWrites)).toEqual([]);
+});
+
 test('single app bar, labeled collapsed navigation and global commands keep their destinations', async ({ page }) => {
   await openSignedInApp(page);
   await expect(page.locator('.win-menubar')).toHaveCount(0);
@@ -89,7 +112,7 @@ for (const theme of ['light', 'dark']) {
     await setTheme(page, theme);
     for (const width of [1280, 1440, 1920]) {
       await page.setViewportSize({ width, height: width === 1280 ? 720 : 900 });
-      for (const tab of ['packer', 'drive', 'reports', 'staff']) {
+      for (const tab of ['dashboard', 'packer', 'drive', 'reports', 'staff']) {
         await page.getByTestId(`${tab}-tab`).click();
         if (tab === 'staff') await expect(page.locator('.staff-card')).toHaveCount(2);
         if (tab === 'reports') {

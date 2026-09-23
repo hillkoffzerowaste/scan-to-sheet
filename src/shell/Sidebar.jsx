@@ -1,5 +1,5 @@
 import React from 'react';
-import { BarChart3, ChevronsLeft, ChevronsRight, Coffee, ExternalLink, MonitorCheck, PackageCheck, Printer, Truck, Upload, Users } from 'lucide-react';
+import { BarChart3, ChevronsLeft, ChevronsRight, Coffee, ExternalLink, LayoutDashboard, MonitorCheck, PackageCheck, Printer, Truck, Upload, Users } from 'lucide-react';
 
 // เมนูซ้ายแบบ Explorer: งานภายในเป็นปุ่มสลับหน้า ส่วนเครื่องมือภายนอกเป็นลิงก์ที่มีไอคอนกำกับชัด
 // จัดกลุ่มเพื่อให้เห็นทันทีว่าอันไหนคือหน้าที่อยู่ในโปรแกรม อันไหนคือของนอกโปรแกรม
@@ -34,7 +34,19 @@ function Sidebar({ activeTab, switchTab, missingAlertBadge, collapsed, setCollap
   return (
     <nav className="win-sidebar" aria-label="เมนูหลัก">
       <div className="win-nav-group">
-        <h2 className="win-nav-heading">งานประจำวัน</h2>
+        <h2 className="win-nav-heading">ภาพรวม</h2>
+        <NavItem
+          active={activeTab === 'dashboard'}
+          icon={LayoutDashboard}
+          label="ศูนย์ควบคุมงาน"
+          testId="dashboard-tab"
+          onClick={() => switchTab('dashboard')}
+          collapsed={collapsed}
+        />
+      </div>
+
+      <div className="win-nav-group">
+        <h2 className="win-nav-heading">งานหน้างาน</h2>
         <NavItem
           active={activeTab === 'packer'}
           icon={PackageCheck}
@@ -75,7 +87,7 @@ function Sidebar({ activeTab, switchTab, missingAlertBadge, collapsed, setCollap
       </div>
 
       <div className="win-nav-group">
-        <h2 className="win-nav-heading">เครื่องมือภายนอก</h2>
+        <h2 className="win-nav-heading">ระบบที่เกี่ยวข้อง</h2>
         {EXTERNAL_TOOLS.map(({ label, icon: Icon, href, testId }) => (
           <a
             key={href}

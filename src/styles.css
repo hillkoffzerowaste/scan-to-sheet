@@ -5380,3 +5380,504 @@ tbody tr:hover {
   min-height: var(--control-height);
   white-space: nowrap;
 }
+
+/* ── HILLKOFF WMS dashboard ────────────────────────────────────────────────────
+   Dashboard และหน้าปฏิบัติงานใช้พื้นทึบ ขอบเดียว และ token กลางร่วมกัน เพื่อให้
+   เปลี่ยนจากภาพรวมไปสแกน/รายงานได้โดยไม่เปลี่ยนภาษาภาพของโปรแกรม */
+.win-shell .win-titlebar .win-app-name {
+  font-size: var(--ui-md);
+  font-weight: 600;
+}
+
+.win-shell .win-titlebar-btn,
+.win-shell .win-conn,
+.win-shell .win-nav-item,
+.win-shell .win-sidebar-toggle {
+  font-size: var(--ui-xs);
+}
+
+.win-shell .win-titlebar-btn {
+  border-color: var(--control-line);
+  color: var(--text);
+  background: var(--surface);
+}
+
+.win-shell .win-titlebar-btn:not(:disabled):hover {
+  background: var(--win-row-hover);
+}
+
+.win-shell .win-nav-heading {
+  font-size: var(--ui-xs);
+  letter-spacing: 0.4px;
+}
+
+.win-shell .win-statusbar {
+  min-height: 24px;
+  font-size: var(--ui-xs);
+}
+
+.win-shell .wms-dashboard {
+  display: grid;
+  gap: var(--space-layout);
+  min-width: 0;
+}
+
+.win-shell .wms-page-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-layout);
+  min-width: 0;
+  padding-bottom: var(--space-layout);
+  border-bottom: 1px solid var(--line);
+}
+
+.win-shell .wms-page-header h2,
+.win-shell .wms-page-header p {
+  margin: 0;
+}
+
+.win-shell .wms-page-header h2 {
+  color: var(--text);
+  font-size: 24px;
+  line-height: 1.25;
+}
+
+.win-shell .wms-page-header p {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: var(--ui-sm);
+}
+
+.win-shell .wms-kicker {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--primary-strong);
+  font-size: var(--ui-xs);
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+
+.win-shell .wms-page-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.win-shell .wms-date-label,
+.win-shell .wms-scope-label,
+.win-shell .wms-scope-note {
+  color: var(--muted);
+  font-size: var(--ui-xs);
+}
+
+.win-shell .wms-date-label {
+  white-space: nowrap;
+}
+
+.win-shell .primary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: var(--control-height);
+  padding: 3px 10px;
+  border: 1px solid var(--primary-strong);
+  border-radius: var(--radius-sm);
+  background: var(--primary-fill);
+  color: var(--on-primary);
+  font: inherit;
+  font-size: var(--ui-sm);
+  font-weight: 600;
+}
+
+.win-shell .primary-button:focus-visible,
+.win-shell .secondary-button:focus-visible,
+.win-shell .ghost-button:focus-visible,
+.win-shell .segmented-control button:focus-visible,
+.win-shell .wms-search-field:focus-within {
+  outline: 2px solid var(--primary-strong);
+  outline-offset: 2px;
+}
+
+.win-shell .primary-button:active,
+.win-shell .wms-full-button:active {
+  transform: scale(0.97);
+}
+
+.win-shell .wms-dashboard-login-state {
+  display: flex;
+  align-items: center;
+  gap: var(--space-layout);
+  min-height: 112px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--primary-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.win-shell .wms-dashboard-login-state > svg {
+  flex: none;
+  color: var(--primary-strong);
+}
+
+.win-shell .wms-dashboard-login-state strong,
+.win-shell .wms-dashboard-login-state p {
+  margin: 0;
+}
+
+.win-shell .wms-dashboard-login-state strong {
+  font-size: var(--ui-md);
+}
+
+.win-shell .wms-dashboard-login-state p {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: var(--ui-sm);
+}
+
+.win-shell .wms-dashboard-login-state .secondary-button {
+  margin-left: auto;
+  flex: none;
+}
+
+.win-shell .wms-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-layout);
+  min-width: 0;
+}
+
+.win-shell .wms-kpi-card,
+.win-shell .wms-panel {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: none;
+}
+
+.win-shell .wms-kpi-card {
+  display: grid;
+  gap: 4px;
+  min-height: 126px;
+  padding: var(--space-layout);
+}
+
+.win-shell .wms-kpi-card > span {
+  color: var(--muted);
+  font-size: var(--ui-xs);
+  font-weight: 600;
+}
+
+.win-shell .wms-kpi-card strong {
+  color: var(--text);
+  font-size: 28px;
+  line-height: 1.05;
+}
+
+.win-shell .wms-kpi-card small {
+  color: var(--muted);
+  font-size: var(--ui-xs);
+}
+
+.win-shell .wms-kpi-icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid currentColor;
+  border-radius: var(--radius-sm);
+}
+
+.win-shell .wms-kpi-icon.success,
+.win-shell .wms-text-success,
+.win-shell .wms-success-icon { color: var(--success); }
+.win-shell .wms-kpi-icon.info { color: var(--info); }
+.win-shell .wms-kpi-icon.warning { color: var(--warning); }
+.win-shell .wms-kpi-icon.danger { color: var(--danger); }
+.win-shell .wms-text-muted { color: var(--muted); }
+
+.win-shell .wms-dashboard-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 320px);
+  align-items: start;
+  gap: var(--space-layout);
+  min-width: 0;
+}
+
+.win-shell .wms-activity-panel,
+.win-shell .wms-dashboard-side {
+  min-width: 0;
+}
+
+.win-shell .wms-dashboard-side {
+  display: grid;
+  gap: var(--space-layout);
+}
+
+.win-shell .wms-panel {
+  padding: var(--space-layout);
+}
+
+.win-shell .wms-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.win-shell .wms-panel-header.compact {
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.win-shell .wms-panel-header h3 {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--ui-md);
+}
+
+.win-shell .wms-panel-header .wms-kicker {
+  margin-bottom: 2px;
+}
+
+.win-shell .wms-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.win-shell .wms-filter-row .segmented-control {
+  flex: none;
+}
+
+.win-shell .wms-search-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 160px;
+  min-height: var(--control-height);
+  margin-left: auto;
+  padding-inline: 8px;
+  border: 1px solid var(--control-line);
+  border-radius: var(--radius-sm);
+  background: var(--field);
+}
+
+.win-shell .wms-search-field svg {
+  flex: none;
+  color: var(--muted);
+}
+
+.win-shell .wms-search-field input {
+  width: 100%;
+  min-width: 0;
+  min-height: 32px;
+  padding: 0 6px;
+  border: 1px solid var(--control-line);
+  border-radius: var(--radius-sm);
+  outline: 0;
+  background: var(--field);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--ui-xs);
+}
+
+.win-shell .wms-scope-note {
+  margin: 8px 0;
+}
+
+.win-shell .wms-table-wrap {
+  max-height: 440px;
+  overflow-x: auto;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.win-shell .wms-table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+}
+
+.win-shell .wms-table th,
+.win-shell .wms-table td {
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--win-grid-line);
+  text-align: left;
+  vertical-align: middle;
+  font-size: var(--ui-table);
+}
+
+.win-shell .wms-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--win-chrome);
+  color: var(--muted);
+  font-size: var(--ui-xs);
+  font-weight: 600;
+}
+
+.win-shell .wms-table tbody tr:nth-child(even) { background: var(--win-row-alt); }
+.win-shell .wms-table tbody tr:hover { background: var(--win-row-hover); }
+.win-shell .wms-table tbody tr:last-child td { border-bottom: 0; }
+
+.win-shell .wms-table .empty-cell {
+  padding: 0;
+}
+
+.win-shell .wms-empty-state {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  min-height: 140px;
+  padding: 26px 16px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.win-shell .wms-empty-state svg { color: var(--primary-strong); }
+.win-shell .wms-empty-state strong { color: var(--text); font-size: var(--ui-sm); }
+.win-shell .wms-empty-state span { font-size: var(--ui-xs); }
+
+.win-shell .wms-source-badge,
+.win-shell .wms-status-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding-inline: 7px;
+  border: 1px solid currentColor;
+  border-radius: var(--radius-sm);
+  font-size: var(--ui-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.win-shell .wms-source-badge.packer { color: var(--primary-strong); background: var(--primary-soft); }
+.win-shell .wms-source-badge.drive { color: var(--info); background: var(--info-soft); }
+.win-shell .wms-status-badge.success { color: var(--success); background: var(--success-bg); }
+.win-shell .wms-status-badge.info { color: var(--info); background: var(--info-soft); }
+.win-shell .wms-status-badge.warning { color: var(--warning); background: var(--warning-bg); }
+
+.win-shell .wms-connection-list,
+.win-shell .wms-bar-list {
+  display: grid;
+  gap: 8px;
+}
+
+.win-shell .wms-connection-list {
+  padding-block: 4px 12px;
+}
+
+.win-shell .wms-connection-list > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--win-grid-line);
+}
+
+.win-shell .wms-connection-list span,
+.win-shell .wms-connection-list strong,
+.win-shell .wms-inline-empty {
+  font-size: var(--ui-xs);
+}
+
+.win-shell .wms-connection-list span,
+.win-shell .wms-inline-empty { color: var(--muted); }
+
+.win-shell .wms-full-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  min-height: var(--control-height);
+}
+
+.win-shell .wms-bar-item {
+  display: grid;
+  gap: 4px;
+}
+
+.win-shell .wms-bar-item > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--text);
+  font-size: var(--ui-xs);
+}
+
+.win-shell .wms-bar-item strong { font-weight: 600; }
+
+.win-shell .wms-bar-track {
+  display: block;
+  height: 6px;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  background: var(--win-chrome);
+}
+
+.win-shell .wms-bar-track > span {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-sm);
+  background: var(--primary-strong);
+}
+
+.win-shell .report-panel,
+.win-shell .staff-page,
+.win-shell .staff-card,
+.win-shell .workflow-guide,
+.win-shell .search-panel,
+.win-shell .scan-panel,
+.win-shell .side-panel,
+.win-shell .secondary-panel {
+  box-shadow: none;
+}
+
+.win-shell .report-panel,
+.win-shell .staff-page {
+  min-width: 0;
+}
+
+.win-shell .report-header h2,
+.win-shell .staff-page-header h2 {
+  font-size: var(--ui-lg);
+}
+
+.win-shell .report-summary span,
+.win-shell .report-card span,
+.win-shell .staff-page-header p,
+.win-shell .staff-summary span {
+  font-size: var(--ui-xs);
+}
+
+.win-shell .table-wrap {
+  overflow-x: auto;
+  box-shadow: none;
+}
+
+@media (max-width: 1279px) {
+  .win-shell .wms-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .win-shell .wms-dashboard-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 720px) {
+  .win-shell .wms-page-header,
+  .win-shell .wms-dashboard-login-state,
+  .win-shell .wms-filter-row { align-items: stretch; flex-direction: column; }
+  .win-shell .wms-page-actions { justify-content: flex-start; }
+  .win-shell .wms-search-field { margin-left: 0; }
+}

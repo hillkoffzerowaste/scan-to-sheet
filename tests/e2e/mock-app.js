@@ -9,7 +9,7 @@ async function mockModule(page, path, exports) {
   });
 }
 
-export async function openSignedInApp(page, { staffAdmin = true } = {}) {
+export async function openSignedInApp(page, { staffAdmin = true, startTab = 'packer' } = {}) {
   await page.route('**/*', (route) => {
     const url = new URL(route.request().url());
     if (url.hostname !== 'localhost' && url.hostname !== '127.0.0.1') return route.abort();
@@ -78,8 +78,12 @@ export async function openSignedInApp(page, { staffAdmin = true } = {}) {
     profile: { email: 'qr-test@example.invalid' }, config: { master: { id: 'qr-test-sheet' } },
   } }));
   await page.goto('/');
-  await expect(page.locator('#scan-input')).toBeEnabled();
-  await expect(page.locator('.workspace-qr-panel .scan-qr-card').first()).toBeEnabled();
+  await expect(page.getByTestId('dashboard-tab')).toHaveCount(1);
+  if (startTab !== 'dashboard') {
+    await page.getByTestId(`${startTab}-tab`).click();
+    await expect(page.locator('#scan-input')).toBeEnabled();
+    await expect(page.locator('.workspace-qr-panel .scan-qr-card').first()).toBeEnabled();
+  }
 }
 
 // The remote screen is its own tree with its own service boundaries: Firebase Auth, the courier

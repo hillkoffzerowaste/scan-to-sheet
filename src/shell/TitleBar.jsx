@@ -31,7 +31,7 @@ function TitleBar({
   return (
     <header className="win-titlebar">
       <span className="win-app-mark" aria-hidden="true"><ScanLine size={14} /></span>
-      <h1 className="win-app-name">HILLKOFF — Scan to Sheet</h1>
+      <h1 className="win-app-name">HILLKOFF WMS</h1>
 
       <div className="win-titlebar-right">
         <span className={`win-conn ${isSignedIn ? 'online' : 'offline'}`}>
