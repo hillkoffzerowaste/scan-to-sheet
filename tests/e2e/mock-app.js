@@ -66,7 +66,7 @@ export async function openSignedInApp(page, {
     export const getStaffSopVersion = async (sopId, version) => {
       const item = window.staffSops.find(sop => sop.id === sopId);
       return item && Number(item.latestVersion) === Number(version)
-        ? { sopId, version, title: item.title, description: item.description, steps: item.draftSteps }
+          ? { sopId, version, title: item.title, description: item.description, ownerStaffId: item.ownerStaffId, effectiveDate: item.effectiveDate, reviewDueDate: item.reviewDueDate, steps: item.draftSteps }
         : null;
     };
     export const saveStaffSopDraft = async (sop, user) => {

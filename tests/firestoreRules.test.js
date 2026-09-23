@@ -160,7 +160,20 @@ test("published staff SOP versions are immutable and bounded", async () => {
   assert.match(block[1], /allow read: if isOperationalStaff\(\);/);
   assert.match(block[1], /allow create: if isStaffAdmin\(\)/);
   assert.match(block[1], /request\.resource\.data\.steps\.size\(\) <= 30/);
+  assert.match(block[1], /request\.resource\.data\.ownerStaffId is string/);
+  assert.match(block[1], /request\.resource\.data\.effectiveDate\.matches\('\^\[0-9\]\{4\}-\[0-9\]\{2\}-\[0-9\]\{2\}\$'\)/);
+  assert.match(block[1], /request\.resource\.data\.reviewDueDate\.matches/);
   assert.match(block[1], /allow update, delete: if false;/);
+});
+
+test("SOP drafts accept legacy documents while bounding optional control metadata", async () => {
+  const rules = await readRules();
+  const block = rules.match(/match \/staffSops\/\{sopId\} \{([\s\S]*?)\n    \}/);
+  assert.ok(block, "staffSops rules must exist");
+  assert.match(block[1], /'ownerStaffId', 'effectiveDate', 'reviewDueDate'/);
+  assert.match(block[1], /!request\.resource\.data\.keys\(\)\.hasAny\(\['ownerStaffId'\]\)/);
+  assert.match(block[1], /!request\.resource\.data\.keys\(\)\.hasAny\(\['effectiveDate'\]\)/);
+  assert.match(block[1], /!request\.resource\.data\.keys\(\)\.hasAny\(\['reviewDueDate'\]\)/);
 });
 
 test("staff plan tasks are limited to validated dates, ordered rows and known states", async () => {

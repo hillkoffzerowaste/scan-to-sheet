@@ -145,7 +145,6 @@ export default function StaffDirectory({
   firebaseUser,
   couriers,
   activeModuleId = "directory",
-  activePlanningModuleId = "plan",
   onPackerOptionsChange,
 }) {
   const [staff, setStaff] = useState([]);
@@ -1437,7 +1436,7 @@ export default function StaffDirectory({
           staff={staff}
           isAdmin={isAdmin}
           firebaseUser={firebaseUser}
-          activeChildId={activePlanningModuleId}
+          activeModuleId={section}
           onMessage={setMessage}
         />
       )}

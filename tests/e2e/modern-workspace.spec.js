@@ -142,22 +142,21 @@ test('staff permissions remain enforced in the redesigned directory', async ({ p
   await expect(page.getByRole('button', { name: 'พิมพ์ QR จุดสแกน' })).toHaveCount(0);
 });
 
-test('staff modules open as a nested tree under the staff sidebar item', async ({ page }) => {
+test('staff workspace modules are siblings under the staff sidebar item', async ({ page }) => {
   await openSignedInApp(page);
   const sidebar = page.locator('.win-sidebar');
   await expect(page.getByTestId('staff-module-directory')).toHaveCount(0);
   await page.getByTestId('staff-tab').click();
   await expect(page.getByTestId('staff-module-directory')).toBeVisible();
   await expect(page.getByTestId('staff-module-schedule')).toBeVisible();
-  await expect(page.getByTestId('staff-module-planning')).toBeVisible();
+  await expect(page.getByTestId('staff-module-workplan')).toBeVisible();
+  await expect(page.getByTestId('staff-module-sops')).toBeVisible();
   await expect(page.getByTestId('staff-submodule-plan')).toHaveCount(0);
-  await page.getByTestId('staff-module-planning').click();
-  await expect(page.getByTestId('staff-submodule-plan')).toBeVisible();
-  await expect(page.getByTestId('staff-submodule-sops')).toBeVisible();
-  await page.getByTestId('staff-submodule-sops').click();
+  await expect(page.getByTestId('staff-submodule-sops')).toHaveCount(0);
+  await page.getByTestId('staff-module-sops').click();
   await expect(page.locator('.sop-library')).toBeVisible();
   await expect(page.locator('.staff-org-chart')).toHaveCount(0);
-  await expect(sidebar.getByTestId('staff-submodule-sops')).toHaveAttribute('aria-current', 'page');
+  await expect(sidebar.getByTestId('staff-module-sops')).toHaveAttribute('aria-current', 'page');
   await page.getByTestId('staff-tab').click();
   await expect(page.getByTestId('staff-module-directory')).toHaveCount(0);
 });
@@ -239,23 +238,26 @@ test('the root path still loads the desktop shell after the remote route was add
   await expect(page.locator('.remote-app')).toHaveCount(0);
 });
 
-test('the staff planning module publishes SOP versions and tracks ordered task steps', async ({ page }, testInfo) => {
+test('sibling staff modules control SOP versions and track ordered daily task steps', async ({ page }, testInfo) => {
   test.setTimeout(90000);
   await openSignedInApp(page);
   await page.getByTestId('staff-tab').click();
-  await page.getByTestId('staff-module-planning').click();
-  await page.getByTestId('staff-submodule-sops').click();
+  await page.getByTestId('staff-module-sops').click();
   await page.getByRole('button', { name: 'สร้าง SOP', exact: true }).click();
   await page.getByLabel('ชื่อ SOP').fill('ตรวจสินค้าก่อนแพ็ค');
   await page.getByLabel('วัตถุประสงค์ / ขอบเขต').fill('ยืนยันสินค้าและสภาพก่อนเริ่มแพ็ค');
+  await page.getByLabel('เจ้าของ SOP').selectOption({ label: 'คนแพ็ค A' });
+  await page.getByLabel('วันที่เริ่มใช้').fill('2026-09-23');
+  await page.getByLabel('ทบทวนภายใน').fill('2027-09-23');
   await page.getByLabel('ชื่อขั้นตอน').fill('ตรวจรุ่นและจำนวน');
   await page.getByLabel('วิธีปฏิบัติ').fill('เทียบรุ่นและจำนวนกับใบสั่ง');
   await page.getByLabel('จุดตรวจ/ผลลัพธ์ที่ต้องได้').fill('รุ่นและจำนวนตรงกับใบสั่ง');
   await page.getByRole('button', { name: 'เผยแพร่ v1', exact: true }).click();
   await expect(page.locator('.sop-card')).toContainText('ตรวจสินค้าก่อนแพ็ค');
   await expect(page.locator('.sop-card')).toContainText('เวอร์ชันล่าสุด: 1');
+  await expect(page.locator('.sop-card')).toContainText('เจ้าของ: คนแพ็ค A · มีผล: 2026-09-23 · ทบทวนภายใน: 2027-09-23');
 
-  await page.getByTestId('staff-submodule-plan').click();
+  await page.getByTestId('staff-module-workplan').click();
   await page.getByRole('button', { name: 'เพิ่มงานในแผน', exact: true }).click();
   await page.getByLabel('เลือก SOP ที่เผยแพร่แล้ว').selectOption({ label: 'ตรวจสินค้าก่อนแพ็ค · v1' });
   await page.locator('.work-plan-assignees input[type="checkbox"]').first().check();
@@ -273,13 +275,13 @@ test('the staff planning module publishes SOP versions and tracks ordered task s
   await expect(page.locator('select[aria-label="สถานะงาน 2"] option[value="in_progress"]')).toBeEnabled();
   await page.getByLabel('สถานะงาน 2').selectOption('in_progress');
 
-  await page.getByTestId('staff-submodule-sops').click();
+  await page.getByTestId('staff-module-sops').click();
   await page.getByRole('button', { name: 'แก้ไขฉบับร่าง', exact: true }).click();
   await page.getByLabel('วิธีปฏิบัติ').fill('เปลี่ยนขั้นตอนในเวอร์ชันใหม่');
   await page.getByRole('button', { name: 'บันทึกฉบับร่าง', exact: true }).click();
   await expect(page.locator('.sop-editor-modal')).toBeVisible();
   await page.getByRole('button', { name: 'เผยแพร่ v2', exact: true }).click();
-  await page.getByTestId('staff-submodule-plan').click();
+  await page.getByTestId('staff-module-workplan').click();
   await expect(page.locator('.work-plan-table tbody tr').nth(0)).toContainText('ดูขั้นตอน SOP · v1');
   await expect(page.locator('.work-plan-table tbody tr').nth(1)).toContainText('ดูขั้นตอน SOP · v1');
 
@@ -289,15 +291,19 @@ test('the staff planning module publishes SOP versions and tracks ordered task s
       await page.setViewportSize({ width, height: width === 1280 ? 720 : 900 });
       await audit(page, `staff-plan/${theme}/${width}`);
       if (width === 1440) await page.screenshot({ path: testInfo.outputPath(`staff-plan-${theme}.png`) });
+      await page.getByTestId('staff-module-sops').click();
+      await audit(page, `staff-sops/${theme}/${width}`);
+      await page.getByTestId('staff-module-workplan').click();
     }
   }
 
-  await page.getByTestId('staff-submodule-sops').click();
+  await page.getByTestId('staff-module-sops').click();
   for (const theme of ['light', 'dark']) {
     await setTheme(page, theme);
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.getByRole('button', { name: 'แก้ไขฉบับร่าง', exact: true }).click();
     await audit(page, `staff-sop-editor/${theme}`);
+    await expect(page.getByRole('button', { name: /เผยแพร่ v/ })).toBeInViewport();
     await page.screenshot({ path: testInfo.outputPath(`staff-sop-editor-${theme}.png`) });
     await page.locator('.sop-editor-modal header button').click();
   }

@@ -8,23 +8,26 @@ import WorkPlanBoard from "./WorkPlanBoard.jsx";
 import SopLibrary from "./SopLibrary.jsx";
 import { findStaffModule } from "../staffModules.js";
 
-const PLANNING_MODULES = findStaffModule("planning").children;
-const CHILD_MODULES = {
-  plan: WorkPlanBoard,
+const WORK_MODULES = {
+  workplan: WorkPlanBoard,
   sops: SopLibrary,
 };
 
-export default function WorkPlanningModule({ date, staff, isAdmin, firebaseUser, activeChildId = PLANNING_MODULES[0].id, onChildChange, onMessage }) {
+export default function WorkPlanningModule({ date, staff, isAdmin, firebaseUser, activeModuleId = "workplan", onMessage }) {
   const [sops, setSops] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const ActiveChild = CHILD_MODULES[activeChildId] ?? CHILD_MODULES[PLANNING_MODULES[0].id];
+  const module = findStaffModule(activeModuleId) ?? findStaffModule("workplan");
+  const ActiveModule = WORK_MODULES[module.id] ?? WORK_MODULES.workplan;
 
   async function reload() {
     setError("");
     try {
-      const [nextSops, nextTasks] = await Promise.all([listStaffSops(), listWorkPlanTasks(date)]);
+      const [nextSops, nextTasks] = await Promise.all([
+        listStaffSops(),
+        activeModuleId === "workplan" ? listWorkPlanTasks(date) : Promise.resolve([]),
+      ]);
       setSops(nextSops);
       setTasks(nextTasks.slice().sort((a, b) => Number(a.sequence) - Number(b.sequence)));
       if (nextSops.length >= WORK_PLANNING_QUERY_LIMITS.sops || nextTasks.length >= WORK_PLANNING_QUERY_LIMITS.tasks) {
@@ -40,14 +43,14 @@ export default function WorkPlanningModule({ date, staff, isAdmin, firebaseUser,
   useEffect(() => {
     setTasks([]);
     void reload();
-  }, [date, firebaseUser?.uid]);
+  }, [date, firebaseUser?.uid, activeModuleId]);
 
   function handleError(errorOrMessage) {
     if (typeof errorOrMessage === "string") {
       setError(errorOrMessage);
       return;
     }
-    if (errorOrMessage?.code === "STAFF_SOP_INVALID") setError("กรุณากรอกชื่อ SOP และชื่อขั้นตอนให้ครบ (สูงสุด 30 ขั้น)");
+    if (errorOrMessage?.code === "STAFF_SOP_INVALID") setError("กรุณาตรวจชื่อ SOP เจ้าของ วันที่เริ่มใช้ รอบทบทวน และชื่อขั้นตอนให้ครบ (สูงสุด 30 ขั้น)");
     else if (errorOrMessage?.code === "STAFF_SOP_LIMIT") setError("คลัง SOP มีครบ 100 รายการแล้ว กรุณาปิดใช้หรือจัดเก็บ SOP เก่าก่อน");
     else if (errorOrMessage?.code === "STAFF_WORK_PLAN_TASK_LIMIT") setError("แผนวันนี้มีครบ 200 งานแล้ว กรุณาแบ่งแผนหรือจัดเก็บงานเก่าก่อน");
     else if (errorOrMessage?.code === "STAFF_WORK_PLAN_ORDER_LIMIT") setError("รายการงานเกินขอบเขตที่จัดลำดับได้ กรุณาแบ่งแผนงาน");
@@ -62,10 +65,10 @@ export default function WorkPlanningModule({ date, staff, isAdmin, firebaseUser,
   return (
     <section className="staff-module" aria-labelledby="work-planning-title">
       <header className="staff-module-header">
-        <div><p className="eyebrow">โมดูลย่อย · แผนปฏิบัติงาน</p><h3 id="work-planning-title">แผนงานและ SOP</h3><p>จัดลำดับงานของวันที่เลือก และติดตามตาม SOP ฉบับที่เริ่มใช้จริง</p></div>
+        <div><p className="eyebrow">โมดูลหลัก · ฝ่ายแพ็คสินค้า</p><h3 id="work-planning-title">{module.label}</h3><p>{module.id === "sops" ? "ควบคุมเจ้าของ วันที่มีผล และรอบทบทวนของมาตรฐานงาน" : "จัดลำดับงานของวันที่เลือกและติดตามผลตาม SOP เวอร์ชันที่ใช้จริง"}</p></div>
       </header>
       {error && <div className="staff-module-alert" role="status">{error}</div>}
-      {loading ? <p className="staff-module-empty">กำลังโหลดข้อมูล…</p> : <ActiveChild
+      {loading ? <p className="staff-module-empty">กำลังโหลดข้อมูล…</p> : <ActiveModule
         date={date}
         tasks={tasks}
         sops={sops}

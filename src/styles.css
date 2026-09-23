@@ -4169,7 +4169,6 @@ tbody tr:hover {
 .win-nav-tree-caret { flex: none; transition: transform var(--dur-ui) ease; }
 .win-nav-tree-caret.expanded { transform: rotate(180deg); }
 .win-nav-child { padding-left: 26px; font-size: 0.76rem; }
-.win-nav-grandchild { padding-left: 38px; font-size: 0.73rem; }
 
 .win-nav-heading {
   margin: 6px 12px 4px;
@@ -6099,7 +6098,6 @@ tbody tr:hover {
 }
 
 .wireframe-shell .win-nav-child { padding-left: 25px; }
-.wireframe-shell .win-nav-grandchild { padding-left: 37px; }
 
 .wireframe-shell .win-sidebar.sidebar-text-small .win-nav-item,
 .wireframe-shell .win-sidebar.sidebar-text-small .win-nav-heading,
@@ -7087,6 +7085,7 @@ tbody tr:hover {
 .wireframe-shell .sop-editor-steps > div:first-child { display: flex; align-items: baseline; justify-content: space-between; }
 .wireframe-shell .sop-editor-steps h4 { margin: 0; }
 .wireframe-shell .sop-editor-steps > div:first-child span { color: var(--wire-muted); }
+.wireframe-shell .sop-editor-modal > footer { position: sticky; bottom: -18px; z-index: 1; padding: 10px 0 2px; border-top: 1px solid var(--wire-line-dark); background: var(--wire-paper); }
 .wireframe-shell .sop-step-editor { position: relative; display: grid; gap: 8px; padding: 10px; border: 1px solid var(--wire-line-dark); border-radius: var(--wire-radius); }
 .wireframe-shell .sop-step-editor legend { padding-inline: 5px; color: var(--wire-info); font-weight: 700; }
 .wireframe-shell .sop-step-editor > button { position: absolute; inset-block-start: 0; inset-inline-end: 5px; min-width: var(--control-height); min-height: var(--control-height); border: 1px solid var(--wire-control-line); border-radius: var(--wire-radius); background: var(--wire-paper); color: var(--wire-text); }

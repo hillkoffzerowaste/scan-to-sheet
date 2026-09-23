@@ -84,6 +84,9 @@ export async function saveStaffSopDraft(sop, user) {
   const draft = {
     title: String(sop.title ?? "").trim(),
     description: String(sop.description ?? "").trim(),
+    ownerStaffId: String(sop.ownerStaffId ?? "").trim(),
+    effectiveDate: String(sop.effectiveDate ?? ""),
+    reviewDueDate: String(sop.reviewDueDate ?? ""),
     steps: sop.steps,
   };
   const errors = validateSopDraft(draft);
@@ -101,6 +104,9 @@ export async function saveStaffSopDraft(sop, user) {
     {
       title: draft.title,
       description: draft.description,
+      ownerStaffId: draft.ownerStaffId,
+      effectiveDate: draft.effectiveDate,
+      reviewDueDate: draft.reviewDueDate,
       draftSteps: draft.steps,
       active: sop.active !== false,
       latestVersion: Number(sop.latestVersion ?? 0),
@@ -149,6 +155,9 @@ export async function publishStaffSop(sop, user) {
         description: snapshot.description,
         publishedTitle: snapshot.title,
         publishedDescription: snapshot.description,
+        ownerStaffId: snapshot.ownerStaffId,
+        effectiveDate: snapshot.effectiveDate,
+        reviewDueDate: snapshot.reviewDueDate,
         draftSteps: snapshot.steps,
         active: true,
         latestVersion: nextVersion,

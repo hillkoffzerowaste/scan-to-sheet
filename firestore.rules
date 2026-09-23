@@ -190,7 +190,8 @@ service cloud.firestore {
       allow read: if isOperationalStaff();
       allow create, update: if isStaffAdmin()
         && request.resource.data.keys().hasOnly([
-          'title', 'description', 'draftSteps', 'publishedTitle', 'publishedDescription', 'active', 'latestVersion',
+          'title', 'description', 'ownerStaffId', 'effectiveDate', 'reviewDueDate',
+          'draftSteps', 'publishedTitle', 'publishedDescription', 'active', 'latestVersion',
           'createdAt', 'createdByUid', 'updatedAt', 'updatedByUid'
         ])
         && request.resource.data.title is string
@@ -198,6 +199,15 @@ service cloud.firestore {
         && request.resource.data.title.size() <= 120
         && request.resource.data.description is string
         && request.resource.data.description.size() <= 1000
+        && (!request.resource.data.keys().hasAny(['ownerStaffId'])
+          || (request.resource.data.ownerStaffId is string
+            && request.resource.data.ownerStaffId.size() <= 120))
+        && (!request.resource.data.keys().hasAny(['effectiveDate'])
+          || (request.resource.data.effectiveDate is string
+            && request.resource.data.effectiveDate.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')))
+        && (!request.resource.data.keys().hasAny(['reviewDueDate'])
+          || (request.resource.data.reviewDueDate is string
+            && request.resource.data.reviewDueDate.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')))
         && request.resource.data.draftSteps is list
         && request.resource.data.draftSteps.size() > 0
         && request.resource.data.draftSteps.size() <= 30
@@ -219,7 +229,8 @@ service cloud.firestore {
       allow read: if isOperationalStaff();
       allow create: if isStaffAdmin()
         && request.resource.data.keys().hasOnly([
-          'sopId', 'version', 'title', 'description', 'steps',
+          'sopId', 'version', 'title', 'description', 'ownerStaffId',
+          'effectiveDate', 'reviewDueDate', 'steps',
           'publishedAt', 'publishedByUid'
         ])
         && request.resource.data.sopId is string
@@ -230,6 +241,13 @@ service cloud.firestore {
         && request.resource.data.title.size() <= 120
         && request.resource.data.description is string
         && request.resource.data.description.size() <= 1000
+        && request.resource.data.ownerStaffId is string
+        && request.resource.data.ownerStaffId.size() > 0
+        && request.resource.data.ownerStaffId.size() <= 120
+        && request.resource.data.effectiveDate is string
+        && request.resource.data.effectiveDate.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && request.resource.data.reviewDueDate is string
+        && request.resource.data.reviewDueDate.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
         && request.resource.data.steps is list
         && request.resource.data.steps.size() > 0
         && request.resource.data.steps.size() <= 30

@@ -32,9 +32,8 @@ function NavItem({ active, icon: Icon, label, badge, testId, onClick, collapsed 
   );
 }
 
-function Sidebar({ activeTab, switchTab, missingAlertBadge, collapsed, setCollapsed, externalToolsGroups = [], sidebarTextSize = 'normal', canManageExternalTools = false, staffModuleId = 'directory', staffPlanningModuleId = 'plan', onStaffModuleChange = () => {}, onStaffPlanningModuleChange = () => {} }) {
+function Sidebar({ activeTab, switchTab, missingAlertBadge, collapsed, setCollapsed, externalToolsGroups = [], sidebarTextSize = 'normal', canManageExternalTools = false, staffModuleId = 'directory', onStaffModuleChange = () => {} }) {
   const [staffExpanded, setStaffExpanded] = React.useState(false);
-  const [planningExpanded, setPlanningExpanded] = React.useState(false);
 
   function openStaffModule(moduleId) {
     onStaffModuleChange(moduleId);
@@ -45,14 +44,6 @@ function Sidebar({ activeTab, switchTab, missingAlertBadge, collapsed, setCollap
   function toggleStaffNavigation() {
     if (collapsed) setCollapsed(false);
     setStaffExpanded((expanded) => activeTab === 'staff' ? !expanded : true);
-    switchTab('staff');
-  }
-
-  function openStaffPlanningModule(childId) {
-    onStaffModuleChange('planning');
-    onStaffPlanningModuleChange(childId);
-    setStaffExpanded(true);
-    setPlanningExpanded(true);
     switchTab('staff');
   }
 
@@ -119,40 +110,15 @@ function Sidebar({ activeTab, switchTab, missingAlertBadge, collapsed, setCollap
         {!collapsed && staffExpanded && (
           <div className="win-staff-tree" id="staff-module-navigation">
             {STAFF_WORKSPACE_MODULE.modules.map((module) => {
-              const hasChildren = Boolean(module.children?.length);
               const moduleActive = staffModuleId === module.id;
-              return (
-                <React.Fragment key={module.id}>
-                  <button
-                    type="button"
-                    className={`win-nav-item win-nav-child ${moduleActive ? 'active' : ''}`}
-                    data-testid={`staff-module-${module.id}`}
-                    aria-current={moduleActive && !hasChildren ? 'page' : undefined}
-                    aria-expanded={hasChildren ? planningExpanded : undefined}
-                    onClick={() => {
-                      openStaffModule(module.id);
-                      if (hasChildren) {
-                        setPlanningExpanded((expanded) => staffModuleId === module.id ? !expanded : true);
-                      }
-                    }}
-                  >
-                    <span className="win-nav-label">{module.label}</span>
-                    {hasChildren && <ChevronDown size={13} className={`win-nav-tree-caret ${planningExpanded ? 'expanded' : ''}`} aria-hidden="true" />}
-                  </button>
-                  {hasChildren && planningExpanded && module.children.map((child) => (
-                    <button
-                      key={child.id}
-                      type="button"
-                      className={`win-nav-item win-nav-child win-nav-grandchild ${staffModuleId === module.id && staffPlanningModuleId === child.id ? 'active' : ''}`}
-                      data-testid={`staff-submodule-${child.id}`}
-                      aria-current={staffModuleId === module.id && staffPlanningModuleId === child.id ? 'page' : undefined}
-                      onClick={() => openStaffPlanningModule(child.id)}
-                    >
-                      <span className="win-nav-label">{child.label}</span>
-                    </button>
-                  ))}
-                </React.Fragment>
-              );
+              return <button
+                key={module.id}
+                type="button"
+                className={`win-nav-item win-nav-child ${moduleActive ? 'active' : ''}`}
+                data-testid={`staff-module-${module.id}`}
+                aria-current={moduleActive ? 'page' : undefined}
+                onClick={() => openStaffModule(module.id)}
+              ><span className="win-nav-label">{module.label}</span></button>;
             })}
           </div>
         )}

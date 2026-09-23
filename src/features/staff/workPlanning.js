@@ -2,6 +2,12 @@ export const WORK_PLAN_TASK_LIMIT = 200;
 export const STAFF_SOP_LIMIT = 100;
 export const SOP_STEP_LIMIT = 30;
 
+export function isValidDateKey(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value ?? ""))) return false;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
 export const WORK_PLAN_STATUSES = {
   planned: "วางแผน",
   in_progress: "กำลังทำ",
@@ -24,6 +30,9 @@ export function validateSopDraft(sop) {
   if (!String(sop.title ?? "").trim()) errors.push("title");
   if (String(sop.title ?? "").trim().length > 120) errors.push("title-length");
   if (String(sop.description ?? "").trim().length > 1000) errors.push("description-length");
+  if (!String(sop.ownerStaffId ?? "").trim()) errors.push("owner");
+  if (!isValidDateKey(sop.effectiveDate)) errors.push("effective-date");
+  if (!isValidDateKey(sop.reviewDueDate) || sop.reviewDueDate < sop.effectiveDate) errors.push("review-date");
   if (!Array.isArray(sop.steps) || !sop.steps.length) errors.push("steps");
   if (Array.isArray(sop.steps) && sop.steps.length > SOP_STEP_LIMIT) errors.push("step-limit");
   if (Array.isArray(sop.steps)) {
@@ -59,6 +68,9 @@ export function createSopSnapshot(sop, version) {
     version: Number(version),
     title: String(sop.title ?? "").trim(),
     description: String(sop.description ?? "").trim(),
+    ownerStaffId: String(sop.ownerStaffId ?? ""),
+    effectiveDate: String(sop.effectiveDate ?? ""),
+    reviewDueDate: String(sop.reviewDueDate ?? ""),
     steps: cleanSopSteps(sop.steps),
   };
 }

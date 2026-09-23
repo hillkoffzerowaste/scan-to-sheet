@@ -19,16 +19,20 @@ const sop = {
   id: "sop-check",
   title: "ตรวจสินค้า",
   description: "ตรวจสอบก่อนแพ็ค",
+  ownerStaffId: "staff-a",
+  effectiveDate: "2026-09-23",
+  reviewDueDate: "2027-09-23",
   steps: [
     { id: "one", title: "ตรวจรุ่น", instruction: "เทียบกับใบสั่ง", verification: "รุ่นตรง", required: true },
     { id: "two", title: "ตรวจสภาพ", instruction: "ตรวจรอบกล่อง", verification: "ไม่มีรอยเสียหาย", required: true },
   ],
 };
 
-test("SOP drafts require a title and at least one named step", () => {
-  assert.deepEqual(validateSopDraft({ title: "", steps: [] }), ["title", "steps"]);
+test("SOP drafts require ownership, valid control dates and at least one named step", () => {
+  assert.deepEqual(validateSopDraft({ title: "", steps: [] }), ["title", "owner", "effective-date", "review-date", "steps"]);
   assert.deepEqual(validateSopDraft({ ...sop, steps: [{ id: "x", title: " " }] }), ["step-title"]);
   assert.deepEqual(validateSopDraft(sop), []);
+  assert.deepEqual(validateSopDraft({ ...sop, effectiveDate: "2026-02-30", reviewDueDate: "2026-01-01" }), ["effective-date", "review-date"]);
 });
 
 test("SOP draft steps are normalized and capped before storage", () => {
@@ -51,6 +55,10 @@ test("published SOP snapshots preserve the exact version and ordered steps", () 
   );
   const editedDraft = { ...sop, title: "ชื่อใหม่" };
   assert.equal(createSopSnapshot(editedDraft, 4).title, "ชื่อใหม่");
+  assert.deepEqual(
+    [snapshot.ownerStaffId, snapshot.effectiveDate, snapshot.reviewDueDate],
+    ["staff-a", "2026-09-23", "2027-09-23"],
+  );
   assert.equal(snapshot.title, "ตรวจสินค้า");
 });
 
@@ -111,10 +119,10 @@ test("work plan rows sort by sequence and summary counts every state", () => {
   assert.equal(nextTaskSequence(tasks), 4);
 });
 
-test("staff workspace keeps planning as a main module with future-ready submodules", () => {
-  const planning = findStaffModule("planning");
+test("staff workspace keeps team, schedule, daily plan and SOP as sibling modules", () => {
   assert.equal(STAFF_WORKSPACE_MODULE.id, "staff-workspace");
-  assert.deepEqual(planning.children.map((item) => item.id), ["plan", "sops"]);
+  assert.deepEqual(STAFF_WORKSPACE_MODULE.modules.map((item) => item.id), ["directory", "schedule", "workplan", "sops"]);
   assert.equal(findStaffModule("schedule").id, "schedule");
+  assert.equal(findStaffModule("sops").id, "sops");
   assert.equal(findStaffModule("unknown"), null);
 });
