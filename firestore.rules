@@ -185,6 +185,148 @@ service cloud.firestore {
       allow delete: if isStaffAdmin();
     }
 
+    // คลัง SOP เป็นข้อมูลแก้ไขได้ของ Admin; ฉบับเผยแพร่แยกเก็บและห้ามแก้ย้อนหลัง
+    match /staffSops/{sopId} {
+      allow read: if isOperationalStaff();
+      allow create, update: if isStaffAdmin()
+        && request.resource.data.keys().hasOnly([
+          'title', 'description', 'draftSteps', 'publishedTitle', 'publishedDescription', 'active', 'latestVersion',
+          'createdAt', 'createdByUid', 'updatedAt', 'updatedByUid'
+        ])
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 120
+        && request.resource.data.description is string
+        && request.resource.data.description.size() <= 1000
+        && request.resource.data.draftSteps is list
+        && request.resource.data.draftSteps.size() > 0
+        && request.resource.data.draftSteps.size() <= 30
+        && (!request.resource.data.keys().hasAny(['publishedTitle'])
+          || (request.resource.data.publishedTitle is string
+            && request.resource.data.publishedTitle.size() <= 120))
+        && (!request.resource.data.keys().hasAny(['publishedDescription'])
+          || (request.resource.data.publishedDescription is string
+            && request.resource.data.publishedDescription.size() <= 1000))
+        && request.resource.data.active is bool
+        && request.resource.data.latestVersion is int
+        && request.resource.data.latestVersion >= 0
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.updatedByUid == request.auth.uid;
+      allow delete: if false;
+    }
+
+    match /staffSopVersions/{versionId} {
+      allow read: if isOperationalStaff();
+      allow create: if isStaffAdmin()
+        && request.resource.data.keys().hasOnly([
+          'sopId', 'version', 'title', 'description', 'steps',
+          'publishedAt', 'publishedByUid'
+        ])
+        && request.resource.data.sopId is string
+        && request.resource.data.version is int
+        && request.resource.data.version > 0
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 120
+        && request.resource.data.description is string
+        && request.resource.data.description.size() <= 1000
+        && request.resource.data.steps is list
+        && request.resource.data.steps.size() > 0
+        && request.resource.data.steps.size() <= 30
+        && request.resource.data.publishedAt == request.time
+        && request.resource.data.publishedByUid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // แผนรายวันเก็บตัวนับลำดับ เพื่อออกเลขงานแบบ atomic เมื่อมี Admin หลายคนสร้างพร้อมกัน
+    match /staffWorkPlans/{date} {
+      allow read: if isOperationalStaff();
+      allow create, update: if isStaffAdmin()
+        && request.resource.data.keys().hasOnly([
+          'date', 'taskCount', 'nextSequence', 'createdAt', 'createdByUid', 'updatedAt', 'updatedByUid'
+        ])
+        && request.resource.data.date == date
+        && request.resource.data.date.size() == 10
+        && request.resource.data.taskCount is int
+        && request.resource.data.taskCount >= 0
+        && request.resource.data.taskCount <= 200
+        && request.resource.data.nextSequence is int
+        && request.resource.data.nextSequence >= 1
+        && request.resource.data.nextSequence <= 201
+        && ((!exists(/databases/$(database)/documents/staffWorkPlans/$(date))
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.createdByUid == request.auth.uid)
+          || (exists(/databases/$(database)/documents/staffWorkPlans/$(date))
+            && request.resource.data.createdAt == resource.data.createdAt
+            && request.resource.data.createdByUid == resource.data.createdByUid))
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.updatedByUid == request.auth.uid;
+      allow delete: if false;
+    }
+
+    // แต่ละงานเก็บภาพ SOP ณ เวอร์ชันที่สร้าง จึงไม่เปลี่ยนเมื่อมีการเผยแพร่เวอร์ชันใหม่
+    match /staffWorkPlanTasks/{taskId} {
+      allow read: if isOperationalStaff();
+      allow create, update: if isStaffAdmin()
+        && request.resource.data.keys().hasOnly([
+          'date', 'sequence', 'targetTime', 'assignedStaffIds', 'dependsOnTaskIds', 'sopId',
+          'sopVersion', 'sopSnapshot', 'stepProgress', 'status', 'note',
+          'createdAt', 'createdByUid', 'updatedAt', 'updatedByUid'
+        ])
+        && request.resource.data.date is string
+        && request.resource.data.date.size() == 10
+        && request.resource.data.sequence is int
+        && request.resource.data.sequence >= 1
+        && request.resource.data.targetTime is string
+        && request.resource.data.assignedStaffIds is list
+        && request.resource.data.assignedStaffIds.size() > 0
+        && request.resource.data.assignedStaffIds.size() <= 50
+        && request.resource.data.dependsOnTaskIds is list
+        && request.resource.data.dependsOnTaskIds.size() <= 20
+        && request.resource.data.sopId is string
+        && request.resource.data.sopVersion is int
+        && request.resource.data.sopVersion > 0
+        && request.resource.data.sopSnapshot is map
+        && request.resource.data.sopSnapshot.steps is list
+        && request.resource.data.sopSnapshot.steps.size() > 0
+        && request.resource.data.sopSnapshot.steps.size() <= 30
+        && request.resource.data.stepProgress is map
+        && request.resource.data.stepProgress.keys().size() <= 30
+        && request.resource.data.status in ['planned', 'in_progress', 'blocked', 'completed']
+        && request.resource.data.note is string
+        && request.resource.data.note.size() <= 500
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.updatedByUid == request.auth.uid
+        && existsAfter(/databases/$(database)/documents/staffWorkPlans/$(request.resource.data.date))
+        && getAfter(/databases/$(database)/documents/staffWorkPlans/$(request.resource.data.date)).data.date
+          == request.resource.data.date
+        && getAfter(/databases/$(database)/documents/staffWorkPlans/$(request.resource.data.date)).data.nextSequence
+          > request.resource.data.sequence;
+      allow delete: if isStaffAdmin();
+    }
+
+    // ประวัติความคืบหน้าเพิ่มได้อย่างเดียว เพื่อเก็บผู้บันทึกและการเปลี่ยนสถานะย้อนหลัง
+    match /staffWorkPlanEvents/{eventId} {
+      allow read: if isOperationalStaff();
+      allow create: if isStaffAdmin()
+        && request.resource.data.keys().hasOnly([
+          'date', 'taskId', 'type', 'status', 'actorUid', 'createdAt', 'stepId', 'completed'
+        ])
+        && request.resource.data.date is string
+        && request.resource.data.date.size() == 10
+        && request.resource.data.taskId is string
+        && request.resource.data.type in ['step_progress', 'status_change', 'task_deleted']
+        && request.resource.data.status in ['planned', 'in_progress', 'blocked', 'completed']
+        && request.resource.data.actorUid == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && ((request.resource.data.type == 'step_progress'
+          && request.resource.data.stepId is string
+          && request.resource.data.completed is bool)
+          || (request.resource.data.type in ['status_change', 'task_deleted']
+            && !request.resource.data.keys().hasAny(['stepId', 'completed'])));
+      allow update, delete: if false;
+    }
+
     match /users/{uid} {
       allow read: if isOwner(uid);
       allow create, update: if isOwner(uid)

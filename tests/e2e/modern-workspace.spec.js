@@ -16,7 +16,19 @@ async function audit(page, label) {
   expect(result.textFailures, `${label}: text`).toEqual([]);
   expect(result.controlFailures, `${label}: controls`).toEqual([]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth), label).toBe(0);
-  expect(await page.locator('.win-main').evaluate(el => el.scrollWidth - el.clientWidth), `${label}: main overflow`).toBe(0);
+  const main = await page.locator('.win-main').evaluate(el => {
+    const bounds = el.getBoundingClientRect();
+    const elements = [...el.querySelectorAll('*')].map(node => ({
+      tag: node.tagName.toLowerCase(),
+      className: String(node.className),
+      right: Math.round(node.getBoundingClientRect().right),
+      overflowX: getComputedStyle(node).overflowX,
+      scrollWidth: node.scrollWidth,
+      clientWidth: node.clientWidth,
+    })).filter(item => item.right > Math.round(bounds.right) + 1 || item.scrollWidth > item.clientWidth + 1);
+    return { overflow: el.scrollWidth - el.clientWidth, elements: elements.slice(0, 25) };
+  });
+  expect(main.overflow, `${label}: main overflow ${JSON.stringify(main.elements)}`).toBe(0);
 }
 
 test('dashboard is the default workspace and signed-out users see an empty state', async ({ page }) => {
@@ -166,10 +178,10 @@ for (const theme of ['light', 'dark']) {
         }
         if (width === 1440) await page.screenshot({ path: testInfo.outputPath(`${tab}-${theme}.png`) });
       }
-      await page.locator('.staff-section-tabs').getByRole('button', { name: 'หน้าที่ประจำวัน', exact: true }).click();
+      await page.locator('.staff-section-tabs').getByRole('button', { name: 'ตารางเวร', exact: true }).click();
       await audit(page, `${theme}/${width}/schedule`);
     }
-    await page.locator('.staff-section-tabs').getByRole('button', { name: 'แผนผังพนักงาน', exact: true }).click();
+    await page.locator('.staff-section-tabs').getByRole('button', { name: 'โครงสร้างทีม', exact: true }).click();
     await page.getByRole('button', { name: 'เพิ่มพนักงาน', exact: true }).click();
     await expect(page.locator('.staff-modal')).toBeVisible();
     await audit(page, `${theme}/staff-dialog`);
@@ -186,7 +198,7 @@ for (const theme of ['light', 'dark']) {
     await page.screenshot({ path: testInfo.outputPath(`qr-print-${theme}.png`), fullPage: true });
     await page.emulateMedia({ media: 'screen' });
     await page.getByRole('button', { name: 'ปิดหน้าพิมพ์ QR', exact: true }).click();
-    await page.locator('.staff-section-tabs').getByRole('button', { name: 'หน้าที่ประจำวัน', exact: true }).click();
+    await page.locator('.staff-section-tabs').getByRole('button', { name: 'ตารางเวร', exact: true }).click();
     await page.emulateMedia({ media: 'print' });
     await expect(page.locator('.duty-print-sheet')).toBeVisible();
     await expect(page.locator('.win-titlebar')).toBeHidden();
@@ -202,4 +214,68 @@ test('the root path still loads the desktop shell after the remote route was add
   await openSignedInApp(page);
   await expect(page.locator('.win-titlebar')).toHaveCount(1);
   await expect(page.locator('.remote-app')).toHaveCount(0);
+});
+
+test('the staff planning module publishes SOP versions and tracks ordered task steps', async ({ page }, testInfo) => {
+  test.setTimeout(90000);
+  await openSignedInApp(page);
+  await page.getByTestId('staff-tab').click();
+  await page.locator('.staff-section-tabs').getByRole('button', { name: 'แผนงานและ SOP', exact: true }).click();
+  await page.getByRole('button', { name: 'คลัง SOP', exact: true }).click();
+  await page.getByRole('button', { name: 'สร้าง SOP', exact: true }).click();
+  await page.getByLabel('ชื่อ SOP').fill('ตรวจสินค้าก่อนแพ็ค');
+  await page.getByLabel('วัตถุประสงค์ / ขอบเขต').fill('ยืนยันสินค้าและสภาพก่อนเริ่มแพ็ค');
+  await page.getByLabel('ชื่อขั้นตอน').fill('ตรวจรุ่นและจำนวน');
+  await page.getByLabel('วิธีปฏิบัติ').fill('เทียบรุ่นและจำนวนกับใบสั่ง');
+  await page.getByLabel('จุดตรวจ/ผลลัพธ์ที่ต้องได้').fill('รุ่นและจำนวนตรงกับใบสั่ง');
+  await page.getByRole('button', { name: 'เผยแพร่ v1', exact: true }).click();
+  await expect(page.locator('.sop-card')).toContainText('ตรวจสินค้าก่อนแพ็ค');
+  await expect(page.locator('.sop-card')).toContainText('เวอร์ชันล่าสุด: 1');
+
+  await page.getByRole('button', { name: 'แผนงานวันนี้', exact: true }).click();
+  await page.getByRole('button', { name: 'เพิ่มงานในแผน', exact: true }).click();
+  await page.getByLabel('เลือก SOP ที่เผยแพร่แล้ว').selectOption({ label: 'ตรวจสินค้าก่อนแพ็ค · v1' });
+  await page.locator('.work-plan-assignees input[type="checkbox"]').first().check();
+  await page.getByRole('button', { name: 'เพิ่มตามลำดับ 1', exact: true }).click();
+  await expect(page.locator('.work-plan-table tbody tr')).toContainText('ตรวจสินค้าก่อนแพ็ค');
+
+  await page.getByRole('button', { name: 'เพิ่มงานในแผน', exact: true }).click();
+  await page.getByLabel('เลือก SOP ที่เผยแพร่แล้ว').selectOption({ label: 'ตรวจสินค้าก่อนแพ็ค · v1' });
+  await page.locator('.work-plan-assignees input[type="checkbox"]').first().check();
+  await page.getByRole('button', { name: 'เพิ่มตามลำดับ 2', exact: true }).click();
+  await expect(page.locator('select[aria-label="สถานะงาน 2"] option[value="in_progress"]')).toBeDisabled();
+  await page.getByText('ดูขั้นตอน SOP · v1').first().click();
+  await page.locator('.work-plan-task-name ol input[type="checkbox"]').first().check();
+  await expect(page.getByLabel('สถานะงาน 1')).toHaveValue('completed');
+  await expect(page.locator('select[aria-label="สถานะงาน 2"] option[value="in_progress"]')).toBeEnabled();
+  await page.getByLabel('สถานะงาน 2').selectOption('in_progress');
+
+  await page.getByRole('button', { name: 'คลัง SOP', exact: true }).click();
+  await page.getByRole('button', { name: 'แก้ไขฉบับร่าง', exact: true }).click();
+  await page.getByLabel('วิธีปฏิบัติ').fill('เปลี่ยนขั้นตอนในเวอร์ชันใหม่');
+  await page.getByRole('button', { name: 'บันทึกฉบับร่าง', exact: true }).click();
+  await expect(page.locator('.sop-editor-modal')).toBeVisible();
+  await page.getByRole('button', { name: 'เผยแพร่ v2', exact: true }).click();
+  await page.getByRole('button', { name: 'แผนงานวันนี้', exact: true }).click();
+  await expect(page.locator('.work-plan-table tbody tr').nth(0)).toContainText('ดูขั้นตอน SOP · v1');
+  await expect(page.locator('.work-plan-table tbody tr').nth(1)).toContainText('ดูขั้นตอน SOP · v1');
+
+  for (const theme of ['light', 'dark']) {
+    await setTheme(page, theme);
+    for (const width of [1280, 1440, 1920]) {
+      await page.setViewportSize({ width, height: width === 1280 ? 720 : 900 });
+      await audit(page, `staff-plan/${theme}/${width}`);
+      if (width === 1440) await page.screenshot({ path: testInfo.outputPath(`staff-plan-${theme}.png`) });
+    }
+  }
+
+  await page.getByRole('button', { name: 'คลัง SOP', exact: true }).click();
+  for (const theme of ['light', 'dark']) {
+    await setTheme(page, theme);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.getByRole('button', { name: 'แก้ไขฉบับร่าง', exact: true }).click();
+    await audit(page, `staff-sop-editor/${theme}`);
+    await page.screenshot({ path: testInfo.outputPath(`staff-sop-editor-${theme}.png`) });
+    await page.locator('.sop-editor-modal header button').click();
+  }
 });

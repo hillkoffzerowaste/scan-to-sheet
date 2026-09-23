@@ -57,6 +57,47 @@ export async function openSignedInApp(page, {
       return () => {};
     };
   `);
+  await mockModule(page, '/src/features/staff/workPlanningService.js', `
+    window.staffSops = window.staffSops ?? [];
+    window.staffWorkPlanTasks = window.staffWorkPlanTasks ?? [];
+    export const WORK_PLANNING_QUERY_LIMITS = { sops: 100, tasks: 200 };
+    export const listStaffSops = async () => window.staffSops;
+    export const listWorkPlanTasks = async (date) => window.staffWorkPlanTasks.filter(item => item.date === date);
+    export const getStaffSopVersion = async (sopId, version) => {
+      const item = window.staffSops.find(sop => sop.id === sopId);
+      return item && Number(item.latestVersion) === Number(version)
+        ? { sopId, version, title: item.title, description: item.description, steps: item.draftSteps }
+        : null;
+    };
+    export const saveStaffSopDraft = async (sop, user) => {
+      const id = sop.id ?? 'sop-' + (window.staffSops.length + 1);
+      const record = { ...sop, id, draftSteps: sop.steps };
+      window.staffSops = [...window.staffSops.filter(item => item.id !== id), record];
+      return id;
+    };
+    export const publishStaffSop = async (sop) => {
+      const id = sop.id ?? 'sop-' + (window.staffSops.length + 1);
+      const version = Number(sop.latestVersion ?? 0) + 1;
+      window.staffSops = [...window.staffSops.filter(item => item.id !== id), { ...sop, id, latestVersion: version, draftSteps: sop.steps, active: true }];
+      return { id, version };
+    };
+    export const setStaffSopActive = async (id, active) => {
+      window.staffSops = window.staffSops.map(item => item.id === id ? { ...item, active } : item);
+    };
+    export const createWorkPlanTask = async (task) => {
+      const id = 'task-' + (window.staffWorkPlanTasks.length + 1);
+      window.staffWorkPlanTasks.push({ ...task, id, stepProgress: Object.fromEntries(task.sopSnapshot.steps.map(step => [step.id, false])), status: 'planned' });
+      return id;
+    };
+    export const updateWorkPlanTask = async (task, changes) => {
+      window.staffWorkPlanTasks = window.staffWorkPlanTasks.map(item => item.id === task.id ? { ...item, ...changes } : item);
+    };
+    export const deleteWorkPlanTask = async (task) => { window.staffWorkPlanTasks = window.staffWorkPlanTasks.filter(item => item.id !== task.id); };
+    export const saveWorkPlanOrder = async (tasks) => {
+      const sequence = new Map(tasks.map((item, index) => [item.id, index + 1]));
+      window.staffWorkPlanTasks = window.staffWorkPlanTasks.map(item => sequence.has(item.id) ? { ...item, sequence: sequence.get(item.id) } : item);
+    };
+  `);
   await mockModule(page, '/src/features/externalTools/externalToolsService.js', `
     import { DEFAULT_EXTERNAL_TOOLS_CONFIG } from '/src/features/externalTools/externalToolsConfig.js';
     const subscribers = [];

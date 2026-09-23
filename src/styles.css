@@ -7009,6 +7009,83 @@ tbody tr:hover {
   color: var(--wire-text);
 }
 
+/* Staff workspace modules: one parent area with independently scoped submodules. */
+.wireframe-shell .staff-module { display: grid; gap: var(--space-layout); min-width: 0; }
+.wireframe-shell .staff-plan-module,
+.wireframe-shell .staff-sop-module { display: grid; gap: var(--space-layout); width: 100%; max-width: 100%; min-width: 0; }
+.wireframe-shell .staff-module-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; max-width: 100%; }
+.wireframe-shell .staff-module-header > div:first-child { min-width: 0; }
+.wireframe-shell .staff-module-header h3,
+.wireframe-shell .staff-module-header h4 { margin: 0 0 3px; color: var(--wire-text); font-size: 17px; }
+.wireframe-shell .staff-module-header p { margin: 0; color: var(--wire-muted); }
+.wireframe-shell .staff-submodule-tabs { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; width: fit-content; border: 1px solid var(--wire-line-dark); border-radius: var(--wire-radius); background: var(--wire-face); }
+.wireframe-shell .staff-submodule-tabs button { display: inline-flex; align-items: center; gap: 6px; min-height: var(--control-height); padding: 6px 10px; border: 1px solid var(--wire-control-line); border-radius: var(--wire-radius); background: var(--wire-paper); color: var(--wire-muted); }
+.wireframe-shell .staff-submodule-tabs button.active { border-color: var(--wire-info-line); background: var(--wire-info-bg); color: var(--wire-info); font-weight: 700; }
+.wireframe-shell .work-plan-summary { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1px; overflow: hidden; border: 1px solid var(--wire-line-dark); border-radius: var(--wire-radius); background: var(--wire-line-dark); }
+.wireframe-shell .work-plan-summary > div { display: grid; gap: 3px; padding: 9px 11px; background: var(--wire-paper); }
+.wireframe-shell .work-plan-summary span { color: var(--wire-muted); font-size: var(--ui-xs); }
+.wireframe-shell .work-plan-summary strong { color: var(--wire-text); font-size: 18px; }
+.wireframe-shell .work-plan-table-wrap { width: 100%; max-width: 100%; min-width: 0; overflow: auto; border: 1px solid var(--wire-line-dark); border-radius: var(--wire-radius); background: var(--wire-paper); }
+.wireframe-shell .work-plan-table { width: 100%; min-width: 1080px; border-collapse: collapse; color: var(--wire-text); }
+.wireframe-shell .work-plan-table caption { padding: 9px 11px; border-bottom: 1px solid var(--wire-line-dark); color: var(--wire-muted); text-align: start; }
+.wireframe-shell .work-plan-table th,
+.wireframe-shell .work-plan-table td { padding: 8px 9px; border: 1px solid var(--wire-line); text-align: start; vertical-align: top; }
+.wireframe-shell .work-plan-table th { background: var(--wire-face); color: var(--wire-text); white-space: nowrap; }
+.wireframe-shell .work-plan-table td select { min-height: var(--control-height); max-width: 150px; border: 1px solid var(--wire-control-line); border-radius: var(--wire-radius); background: var(--wire-paper); color: var(--wire-text); }
+.wireframe-shell .work-plan-task-name { min-width: 290px; }
+.wireframe-shell .work-plan-task-name > strong,
+.wireframe-shell .work-plan-task-name > span,
+.wireframe-shell .work-plan-task-name > small { display: block; margin-bottom: 4px; }
+.wireframe-shell .work-plan-task-name > span,
+.wireframe-shell .work-plan-task-name > small { color: var(--wire-muted); }
+.wireframe-shell .work-plan-task-name details { margin: 7px 0; }
+.wireframe-shell .work-plan-task-name summary { color: var(--wire-info); cursor: pointer; font-weight: 700; }
+.wireframe-shell .work-plan-task-name ol { display: grid; gap: 6px; margin: 8px 0 0; padding-inline-start: 24px; }
+.wireframe-shell .work-plan-task-name li label { display: flex; align-items: flex-start; gap: 7px; }
+.wireframe-shell .work-plan-task-name li label > span { display: grid; gap: 2px; }
+.wireframe-shell .work-plan-task-name li small { color: var(--wire-muted); }
+.wireframe-shell .work-plan-row-actions { display: flex; gap: 3px; }
+.wireframe-shell .work-plan-row-actions button,
+.wireframe-shell .sop-card-actions button { display: inline-flex; align-items: center; justify-content: center; min-width: var(--control-height); min-height: var(--control-height); padding: 5px 8px; border: 1px solid var(--wire-control-line); border-radius: var(--wire-radius); background: var(--wire-paper); color: var(--wire-text); }
+.wireframe-shell .work-plan-row-actions button:disabled { opacity: .55; }
+.wireframe-shell .sop-library { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.wireframe-shell .sop-card { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 12px; border: 1px solid var(--wire-line-dark); border-radius: var(--wire-radius); background: var(--wire-paper); color: var(--wire-text); }
+.wireframe-shell .sop-card h5 { margin: 7px 0 3px; font-size: 16px; }
+.wireframe-shell .sop-card p { margin: 0 0 6px; color: var(--wire-muted); }
+.wireframe-shell .sop-card > div:first-child > small { color: var(--wire-muted); }
+.wireframe-shell .sop-card-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 5px; }
+.wireframe-shell .staff-module-empty { padding: 24px; border: 1px dashed var(--wire-line-dark); border-radius: var(--wire-radius); color: var(--wire-muted); text-align: center; }
+.wireframe-shell .staff-module-alert { display: flex; align-items: flex-start; gap: 8px; padding: 9px 11px; border: 1px solid var(--wire-warning-line); border-inline-start-width: 4px; border-radius: var(--wire-radius); background: var(--wire-warning-bg); color: var(--wire-warning); }
+.wireframe-shell .staff-module-alert svg { flex: 0 0 auto; }
+.wireframe-shell .sop-editor-modal,
+.wireframe-shell .work-plan-modal { display: grid; gap: 12px; }
+.wireframe-shell .sop-editor-modal label,
+.wireframe-shell .work-plan-modal > label { display: grid; gap: 5px; color: var(--wire-text); }
+.wireframe-shell .sop-editor-modal input:not([type="checkbox"]),
+.wireframe-shell .sop-editor-modal textarea,
+.wireframe-shell .work-plan-modal input,
+.wireframe-shell .work-plan-modal select,
+.wireframe-shell .work-plan-modal textarea { width: 100%; min-height: var(--control-height); padding: 7px 9px; border: 1px solid var(--wire-control-line); border-radius: var(--wire-radius); background: var(--wire-paper); color: var(--wire-text); }
+.wireframe-shell .sop-editor-modal textarea,
+.wireframe-shell .work-plan-modal textarea { min-height: 72px; resize: vertical; }
+.wireframe-shell .sop-editor-steps { display: grid; gap: 8px; }
+.wireframe-shell .sop-editor-steps > div:first-child { display: flex; align-items: baseline; justify-content: space-between; }
+.wireframe-shell .sop-editor-steps h4 { margin: 0; }
+.wireframe-shell .sop-editor-steps > div:first-child span { color: var(--wire-muted); }
+.wireframe-shell .sop-step-editor { position: relative; display: grid; gap: 8px; padding: 10px; border: 1px solid var(--wire-line-dark); border-radius: var(--wire-radius); }
+.wireframe-shell .sop-step-editor legend { padding-inline: 5px; color: var(--wire-info); font-weight: 700; }
+.wireframe-shell .sop-step-editor > button { position: absolute; inset-block-start: 0; inset-inline-end: 5px; min-width: var(--control-height); min-height: var(--control-height); border: 1px solid var(--wire-control-line); border-radius: var(--wire-radius); background: var(--wire-paper); color: var(--wire-text); }
+.wireframe-shell .sop-step-editor .sop-required-step { display: flex; align-items: center; gap: 7px; }
+.wireframe-shell .work-plan-modal fieldset { display: grid; gap: 7px; padding: 10px; border: 1px solid var(--wire-line-dark); border-radius: var(--wire-radius); }
+.wireframe-shell .work-plan-assignees { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; max-height: 180px; overflow: auto; }
+.wireframe-shell .work-plan-assignees label { display: flex; align-items: center; gap: 6px; padding: 5px; }
+
+@media (max-width: 900px) {
+  .wireframe-shell .sop-library { grid-template-columns: 1fr; }
+  .wireframe-shell .work-plan-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .wireframe-shell .work-plan-assignees { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
 .wireframe-shell .wms-source-badge.packer {
   border-color: var(--wire-focus);
   background: var(--wire-selection);

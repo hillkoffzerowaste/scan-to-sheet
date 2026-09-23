@@ -7,6 +7,7 @@ const readStorageRules = () => readFile(new URL("../storage.rules", import.meta.
 const readSheetWriter = () => readFile(new URL("../src/services/googleSheets.js", import.meta.url), "utf8");
 const readLabelScript = () => readFile(new URL("../apps-script/label-sync/Code.gs", import.meta.url), "utf8");
 const readStaffService = () => readFile(new URL("../src/features/staff/staffService.js", import.meta.url), "utf8");
+const readWorkPlanningService = () => readFile(new URL("../src/features/staff/workPlanningService.js", import.meta.url), "utf8");
 
 test("staff private contacts allow Admin reads without write payload validation", async () => {
   const rules = await readFile(new URL("../firestore.rules", import.meta.url), "utf8");
@@ -70,7 +71,7 @@ test("operational data requires an approved staff claim, not merely Firebase sig
   assert.match(rules, /function isOperationalStaff\(\)/);
   assert.match(rules, /request\.auth\.token\.operator == true/);
   assert.match(storageRules, /function isOperationalStaff\(\)/);
-  for (const collection of ['staffMembers', 'staffDutyTypes', 'staffWeeklyDuties', 'staffDutyOverrides', 'staffDailyAssignments', 'staffDailyStatuses', 'staffDailyLeads', 'scanEvents', 'orders', 'couriers']) {
+  for (const collection of ['staffMembers', 'staffDutyTypes', 'staffWeeklyDuties', 'staffDutyOverrides', 'staffDailyAssignments', 'staffDailyStatuses', 'staffDailyLeads', 'staffSops', 'staffSopVersions', 'staffWorkPlanTasks', 'staffWorkPlanEvents', 'scanEvents', 'orders', 'couriers']) {
     const block = rules.match(new RegExp(`match /${collection}/\\{[^}]+\\} \\{([\\s\\S]*?)\\n    \\}`));
     assert.ok(block, `${collection} rules must exist`);
     assert.doesNotMatch(block[1], /allow (?:read|create|update|write)[^\n]*isSignedIn\(\)/);
@@ -150,6 +151,58 @@ test("a remote control write carries exactly five keys, a server timestamp and t
   assert.match(block[1], /request\.resource\.data\.origin in \['remote', 'desktop'\]/);
   assert.match(block[1], /request\.resource\.data\.updatedAt == request\.time/);
   assert.match(block[1], /request\.resource\.data\.updatedByUid == request\.auth\.uid/);
+});
+
+test("published staff SOP versions are immutable and bounded", async () => {
+  const rules = await readRules();
+  const block = rules.match(/match \/staffSopVersions\/\{versionId\} \{([\s\S]*?)\n    \}/);
+  assert.ok(block, "staffSopVersions rules must exist");
+  assert.match(block[1], /allow read: if isOperationalStaff\(\);/);
+  assert.match(block[1], /allow create: if isStaffAdmin\(\)/);
+  assert.match(block[1], /request\.resource\.data\.steps\.size\(\) <= 30/);
+  assert.match(block[1], /allow update, delete: if false;/);
+});
+
+test("staff plan tasks are limited to validated dates, ordered rows and known states", async () => {
+  const rules = await readRules();
+  const block = rules.match(/match \/staffWorkPlanTasks\/\{taskId\} \{([\s\S]*?)\n    \}/);
+  assert.ok(block, "staffWorkPlanTasks rules must exist");
+  assert.match(block[1], /allow read: if isOperationalStaff\(\);/);
+  assert.match(block[1], /allow create, update: if isStaffAdmin\(\)/);
+  assert.match(block[1], /assignedStaffIds\.size\(\) <= 50/);
+  assert.match(block[1], /status in \['planned', 'in_progress', 'blocked', 'completed'\]/);
+  assert.match(block[1], /sopSnapshot is map/);
+  assert.match(block[1], /existsAfter\(\/databases\/\$\(database\)\/documents\/staffWorkPlans/);
+  assert.match(block[1], /getAfter\([\s\S]*?nextSequence[\s\S]*?>\s*request\.resource\.data\.sequence/);
+});
+
+test("staff work plan sequence headers are bounded and preserve their creator", async () => {
+  const rules = await readRules();
+  const block = rules.match(/match \/staffWorkPlans\/\{date\} \{([\s\S]*?)\n    \}/);
+  assert.ok(block, "staffWorkPlans rules must exist");
+  assert.match(block[1], /taskCount <= 200/);
+  assert.match(block[1], /nextSequence <= 201/);
+  assert.match(block[1], /request\.resource\.data\.createdAt == resource\.data\.createdAt/);
+  assert.match(block[1], /allow delete: if false/);
+});
+
+test("staff work plan progress events are append-only and identify the actor", async () => {
+  const rules = await readRules();
+  const block = rules.match(/match \/staffWorkPlanEvents\/\{eventId\} \{([\s\S]*?)\n    \}/);
+  assert.ok(block, "staffWorkPlanEvents rules must exist");
+  assert.match(block[1], /allow create: if isStaffAdmin\(\)/);
+  assert.match(block[1], /actorUid == request\.auth\.uid/);
+  assert.match(block[1], /stepId is string/);
+  assert.match(block[1], /completed is bool/);
+  assert.match(block[1], /allow update, delete: if false;/);
+});
+
+test("work planning queries and create guards stay inside documented Firestore limits", async () => {
+  const service = await readWorkPlanningService();
+  assert.match(service, /query\(collection\(firestoreDb, "staffSops"\), limit\(STAFF_SOP_LIMIT\)\)/);
+  assert.match(service, /where\("date", "==", task\.date\)[\s\S]*?limit\(WORK_PLAN_TASK_LIMIT\)/);
+  assert.match(service, /existing\.size >= WORK_PLAN_TASK_LIMIT/);
+  assert.match(service, /remainingTasks\.length > WORK_PLAN_TASK_LIMIT/);
 });
 
 test('external tool preferences are accepted by the shared settings rules with a known size', async () => {

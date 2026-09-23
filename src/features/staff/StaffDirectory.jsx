@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   CalendarDays,
+  ClipboardList,
   Copy,
   GripVertical,
   Mail,
@@ -83,6 +84,8 @@ import {
   uploadStaffPhoto,
 } from "./staffService.js";
 import QrPrintSheet from "./QrPrintSheet.jsx";
+import WorkPlanningModule from "./modules/WorkPlanningModule.jsx";
+import { STAFF_WORKSPACE_MODULE } from "./staffModules.js";
 
 const POSITION_LABELS = {
   leader: "หัวหน้า",
@@ -756,8 +759,8 @@ export default function StaffDirectory({
       <header className="staff-page-header">
         <div>
           <p className="eyebrow">ฝ่ายแพ็คสินค้า</p>
-          <h2 id="staff-title">แผนผังพนักงานห้องแพ็ค</h2>
-          <p>รายชื่อ ช่องทางติดต่อ และหน้าที่ประจำวันของเจ้าหน้าที่</p>
+          <h2 id="staff-title">{STAFF_WORKSPACE_MODULE.title}</h2>
+          <p>จัดโครงสร้างทีม วางแผนงาน และกำหนดขั้นตอนมาตรฐาน</p>
         </div>
         {isAdmin && section === "directory" && (
           <div className="staff-page-actions">
@@ -773,19 +776,18 @@ export default function StaffDirectory({
           </div>
         )}
       </header>
-      <div className="staff-section-tabs">
-        <button
-          className={section === "directory" ? "active" : ""}
-          onClick={() => setSection("directory")}
-        >
-          <Users size={17} /> แผนผังพนักงาน
-        </button>
-        <button
-          className={section === "schedule" ? "active" : ""}
-          onClick={() => setSection("schedule")}
-        >
-          <CalendarDays size={17} /> หน้าที่ประจำวัน
-        </button>
+      <div className="staff-section-tabs" aria-label="โมดูลบริหารทีมงาน">
+        {STAFF_WORKSPACE_MODULE.modules.map((module) => (
+          <button
+            key={module.id}
+            aria-current={section === module.id ? "page" : undefined}
+            className={section === module.id ? "active" : ""}
+            onClick={() => setSection(module.id)}
+          >
+            {module.id === "directory" ? <Users size={17} /> : module.id === "schedule" ? <CalendarDays size={17} /> : <ClipboardList size={17} />}
+            {module.label}
+          </button>
+        ))}
       </div>
       {message && (
         <div className="staff-message" role="status">
@@ -976,7 +978,7 @@ export default function StaffDirectory({
             </div>
           )}
         </>
-      ) : (
+      ) : section === "schedule" ? (
         <>
           <div className="schedule-toolbar">
             <label>
@@ -1441,6 +1443,14 @@ export default function StaffDirectory({
             </footer>
           </div>
         </>
+      ) : (
+        <WorkPlanningModule
+          date={date}
+          staff={staff}
+          isAdmin={isAdmin}
+          firebaseUser={firebaseUser}
+          onMessage={setMessage}
+        />
       )}
 
       {editingNotice && (
