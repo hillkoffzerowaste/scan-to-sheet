@@ -9,13 +9,23 @@ async function mockModule(page, path, exports) {
   });
 }
 
-export async function openSignedInApp(page, { staffAdmin = true, startTab = 'packer' } = {}) {
+export async function openSignedInApp(page, {
+  staffAdmin = true,
+  startTab = 'packer',
+  externalToolsConfig = null,
+  externalToolsReadError = false,
+} = {}) {
   await page.route('**/*', (route) => {
     const url = new URL(route.request().url());
     if (url.hostname !== 'localhost' && url.hostname !== '127.0.0.1') return route.abort();
     return route.continue();
   });
-  await page.addInitScript(() => { window.qrTestWrites = []; });
+  await page.addInitScript(({ config, readError }) => {
+    window.qrTestWrites = [];
+    window.externalToolsConfig = config;
+    window.externalToolsReadError = readError;
+    window.externalToolsWrites = [];
+  }, { config: externalToolsConfig, readError: externalToolsReadError });
   await mockModule(page, '/src/services/firebase.js', `
     export const isFirebaseConfigured = true;
     const user = { uid: 'qr-test-user', email: 'qr-test@example.invalid', getIdToken: async () => 'test-id-token' };
@@ -45,6 +55,33 @@ export async function openSignedInApp(page, { staffAdmin = true, startTab = 'pac
         { id: 'qr-b', nickname: 'คนแพ็ค B', position: 'packer', active: true, sortOrder: 2 }
       ]);
       return () => {};
+    };
+  `);
+  await mockModule(page, '/src/features/externalTools/externalToolsService.js', `
+    import { DEFAULT_EXTERNAL_TOOLS_CONFIG } from '/src/features/externalTools/externalToolsConfig.js';
+    const subscribers = [];
+    export const subscribeExternalTools = ({ onChange, onError }) => {
+      if (window.externalToolsReadError) {
+        onError?.({ code: 'EXTERNAL_TOOLS_READ_FAILED', message: 'อ่านการตั้งค่าไม่สำเร็จ' });
+      } else {
+        const config = window.externalToolsConfig ?? DEFAULT_EXTERNAL_TOOLS_CONFIG;
+        const version = { exists: Boolean(window.externalToolsConfig), revision: window.externalToolsRevision ?? null };
+        onChange(config, { source: window.externalToolsConfig ? 'firestore' : 'default', ready: true, version });
+        subscribers.push(onChange);
+      }
+      return () => {};
+    };
+    export const saveExternalToolsConfig = async (config, user, expectedVersion) => {
+      const currentVersion = { exists: Boolean(window.externalToolsConfig), revision: window.externalToolsRevision ?? null };
+      if (currentVersion.exists !== expectedVersion?.exists || currentVersion.revision !== expectedVersion?.revision) {
+        throw { code: 'EXTERNAL_TOOLS_CONFLICT', message: 'มี Admin อีกเครื่องบันทึกการตั้งค่าใหม่แล้ว' };
+      }
+      window.externalToolsWrites.push(config);
+      window.externalToolsConfig = config;
+      const version = { exists: true, revision: 'revision-' + window.externalToolsWrites.length };
+      window.externalToolsRevision = version.revision;
+      subscribers.forEach((subscriber) => subscriber(config, { source: 'firestore', ready: true, version }));
+      return { config, version };
     };
   `);
   await mockModule(page, '/src/services/firebaseScans.js', `

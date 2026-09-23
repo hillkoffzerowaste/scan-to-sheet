@@ -21,6 +21,8 @@ function StatusBar({ activeTab, isSignedIn, totalTodayCount, scanQueueSnapshot, 
         ? 'รายงาน'
         : activeTab === 'staff'
           ? 'พนักงาน'
+          : activeTab === 'external-tools-settings'
+            ? 'ตั้งค่าเครื่องมือภายนอก'
           : 'แพ็กสินค้า';
 
   return (

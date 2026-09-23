@@ -130,27 +130,27 @@
   --ease-bounce: cubic-bezier(0.34, 1.35, 0.64, 1);
   --dur-press: 0.12s;
   --dur-ui: 0.18s;
-  /* Classic Windows wireframe palette. Keep it separate from the legacy Modern Workspace
+  /* Modern Windows wireframe palette. Keep it separate from the legacy Modern Workspace
      tokens so the operational shell can change visual language without changing data states. */
-  --wire-window: #c0c0c0;
-  --wire-face: #d4d0c8;
+  --wire-window: #e9eef4;
+  --wire-face: #dfe6ee;
   --wire-paper: #ffffff;
-  --wire-titlebar: #000080;
+  --wire-titlebar: #224f80;
   --wire-titlebar-text: #ffffff;
-  --wire-text: #000000;
-  --wire-muted: #404040;
-  --wire-line: #808080;
-  --wire-line-dark: #404040;
-  --wire-control-line: #404040;
+  --wire-text: #17212b;
+  --wire-muted: #425466;
+  --wire-line: #9eacba;
+  --wire-line-dark: #657789;
+  --wire-control-line: #60758a;
   --wire-light: #ffffff;
-  --wire-selection: #000080;
+  --wire-selection: #255f9e;
   --wire-selection-text: #ffffff;
-  --wire-focus: #000080;
-  --wire-success: #006400;
-  --wire-warning: #805000;
-  --wire-danger: #800000;
-  --wire-info: #000080;
-  --wire-radius: 0px;
+  --wire-focus: #1c5d9d;
+  --wire-success: #176b42;
+  --wire-warning: #815500;
+  --wire-danger: #8f2d2d;
+  --wire-info: #245b8e;
+  --wire-radius: 4px;
   /* Paper tokens. Deliberately absent from the dark block: a printed roster is always ink on
      white, so printing from dark mode must not carry the dark surfaces onto the page. */
   --print-paper: #ffffff;
@@ -238,25 +238,25 @@
   --glow-accent: 0 2px 14px rgba(255,210,63,0.35);
   --glow-coral: 0 2px 14px rgba(239,108,74,0.42);
   --glow-info: 0 2px 14px rgba(93,173,226,0.38);
-  --wire-window: #3b3b3b;
-  --wire-face: #5a5a5a;
-  --wire-paper: #202020;
-  --wire-titlebar: #000080;
+  --wire-window: #18212b;
+  --wire-face: #263342;
+  --wire-paper: #111820;
+  --wire-titlebar: #1b4f83;
   --wire-titlebar-text: #ffffff;
-  --wire-text: #ffffff;
-  --wire-muted: #e0e0e0;
-  --wire-line: #8c8c8c;
-  --wire-line-dark: #d0d0d0;
-  --wire-control-line: #d0d0d0;
-  --wire-light: #f5f5f5;
-  --wire-selection: #000080;
+  --wire-text: #f2f6fa;
+  --wire-muted: #c3cfda;
+  --wire-line: #566777;
+  --wire-line-dark: #a1b1c0;
+  --wire-control-line: #b2c0cc;
+  --wire-light: #eef3f7;
+  --wire-selection: #2f6fbb;
   --wire-selection-text: #ffffff;
-  --wire-focus: #ffffff;
-  --wire-success: #7cf0a0;
-  --wire-warning: #ffd080;
-  --wire-danger: #ff9090;
-  --wire-info: #a0d0ff;
-  --wire-radius: 0px;
+  --wire-focus: #c5ddf7;
+  --wire-success: #80d8a6;
+  --wire-warning: #ffd18a;
+  --wire-danger: #ff9f9f;
+  --wire-info: #9fd0ff;
+  --wire-radius: 4px;
 }
 
 * {
@@ -5922,12 +5922,12 @@ tbody tr:hover {
   .win-shell .wms-search-field { margin-left: 0; }
 }
 
-/* ── Classic Windows wireframe shell ─────────────────────────────────────────
-   This is intentionally utilitarian: square controls, dense information, visible borders,
-   and a small system palette. It replaces decorative WMS treatment at the shell boundary
+/* ── Modern Windows wireframe shell ──────────────────────────────────────────
+   This stays utilitarian: compact controls, visible borders, restrained radii,
+   and a clean system palette. It replaces decorative WMS treatment at the shell boundary
    while leaving the operational DOM, scan flow, and existing component contracts intact. */
 .wireframe-shell {
-  font-family: Tahoma, "Segoe UI", "Noto Sans Thai", sans-serif;
+  font-family: "Segoe UI", Tahoma, "Noto Sans Thai", sans-serif;
   color: var(--wire-text);
   background: var(--wire-window);
 }
@@ -5957,7 +5957,7 @@ tbody tr:hover {
 
 .wireframe-shell .win-titlebar .win-app-name {
   color: var(--wire-titlebar-text);
-  font-family: Tahoma, "Segoe UI", sans-serif;
+  font-family: "Segoe UI", Tahoma, "Noto Sans Thai", sans-serif;
   font-size: var(--ui-sm);
   font-weight: 700;
   letter-spacing: 0;
@@ -6021,6 +6021,18 @@ tbody tr:hover {
 
 .wireframe-shell .win-nav-group {
   padding-block: 2px;
+}
+
+.wireframe-shell .win-nav-subgroup {
+  display: grid;
+  gap: 2px;
+}
+
+.wireframe-shell .win-nav-subheading {
+  margin: 3px 7px 1px;
+  color: var(--wire-muted);
+  font-size: var(--ui-xs);
+  font-weight: 600;
 }
 
 .wireframe-shell .win-nav-heading {
@@ -6110,7 +6122,7 @@ tbody tr:hover {
   border-top: 1px solid var(--wire-line-dark);
   background: var(--wire-face);
   color: var(--wire-text);
-  font-family: Tahoma, "Segoe UI", sans-serif;
+  font-family: "Segoe UI", Tahoma, "Noto Sans Thai", sans-serif;
   font-size: var(--ui-xs);
 }
 
@@ -6452,7 +6464,7 @@ tbody tr:hover {
 .wireframe-shell textarea:focus-visible,
 .wireframe-shell button:focus-visible,
 .wireframe-shell summary:focus-visible {
-  outline: 1px dotted var(--wire-focus);
+  outline: 2px solid var(--wire-focus);
   outline-offset: 1px;
 }
 
@@ -6608,4 +6620,141 @@ tbody tr:hover {
   background: var(--wire-paper);
   color: var(--wire-text);
   box-shadow: var(--shadow-modal);
+}
+
+/* Settings uses the same compact form language as the workspaces, but keeps each row easy to
+   scan so an Admin can maintain links without editing source code. */
+.wireframe-shell .external-tools-settings {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  color: var(--wire-text);
+}
+
+.wireframe-shell .external-tools-settings-header,
+.wireframe-shell .external-tools-group-header,
+.wireframe-shell .external-tools-settings-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.wireframe-shell .external-tools-settings-header {
+  padding: 10px;
+  border: 1px solid var(--wire-line-dark);
+  border-radius: var(--wire-radius);
+  background: var(--wire-paper);
+}
+
+.wireframe-shell .external-tools-settings-header h1 {
+  margin: 0;
+  color: var(--wire-text);
+  font-size: 18px;
+}
+
+.wireframe-shell .external-tools-settings-header p,
+.wireframe-shell .external-tools-settings-notice,
+.wireframe-shell .external-tools-settings-actions {
+  margin: 0;
+  color: var(--wire-muted);
+  font-size: var(--ui-xs);
+}
+
+.wireframe-shell .external-tools-settings-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--wire-line);
+  border-radius: var(--wire-radius);
+  background: var(--wire-face);
+}
+
+.wireframe-shell .external-tools-settings-notice.error { border-color: var(--wire-danger); color: var(--wire-danger); }
+.wireframe-shell .external-tools-settings-notice.success { border-color: var(--wire-success); color: var(--wire-success); }
+.wireframe-shell .external-tools-settings-notice p { margin: 0; }
+
+.wireframe-shell .external-tools-groups,
+.wireframe-shell .external-tools-group,
+.wireframe-shell .external-tools-links {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.wireframe-shell .external-tools-groups { gap: 12px; }
+
+.wireframe-shell .external-tools-group {
+  padding: 10px;
+  border: 1px solid var(--wire-line-dark);
+  border-radius: var(--wire-radius);
+  background: var(--wire-paper);
+}
+
+.wireframe-shell .external-tools-field {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.wireframe-shell .external-tools-field label {
+  color: var(--wire-muted);
+  font-size: var(--ui-xs);
+}
+
+.wireframe-shell .external-tools-field input {
+  width: 100%;
+  min-width: 0;
+  min-height: var(--control-height);
+  padding: 7px 8px;
+  border: 1px solid var(--wire-control-line);
+  border-radius: var(--wire-radius);
+  background: var(--wire-paper);
+  color: var(--wire-text);
+  font-size: var(--ui-xs);
+}
+
+.wireframe-shell .external-tools-link {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto;
+  align-items: end;
+  gap: 8px;
+  min-width: 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--wire-line);
+}
+
+.wireframe-shell .external-tools-delete,
+.wireframe-shell .external-tools-delete-link,
+.wireframe-shell .external-tools-add-link,
+.wireframe-shell .external-tools-settings-actions > button,
+.wireframe-shell .external-tools-save {
+  display: inline-flex;
+  width: auto;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.wireframe-shell .external-tools-delete,
+.wireframe-shell .external-tools-delete-link { color: var(--wire-danger); }
+
+.wireframe-shell .external-tools-settings :focus-visible {
+  outline: 2px solid var(--wire-focus);
+  outline-offset: 1px;
+}
+
+@media (max-width: 900px) {
+  .wireframe-shell .external-tools-settings-header,
+  .wireframe-shell .external-tools-group-header,
+  .wireframe-shell .external-tools-settings-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .wireframe-shell .external-tools-link {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }

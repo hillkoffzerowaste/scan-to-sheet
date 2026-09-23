@@ -68,6 +68,21 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /staffSettings/externalTools {
+      allow read: if isOperationalStaff();
+      allow create, update: if isStaffAdmin()
+        && request.resource.data.keys().hasOnly(['groups', 'revision', 'updatedAt', 'updatedByUid'])
+        && request.resource.data.keys().hasAll(['groups', 'revision', 'updatedAt', 'updatedByUid'])
+        && request.resource.data.groups is list
+        && request.resource.data.groups.size() <= 10
+        && request.resource.data.revision is string
+        && request.resource.data.revision.size() > 0
+        && request.resource.data.revision.size() <= 80
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.updatedByUid == request.auth.uid;
+      allow delete: if false;
+    }
+
     match /staffSettings/packingRoomNotice {
       allow read: if isOperationalStaff();
       allow create, update: if isStaffAdmin()
