@@ -152,9 +152,17 @@
   --wire-sidebar-hover: #343e49;
   --wire-sidebar-active: #1f6bc5;
   --wire-success: #176b42;
+  --wire-success-bg: #e9f5ee;
+  --wire-success-line: #548e70;
   --wire-warning: #815500;
+  --wire-warning-bg: #fff4dc;
+  --wire-warning-line: #a46d19;
   --wire-danger: #8f2d2d;
+  --wire-danger-bg: #fbe9e8;
+  --wire-danger-line: #c26f6f;
   --wire-info: #245b8e;
+  --wire-info-bg: #eaf3fa;
+  --wire-info-line: #5d8ead;
   --wire-radius: 6px;
   /* Paper tokens. Deliberately absent from the dark block: a printed roster is always ink on
      white, so printing from dark mode must not carry the dark surfaces onto the page. */
@@ -263,9 +271,17 @@
   --wire-sidebar-hover: #28323d;
   --wire-sidebar-active: #256bb2;
   --wire-success: #62d08f;
+  --wire-success-bg: #1d3829;
+  --wire-success-line: #4f9f70;
   --wire-warning: #f3c36c;
+  --wire-warning-bg: #43361f;
+  --wire-warning-line: #b8934c;
   --wire-danger: #ff9696;
+  --wire-danger-bg: #45272b;
+  --wire-danger-line: #c66a6a;
   --wire-info: #87c7f5;
+  --wire-info-bg: #20394c;
+  --wire-info-line: #6296c2;
   --wire-radius: 6px;
 }
 
@@ -6786,4 +6802,223 @@ tbody tr:hover {
   .wireframe-shell .external-tools-link {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+/* Semantic status palette for every operational surface in the Windows shell. */
+.wireframe-shell .win-statusbar-item {
+  color: var(--wire-text);
+}
+
+.wireframe-shell .win-statusbar-item b {
+  color: inherit;
+}
+
+.wireframe-shell .win-statusbar-queue.ready,
+.wireframe-shell .win-statusbar-connection.online,
+.wireframe-shell .scan-queue-status.ready {
+  color: var(--wire-success);
+}
+
+.wireframe-shell .win-statusbar-queue.pending,
+.wireframe-shell .win-statusbar-connection.offline,
+.wireframe-shell .scan-queue-status.pending {
+  color: var(--wire-warning);
+}
+
+.wireframe-shell .win-statusbar-alert,
+.wireframe-shell .win-statusbar-alert b,
+.wireframe-shell .scan-queue-status.error {
+  color: var(--wire-danger);
+}
+
+.wireframe-shell .win-statusbar-remote {
+  color: var(--wire-info);
+}
+
+.wireframe-shell .scan-queue-status.idle {
+  color: var(--wire-muted);
+}
+
+.wireframe-shell .status-banner.success,
+.wireframe-shell .scan-popup-feedback.success,
+.wireframe-shell .camera-message.success,
+.wireframe-shell .marketplace-upload-result.success,
+.wireframe-shell .missing-result-card.success,
+.wireframe-shell .staff-status.status-working,
+.wireframe-shell .drive-card.matched,
+.wireframe-shell .external-tools-settings-notice.success,
+.wireframe-shell .wms-status-badge.success,
+.wireframe-shell .status-badge.success {
+  border-color: var(--wire-success-line);
+  background: var(--wire-success-bg);
+  color: var(--wire-success);
+}
+
+.wireframe-shell .status-banner.success span,
+.wireframe-shell .scan-popup-feedback.success span,
+.wireframe-shell .missing-result-card.success p {
+  color: var(--wire-text);
+}
+
+.wireframe-shell .status-banner.duplicate,
+.wireframe-shell .status-banner.ignored,
+.wireframe-shell .status-banner.warning,
+.wireframe-shell .scan-popup-feedback.duplicate,
+.wireframe-shell .scan-popup-feedback.ignored,
+.wireframe-shell .scan-popup-feedback.warning,
+.wireframe-shell .camera-message.duplicate,
+.wireframe-shell .camera-message.ignored,
+.wireframe-shell .marketplace-upload-result.warning,
+.wireframe-shell .missing-result-card.warning,
+.wireframe-shell .staff-status.status-leave,
+.wireframe-shell .staff-status.status-outside,
+.wireframe-shell .staff-incomplete,
+.wireframe-shell .staff-message,
+.wireframe-shell .duty-badge.changed,
+.wireframe-shell .drive-card.muted,
+.wireframe-shell .issue-bar.active,
+.wireframe-shell .any-format-warning,
+.wireframe-shell .wms-status-badge.warning,
+.wireframe-shell .status-badge.pending,
+.wireframe-shell .status-badge.รอแพ็ค,
+.wireframe-shell .status-badge.duplicate,
+.wireframe-shell .status-badge.ignored,
+.wireframe-shell .external-tools-settings-notice.warning {
+  border-color: var(--wire-warning-line);
+  background: var(--wire-warning-bg);
+  color: var(--wire-warning);
+}
+
+.wireframe-shell .status-banner.duplicate span,
+.wireframe-shell .status-banner.ignored span,
+.wireframe-shell .status-banner.warning span,
+.wireframe-shell .scan-popup-feedback.duplicate span,
+.wireframe-shell .scan-popup-feedback.ignored span,
+.wireframe-shell .scan-popup-feedback.warning span,
+.wireframe-shell .missing-result-card.warning p,
+.wireframe-shell .staff-message button {
+  color: var(--wire-text);
+}
+
+.wireframe-shell .status-banner.error,
+.wireframe-shell .scan-popup-feedback.error,
+.wireframe-shell .camera-message.error,
+.wireframe-shell .marketplace-upload-result.error,
+.wireframe-shell .missing-result-card.danger,
+.wireframe-shell .duty-badge.issue,
+.wireframe-shell .duty-alert,
+.wireframe-shell .marketplace-queue-error,
+.wireframe-shell .external-tools-settings-notice.error,
+.wireframe-shell .status-badge.cancelled,
+.wireframe-shell .status-badge.damaged,
+.wireframe-shell .status-badge.error {
+  border-color: var(--wire-danger-line);
+  background: var(--wire-danger-bg);
+  color: var(--wire-danger);
+}
+
+.wireframe-shell .status-banner.error span,
+.wireframe-shell .scan-popup-feedback.error span,
+.wireframe-shell .missing-result-card.danger p,
+.wireframe-shell .duty-alert p {
+  color: var(--wire-text);
+}
+
+.wireframe-shell .status-banner.info,
+.wireframe-shell .scan-popup-feedback.info,
+.wireframe-shell .wms-status-badge.info,
+.wireframe-shell .status-badge.cross-day,
+.wireframe-shell .wms-source-badge.drive,
+.wireframe-shell .drive-card.total {
+  border-color: var(--wire-info-line);
+  background: var(--wire-info-bg);
+  color: var(--wire-info);
+}
+
+.wireframe-shell .status-banner.info span,
+.wireframe-shell .scan-popup-feedback.info span {
+  color: var(--wire-text);
+}
+
+.wireframe-shell .wms-source-badge.packer {
+  border-color: var(--wire-focus);
+  background: var(--wire-selection);
+  color: var(--wire-selection-text);
+}
+
+.wireframe-shell .wms-text-warning,
+.wireframe-shell .wms-kpi-icon.warning,
+.wireframe-shell .wms-status-badge.warning,
+.wireframe-shell .missing-result-card.warning .missing-result-card-header,
+.wireframe-shell .duty-badge.changed,
+.wireframe-shell .drive-card.muted strong,
+.wireframe-shell .drive-card.muted svg {
+  color: var(--wire-warning);
+}
+
+.wireframe-shell .wms-status-badge.danger,
+.wireframe-shell .wms-kpi-icon.danger,
+.wireframe-shell .missing-result-card.danger .missing-result-card-header,
+.wireframe-shell .drive-card.danger strong,
+.wireframe-shell .drive-card.danger svg {
+  color: var(--wire-danger);
+}
+
+.wireframe-shell .wms-status-badge.info,
+.wireframe-shell .wms-kpi-icon.info,
+.wireframe-shell .drive-card.total strong,
+.wireframe-shell .drive-card.total svg {
+  color: var(--wire-info);
+}
+
+.wireframe-shell .wms-status-badge.success,
+.wireframe-shell .wms-kpi-icon.success,
+.wireframe-shell .wms-text-success,
+.wireframe-shell .wms-success-icon,
+.wireframe-shell .missing-result-card.success .missing-result-card-header,
+.wireframe-shell .drive-card.matched strong,
+.wireframe-shell .drive-card.matched svg {
+  color: var(--wire-success);
+}
+
+.wireframe-shell .wms-connection-list .wms-text-muted,
+.wireframe-shell .staff-status.status-off,
+.wireframe-shell .missing-result-card.muted,
+.wireframe-shell .duty-badge.adhoc {
+  color: var(--wire-muted);
+}
+
+.wireframe-shell .wms-connection-list .wms-text-warning,
+.wireframe-shell .wms-connection-list .wms-text-success {
+  background: transparent;
+}
+
+.wireframe-shell .win-nav-badge {
+  border-color: var(--wire-danger-line);
+  background: var(--wire-danger-bg);
+  color: var(--wire-danger);
+}
+
+.wireframe-shell .issue-bar.active button,
+.wireframe-shell .issue-bar button.active {
+  border-color: var(--wire-warning-line);
+  background: var(--wire-warning-bg);
+  color: var(--wire-warning);
+}
+
+.wireframe-shell .drive-mode-label,
+.wireframe-shell .workflow-guide.drive-workflow-guide {
+  border-color: var(--wire-info-line);
+  background: var(--wire-info-bg);
+  color: var(--wire-info);
+}
+
+.wireframe-shell .workflow-drive.camera-panel .camera-stage,
+.wireframe-shell .workflow-drive.scan-form .scan-input-row {
+  border-color: var(--wire-info);
+}
+
+.wireframe-shell .external-tools-settings-notice.error,
+.wireframe-shell .external-tools-settings-notice.success {
+  border-style: solid;
 }

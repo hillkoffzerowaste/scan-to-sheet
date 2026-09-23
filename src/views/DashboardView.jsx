@@ -245,8 +245,8 @@ function DashboardView({
                 </div>
                 <div className="wms-connection-list">
                   <div><span>Firebase / Firestore</span><strong className="wms-text-success">เชื่อมต่อแล้ว</strong></div>
-                  <div><span>Google Sheet</span><strong className={isSheetConnected ? 'wms-text-success' : 'wms-text-muted'}>{isSheetConnected ? 'พร้อมใช้งาน' : 'ไม่อยู่ใน session'}</strong></div>
-                  <div><span>คิวเขียนข้อมูล</span><strong>{pendingQueue > 0 ? 'กำลังดำเนินการ' : 'ว่าง'}</strong></div>
+                  <div><span>Google Sheet</span><strong className={isSheetConnected ? 'wms-text-success' : 'wms-text-warning'}>{isSheetConnected ? 'พร้อมใช้งาน' : 'ไม่อยู่ใน session'}</strong></div>
+                  <div><span>คิวเขียนข้อมูล</span><strong className={pendingQueue > 0 ? 'wms-text-warning' : 'wms-text-success'}>{pendingQueue > 0 ? 'กำลังดำเนินการ' : 'ว่าง'}</strong></div>
                 </div>
                 <button className="ghost-button wms-full-button" type="button" onClick={() => switchTab('drive')}>
                   <Truck size={15} aria-hidden="true" /> ตรวจงานรับเข้า Drive <ArrowRight size={14} aria-hidden="true" />

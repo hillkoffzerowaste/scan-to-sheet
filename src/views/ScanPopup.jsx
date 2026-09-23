@@ -44,6 +44,14 @@ function ScanPopup({
   status,
   stopCamera,
 }) {
+  const scanQueueTone = scanQueueSnapshot?.lastResult?.status === 'error'
+    ? 'error'
+    : scanQueueSnapshot?.processing || scanQueueSnapshot?.pending?.length
+      ? 'pending'
+      : isScanReady
+        ? 'ready'
+        : 'idle';
+
   return (
         <div
           className={`scan-popup-overlay ${activeTab === 'packer' ? `with-qr-panels qr-layout-${qrLayout}` : ''}`}
@@ -203,7 +211,7 @@ function ScanPopup({
                     <span>{activeTab === 'drive' ? 'รับเข้า Drive' : 'บันทึกแพ็ก'}</span>
                   </button>
                 </div>
-                <p className="scan-queue-status" role="status" aria-live="polite">
+                <p className={`scan-queue-status ${scanQueueTone}`} role="status" aria-live="polite">
                   {scanQueueStatusText}
                 </p>
               </form>

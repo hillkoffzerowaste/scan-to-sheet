@@ -32,6 +32,19 @@ Modern Windows workspace ใช้กับ Packer/Admin รายงาน แ�
 | `--wire-muted` | `#536170` | `#b7c3cf` | label และข้อความรอง |
 | `--wire-radius` | `6px` | `6px` | มุมทุก component ใน shell |
 
+### สถานะใน Modern Windows workspace
+
+ใช้ semantic color ชุดเดียวกันทุกหน้าและทุก component โดยแยก text, background และ line เพื่อให้สีสถานะยังอ่านได้ทั้ง light/dark และไม่ใช้สีเป็นของตกแต่ง
+
+| ความหมาย | text | background | line | ตัวอย่าง |
+|---|---|---|---|---|
+| `success` | `--wire-success` | `--wire-success-bg` | `--wire-success-line` | สำเร็จ, เชื่อมต่อแล้ว, จับคู่แล้ว |
+| `warning` | `--wire-warning` | `--wire-warning-bg` | `--wire-warning-line` | รอแพ็ค, รอคิว, ต้องตรวจ, duplicate |
+| `danger` | `--wire-danger` | `--wire-danger-bg` | `--wire-danger-line` | ผิดพลาด, ตกหล่น, บันทึกไม่สำเร็จ |
+| `info` | `--wire-info` | `--wire-info-bg` | `--wire-info-line` | รับเข้า Drive, ข้ามวัน, ข้อมูลประกอบ |
+
+การใช้งานหลักที่ต้องใช้ mapping เดียวกันคือ topbar/status bar, status banner, scan/camera feedback, queue, table badge, dashboard KPI/connection, Drive summary, Staff alert และ External Tools notice
+
 ตาราง token กลุ่ม Modern/teal ด้านล่างยังคงไว้เพื่อ compatibility และประวัติการย้ายระบบ แต่ห้ามใช้เป็นค่าใหม่ใน `.wireframe-shell`
 
 ### รีโมทบนมือถือ (`/remote`) — ข้อยกเว้นเดียวของ desktop-only

@@ -5,6 +5,7 @@ function StatusBar({ activeTab, isSignedIn, totalTodayCount, scanQueueSnapshot, 
   // pending เป็น array ของงานที่รอ ส่วน processing เป็นงานที่กำลังเขียนอยู่ (หรือ null)
   const pending = (scanQueueSnapshot?.pending?.length ?? 0) + (scanQueueSnapshot?.processing ? 1 : 0);
   const failed = scanQueueSnapshot?.failed ?? 0;
+  const queueTone = failed > 0 ? 'failed' : pending > 0 ? 'pending' : 'ready';
   // การเปลี่ยนที่สั่งมาจากรีโมทบนมือถือบอกที่นี่เท่านั้น เพื่อไม่ให้ไปขัดจังหวะคนที่กำลังสแกน
   const remoteAt = remoteControlHint
     ? new Date(remoteControlHint.at).toLocaleTimeString('th-TH', {
@@ -27,17 +28,17 @@ function StatusBar({ activeTab, isSignedIn, totalTodayCount, scanQueueSnapshot, 
 
   return (
     <div className="win-statusbar">
-      <span>โหมด <b>{modeLabel}</b></span>
-      <span>สแกนวันนี้ <b>{totalTodayCount}</b></span>
-      <span>คิวรอเขียนชีต <b>{pending}</b></span>
-      {failed > 0 && <span className="win-statusbar-alert">เขียนไม่สำเร็จ <b>{failed}</b></span>}
+      <span className="win-statusbar-item">โหมด <b>{modeLabel}</b></span>
+      <span className="win-statusbar-item">สแกนวันนี้ <b>{totalTodayCount}</b></span>
+      <span className={`win-statusbar-item win-statusbar-queue ${queueTone}`}>คิวรอเขียนชีต <b>{pending}</b></span>
+      {failed > 0 && <span className="win-statusbar-item win-statusbar-alert">เขียนไม่สำเร็จ <b>{failed}</b></span>}
       {remoteControlHint && (
-        <span>จากมือถือ <b>{remoteControlHint.courier}</b> {remoteAt}</span>
+        <span className="win-statusbar-item win-statusbar-remote">จากมือถือ <b>{remoteControlHint.courier}</b> {remoteAt}</span>
       )}
       <span className="win-statusbar-right">
-        <span>Packer: <b>{selectedPacker}</b></span>
-        <span>Google Sheet: <b>{isSignedIn ? 'เชื่อมต่อแล้ว' : 'ยังไม่เชื่อม'}</b></span>
-        <span>{today?.date}</span>
+        <span className="win-statusbar-item">Packer: <b>{selectedPacker}</b></span>
+        <span className={`win-statusbar-item win-statusbar-connection ${isSignedIn ? 'online' : 'offline'}`}>Google Sheet: <b>{isSignedIn ? 'เชื่อมต่อแล้ว' : 'ยังไม่เชื่อม'}</b></span>
+        <span className="win-statusbar-item">{today?.date}</span>
       </span>
     </div>
   );

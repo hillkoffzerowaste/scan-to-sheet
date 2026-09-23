@@ -115,6 +115,14 @@ function WorkflowView({
   totalTodayCount,
   uploadMarketplaceFiles,
 }) {
+  const scanQueueTone = scanQueueSnapshot?.lastResult?.status === 'error'
+    ? 'error'
+    : scanQueueSnapshot?.processing || scanQueueSnapshot?.pending?.length
+      ? 'pending'
+      : isScanReady
+        ? 'ready'
+        : 'idle';
+
   return (
         <>
           <section className={`workspace-grid qr-layout-${qrLayout}`}>
@@ -356,7 +364,7 @@ function WorkflowView({
                   <span>{activeTab === 'drive' ? 'รับเข้า Drive' : 'บันทึกแพ็ก'}</span>
                 </button>
               </div>
-              <p className="scan-queue-status" role="status" aria-live="polite">
+              <p className={`scan-queue-status ${scanQueueTone}`} role="status" aria-live="polite">
                 {scanQueueStatusText}
               </p>
             </form>
