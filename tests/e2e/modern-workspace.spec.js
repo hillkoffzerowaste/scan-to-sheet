@@ -24,8 +24,22 @@ test('dashboard is the default workspace and signed-out users see an empty state
   await expect(page.getByTestId('dashboard-tab')).toHaveAttribute('aria-current', 'page');
   await expect(page.locator('.win-app-name')).toHaveText('HILLKOFF WMS');
   await expect(page.locator('#dashboard-title')).toHaveText('ศูนย์ควบคุมงาน');
-  await expect(page.locator('.wms-dashboard-login-state')).toContainText('เข้าสู่ระบบเพื่อดูข้อมูลจริง');
+  await expect(page.locator('.wms-dashboard-login-state')).toContainText('เข้าสู่ระบบด้วย Google จากแถบบน');
   await expect(page.getByTestId('google-sign-in')).toBeVisible();
+  await expect(page.locator('.wms-dashboard-login-state .secondary-button')).toHaveCount(0);
+  await expect(page.locator('.win-nav-icon').first()).toBeVisible();
+  for (const width of [1280, 1440, 1920]) {
+    await page.setViewportSize({ width, height: width === 1280 ? 720 : 900 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBe(0);
+    expect(await page.locator('.win-main').evaluate(el => el.scrollWidth - el.clientWidth)).toBe(0);
+    const copy = await page.locator('.wms-dashboard-login-copy').boundingBox();
+    expect(copy?.width ?? 0).toBeGreaterThan(300);
+  }
+  await page.getByTestId('packer-tab').click();
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await expect(page.locator('.workspace-qr-panel')).toHaveCSS('position', 'static');
+  await expect(page.locator('.workspace-qr-panel')).toHaveCSS('overflow', 'visible');
+  await expect(page.locator('.scan-queue-status')).toHaveCount(0);
 });
 
 test('dashboard uses the signed-in data surface and navigates to both workspaces', async ({ page }) => {
@@ -120,9 +134,21 @@ for (const theme of ['light', 'dark']) {
           await expect(page.locator('.report-badge')).toContainText('1 รายการ');
         }
         await audit(page, `${theme}/${width}/${tab}`);
+        if (tab === 'packer') {
+          const issueButtonsFit = await page.locator('.issue-bar button').evaluateAll((buttons) => (
+            buttons.every((button) => button.scrollWidth <= button.clientWidth + 1)
+          ));
+          expect(issueButtonsFit, `${theme}/${width}/packer issue buttons`).toBe(true);
+        }
         const clipped = await page.locator('.win-nav-label, .segmented-control button span, .scan-qr-card strong').evaluateAll(nodes => nodes.filter(el => el.checkVisibility() && el.scrollWidth > el.clientWidth + 1).map(el => el.textContent));
         expect(clipped).toEqual([]);
-        if (tab === 'packer') expect((await page.locator('#scan-input').boundingBox()).y).toBeLessThan(500);
+        if (tab === 'packer') {
+          expect((await page.locator('#scan-input').boundingBox()).y).toBeLessThan(500);
+          if (width === 1280) {
+            await expect(page.locator('.workspace-qr-panel')).toHaveCSS('position', 'static');
+            await page.screenshot({ path: testInfo.outputPath(`packer-1280-${theme}.png`) });
+          }
+        }
         if (width === 1440) await page.screenshot({ path: testInfo.outputPath(`${tab}-${theme}.png`) });
       }
       await page.locator('.staff-section-tabs').getByRole('button', { name: 'หน้าที่ประจำวัน', exact: true }).click();

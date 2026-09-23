@@ -139,13 +139,10 @@ function DashboardView({
       {!isSignedIn ? (
         <div className="wms-dashboard-login-state">
           <Database size={28} aria-hidden="true" />
-          <div>
+          <div className="wms-dashboard-login-copy">
             <strong>ศูนย์ควบคุมพร้อมใช้งาน</strong>
-            <p>เข้าสู่ระบบเพื่อดูข้อมูลจริงจาก Firestore และ Google Sheet</p>
+            <p>เข้าสู่ระบบด้วย Google จากแถบบนเพื่อดูข้อมูลจริงจาก Firestore และ Google Sheet</p>
           </div>
-          <button className="secondary-button" type="button" onClick={() => switchTab('packer')}>
-            ไปหน้าสแกน
-          </button>
         </div>
       ) : (
         <>

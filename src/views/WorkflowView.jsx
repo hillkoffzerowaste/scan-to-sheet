@@ -232,7 +232,7 @@ function WorkflowView({
               <p className="eyebrow">{activeTab === 'drive' ? 'รับเข้า Drive →' : 'ขนส่งที่เลือก'}</p>
               <h2>{selectedCourier}</h2>
               {activeTab === 'drive' && (
-                <span className="drive-mode-label">📥 รับเข้า Drive ก่อนส่งให้ Packer สแกนแพ็ก</span>
+                <span className="drive-mode-label"><Upload size={14} aria-hidden="true" /><span>รับเข้า Drive ก่อนส่งให้ Packer สแกนแพ็ก</span></span>
               )}
             </div>
             <div className="date-box">
@@ -286,7 +286,7 @@ function WorkflowView({
           {allowAnyTrackingFormat && (
             <div className="any-format-warning">
               <AlertTriangle size={16} />
-              <span>⚠️ ข้ามการตรวจรูปแบบ Tracking: เลขอะไรก็สแกนผ่าน</span>
+              <span>ข้ามการตรวจรูปแบบ Tracking: เลขที่สแกนจะผ่านโดยไม่ตรวจรูปแบบ</span>
             </div>
           )}
 
@@ -352,9 +352,11 @@ function WorkflowView({
                   <span>{activeTab === 'drive' ? 'รับเข้า Drive' : 'บันทึกแพ็ก'}</span>
                 </button>
               </div>
-              <p className={`scan-queue-status ${scanQueueTone}`} role="status" aria-live="polite">
-                {scanQueueStatusText}
-              </p>
+              {isScanReady && (
+                <p className={`scan-queue-status ${scanQueueTone}`} role="status" aria-live="polite">
+                  {scanQueueStatusText}
+                </p>
+              )}
             </form>
           )}
 

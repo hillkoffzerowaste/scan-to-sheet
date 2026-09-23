@@ -8,6 +8,7 @@ test('opens scanner controls in barcode gun mode by default', () => {
 });
 
 test('describes the scan readiness gate in Thai', () => {
+  assert.equal(getScanReadinessMessage(SCAN_READINESS.SIGNED_OUT), 'เข้าสู่ระบบด้วย Google ก่อนเริ่มสแกน');
   assert.equal(getScanReadinessMessage(SCAN_READINESS.CHECKING), 'กำลังตรวจสอบ session ก่อนเริ่มสแกน');
   assert.equal(getScanReadinessMessage(SCAN_READINESS.REAUTH_REQUIRED), 'ยังเริ่มสแกนไม่ได้ กรุณาออกจากระบบ แล้วเข้าสู่ระบบใหม่');
 });

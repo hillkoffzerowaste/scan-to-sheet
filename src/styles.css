@@ -4568,6 +4568,24 @@ tbody tr:hover {
 .win-shell .workspace-grid,
 .win-shell .scan-header { gap: var(--space-layout); }
 
+/* At 1280px, keep the scan controls wide and let the QR choices use a full row below them. */
+@media (min-width: 1200px) and (max-width: 1399px) {
+  .win-shell .workspace-grid {
+    grid-template-columns: minmax(220px, 260px) minmax(0, 1fr);
+  }
+
+  .win-shell .side-panel {
+    position: static;
+  }
+
+  .win-shell .workspace-qr-panel {
+    grid-column: 1 / -1;
+    position: static;
+    max-height: none;
+    overflow: visible;
+  }
+}
+
 /* QR ใช้ซ้ำจากชุดพิมพ์เดิมเพื่อให้สแกนจากหน้าจอได้โดยไม่ต้องพิมพ์กระดาษ */
 .scan-qr-panel {
   min-width: 0;
@@ -5518,6 +5536,11 @@ tbody tr:hover {
   color: var(--primary-strong);
 }
 
+.win-shell .wms-dashboard-login-copy {
+  flex: 1;
+  min-width: 0;
+}
+
 .win-shell .wms-dashboard-login-state strong,
 .win-shell .wms-dashboard-login-state p {
   margin: 0;
@@ -6054,7 +6077,6 @@ tbody tr:hover {
   color: var(--wire-sidebar-muted);
 }
 
-.wireframe-shell:not(.collapsed) .win-nav-icon,
 .wireframe-shell:not(.collapsed) .win-nav-external {
   display: none;
 }
@@ -6932,11 +6954,30 @@ tbody tr:hover {
   color: var(--wire-warning);
 }
 
+.wireframe-shell .issue-bar {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.wireframe-shell .issue-bar .packer-control {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
 .wireframe-shell .drive-mode-label,
 .wireframe-shell .workflow-guide.drive-workflow-guide {
   border-color: var(--wire-info-line);
   background: var(--wire-info-bg);
   color: var(--wire-info);
+}
+
+.wireframe-shell .drive-mode-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.wireframe-shell .drive-mode-label > svg {
+  flex: none;
 }
 
 .wireframe-shell .workflow-drive.camera-panel .camera-stage,

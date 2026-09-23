@@ -14,5 +14,5 @@ export function getScanReadinessMessage(readiness) {
   if (readiness === SCAN_READINESS.REAUTH_REQUIRED) {
     return 'ยังเริ่มสแกนไม่ได้ กรุณาออกจากระบบ แล้วเข้าสู่ระบบใหม่';
   }
-  return 'Login with Google ก่อนเริ่มสแกน';
+  return 'เข้าสู่ระบบด้วย Google ก่อนเริ่มสแกน';
 }
