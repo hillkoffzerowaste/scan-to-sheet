@@ -38,7 +38,6 @@ import {
   getScanReportGoogle,
   getTodayRowsGoogle,
   findMarketplaceOrderGoogle,
-  listMarketplaceOrdersGoogle,
   listDatesBetween,
   listDatesInMonth,
   loadGoogleConfig,
@@ -72,7 +71,6 @@ import {
   checkMissingOrdersFirestore,
   fetchTodaySummaryFirestore,
   getDriveRowsFirestore,
-  getOrdersByNormalizedCodes,
   getScanReportFirestore,
   getTodayRowsFirestore,
   markSheetSyncWriting,
@@ -99,10 +97,6 @@ import { createScanQueue } from './services/scanQueue.js';
 import { hasDeploymentUpdate } from './services/deploymentUpdate.js';
 import { getScanPopupCourierOptions, getScanPopupStatusMeta } from './services/scanPopup.js';
 import { getScanQrAnnouncement, parseScanQrCommand, resolveScanQrCommand, resolveScanQrName } from './services/scanQrCommand.js';
-import {
-  MARKETPLACE_QUEUE_LIMIT,
-  mergeMarketplaceQueueOrders,
-} from './services/marketplaceQueue.js';
 import { DEFAULT_SCAN_METHOD, getScanReadinessMessage, SCAN_READINESS } from './services/scanPreferences.js';
 import {
   DEFAULT_QR_LAYOUT_PREFERENCES,
@@ -372,10 +366,6 @@ function App() {
   const [marketplaceUploadBusy, setMarketplaceUploadBusy] = useState(false);
   const [marketplaceUploadResult, setMarketplaceUploadResult] = useState(null);
   const [marketplaceFilterPlatform, setMarketplaceFilterPlatform] = useState('all');
-  const [marketplaceQueueRows, setMarketplaceQueueRows] = useState([]);
-  const [marketplaceQueueBusy, setMarketplaceQueueBusy] = useState(false);
-  const [marketplaceQueueError, setMarketplaceQueueError] = useState('');
-  const [marketplaceQueueRefreshVersion, setMarketplaceQueueRefreshVersion] = useState(0);
   const marketplaceFileRef = useRef(null);
   const mainScanInputRef = useRef(null);
   const popupScanInputRef = useRef(null);
@@ -396,7 +386,6 @@ function App() {
   const sheetRecoveryRunningRef = useRef(false);
   const refreshRowsRequestRef = useRef(0);
   const sheetRecoveryNextAllowedAtRef = useRef(0);
-  const marketplaceQueueRequestRef = useRef(0);
 
   const isGoogleReady = isFirebaseConfigured || Boolean(GOOGLE_CLIENT_ID);
   const isSheetConnected = Boolean(token && config);
@@ -564,7 +553,6 @@ function App() {
       ), { sheetWrite: true });
       const limitedGroups = result.groups;
       const skippedCount = result.skipped;
-      setMarketplaceQueueRefreshVersion((version) => version + 1);
       const missingOrderDateCount = limitedGroups.filter((group) => !group.orderedAt).length;
       const untrackedNote = untrackedCount > 0
         ? ` (ข้าม ${untrackedCount} ออเดอร์ที่ยังไม่มีเลขพัสดุ)`
@@ -904,11 +892,6 @@ function App() {
       refreshAllCounts();
     }
   }, [selectedCourier, today.date, isSignedIn, activeTab]);
-
-  useEffect(() => {
-    if (activeTab !== 'packer') return;
-    void refreshMarketplaceQueue();
-  }, [activeTab, isSignedIn, token, config?.master?.id, marketplaceQueueRefreshVersion]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1423,43 +1406,6 @@ function App() {
     ));
   }
 
-  async function refreshMarketplaceQueue({ force = false, showError = false } = {}) {
-    if (!isSignedIn || !token || !config?.master?.id) {
-      setMarketplaceQueueRows([]);
-      setMarketplaceQueueError('');
-      return;
-    }
-
-    const requestId = ++marketplaceQueueRequestRef.current;
-    setMarketplaceQueueBusy(true);
-    setMarketplaceQueueError('');
-    try {
-      const catalogOrders = await listMarketplaceOrdersGoogle({
-        token,
-        config,
-        limit: MARKETPLACE_QUEUE_LIMIT,
-        force,
-      });
-      const firestoreOrders = canUseFirestorePrimary()
-        ? await getOrdersByNormalizedCodes({
-            codes: catalogOrders.map((order) => order.normalizedTrackingNo || order.trackingNo),
-            maxRows: MARKETPLACE_QUEUE_LIMIT,
-          })
-        : [];
-      if (requestId !== marketplaceQueueRequestRef.current) return;
-      setMarketplaceQueueRows(mergeMarketplaceQueueOrders(catalogOrders, firestoreOrders));
-    } catch (error) {
-      if (requestId !== marketplaceQueueRequestRef.current) return;
-      const message = userErrorMessage(error, 'โหลดออเดอร์จาก Store ไม่สำเร็จ กรุณาลองใหม่');
-      setMarketplaceQueueError(message);
-      if (showError) {
-        setStatus({ type: 'error', title: 'โหลดออเดอร์จาก Store ไม่สำเร็จ', message });
-      }
-    } finally {
-      if (requestId === marketplaceQueueRequestRef.current) setMarketplaceQueueBusy(false);
-    }
-  }
-
   function isGoogleAuthError(error) {
     const message = String(error?.message ?? '').toLowerCase();
     return (
@@ -1501,8 +1447,6 @@ function App() {
     setMissingResults(null);
     setMissingAlertBadge(0);
     setDriveTotalCount(0);
-    setMarketplaceQueueRows([]);
-    setMarketplaceQueueError('');
     setStatus({
       type: 'idle',
       title: 'ออกจากระบบแล้ว',
@@ -1557,7 +1501,6 @@ function App() {
             getTodayRowsGoogle({ token: t, config: c, courier: selectedCourier, date: getBangkokParts().date }),
           ).catch(() => []);
       setRecentRows(courierRows);
-      void refreshMarketplaceQueue({ force: true });
     } else {
       const driveRows = canUseFirestorePrimary()
         ? await getDriveRowsFirestore({ date: getBangkokParts().date }).catch(() => [])
@@ -2053,9 +1996,6 @@ function App() {
       }
       setToday({ date: result.date, time: result.time });
       setRecentRows(result.rows ?? []);
-      if (activeTab === 'packer') {
-        setMarketplaceQueueRefreshVersion((version) => version + 1);
-      }
 
       if (result.status === 'success' && isSignedIn) {
         setScanFlash(true);
@@ -2589,24 +2529,6 @@ function App() {
     } finally {
       setExternalToolsSaving(false);
     }
-  }
-
-  function selectMarketplaceOrderForPacking(order) {
-    const code = String(order?.normalizedTrackingNo || order?.trackingNo || '').trim();
-    if (!code) return;
-    setScanMethod('manual');
-    setScanRemark('');
-    updateScanValue(code);
-    const courierText = selectedCourier ? `ขนส่ง ${selectedCourier}` : 'ขนส่งที่เลือก';
-    const packerText = selectedPacker === PACKER_UNASSIGNED
-      ? 'กรุณาเลือก Packer ก่อนกดยืนยัน'
-      : `Packer ${selectedPacker}`;
-    setStatus({
-      type: 'success',
-      title: 'ดึงออเดอร์มาเช็คแล้ว',
-      message: `${code} พร้อมเช็คสินค้า ใช้${courierText} และ ${packerText}`,
-    });
-    window.setTimeout(() => focusScanInput({ force: true }), 0);
   }
 
   function switchTab(nextTab) {
@@ -3490,8 +3412,6 @@ function App() {
       {['packer', 'drive'].includes(activeTab) && (
         <WorkflowView
           onQrSelect={handleQrSelect}
-          onRefreshMarketplaceQueue={() => refreshMarketplaceQueue({ force: true, showError: true })}
-          onSelectMarketplaceOrder={selectMarketplaceOrderForPacking}
           activeTab={activeTab}
           addingCourier={addingCourier}
           allowAnyTrackingFormat={allowAnyTrackingFormat}
@@ -3524,9 +3444,6 @@ function App() {
           markSearchResultDamaged={markSearchResultDamaged}
           marketplaceFileRef={marketplaceFileRef}
           marketplaceFilterPlatform={marketplaceFilterPlatform}
-          marketplaceQueueBusy={marketplaceQueueBusy}
-          marketplaceQueueError={marketplaceQueueError}
-          marketplaceQueueRows={marketplaceQueueRows}
           marketplaceUploadBusy={marketplaceUploadBusy}
           marketplaceUploadResult={marketplaceUploadResult}
           missingBusy={missingBusy}

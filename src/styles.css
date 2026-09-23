@@ -5374,79 +5374,6 @@ tbody tr:hover {
 .qr-pdf-export .qr-print-card h3 { font-size: 20px; }
 .qr-pdf-export .qr-print-card p { font-size: 12px; }
 .qr-pdf-export .qr-print-card img { width: 94px; height: 94px; }
-
-/* Store catalog joined with the operational Admin/Packer state for the packing room. */
-.win-shell .marketplace-queue-panel {
-  display: grid;
-  gap: 8px;
-  margin-top: var(--space-layout);
-  padding: var(--space-layout);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
-  background: var(--surface-soft);
-}
-
-.win-shell .marketplace-queue-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-layout);
-}
-
-.win-shell .marketplace-queue-header h3,
-.win-shell .marketplace-queue-header p,
-.win-shell .marketplace-queue-help {
-  margin: 0;
-}
-
-.win-shell .marketplace-queue-header h3 {
-  font-size: var(--ui-md);
-  color: var(--text);
-}
-
-.win-shell .marketplace-queue-help,
-.win-shell .marketplace-queue-summary,
-.win-shell .marketplace-queue-action-label {
-  color: var(--muted);
-  font-size: var(--ui-xs);
-}
-
-.win-shell .marketplace-queue-summary {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px var(--space-layout);
-  font-weight: 700;
-}
-
-.win-shell .marketplace-queue-error {
-  padding: 8px;
-  border: 1px solid var(--danger-line);
-  border-radius: var(--radius-sm);
-  background: var(--danger-bg);
-  color: var(--danger);
-  font-size: var(--ui-xs);
-}
-
-.win-shell .marketplace-queue-table {
-  max-height: 300px;
-}
-
-.win-shell .marketplace-queue-table table {
-  min-width: 900px;
-}
-
-.win-shell .marketplace-item-cell {
-  max-width: 260px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.win-shell .marketplace-queue-table .table-action-button {
-  min-height: var(--control-height);
-  white-space: nowrap;
-}
-
 /* ── HILLKOFF WMS dashboard ────────────────────────────────────────────────────
    Dashboard และหน้าปฏิบัติงานใช้พื้นทึบ ขอบเดียว และ token กลางร่วมกัน เพื่อให้
    เปลี่ยนจากภาพรวมไปสแกน/รายงานได้โดยไม่เปลี่ยนภาษาภาพของโปรแกรม */
@@ -6196,7 +6123,6 @@ tbody tr:hover {
 .wireframe-shell .secondary-panel,
 .wireframe-shell .standards-panel,
 .wireframe-shell .marketplace-upload-panel,
-.wireframe-shell .marketplace-queue-panel,
 .wireframe-shell .drive-card,
 .wireframe-shell .staff-card {
   border: 1px solid var(--wire-line);
