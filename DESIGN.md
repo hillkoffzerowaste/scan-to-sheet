@@ -1,20 +1,36 @@
-# DESIGN.md — Modern Workspace
+# DESIGN.md — Classic Windows Wireframe
 
-ระบบดีไซน์ของ scan-to-sheet เป็นแหล่งอ้างอิงเดียวของสี สเกล component และเกณฑ์ตรวจ UI ทุกค่าต้องประกาศเป็น CSS variable ใน `src/styles.css` ไม่ hardcode ที่จุดใช้งาน
+ระบบดีไซน์ของ scan-to-sheet เป็นแหล่งอ้างอิงเดียวของสี สเกล component และเกณฑ์ตรวจ UI ทุกค่าต้องประกาศเป็น CSS variable ใน `src/styles.css` ไม่ hardcode ที่จุดใช้งาน ปัจจุบัน shell desktop ใช้ขอบเขต `.wireframe-shell` และ token กลุ่ม `--wire-*` เป็นภาษาภาพหลัก
 
 ## 1. หลักการและขอบเขต
 
-Modern Workspace แทน Windows Enterprise ตามแผนที่ผู้ใช้เลือก: ใช้ทั้ง Packer/Admin รายงาน และพนักงาน/ตารางงาน แต่คง popup สแกน พฤติกรรม QR และระบบบันทึกเดิม ไม่เปลี่ยน API, Firestore schema หรือ Sheet
+Classic Windows wireframe ใช้กับ Packer/Admin รายงาน และพนักงาน/ตารางงาน โดยเน้นการอ่านข้อมูลและคำสั่งภายในมากกว่าการตกแต่ง แต่คง popup สแกน พฤติกรรม QR และระบบบันทึกเดิม ไม่เปลี่ยน API, Firestore schema หรือ Sheet
 
 - Desktop-only: ตรวจที่ 1280/1440/1920px และให้ช่องสแกนเห็นได้ที่ 1280×720 ไม่มีการเพิ่ม mobile layout
 - แถบบนเดียว 56px; เมนูซ้าย 224px ยุบเหลือ 64px; หัวหน้าและคำสั่งอยู่ด้วยกัน; แถบสถานะล่าง 24px
-- สีพื้นขาว–เทา เขียวฟ้าเป็นสีเน้น และมี dark mode; สีสถานะใช้เพื่อสื่อความหมายเท่านั้น
-- ลดเส้นกรอบตกแต่งและข้อมูลซ้ำ แต่คงขอบ control ที่ผ่าน 3:1 และตัวบ่งชี้รายการที่เลือก ห้ามเหลือแต่พื้น tint
-- ปุ่มสูงขั้นต่ำ 36px; control มุม 8px; พาเนล/dialog มุม 12px; ระยะห่างหลัก 16px
-- พาเนลทึบ ไม่มีเงาหรือ hover effect; เงาอนุญาตเฉพาะ dialog/dropdown; ไม่มี gradient ตกแต่ง
-- ไม่สร้างหน้าตาเดิมเป็นอีกธีมหนึ่ง ชื่อ class `win-*` และ `enterprise-shell` ยังเก็บไว้เป็น compatibility hooks ไม่ได้หมายความว่าใช้ดีไซน์ Windows
+- สีระบบเป็นเทา–น้ำเงินเข้มแบบ Windows wireframe และมี dark mode; สีสถานะใช้เพื่อสื่อความหมายเท่านั้น
+- ทุก panel/control ใช้เส้น 1px ที่เห็นได้ พื้นทึบ และตัวบ่งชี้รายการที่เลือกชัดเจน ไม่ใช้เงาหรือพื้น tint เป็นตัวสื่อสารเพียงอย่างเดียว
+- ปุ่มสูงขั้นต่ำ 36px; มุมทั้งหมดใช้ `--wire-radius: 0px`; ระยะห่างหลัก 16px
+- ไม่มี hover lift, gradient หรือ glassmorphism; shadow อนุญาตเฉพาะ dialog/dropdown
+- `.wireframe-shell` คือขอบเขตหน้าตาปัจจุบัน ส่วนชื่อ class `win-*` และ `enterprise-shell` ยังเก็บไว้เป็น compatibility hooks และ DOM contract
 - CSS เก่ายังมีอยู่ ให้แก้กฎต้นทางที่เกี่ยวข้อง ไม่ซ้อน `!important` หรือเพิ่มชุด override ทั้งระบบ
 - รูปแบบพิมพ์ตารางเวรและ QR ต้องรักษาโครงกระดาษ ไม่รับขนาด control หรือเปลือกหน้าจอใหม่
+
+### Classic wireframe tokens
+
+| token | light | dark | ใช้ที่ |
+|---|---|---|---|
+| `--wire-window` | `#c0c0c0` | `#3b3b3b` | พื้น workspace และ shell |
+| `--wire-face` | `#d4d0c8` | `#5a5a5a` | toolbar, sidebar, control |
+| `--wire-paper` | `#ffffff` | `#202020` | panel, table, input |
+| `--wire-titlebar` | `#000080` | `#000080` | topbar แบบ classic |
+| `--wire-selection` | `#000080` | `#000080` | รายการ/ปุ่มที่เลือก |
+| `--wire-control-line` | `#404040` | `#d0d0d0` | ขอบ control |
+| `--wire-text` | `#000000` | `#ffffff` | ตัวหนังสือหลัก |
+| `--wire-muted` | `#404040` | `#e0e0e0` | label และข้อความรอง |
+| `--wire-radius` | `0px` | `0px` | มุมทุก component ใน shell |
+
+ตาราง token กลุ่ม Modern/teal ด้านล่างยังคงไว้เพื่อ compatibility และประวัติการย้ายระบบ แต่ห้ามใช้เป็นค่าใหม่ใน `.wireframe-shell`
 
 ### รีโมทบนมือถือ (`/remote`) — ข้อยกเว้นเดียวของ desktop-only
 

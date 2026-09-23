@@ -3330,7 +3330,7 @@ function App() {
   return (
     <>
     <a className="skip-link" href="#main">ข้ามไปยังเนื้อหาหลัก</a>
-    <div className={`app-shell enterprise-shell win-shell ${sidebarCollapsed ? 'collapsed' : ''}`}>
+    <div className={`app-shell enterprise-shell win-shell wireframe-shell ${sidebarCollapsed ? 'collapsed' : ''}`}>
       <TitleBar
         user={user}
         isSignedIn={isSignedIn}

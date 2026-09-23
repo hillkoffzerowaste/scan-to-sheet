@@ -130,6 +130,27 @@
   --ease-bounce: cubic-bezier(0.34, 1.35, 0.64, 1);
   --dur-press: 0.12s;
   --dur-ui: 0.18s;
+  /* Classic Windows wireframe palette. Keep it separate from the legacy Modern Workspace
+     tokens so the operational shell can change visual language without changing data states. */
+  --wire-window: #c0c0c0;
+  --wire-face: #d4d0c8;
+  --wire-paper: #ffffff;
+  --wire-titlebar: #000080;
+  --wire-titlebar-text: #ffffff;
+  --wire-text: #000000;
+  --wire-muted: #404040;
+  --wire-line: #808080;
+  --wire-line-dark: #404040;
+  --wire-control-line: #404040;
+  --wire-light: #ffffff;
+  --wire-selection: #000080;
+  --wire-selection-text: #ffffff;
+  --wire-focus: #000080;
+  --wire-success: #006400;
+  --wire-warning: #805000;
+  --wire-danger: #800000;
+  --wire-info: #000080;
+  --wire-radius: 0px;
   /* Paper tokens. Deliberately absent from the dark block: a printed roster is always ink on
      white, so printing from dark mode must not carry the dark surfaces onto the page. */
   --print-paper: #ffffff;
@@ -217,6 +238,25 @@
   --glow-accent: 0 2px 14px rgba(255,210,63,0.35);
   --glow-coral: 0 2px 14px rgba(239,108,74,0.42);
   --glow-info: 0 2px 14px rgba(93,173,226,0.38);
+  --wire-window: #3b3b3b;
+  --wire-face: #5a5a5a;
+  --wire-paper: #202020;
+  --wire-titlebar: #000080;
+  --wire-titlebar-text: #ffffff;
+  --wire-text: #ffffff;
+  --wire-muted: #e0e0e0;
+  --wire-line: #8c8c8c;
+  --wire-line-dark: #d0d0d0;
+  --wire-control-line: #d0d0d0;
+  --wire-light: #f5f5f5;
+  --wire-selection: #000080;
+  --wire-selection-text: #ffffff;
+  --wire-focus: #ffffff;
+  --wire-success: #7cf0a0;
+  --wire-warning: #ffd080;
+  --wire-danger: #ff9090;
+  --wire-info: #a0d0ff;
+  --wire-radius: 0px;
 }
 
 * {
@@ -5880,4 +5920,692 @@ tbody tr:hover {
   .win-shell .wms-filter-row { align-items: stretch; flex-direction: column; }
   .win-shell .wms-page-actions { justify-content: flex-start; }
   .win-shell .wms-search-field { margin-left: 0; }
+}
+
+/* ── Classic Windows wireframe shell ─────────────────────────────────────────
+   This is intentionally utilitarian: square controls, dense information, visible borders,
+   and a small system palette. It replaces decorative WMS treatment at the shell boundary
+   while leaving the operational DOM, scan flow, and existing component contracts intact. */
+.wireframe-shell {
+  font-family: Tahoma, "Segoe UI", "Noto Sans Thai", sans-serif;
+  color: var(--wire-text);
+  background: var(--wire-window);
+}
+
+.wireframe-shell,
+.wireframe-shell .win-body,
+.wireframe-shell .win-main {
+  background: var(--wire-window);
+}
+
+.wireframe-shell .win-titlebar {
+  min-height: var(--appbar-height);
+  padding: 6px 8px;
+  background: var(--wire-titlebar);
+  color: var(--wire-titlebar-text);
+  border-bottom: 1px solid var(--wire-line-dark);
+}
+
+.wireframe-shell .win-app-mark {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--wire-light);
+  border-radius: var(--wire-radius);
+  background: var(--wire-titlebar);
+  color: var(--wire-titlebar-text);
+}
+
+.wireframe-shell .win-titlebar .win-app-name {
+  color: var(--wire-titlebar-text);
+  font-family: Tahoma, "Segoe UI", sans-serif;
+  font-size: var(--ui-sm);
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.wireframe-shell .win-titlebar-right {
+  gap: 4px;
+}
+
+.wireframe-shell .win-conn {
+  color: var(--wire-titlebar-text);
+  font-size: var(--ui-xs);
+}
+
+.wireframe-shell .win-conn-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--wire-radius);
+  background: var(--wire-success);
+}
+
+.wireframe-shell .win-conn.offline .win-conn-dot {
+  background: var(--wire-warning);
+}
+
+.wireframe-shell .win-titlebar-btn {
+  min-height: 28px;
+  padding: 3px 7px;
+  border: 1px solid var(--wire-light);
+  border-radius: var(--wire-radius);
+  background: var(--wire-titlebar);
+  color: var(--wire-titlebar-text);
+  font-size: var(--ui-xs);
+  font-weight: 400;
+  transition: none;
+}
+
+.wireframe-shell .win-titlebar-btn:not(:disabled):hover,
+.wireframe-shell .win-titlebar-btn:not(:disabled):focus-visible {
+  background: var(--wire-selection);
+  color: var(--wire-selection-text);
+}
+
+.wireframe-shell .win-titlebar-btn:not(:disabled):active {
+  transform: none;
+}
+
+.wireframe-shell .win-body {
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+}
+
+.wireframe-shell.collapsed .win-body {
+  grid-template-columns: var(--sidebar-collapsed-width) minmax(0, 1fr);
+}
+
+.wireframe-shell .win-sidebar {
+  padding: 8px 5px;
+  background: var(--wire-face);
+  border-right: 1px solid var(--wire-line-dark);
+}
+
+.wireframe-shell .win-nav-group {
+  padding-block: 2px;
+}
+
+.wireframe-shell .win-nav-heading {
+  margin: 5px 7px 3px;
+  color: var(--wire-muted);
+  font-size: var(--ui-xs);
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.wireframe-shell .win-nav-item {
+  min-height: var(--control-height);
+  gap: 7px;
+  padding: 7px;
+  border: 1px solid transparent;
+  border-left-width: 1px;
+  border-radius: var(--wire-radius);
+  color: var(--wire-text);
+  background: transparent;
+  font-size: var(--ui-xs);
+  font-weight: 400;
+  transition: none;
+}
+
+.wireframe-shell .win-nav-item:hover,
+.wireframe-shell .win-nav-item:focus-visible {
+  border-color: var(--wire-line);
+  background: var(--wire-face);
+  color: var(--wire-text);
+}
+
+.wireframe-shell .win-nav-item.active {
+  border-color: var(--wire-line-dark);
+  background: var(--wire-selection);
+  color: var(--wire-selection-text);
+  font-weight: 700;
+}
+
+.wireframe-shell .win-nav-item.active .win-nav-external,
+.wireframe-shell .win-nav-item.active .win-nav-icon,
+.wireframe-shell .win-nav-item.active .win-nav-label {
+  color: var(--wire-selection-text);
+}
+
+.wireframe-shell .win-nav-external {
+  color: var(--wire-muted);
+}
+
+.wireframe-shell .win-nav-badge {
+  padding-inline: 4px;
+  border: 1px solid var(--wire-danger);
+  border-radius: var(--wire-radius);
+  background: var(--wire-danger);
+  color: var(--wire-selection-text);
+  font-size: var(--ui-xs);
+}
+
+.wireframe-shell .win-sidebar-toggle {
+  min-height: var(--control-height);
+  margin-top: auto;
+  padding: 7px;
+  border: 1px solid var(--wire-control-line);
+  border-radius: var(--wire-radius);
+  background: var(--wire-face);
+  color: var(--wire-text);
+  font-size: var(--ui-xs);
+  font-weight: 400;
+  transition: none;
+}
+
+.wireframe-shell .win-sidebar-toggle:hover,
+.wireframe-shell .win-sidebar-toggle:focus-visible {
+  border-color: var(--wire-line);
+  background: var(--wire-face);
+  color: var(--wire-text);
+}
+
+.wireframe-shell .win-main {
+  padding: 8px;
+  overflow: auto;
+}
+
+.wireframe-shell .win-statusbar {
+  min-height: 24px;
+  padding-inline: 6px;
+  border-top: 1px solid var(--wire-line-dark);
+  background: var(--wire-face);
+  color: var(--wire-text);
+  font-family: Tahoma, "Segoe UI", sans-serif;
+  font-size: var(--ui-xs);
+}
+
+.wireframe-shell .win-statusbar b,
+.wireframe-shell .win-statusbar-alert,
+.wireframe-shell .win-statusbar-alert b {
+  color: var(--wire-text);
+}
+
+.wireframe-shell .win-toolbar,
+.wireframe-shell .wms-page-header,
+.wireframe-shell .wms-dashboard-login-state,
+.wireframe-shell .wms-panel,
+.wireframe-shell .wms-kpi-card,
+.wireframe-shell .side-panel,
+.wireframe-shell .scan-panel,
+.wireframe-shell .report-panel,
+.wireframe-shell .staff-page,
+.wireframe-shell .workflow-guide,
+.wireframe-shell .search-panel,
+.wireframe-shell .secondary-panel,
+.wireframe-shell .standards-panel,
+.wireframe-shell .marketplace-upload-panel,
+.wireframe-shell .marketplace-queue-panel,
+.wireframe-shell .drive-card,
+.wireframe-shell .staff-card {
+  border: 1px solid var(--wire-line-dark);
+  border-radius: var(--wire-radius);
+  background: var(--wire-paper);
+  color: var(--wire-text);
+  box-shadow: none;
+}
+
+.wireframe-shell .win-toolbar {
+  min-height: var(--control-height);
+  padding: 5px 7px;
+  background: var(--wire-face);
+}
+
+.wireframe-shell .workspace-page-title,
+.wireframe-shell .report-header h2,
+.wireframe-shell .staff-page-header h2,
+.wireframe-shell .wms-page-header h2 {
+  color: var(--wire-text);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.wireframe-shell .wms-page-header {
+  align-items: center;
+  padding: 8px;
+  border-bottom: 1px solid var(--wire-line-dark);
+}
+
+.wireframe-shell .wms-page-header p,
+.wireframe-shell .wms-date-label,
+.wireframe-shell .wms-scope-label,
+.wireframe-shell .wms-scope-note,
+.wireframe-shell .wms-page-header .wms-kicker {
+  color: var(--wire-muted);
+  font-size: var(--ui-xs);
+}
+
+.wireframe-shell .wms-kicker {
+  margin-bottom: 2px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.wireframe-shell .wms-page-actions {
+  gap: 4px;
+}
+
+.wireframe-shell .wms-kpi-grid,
+.wireframe-shell .wms-dashboard-grid,
+.wireframe-shell .wms-dashboard-side {
+  gap: 8px;
+}
+
+.wireframe-shell .wms-kpi-card {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  grid-template-rows: auto auto auto;
+  column-gap: 7px;
+  min-height: 88px;
+  padding: 8px;
+}
+
+.wireframe-shell .wms-kpi-icon {
+  grid-row: 1 / span 3;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--wire-radius);
+  color: var(--wire-info);
+}
+
+.wireframe-shell .wms-kpi-icon.success,
+.wireframe-shell .wms-text-success,
+.wireframe-shell .wms-success-icon { color: var(--wire-success); }
+.wireframe-shell .wms-kpi-icon.info { color: var(--wire-info); }
+.wireframe-shell .wms-kpi-icon.warning { color: var(--wire-warning); }
+.wireframe-shell .wms-kpi-icon.danger { color: var(--wire-danger); }
+.wireframe-shell .wms-text-muted { color: var(--wire-muted); }
+
+.wireframe-shell .wms-kpi-card > span,
+.wireframe-shell .wms-kpi-card small {
+  color: var(--wire-muted);
+  font-size: var(--ui-xs);
+}
+
+.wireframe-shell .wms-kpi-card strong {
+  color: var(--wire-text);
+  font-size: 20px;
+  line-height: 1.1;
+}
+
+.wireframe-shell .wms-panel {
+  padding: 8px;
+}
+
+.wireframe-shell .wms-panel-header {
+  margin-bottom: 8px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid var(--wire-line);
+}
+
+.wireframe-shell .wms-panel-header h3 {
+  color: var(--wire-text);
+  font-size: var(--ui-sm);
+}
+
+.wireframe-shell .wms-filter-row {
+  gap: 4px;
+}
+
+.wireframe-shell .wms-search-field {
+  min-height: var(--control-height);
+  padding-inline: 5px;
+  border: 1px solid var(--wire-control-line);
+  border-radius: var(--wire-radius);
+  background: var(--wire-paper);
+}
+
+.wireframe-shell .wms-search-field input {
+  min-height: 28px;
+  border: 1px solid var(--wire-control-line);
+  padding-inline: 4px;
+  border-radius: var(--wire-radius);
+  background: var(--wire-paper);
+  color: var(--wire-text);
+  font-size: var(--ui-xs);
+}
+
+.wireframe-shell .wms-search-field svg {
+  color: var(--wire-text);
+}
+
+.wireframe-shell .wms-table-wrap,
+.wireframe-shell .table-wrap {
+  border: 1px solid var(--wire-line-dark);
+  border-radius: var(--wire-radius);
+  background: var(--wire-paper);
+  box-shadow: none;
+}
+
+.wireframe-shell .wms-table,
+.wireframe-shell table {
+  border-collapse: collapse;
+}
+
+.wireframe-shell .wms-table th,
+.wireframe-shell .wms-table td,
+.wireframe-shell thead th,
+.wireframe-shell tbody td {
+  border-color: var(--wire-line);
+  color: var(--wire-text);
+}
+
+.wireframe-shell .wms-table th,
+.wireframe-shell thead th {
+  background: var(--wire-face);
+  color: var(--wire-text);
+  font-size: var(--ui-xs);
+  font-weight: 700;
+}
+
+.wireframe-shell .wms-table tbody tr:nth-child(even),
+.wireframe-shell tbody tr:nth-child(even) {
+  background: var(--wire-paper);
+}
+
+.wireframe-shell .wms-table tbody tr:hover,
+.wireframe-shell tbody tr:hover {
+  background: var(--wire-face);
+}
+
+.wireframe-shell .wms-empty-state,
+.wireframe-shell .wms-inline-empty,
+.wireframe-shell .empty-cell {
+  color: var(--wire-muted);
+}
+
+.wireframe-shell .wms-empty-state strong {
+  color: var(--wire-text);
+}
+
+.wireframe-shell .wms-source-badge,
+.wireframe-shell .wms-status-badge,
+.wireframe-shell .status-badge,
+.wireframe-shell .grid-count {
+  border-radius: var(--wire-radius);
+  background: var(--wire-face);
+  color: var(--wire-text);
+  font-size: var(--ui-xs);
+}
+
+.wireframe-shell .wms-source-badge.packer,
+.wireframe-shell .wms-source-badge.drive,
+.wireframe-shell .wms-status-badge.success,
+.wireframe-shell .wms-status-badge.info,
+.wireframe-shell .wms-status-badge.warning {
+  border-color: var(--wire-line-dark);
+  background: var(--wire-face);
+  color: var(--wire-text);
+}
+
+.wireframe-shell .wms-connection-list > div {
+  border-bottom-color: var(--wire-line);
+}
+
+.wireframe-shell .wms-connection-list span,
+.wireframe-shell .wms-connection-list strong,
+.wireframe-shell .wms-bar-item > div,
+.wireframe-shell .wms-inline-empty {
+  color: var(--wire-text);
+  font-size: var(--ui-xs);
+}
+
+.wireframe-shell .wms-bar-track {
+  height: 8px;
+  border-radius: var(--wire-radius);
+  background: var(--wire-face);
+}
+
+.wireframe-shell .wms-bar-track > span {
+  border-radius: var(--wire-radius);
+  background: var(--wire-selection);
+}
+
+.wireframe-shell button,
+.wireframe-shell input,
+.wireframe-shell select,
+.wireframe-shell textarea,
+.wireframe-shell .field-control {
+  border-radius: var(--wire-radius);
+}
+
+.wireframe-shell button,
+.wireframe-shell .secondary-button,
+.wireframe-shell .ghost-button,
+.wireframe-shell .report-button,
+.wireframe-shell .primary-button,
+.wireframe-shell .segmented-control button,
+.wireframe-shell .table-action-button,
+.wireframe-shell .text-button {
+  min-height: var(--control-height);
+  border: 1px solid var(--wire-control-line);
+  border-radius: var(--wire-radius);
+  background: var(--wire-face);
+  color: var(--wire-text);
+  font-size: var(--ui-xs);
+  font-weight: 400;
+  box-shadow: none;
+  transition: none;
+}
+
+.wireframe-shell .primary-button,
+.wireframe-shell .primary-button:disabled {
+  border-color: var(--wire-line-dark);
+  background: var(--wire-selection);
+  color: var(--wire-selection-text);
+  font-weight: 700;
+}
+
+.wireframe-shell button:not(:disabled):hover,
+.wireframe-shell button:not(:disabled):focus-visible,
+.wireframe-shell .secondary-button:not(:disabled):hover,
+.wireframe-shell .ghost-button:not(:disabled):hover,
+.wireframe-shell .segmented-control button:not(:disabled):hover {
+  border-color: var(--wire-line-dark);
+  background: var(--wire-face);
+  color: var(--wire-text);
+}
+
+.wireframe-shell .primary-button:not(:disabled):hover,
+.wireframe-shell .primary-button:not(:disabled):focus-visible {
+  background: var(--wire-selection);
+  color: var(--wire-selection-text);
+}
+
+/* เมนูที่เปิดอยู่ต้องคงสีน้ำเงินไว้ แม้ pointer จะวางอยู่บนปุ่มเมนู */
+.wireframe-shell .win-nav-item.active:hover,
+.wireframe-shell .win-nav-item.active:focus-visible {
+  border-color: var(--wire-line-dark);
+  background: var(--wire-selection);
+  color: var(--wire-selection-text);
+}
+
+.wireframe-shell .win-nav-item.active:hover .win-nav-external,
+.wireframe-shell .win-nav-item.active:hover .win-nav-icon,
+.wireframe-shell .win-nav-item.active:hover .win-nav-label,
+.wireframe-shell .win-nav-item.active:focus-visible .win-nav-external,
+.wireframe-shell .win-nav-item.active:focus-visible .win-nav-icon,
+.wireframe-shell .win-nav-item.active:focus-visible .win-nav-label {
+  color: var(--wire-selection-text);
+}
+
+.wireframe-shell button:not(:disabled):active {
+  transform: none;
+}
+
+.wireframe-shell input,
+.wireframe-shell select,
+.wireframe-shell textarea,
+.wireframe-shell .field-control input,
+.wireframe-shell .field-control select,
+.wireframe-shell .packer-control select {
+  min-height: var(--control-height);
+  border: 1px solid var(--wire-control-line);
+  border-radius: var(--wire-radius);
+  background: var(--wire-paper);
+  color: var(--wire-text);
+  font-size: var(--ui-xs);
+}
+
+.wireframe-shell input:focus-visible,
+.wireframe-shell select:focus-visible,
+.wireframe-shell textarea:focus-visible,
+.wireframe-shell button:focus-visible,
+.wireframe-shell summary:focus-visible {
+  outline: 1px dotted var(--wire-focus);
+  outline-offset: 1px;
+}
+
+.wireframe-shell .segmented-control {
+  border: 1px solid var(--wire-control-line);
+  border-radius: var(--wire-radius);
+  background: var(--wire-face);
+}
+
+.wireframe-shell .segmented-control button {
+  border: 1px solid var(--wire-control-line);
+  background: var(--wire-face);
+}
+
+.wireframe-shell .segmented-control button.active {
+  background: var(--wire-selection);
+  color: var(--wire-selection-text);
+  font-weight: 700;
+}
+
+.wireframe-shell .scan-input-row {
+  border: 2px solid var(--wire-selection);
+  border-radius: var(--wire-radius);
+  background: var(--wire-face);
+}
+
+.wireframe-shell .scan-input-row input {
+  border: 1px solid var(--wire-control-line);
+  background: var(--wire-paper);
+  color: var(--wire-text);
+}
+
+.wireframe-shell .scan-input-row button {
+  border-color: var(--wire-line-dark);
+  background: var(--wire-selection);
+  color: var(--wire-selection-text);
+  font-weight: 700;
+}
+
+.wireframe-shell .courier-button,
+.wireframe-shell .courier-button.active {
+  border-color: var(--wire-control-line);
+  border-left-color: var(--wire-control-line);
+  border-radius: var(--wire-radius);
+  background: var(--wire-paper);
+  color: var(--wire-text);
+}
+
+.wireframe-shell .courier-button:hover,
+.wireframe-shell .courier-button.active:hover,
+.wireframe-shell .courier-button.active {
+  background: var(--wire-selection);
+  color: var(--wire-selection-text);
+}
+
+.wireframe-shell .courier-button strong,
+.wireframe-shell .courier-button.active strong {
+  border-radius: var(--wire-radius);
+  background: var(--wire-face);
+  color: var(--wire-text);
+}
+
+.wireframe-shell .courier-button.active strong {
+  background: var(--wire-light);
+}
+
+.wireframe-shell .status-banner,
+.wireframe-shell .any-format-warning,
+.wireframe-shell .issue-bar,
+.wireframe-shell .marketplace-queue-error {
+  border: 1px solid var(--wire-line-dark);
+  border-radius: var(--wire-radius);
+  background: var(--wire-face);
+  color: var(--wire-text);
+}
+
+.wireframe-shell .status-banner strong,
+.wireframe-shell .status-banner span,
+.wireframe-shell .issue-bar span,
+.wireframe-shell .marketplace-queue-error {
+  color: var(--wire-text);
+  font-size: var(--ui-xs);
+}
+
+.wireframe-shell .wms-full-button:active,
+.wireframe-shell .wms-full-button:hover {
+  transform: none;
+}
+
+.wireframe-shell .wms-full-button {
+  border: 1px solid var(--wire-control-line);
+  background: var(--wire-face);
+  color: var(--wire-text);
+}
+
+/* กฎเดิมของ shell มี specificity สูงกว่ากฎปุ่มทั่วไป จึงกำหนด control หลักซ้ำที่
+   ขอบเขต wireframe เพื่อให้ขอบและพื้นใช้ palette เดียวกันจริงทั้ง light/dark */
+.wireframe-shell .win-tool-btn,
+.wireframe-shell .ghost-button:not(:disabled),
+.wireframe-shell .secondary-button:not(:disabled),
+.wireframe-shell .report-button:not(:disabled) {
+  border-color: var(--wire-control-line);
+  background: var(--wire-face);
+  color: var(--wire-text);
+}
+
+.wireframe-shell .win-toolbar-right {
+  color: var(--wire-text);
+}
+
+.wireframe-shell input:not([type="checkbox"]):not([type="radio"]),
+.wireframe-shell select,
+.wireframe-shell textarea,
+.wireframe-shell .field-control input,
+.wireframe-shell .field-control select,
+.wireframe-shell .packer-control select {
+  border-color: var(--wire-control-line);
+  background: var(--wire-paper);
+  color: var(--wire-text);
+}
+
+.wireframe-shell .win-tool-search {
+  border: 1px solid var(--wire-control-line);
+  border-radius: var(--wire-radius);
+  background: var(--wire-paper);
+}
+
+.wireframe-shell .win-tool-search input {
+  border: 0;
+  background: transparent;
+  color: var(--wire-text);
+}
+
+.wireframe-shell .win-tool-search svg {
+  color: var(--wire-text);
+}
+
+.wireframe-shell .issue-bar button,
+.wireframe-shell .issue-bar button.active {
+  border: 1px solid var(--wire-control-line);
+  border-radius: var(--wire-radius);
+  background: var(--wire-face);
+  color: var(--wire-text);
+}
+
+.wireframe-shell .app-tools-popover,
+.wireframe-shell .win-menu-pop,
+.wireframe-shell .scan-popup-sheet,
+.wireframe-shell .staff-modal,
+.wireframe-shell .qr-print-dialog {
+  border: 1px solid var(--wire-line-dark);
+  border-radius: var(--wire-radius);
+  background: var(--wire-paper);
+  color: var(--wire-text);
+  box-shadow: var(--shadow-modal);
 }
