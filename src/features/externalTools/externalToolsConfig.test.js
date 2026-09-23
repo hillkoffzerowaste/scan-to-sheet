@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   DEFAULT_EXTERNAL_TOOLS_CONFIG,
+  EXTERNAL_LINK_ACCENT_COLORS,
   EXTERNAL_TOOL_TEST_IDS,
   normalizeExternalToolsConfig,
   validateExternalToolsConfig,
@@ -21,8 +22,8 @@ test('preserves the six existing external tools and their stable test IDs', () =
       { id: 'wrong-delivery', label: 'จัดการส่งของผิด', url: 'https://script.google.com/a/macros/hillkoff.com/s/AKfycbxQENSgzP-0IzDX0J_pY2g9HoMlCKMaNQYJlnxPbudqELr79oKdwYpoNflqrSAfsgw2/exec', accentColor: 'purple' },
       { id: 'label-checker', label: 'พิมพ์ใบเช็ค ใบปะหน้า', url: 'https://barcode-checker-ashy.vercel.app/', accentColor: 'teal' },
       { id: 'coffee-stock', label: 'เบิกออก/รับเข้ากาแฟถัง', url: 'https://script.google.com/a/macros/hillkoff.com/s/AKfycbxETrRx_gJBuVTdl2MUaumr5Pem4LzahebQ6HZzrknPOr-PPCPmJHQ0I9f-p-kYJB-J/exec', accentColor: 'amber' },
-      { id: 'coffee-shop-grinder', label: 'บดกาแฟหน้าร้าน', url: 'https://coffee-grinder-system.vercel.app/', accentColor: 'rose' },
-      { id: 'coffee-stock-count', label: 'ตรวจนับสต็อกกาแฟ', url: 'https://script.google.com/macros/s/AKfycbyulSX89Q-eXvcd33QypMp8uP2_PrqjGjpBiYre_j2rJDXg74dNqGQ44jBgU1N_WNIXnA/exec', accentColor: 'neutral' },
+      { id: 'coffee-shop-grinder', label: 'บดกาแฟหน้าร้าน', url: 'https://coffee-grinder-system.vercel.app/', accentColor: 'pink' },
+      { id: 'coffee-stock-count', label: 'ตรวจนับสต็อกกาแฟ', url: 'https://script.google.com/macros/s/AKfycbyulSX89Q-eXvcd33QypMp8uP2_PrqjGjpBiYre_j2rJDXg74dNqGQ44jBgU1N_WNIXnA/exec', accentColor: 'slate' },
     ],
   }]);
   assert.deepEqual(EXTERNAL_TOOL_TEST_IDS, {
@@ -51,7 +52,7 @@ test('normalizes whitespace while retaining valid group and link IDs', () => {
     groups: [{
       id: 'group-a',
       name: 'Tools',
-      links: [{ id: 'link-a', label: 'Search', url: 'https://example.com/path', accentColor: 'neutral' }],
+      links: [{ id: 'link-a', label: 'Search', url: 'https://example.com/path', accentColor: 'slate' }],
     }],
   });
 });
@@ -65,6 +66,20 @@ test('normalizes supported sidebar preferences and rejects unknown values', () =
   assert.equal(configured.groups[0].links[0].accentColor, 'blue');
   assert.equal(normalizeExternalToolsConfig({ sidebarTextSize: 'huge', groups: [] }), null);
   assert.equal(normalizeExternalToolsConfig({ groups: [{ id: 'g', name: 'Tools', links: [{ id: 'l', label: 'Link', url: 'https://example.com', accentColor: 'custom' }] }] }), null);
+});
+
+test('offers ten external-link accent colors and migrates retired palette keys', () => {
+  const colors = EXTERNAL_LINK_ACCENT_COLORS.map(({ value }) => value);
+  assert.equal(colors.length, 10);
+  assert.equal(new Set(colors).size, 10);
+  const links = ['neutral', 'rose', 'green', 'red'].map((accentColor, index) => ({
+    id: 'link-' + index,
+    label: 'Link ' + index,
+    url: 'https://example.com/' + index,
+    accentColor,
+  }));
+  const normalized = normalizeExternalToolsConfig({ groups: [{ id: 'g', name: 'Tools', links }] });
+  assert.deepEqual(normalized.groups[0].links.map(({ accentColor }) => accentColor), ['slate', 'pink', 'lime', 'pink']);
 });
 
 test('rejects malformed payloads and duplicate IDs', () => {

@@ -278,7 +278,7 @@ function ExternalToolsSettings({ config, version, loadStatus, saving, onSave }) 
                       <select
                         id={'external-tools-link-color-' + link.id}
                         data-testid={'external-tools-link-color-' + link.id}
-                        value={link.accentColor ?? 'neutral'}
+                        value={link.accentColor ?? 'slate'}
                         onChange={(event) => updateLink(group.id, link.id, { accentColor: event.target.value })}
                         disabled={disabled}
                       >

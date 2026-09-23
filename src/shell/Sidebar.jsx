@@ -111,7 +111,7 @@ function Sidebar({ activeTab, switchTab, missingAlertBadge, collapsed, setCollap
               return (
                 <a
                   key={link.id}
-                  className={`win-nav-item external external-accent-${link.accentColor ?? 'neutral'}`}
+                  className={`win-nav-item external external-accent-${link.accentColor ?? 'slate'}`}
                   data-testid={EXTERNAL_TOOL_TEST_IDS[link.id]}
                   href={link.url}
                   target="_blank"

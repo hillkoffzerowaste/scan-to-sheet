@@ -32,16 +32,22 @@ Modern Windows workspace ใช้กับ Packer/Admin รายงาน แ�
 | `--wire-muted` | `#536170` | `#b7c3cf` | label และข้อความรอง |
 | `--wire-radius` | `6px` | `6px` | มุมทุก component ใน shell |
 
-สีแถบลิงก์ภายนอกเป็นสีจัดหมวด (ไม่สื่อสถานะ) และคงค่าเดียวกันทั้งสองธีม เพราะ sidebar ทั้ง light/dark เป็นพื้นเข้ม
+ลิงก์ภายนอกใช้สีจัดหมวด 10 สีบนพื้นทั้งแถบ (ไม่สื่อสถานะ) สีพื้นผสม accent 24% กับ `--wire-sidebar`; hover เพิ่มเป็น 32% โดยมีขอบบนสว่าง ขอบล่างลึก และแถบซ้ายสี accent เพื่อให้เกิดมิติแบบทึบโดยไม่ใช้ shadow/gradient ตัวหนังสือบนพื้นแถบปกติได้ contrast อย่างน้อย 6.29:1 และตอน hover อย่างน้อย 5.10:1 ทั้ง light/dark
 
-| token | light / dark | contrast บน sidebar light / dark |
+| token | light / dark | contrast ข้อความบนแถบ light / dark |
 |---|---|---|
-| `--wire-sidebar-accent-neutral` | `#cbd5e1` | 9.10 / 10.81 |
-| `--wire-sidebar-accent-blue` | `#93c5fd` | 7.49 / 8.90 |
-| `--wire-sidebar-accent-teal` | `#5eead4` | 9.14 / 10.85 |
-| `--wire-sidebar-accent-purple` | `#c4b5fd` | 7.32 / 8.69 |
-| `--wire-sidebar-accent-amber` | `#fcd34d` | 9.37 / 11.13 |
-| `--wire-sidebar-accent-rose` | `#fda4af` | 7.15 / 8.49 |
+| `--wire-sidebar-accent-slate` | `#cbd5e1` | 6.56 / 7.61 |
+| `--wire-sidebar-accent-blue` | `#93c5fd` | 7.06 / 8.18 |
+| `--wire-sidebar-accent-cyan` | `#67e8f9` | 6.60 / 7.54 |
+| `--wire-sidebar-accent-teal` | `#5eead4` | 6.62 / 7.66 |
+| `--wire-sidebar-accent-lime` | `#bef264` | 6.29 / 7.29 |
+| `--wire-sidebar-accent-purple` | `#c4b5fd` | 7.15 / 8.27 |
+| `--wire-sidebar-accent-violet` | `#d8b4fe` | 7.03 / 8.16 |
+| `--wire-sidebar-accent-pink` | `#fda4af` | 7.28 / 8.46 |
+| `--wire-sidebar-accent-orange` | `#fdba74` | 7.02 / 8.14 |
+| `--wire-sidebar-accent-amber` | `#fcd34d` | 6.62 / 7.67 |
+
+สัดส่วน tint และ edge: `--wire-sidebar-accent-fill` 24%, `--wire-sidebar-accent-border` 54%, `--wire-sidebar-accent-hover-fill` 32%, `--wire-sidebar-accent-hover-border` 70%, `--wire-sidebar-accent-highlight` 58%, `--wire-sidebar-accent-depth` 44%
 
 ### สถานะใน Modern Windows workspace
 

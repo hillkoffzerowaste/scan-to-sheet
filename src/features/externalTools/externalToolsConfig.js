@@ -9,8 +9,8 @@ export const DEFAULT_EXTERNAL_TOOLS_CONFIG = Object.freeze({
         Object.freeze({ id: 'wrong-delivery', label: 'จัดการส่งของผิด', url: 'https://script.google.com/a/macros/hillkoff.com/s/AKfycbxQENSgzP-0IzDX0J_pY2g9HoMlCKMaNQYJlnxPbudqELr79oKdwYpoNflqrSAfsgw2/exec', accentColor: 'purple' }),
         Object.freeze({ id: 'label-checker', label: 'พิมพ์ใบเช็ค ใบปะหน้า', url: 'https://barcode-checker-ashy.vercel.app/', accentColor: 'teal' }),
         Object.freeze({ id: 'coffee-stock', label: 'เบิกออก/รับเข้ากาแฟถัง', url: 'https://script.google.com/a/macros/hillkoff.com/s/AKfycbxETrRx_gJBuVTdl2MUaumr5Pem4LzahebQ6HZzrknPOr-PPCPmJHQ0I9f-p-kYJB-J/exec', accentColor: 'amber' }),
-        Object.freeze({ id: 'coffee-shop-grinder', label: 'บดกาแฟหน้าร้าน', url: 'https://coffee-grinder-system.vercel.app/', accentColor: 'rose' }),
-        Object.freeze({ id: 'coffee-stock-count', label: 'ตรวจนับสต็อกกาแฟ', url: 'https://script.google.com/macros/s/AKfycbyulSX89Q-eXvcd33QypMp8uP2_PrqjGjpBiYre_j2rJDXg74dNqGQ44jBgU1N_WNIXnA/exec', accentColor: 'neutral' }),
+        Object.freeze({ id: 'coffee-shop-grinder', label: 'บดกาแฟหน้าร้าน', url: 'https://coffee-grinder-system.vercel.app/', accentColor: 'pink' }),
+        Object.freeze({ id: 'coffee-stock-count', label: 'ตรวจนับสต็อกกาแฟ', url: 'https://script.google.com/macros/s/AKfycbyulSX89Q-eXvcd33QypMp8uP2_PrqjGjpBiYre_j2rJDXg74dNqGQ44jBgU1N_WNIXnA/exec', accentColor: 'slate' }),
       ]),
     }),
   ]),
@@ -23,16 +23,21 @@ export const SIDEBAR_TEXT_SIZES = Object.freeze([
 ]);
 
 export const EXTERNAL_LINK_ACCENT_COLORS = Object.freeze([
-  Object.freeze({ value: 'neutral', label: 'เทา' }),
+  Object.freeze({ value: 'slate', label: 'เทา' }),
   Object.freeze({ value: 'blue', label: 'ฟ้า' }),
+  Object.freeze({ value: 'cyan', label: 'ฟ้าใส' }),
   Object.freeze({ value: 'teal', label: 'เขียวฟ้า' }),
+  Object.freeze({ value: 'lime', label: 'เขียวมะนาว' }),
   Object.freeze({ value: 'purple', label: 'ม่วง' }),
+  Object.freeze({ value: 'violet', label: 'ม่วงอ่อน' }),
+  Object.freeze({ value: 'pink', label: 'ชมพู' }),
+  Object.freeze({ value: 'orange', label: 'ส้ม' }),
   Object.freeze({ value: 'amber', label: 'เหลือง' }),
-  Object.freeze({ value: 'rose', label: 'ชมพู' }),
 ]);
 
 const VALID_SIDEBAR_TEXT_SIZES = new Set(SIDEBAR_TEXT_SIZES.map(({ value }) => value));
 const VALID_ACCENT_COLORS = new Set(EXTERNAL_LINK_ACCENT_COLORS.map(({ value }) => value));
+const LEGACY_ACCENT_COLORS = Object.freeze({ neutral: 'slate', rose: 'pink', green: 'lime', red: 'pink' });
 
 export const EXTERNAL_TOOL_TEST_IDS = Object.freeze({
   'delivery-system': 'delivery-system-link',
@@ -103,7 +108,7 @@ export function normalizeExternalToolsConfig(value) {
       const linkId = normalizeId(rawLink.id);
       const label = normalizeName(rawLink.label);
       const url = normalizeUrl(rawLink.url);
-      const accentColor = rawLink.accentColor ?? 'neutral';
+      const accentColor = LEGACY_ACCENT_COLORS[rawLink.accentColor] ?? rawLink.accentColor ?? 'slate';
       if (!linkId || !label || !url || ids.has(linkId) || !VALID_ACCENT_COLORS.has(accentColor)) return null;
       ids.add(linkId);
       links.push({ id: linkId, label, url, accentColor });

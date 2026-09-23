@@ -151,12 +151,23 @@
   --wire-sidebar-muted: #bac5cf;
   --wire-sidebar-hover: #343e49;
   --wire-sidebar-active: #1f6bc5;
-  --wire-sidebar-accent-neutral: #cbd5e1;
+  --wire-sidebar-accent-slate: #cbd5e1;
   --wire-sidebar-accent-blue: #93c5fd;
+  --wire-sidebar-accent-cyan: #67e8f9;
   --wire-sidebar-accent-teal: #5eead4;
+  --wire-sidebar-accent-lime: #bef264;
   --wire-sidebar-accent-purple: #c4b5fd;
+  --wire-sidebar-accent-violet: #d8b4fe;
+  --wire-sidebar-accent-pink: #fda4af;
+  --wire-sidebar-accent-orange: #fdba74;
   --wire-sidebar-accent-amber: #fcd34d;
-  --wire-sidebar-accent-rose: #fda4af;
+  --wire-sidebar-accent-fill: 24%;
+  --wire-sidebar-accent-border: 54%;
+  --wire-sidebar-accent-hover-fill: 32%;
+  --wire-sidebar-accent-hover-border: 70%;
+  --wire-sidebar-accent-highlight: 58%;
+  --wire-sidebar-accent-depth: 44%;
+  --external-tool-accent: var(--wire-sidebar-accent-blue);
   --wire-success: #176b42;
   --wire-success-bg: #e9f5ee;
   --wire-success-line: #548e70;
@@ -276,12 +287,16 @@
   --wire-sidebar-muted: #aab7c3;
   --wire-sidebar-hover: #28323d;
   --wire-sidebar-active: #256bb2;
-  --wire-sidebar-accent-neutral: #cbd5e1;
+  --wire-sidebar-accent-slate: #cbd5e1;
   --wire-sidebar-accent-blue: #93c5fd;
+  --wire-sidebar-accent-cyan: #67e8f9;
   --wire-sidebar-accent-teal: #5eead4;
+  --wire-sidebar-accent-lime: #bef264;
   --wire-sidebar-accent-purple: #c4b5fd;
+  --wire-sidebar-accent-violet: #d8b4fe;
+  --wire-sidebar-accent-pink: #fda4af;
+  --wire-sidebar-accent-orange: #fdba74;
   --wire-sidebar-accent-amber: #fcd34d;
-  --wire-sidebar-accent-rose: #fda4af;
   --wire-success: #62d08f;
   --wire-success-bg: #1d3829;
   --wire-success-line: #4f9f70;
@@ -6101,12 +6116,43 @@ tbody tr:hover {
   font-weight: 700;
 }
 
-.wireframe-shell .win-nav-item.external-accent-neutral { border-left-color: var(--wire-sidebar-accent-neutral); }
-.wireframe-shell .win-nav-item.external-accent-blue { border-left-color: var(--wire-sidebar-accent-blue); }
-.wireframe-shell .win-nav-item.external-accent-teal { border-left-color: var(--wire-sidebar-accent-teal); }
-.wireframe-shell .win-nav-item.external-accent-purple { border-left-color: var(--wire-sidebar-accent-purple); }
-.wireframe-shell .win-nav-item.external-accent-amber { border-left-color: var(--wire-sidebar-accent-amber); }
-.wireframe-shell .win-nav-item.external-accent-rose { border-left-color: var(--wire-sidebar-accent-rose); }
+.wireframe-shell .win-nav-item.external-accent-slate { --external-tool-accent: var(--wire-sidebar-accent-slate); }
+.wireframe-shell .win-nav-item.external-accent-blue { --external-tool-accent: var(--wire-sidebar-accent-blue); }
+.wireframe-shell .win-nav-item.external-accent-cyan { --external-tool-accent: var(--wire-sidebar-accent-cyan); }
+.wireframe-shell .win-nav-item.external-accent-teal { --external-tool-accent: var(--wire-sidebar-accent-teal); }
+.wireframe-shell .win-nav-item.external-accent-lime { --external-tool-accent: var(--wire-sidebar-accent-lime); }
+.wireframe-shell .win-nav-item.external-accent-purple { --external-tool-accent: var(--wire-sidebar-accent-purple); }
+.wireframe-shell .win-nav-item.external-accent-violet { --external-tool-accent: var(--wire-sidebar-accent-violet); }
+.wireframe-shell .win-nav-item.external-accent-pink { --external-tool-accent: var(--wire-sidebar-accent-pink); }
+.wireframe-shell .win-nav-item.external-accent-orange { --external-tool-accent: var(--wire-sidebar-accent-orange); }
+.wireframe-shell .win-nav-item.external-accent-amber { --external-tool-accent: var(--wire-sidebar-accent-amber); }
+
+.wireframe-shell .win-nav-item.external {
+  border: 1px solid color-mix(in srgb, var(--external-tool-accent) var(--wire-sidebar-accent-border), var(--wire-sidebar));
+  border-inline-start: 4px solid var(--external-tool-accent);
+  border-block-start-color: color-mix(in srgb, var(--external-tool-accent) var(--wire-sidebar-accent-highlight), var(--wire-sidebar-text));
+  border-block-end-color: color-mix(in srgb, var(--external-tool-accent) var(--wire-sidebar-accent-depth), var(--wire-sidebar));
+  border-radius: var(--wire-radius);
+  background: color-mix(in srgb, var(--external-tool-accent) var(--wire-sidebar-accent-fill), var(--wire-sidebar));
+  color: var(--wire-sidebar-text);
+  transition: background-color var(--dur-ui) ease, border-color var(--dur-ui) ease;
+}
+
+.wireframe-shell .win-nav-item.external:hover,
+.wireframe-shell .win-nav-item.external:focus-visible {
+  border-color: color-mix(in srgb, var(--external-tool-accent) var(--wire-sidebar-accent-hover-border), var(--wire-sidebar));
+  border-inline-start-color: var(--external-tool-accent);
+  border-block-start-color: color-mix(in srgb, var(--external-tool-accent) var(--wire-sidebar-accent-highlight), var(--wire-sidebar-text));
+  border-block-end-color: color-mix(in srgb, var(--external-tool-accent) var(--wire-sidebar-accent-depth), var(--wire-sidebar));
+  background: color-mix(in srgb, var(--external-tool-accent) var(--wire-sidebar-accent-hover-fill), var(--wire-sidebar));
+  color: var(--wire-sidebar-text);
+}
+
+.wireframe-shell .win-nav-item.external .win-nav-icon,
+.wireframe-shell .win-nav-item.external .win-nav-label,
+.wireframe-shell .win-nav-item.external .win-nav-external {
+  color: inherit;
+}
 
 .wireframe-shell .win-nav-item.active .win-nav-external,
 .wireframe-shell .win-nav-item.active .win-nav-icon,
