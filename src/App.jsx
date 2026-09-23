@@ -3425,6 +3425,8 @@ function App() {
         refreshAllCounts={refreshAllCounts}
         checkMissingOrders={() => { switchTab('drive'); void handleCheckMissingOrders(); }}
         missingBusy={missingBusy}
+        sidebarCollapsed={sidebarCollapsed}
+        setSidebarCollapsed={setSidebarCollapsed}
       />
       <div className="win-body">
         <Sidebar

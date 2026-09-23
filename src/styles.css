@@ -132,20 +132,25 @@
   --dur-ui: 0.18s;
   /* Modern Windows workspace palette. Keep it separate from the legacy Modern Workspace
      tokens so the operational shell can change visual language without changing data states. */
-  --wire-window: #f4f7fb;
-  --wire-face: #e9eef5;
+  --wire-window: #eef1f4;
+  --wire-face: #f6f7f9;
   --wire-paper: #ffffff;
-  --wire-titlebar: #315a84;
+  --wire-titlebar: #222a33;
   --wire-titlebar-text: #ffffff;
-  --wire-text: #1d2733;
-  --wire-muted: #4c5a6a;
-  --wire-line: #c7d2df;
-  --wire-line-dark: #6c8093;
-  --wire-control-line: #71869a;
-  --wire-light: #f8fbff;
-  --wire-selection: #d9e9f7;
-  --wire-selection-text: #193a5b;
-  --wire-focus: #2b6fa8;
+  --wire-text: #202932;
+  --wire-muted: #536170;
+  --wire-line: #cdd5dd;
+  --wire-line-dark: #7d8b99;
+  --wire-control-line: #71808e;
+  --wire-light: #f5f7fa;
+  --wire-selection: #dcecff;
+  --wire-selection-text: #173a5d;
+  --wire-focus: #2b78c5;
+  --wire-sidebar: #282f38;
+  --wire-sidebar-text: #eef3f8;
+  --wire-sidebar-muted: #bac5cf;
+  --wire-sidebar-hover: #343e49;
+  --wire-sidebar-active: #1f6bc5;
   --wire-success: #176b42;
   --wire-warning: #815500;
   --wire-danger: #8f2d2d;
@@ -238,20 +243,25 @@
   --glow-accent: 0 2px 14px rgba(255,210,63,0.35);
   --glow-coral: 0 2px 14px rgba(239,108,74,0.42);
   --glow-info: 0 2px 14px rgba(93,173,226,0.38);
-  --wire-window: #1a2430;
-  --wire-face: #253445;
-  --wire-paper: #111a23;
-  --wire-titlebar: #1f4f7b;
+  --wire-window: #151b22;
+  --wire-face: #202831;
+  --wire-paper: #1c242c;
+  --wire-titlebar: #151a20;
   --wire-titlebar-text: #ffffff;
   --wire-text: #edf4fb;
-  --wire-muted: #b8c6d4;
-  --wire-line: #465a6e;
-  --wire-line-dark: #9bb1c5;
-  --wire-control-line: #9bb1c5;
-  --wire-light: #f2f7fc;
-  --wire-selection: #3c78b2;
+  --wire-muted: #b7c3cf;
+  --wire-line: #3c4957;
+  --wire-line-dark: #90a1b3;
+  --wire-control-line: #9fb0c0;
+  --wire-light: #e8eef4;
+  --wire-selection: #3b78b8;
   --wire-selection-text: #ffffff;
   --wire-focus: #c5ddf7;
+  --wire-sidebar: #1b222a;
+  --wire-sidebar-text: #edf2f7;
+  --wire-sidebar-muted: #aab7c3;
+  --wire-sidebar-hover: #28323d;
+  --wire-sidebar-active: #256bb2;
   --wire-success: #62d08f;
   --wire-warning: #f3c36c;
   --wire-danger: #ff9696;
@@ -5955,6 +5965,24 @@ tbody tr:hover {
   color: var(--wire-titlebar-text);
 }
 
+.wireframe-shell .win-app-menu {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--wire-light);
+  border-radius: var(--wire-radius);
+  background: transparent;
+  color: var(--wire-titlebar-text);
+}
+
+.wireframe-shell .win-app-menu:hover,
+.wireframe-shell .win-app-menu:focus-visible {
+  background: var(--wire-selection);
+  color: var(--wire-selection-text);
+}
+
 .wireframe-shell .win-titlebar .win-app-name {
   color: var(--wire-titlebar-text);
   font-family: "Segoe UI", Tahoma, "Noto Sans Thai", sans-serif;
@@ -6014,8 +6042,8 @@ tbody tr:hover {
 }
 
 .wireframe-shell .win-sidebar {
-  padding: 8px 5px;
-  background: var(--wire-face);
+  padding: 8px 0;
+  background: var(--wire-sidebar);
   border-right: 1px solid var(--wire-line-dark);
 }
 
@@ -6029,15 +6057,15 @@ tbody tr:hover {
 }
 
 .wireframe-shell .win-nav-subheading {
-  margin: 3px 7px 1px;
-  color: var(--wire-muted);
+  margin: 3px 12px 1px;
+  color: var(--wire-sidebar-muted);
   font-size: var(--ui-xs);
   font-weight: 600;
 }
 
 .wireframe-shell .win-nav-heading {
-  margin: 5px 7px 3px;
-  color: var(--wire-muted);
+  margin: 5px 12px 3px;
+  color: var(--wire-sidebar-muted);
   font-size: var(--ui-xs);
   font-weight: 700;
   letter-spacing: 0;
@@ -6046,12 +6074,12 @@ tbody tr:hover {
 
 .wireframe-shell .win-nav-item {
   min-height: var(--control-height);
-  gap: 7px;
-  padding: 7px;
-  border: 1px solid transparent;
-  border-left-width: 1px;
-  border-radius: var(--wire-radius);
-  color: var(--wire-text);
+  gap: 8px;
+  padding: 7px 12px;
+  border: 0;
+  border-left: 3px solid transparent;
+  border-radius: 0;
+  color: var(--wire-sidebar-text);
   background: transparent;
   font-size: var(--ui-xs);
   font-weight: 400;
@@ -6060,26 +6088,32 @@ tbody tr:hover {
 
 .wireframe-shell .win-nav-item:hover,
 .wireframe-shell .win-nav-item:focus-visible {
-  border-color: var(--wire-line);
-  background: var(--wire-face);
-  color: var(--wire-text);
+  border-color: transparent;
+  background: var(--wire-sidebar-hover);
+  color: var(--wire-sidebar-text);
 }
 
 .wireframe-shell .win-nav-item.active {
-  border-color: var(--wire-line-dark);
-  background: var(--wire-selection);
-  color: var(--wire-selection-text);
+  border-color: transparent;
+  border-left-color: var(--wire-control-line);
+  background: var(--wire-sidebar-active);
+  color: var(--wire-sidebar-text);
   font-weight: 700;
 }
 
 .wireframe-shell .win-nav-item.active .win-nav-external,
 .wireframe-shell .win-nav-item.active .win-nav-icon,
 .wireframe-shell .win-nav-item.active .win-nav-label {
-  color: var(--wire-selection-text);
+  color: var(--wire-sidebar-text);
 }
 
 .wireframe-shell .win-nav-external {
-  color: var(--wire-muted);
+  color: var(--wire-sidebar-muted);
+}
+
+.wireframe-shell:not(.collapsed) .win-nav-icon,
+.wireframe-shell:not(.collapsed) .win-nav-external {
+  display: none;
 }
 
 .wireframe-shell .win-nav-badge {
@@ -6094,11 +6128,11 @@ tbody tr:hover {
 .wireframe-shell .win-sidebar-toggle {
   min-height: var(--control-height);
   margin-top: auto;
-  padding: 7px;
-  border: 1px solid var(--wire-control-line);
-  border-radius: var(--wire-radius);
-  background: var(--wire-face);
-  color: var(--wire-text);
+  padding: 7px 12px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--wire-sidebar-muted);
   font-size: var(--ui-xs);
   font-weight: 400;
   transition: none;
@@ -6106,13 +6140,13 @@ tbody tr:hover {
 
 .wireframe-shell .win-sidebar-toggle:hover,
 .wireframe-shell .win-sidebar-toggle:focus-visible {
-  border-color: var(--wire-line);
-  background: var(--wire-face);
-  color: var(--wire-text);
+  border-color: transparent;
+  background: var(--wire-sidebar-hover);
+  color: var(--wire-sidebar-text);
 }
 
 .wireframe-shell .win-main {
-  padding: 8px;
+  padding: 10px;
   overflow: auto;
 }
 
@@ -6149,7 +6183,7 @@ tbody tr:hover {
 .wireframe-shell .marketplace-queue-panel,
 .wireframe-shell .drive-card,
 .wireframe-shell .staff-card {
-  border: 1px solid var(--wire-line-dark);
+  border: 1px solid var(--wire-line);
   border-radius: var(--wire-radius);
   background: var(--wire-paper);
   color: var(--wire-text);
@@ -6205,19 +6239,14 @@ tbody tr:hover {
 
 .wireframe-shell .wms-kpi-card {
   display: grid;
-  grid-template-columns: 28px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto auto auto;
-  column-gap: 7px;
-  min-height: 88px;
-  padding: 8px;
+  min-height: 84px;
+  padding: 10px;
 }
 
 .wireframe-shell .wms-kpi-icon {
-  grid-row: 1 / span 3;
-  width: 24px;
-  height: 24px;
-  border-radius: var(--wire-radius);
-  color: var(--wire-info);
+  display: none;
 }
 
 .wireframe-shell .wms-kpi-icon.success,
@@ -6241,7 +6270,7 @@ tbody tr:hover {
 }
 
 .wireframe-shell .wms-panel {
-  padding: 8px;
+  padding: 10px;
 }
 
 .wireframe-shell .wms-panel-header {
@@ -6283,7 +6312,7 @@ tbody tr:hover {
 
 .wireframe-shell .wms-table-wrap,
 .wireframe-shell .table-wrap {
-  border: 1px solid var(--wire-line-dark);
+  border: 1px solid var(--wire-line);
   border-radius: var(--wire-radius);
   background: var(--wire-paper);
   box-shadow: none;

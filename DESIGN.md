@@ -20,14 +20,16 @@ Modern Windows workspace ใช้กับ Packer/Admin รายงาน แ�
 
 | token | light | dark | ใช้ที่ |
 |---|---|---|---|
-| `--wire-window` | `#f4f7fb` | `#1a2430` | พื้น workspace และ shell |
-| `--wire-face` | `#e9eef5` | `#253445` | toolbar, sidebar, control |
-| `--wire-paper` | `#ffffff` | `#111a23` | panel, table, input |
-| `--wire-titlebar` | `#315a84` | `#1f4f7b` | topbar แบบ Windows รุ่นใหม่ |
-| `--wire-selection` | `#d9e9f7` | `#3c78b2` | รายการ/ปุ่มที่เลือก |
-| `--wire-control-line` | `#71869a` | `#9bb1c5` | ขอบ control |
-| `--wire-text` | `#1d2733` | `#edf4fb` | ตัวหนังสือหลัก |
-| `--wire-muted` | `#4c5a6a` | `#b8c6d4` | label และข้อความรอง |
+| `--wire-window` | `#eef1f4` | `#151b22` | พื้น workspace และ shell |
+| `--wire-face` | `#f6f7f9` | `#202831` | toolbar และ control |
+| `--wire-paper` | `#ffffff` | `#1c242c` | panel, table, input |
+| `--wire-titlebar` | `#222a33` | `#151a20` | topbar เรียบแบบ internal tool |
+| `--wire-sidebar` | `#282f38` | `#1b222a` | sidebar หลัก |
+| `--wire-sidebar-active` | `#1f6bc5` | `#256bb2` | เมนูที่เปิดอยู่ |
+| `--wire-selection` | `#dcecff` | `#3b78b8` | รายการ/ปุ่มที่เลือกใน workspace |
+| `--wire-control-line` | `#71808e` | `#9fb0c0` | ขอบ control |
+| `--wire-text` | `#202932` | `#edf4fb` | ตัวหนังสือหลัก |
+| `--wire-muted` | `#536170` | `#b7c3cf` | label และข้อความรอง |
 | `--wire-radius` | `6px` | `6px` | มุมทุก component ใน shell |
 
 ตาราง token กลุ่ม Modern/teal ด้านล่างยังคงไว้เพื่อ compatibility และประวัติการย้ายระบบ แต่ห้ามใช้เป็นค่าใหม่ใน `.wireframe-shell`

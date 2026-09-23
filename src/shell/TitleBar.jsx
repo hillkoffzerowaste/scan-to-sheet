@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { FileSpreadsheet, LogIn, LogOut, Moon, MoreHorizontal, RefreshCw, ScanLine, ScanSearch, Sun, Volume2, VolumeX } from 'lucide-react';
+import { FileSpreadsheet, LogIn, LogOut, Menu, Moon, MoreHorizontal, RefreshCw, ScanSearch, Sun, Volume2, VolumeX } from 'lucide-react';
 
 // Global commands remain reachable from every workspace without a second menu bar.
 function TitleBar({
@@ -17,6 +17,8 @@ function TitleBar({
   refreshAllCounts,
   checkMissingOrders,
   missingBusy,
+  sidebarCollapsed,
+  setSidebarCollapsed,
 }) {
   const toolsRef = useRef(null);
   useEffect(() => {
@@ -30,7 +32,15 @@ function TitleBar({
 
   return (
     <header className="win-titlebar">
-      <span className="win-app-mark" aria-hidden="true"><ScanLine size={14} /></span>
+      <button
+        className="win-app-menu"
+        type="button"
+        aria-label={sidebarCollapsed ? 'ขยายเมนูนำทาง' : 'ยุบเมนูนำทาง'}
+        aria-expanded={!sidebarCollapsed}
+        onClick={() => setSidebarCollapsed((value) => !value)}
+      >
+        <Menu size={18} aria-hidden="true" />
+      </button>
       <h1 className="win-app-name">HILLKOFF WMS</h1>
 
       <div className="win-titlebar-right">
