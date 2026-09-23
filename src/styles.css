@@ -151,6 +151,12 @@
   --wire-sidebar-muted: #bac5cf;
   --wire-sidebar-hover: #343e49;
   --wire-sidebar-active: #1f6bc5;
+  --wire-sidebar-accent-neutral: #cbd5e1;
+  --wire-sidebar-accent-blue: #93c5fd;
+  --wire-sidebar-accent-teal: #5eead4;
+  --wire-sidebar-accent-purple: #c4b5fd;
+  --wire-sidebar-accent-amber: #fcd34d;
+  --wire-sidebar-accent-rose: #fda4af;
   --wire-success: #176b42;
   --wire-success-bg: #e9f5ee;
   --wire-success-line: #548e70;
@@ -270,6 +276,12 @@
   --wire-sidebar-muted: #aab7c3;
   --wire-sidebar-hover: #28323d;
   --wire-sidebar-active: #256bb2;
+  --wire-sidebar-accent-neutral: #cbd5e1;
+  --wire-sidebar-accent-blue: #93c5fd;
+  --wire-sidebar-accent-teal: #5eead4;
+  --wire-sidebar-accent-purple: #c4b5fd;
+  --wire-sidebar-accent-amber: #fcd34d;
+  --wire-sidebar-accent-rose: #fda4af;
   --wire-success: #62d08f;
   --wire-success-bg: #1d3829;
   --wire-success-line: #4f9f70;
@@ -6059,6 +6071,21 @@ tbody tr:hover {
   transition: none;
 }
 
+.wireframe-shell .win-sidebar.sidebar-text-small .win-nav-item,
+.wireframe-shell .win-sidebar.sidebar-text-small .win-nav-heading,
+.wireframe-shell .win-sidebar.sidebar-text-small .win-nav-subheading,
+.wireframe-shell .win-sidebar.sidebar-text-small .win-sidebar-toggle { font-size: var(--ui-xs); }
+
+.wireframe-shell .win-sidebar.sidebar-text-normal .win-nav-item,
+.wireframe-shell .win-sidebar.sidebar-text-normal .win-nav-heading,
+.wireframe-shell .win-sidebar.sidebar-text-normal .win-nav-subheading,
+.wireframe-shell .win-sidebar.sidebar-text-normal .win-sidebar-toggle { font-size: var(--ui-sm); }
+
+.wireframe-shell .win-sidebar.sidebar-text-large .win-nav-item,
+.wireframe-shell .win-sidebar.sidebar-text-large .win-nav-heading,
+.wireframe-shell .win-sidebar.sidebar-text-large .win-nav-subheading,
+.wireframe-shell .win-sidebar.sidebar-text-large .win-sidebar-toggle { font-size: var(--ui-md); }
+
 .wireframe-shell .win-nav-item:hover,
 .wireframe-shell .win-nav-item:focus-visible {
   border-color: transparent;
@@ -6073,6 +6100,13 @@ tbody tr:hover {
   color: var(--wire-sidebar-text);
   font-weight: 700;
 }
+
+.wireframe-shell .win-nav-item.external-accent-neutral { border-left-color: var(--wire-sidebar-accent-neutral); }
+.wireframe-shell .win-nav-item.external-accent-blue { border-left-color: var(--wire-sidebar-accent-blue); }
+.wireframe-shell .win-nav-item.external-accent-teal { border-left-color: var(--wire-sidebar-accent-teal); }
+.wireframe-shell .win-nav-item.external-accent-purple { border-left-color: var(--wire-sidebar-accent-purple); }
+.wireframe-shell .win-nav-item.external-accent-amber { border-left-color: var(--wire-sidebar-accent-amber); }
+.wireframe-shell .win-nav-item.external-accent-rose { border-left-color: var(--wire-sidebar-accent-rose); }
 
 .wireframe-shell .win-nav-item.active .win-nav-external,
 .wireframe-shell .win-nav-item.active .win-nav-icon,
@@ -6217,7 +6251,14 @@ tbody tr:hover {
 }
 
 .wireframe-shell .wms-kpi-icon {
-  display: none;
+  display: grid;
+}
+
+.wireframe-shell .wms-kpi-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
 }
 
 .wireframe-shell .wms-kpi-icon.success,
@@ -6228,10 +6269,14 @@ tbody tr:hover {
 .wireframe-shell .wms-kpi-icon.danger { color: var(--wire-danger); }
 .wireframe-shell .wms-text-muted { color: var(--wire-muted); }
 
-.wireframe-shell .wms-kpi-card > span,
+.wireframe-shell .wms-kpi-label > span,
 .wireframe-shell .wms-kpi-card small {
   color: var(--wire-muted);
   font-size: var(--ui-xs);
+}
+
+.wireframe-shell .wms-kpi-label > span {
+  min-width: 0;
 }
 
 .wireframe-shell .wms-kpi-card strong {
@@ -6533,8 +6578,7 @@ tbody tr:hover {
 
 .wireframe-shell .status-banner,
 .wireframe-shell .any-format-warning,
-.wireframe-shell .issue-bar,
-.wireframe-shell .marketplace-queue-error {
+.wireframe-shell .issue-bar {
   border: 1px solid var(--wire-line-dark);
   border-radius: var(--wire-radius);
   background: var(--wire-face);
@@ -6543,8 +6587,7 @@ tbody tr:hover {
 
 .wireframe-shell .status-banner strong,
 .wireframe-shell .status-banner span,
-.wireframe-shell .issue-bar span,
-.wireframe-shell .marketplace-queue-error {
+.wireframe-shell .issue-bar span {
   color: var(--wire-text);
   font-size: var(--ui-xs);
 }
@@ -6633,12 +6676,34 @@ tbody tr:hover {
 
 .wireframe-shell .external-tools-settings-header,
 .wireframe-shell .external-tools-group-header,
+.wireframe-shell .external-tools-appearance,
 .wireframe-shell .external-tools-settings-actions {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
 }
+
+.wireframe-shell .external-tools-appearance {
+  padding: 10px;
+  border: 1px solid var(--wire-line-dark);
+  border-radius: var(--wire-radius);
+  background: var(--wire-paper);
+}
+
+.wireframe-shell .external-tools-appearance h2 {
+  margin: 0;
+  color: var(--wire-text);
+  font-size: var(--ui-sm);
+}
+
+.wireframe-shell .external-tools-appearance p {
+  margin: 3px 0 0;
+  color: var(--wire-muted);
+  font-size: var(--ui-xs);
+}
+
+.wireframe-shell .external-tools-sidebar-size { width: min(240px, 100%); }
 
 .wireframe-shell .external-tools-settings-header {
   padding: 10px;
@@ -6704,7 +6769,8 @@ tbody tr:hover {
   font-size: var(--ui-xs);
 }
 
-.wireframe-shell .external-tools-field input {
+.wireframe-shell .external-tools-field input,
+.wireframe-shell .external-tools-field select {
   width: 100%;
   min-width: 0;
   min-height: var(--control-height);
@@ -6716,9 +6782,11 @@ tbody tr:hover {
   font-size: var(--ui-xs);
 }
 
+.wireframe-shell .external-tools-field select { cursor: pointer; }
+
 .wireframe-shell .external-tools-link {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) minmax(100px, 0.7fr) auto;
   align-items: end;
   gap: 8px;
   min-width: 0;
@@ -6749,6 +6817,7 @@ tbody tr:hover {
 @media (max-width: 900px) {
   .wireframe-shell .external-tools-settings-header,
   .wireframe-shell .external-tools-group-header,
+  .wireframe-shell .external-tools-appearance,
   .wireframe-shell .external-tools-settings-actions {
     align-items: stretch;
     flex-direction: column;
@@ -6862,7 +6931,6 @@ tbody tr:hover {
 .wireframe-shell .missing-result-card.danger,
 .wireframe-shell .duty-badge.issue,
 .wireframe-shell .duty-alert,
-.wireframe-shell .marketplace-queue-error,
 .wireframe-shell .external-tools-settings-notice.error,
 .wireframe-shell .status-badge.cancelled,
 .wireframe-shell .status-badge.damaged,
@@ -6935,6 +7003,12 @@ tbody tr:hover {
 .wireframe-shell .drive-card.matched svg {
   color: var(--wire-success);
 }
+
+.wireframe-shell .report-summary-total { border-inline-start: 3px solid var(--wire-info-line); }
+.wireframe-shell .report-summary-sent { border-inline-start: 3px solid var(--wire-success-line); }
+.wireframe-shell .report-summary-cancelled { border-inline-start: 3px solid var(--wire-warning-line); }
+.wireframe-shell .report-summary-returned { border-inline-start: 3px solid var(--wire-info-line); }
+.wireframe-shell .report-summary-damaged { border-inline-start: 3px solid var(--wire-danger-line); }
 
 .wireframe-shell .wms-connection-list .wms-text-muted,
 .wireframe-shell .staff-status.status-off,

@@ -148,26 +148,34 @@ function DashboardView({
         <>
           <div className="wms-kpi-grid" aria-label="สรุปยอดวันนี้">
             <article className="wms-kpi-card">
-              <div className="wms-kpi-icon success"><PackageCheck size={18} aria-hidden="true" /></div>
-              <span>แพ็กสำเร็จวันนี้</span>
+              <div className="wms-kpi-label">
+                <div className="wms-kpi-icon success"><PackageCheck size={18} aria-hidden="true" /></div>
+                <span>แพ็กสำเร็จวันนี้</span>
+              </div>
               <strong>{formatNumber(totalTodayCount)}</strong>
               <small>รวมทุกขนส่งจาก Packer</small>
             </article>
             <article className="wms-kpi-card">
-              <div className="wms-kpi-icon info"><Upload size={18} aria-hidden="true" /></div>
-              <span>รับเข้า Drive วันนี้</span>
+              <div className="wms-kpi-label">
+                <div className="wms-kpi-icon info"><Upload size={18} aria-hidden="true" /></div>
+                <span>รับเข้า Drive วันนี้</span>
+              </div>
               <strong>{formatNumber(driveTotalCount)}</strong>
               <small>รายการที่ Admin รับเข้า</small>
             </article>
             <article className="wms-kpi-card">
-              <div className="wms-kpi-icon warning"><Activity size={18} aria-hidden="true" /></div>
-              <span>คิวรอเขียน Sheet</span>
+              <div className="wms-kpi-label">
+                <div className="wms-kpi-icon warning"><Activity size={18} aria-hidden="true" /></div>
+                <span>คิวรอเขียน Sheet</span>
+              </div>
               <strong>{formatNumber(pendingQueue)}</strong>
               <small>{failedQueue > 0 ? `ไม่สำเร็จ ${formatNumber(failedQueue)} รายการ` : 'สถานะคิวปกติ'}</small>
             </article>
             <article className="wms-kpi-card">
-              <div className="wms-kpi-icon danger"><ShieldAlert size={18} aria-hidden="true" /></div>
-              <span>ออเดอร์ที่ต้องตรวจ</span>
+              <div className="wms-kpi-label">
+                <div className="wms-kpi-icon danger"><ShieldAlert size={18} aria-hidden="true" /></div>
+                <span>ออเดอร์ที่ต้องตรวจ</span>
+              </div>
               <strong>{formatNumber(missingCount)}</strong>
               <small>{dashboardSummary ? 'จากการตรวจสอบล่าสุด' : 'กดตรวจจากเมนูเครื่องมือ'}</small>
             </article>

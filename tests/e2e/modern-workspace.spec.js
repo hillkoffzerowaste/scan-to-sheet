@@ -45,6 +45,8 @@ test('dashboard is the default workspace and signed-out users see an empty state
 test('dashboard uses the signed-in data surface and navigates to both workspaces', async ({ page }) => {
   await openSignedInApp(page, { startTab: 'dashboard' });
   await expect(page.locator('.wms-kpi-grid')).toBeVisible();
+  await expect(page.locator('.wms-kpi-label')).toHaveCount(4);
+  await expect(page.locator('.wms-kpi-icon').first()).toBeVisible();
   await expect(page.locator('.wms-empty-state')).toContainText('ยังไม่มีรายการในขอบเขตนี้');
 
   await page.getByTestId('packer-tab').click();
@@ -56,11 +58,20 @@ test('dashboard uses the signed-in data surface and navigates to both workspaces
   expect(await page.evaluate(() => window.qrTestWrites)).toEqual([]);
 });
 
+test('packer workspace excludes the obsolete Store-to-driver queue feature', async ({ page }) => {
+  await openSignedInApp(page, { startTab: 'packer' });
+  await expect(page.locator('.marketplace-queue-panel, .marketplace-queue-error')).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'เครื่องมือภายนอก', exact: true })).toBeVisible();
+  await expect(page.getByTestId('delivery-system-link')).toBeVisible();
+});
+
 test('single app bar, labeled collapsed navigation and global commands keep their destinations', async ({ page }) => {
   await openSignedInApp(page);
   await expect(page.locator('.win-menubar')).toHaveCount(0);
   expect((await page.locator('.win-titlebar').boundingBox()).height).toBe(56);
   expect((await page.locator('.win-sidebar').boundingBox()).width).toBe(224);
+  await expect(page.getByRole('heading', { name: 'เครื่องมือภายนอก', exact: true })).toBeVisible();
+  await expect(page.getByTestId('delivery-system-link')).toBeVisible();
   await page.getByRole('button', { name: 'ยุบเมนู', exact: true }).click();
   expect((await page.locator('.win-sidebar').boundingBox()).width).toBe(64);
   await expect(page.getByTestId('packer-tab')).toHaveAccessibleName('แพ็กสินค้า (Packer)');

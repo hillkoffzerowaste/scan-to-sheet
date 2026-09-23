@@ -71,8 +71,10 @@ service cloud.firestore {
     match /staffSettings/externalTools {
       allow read: if isOperationalStaff();
       allow create, update: if isStaffAdmin()
-        && request.resource.data.keys().hasOnly(['groups', 'revision', 'updatedAt', 'updatedByUid'])
+        && request.resource.data.keys().hasOnly(['groups', 'sidebarTextSize', 'revision', 'updatedAt', 'updatedByUid'])
         && request.resource.data.keys().hasAll(['groups', 'revision', 'updatedAt', 'updatedByUid'])
+        && (!request.resource.data.keys().hasAny(['sidebarTextSize'])
+          || request.resource.data.sidebarTextSize in ['small', 'normal', 'large'])
         && request.resource.data.groups is list
         && request.resource.data.groups.size() <= 10
         && request.resource.data.revision is string

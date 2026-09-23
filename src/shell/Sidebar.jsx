@@ -31,9 +31,9 @@ function NavItem({ active, icon: Icon, label, badge, testId, onClick, collapsed 
   );
 }
 
-function Sidebar({ activeTab, switchTab, missingAlertBadge, collapsed, setCollapsed, externalToolsGroups = [], canManageExternalTools = false }) {
+function Sidebar({ activeTab, switchTab, missingAlertBadge, collapsed, setCollapsed, externalToolsGroups = [], sidebarTextSize = 'normal', canManageExternalTools = false }) {
   return (
-    <nav className="win-sidebar" aria-label="เมนูหลัก">
+    <nav className={`win-sidebar sidebar-text-${sidebarTextSize}`} aria-label="เมนูหลัก">
       <div className="win-nav-group">
         <h2 className="win-nav-heading">ภาพรวม</h2>
         <NavItem
@@ -111,7 +111,7 @@ function Sidebar({ activeTab, switchTab, missingAlertBadge, collapsed, setCollap
               return (
                 <a
                   key={link.id}
-                  className="win-nav-item external"
+                  className={`win-nav-item external external-accent-${link.accentColor ?? 'neutral'}`}
                   data-testid={EXTERNAL_TOOL_TEST_IDS[link.id]}
                   href={link.url}
                   target="_blank"

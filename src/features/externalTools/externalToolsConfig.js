@@ -1,19 +1,38 @@
 export const DEFAULT_EXTERNAL_TOOLS_CONFIG = Object.freeze({
+  sidebarTextSize: 'normal',
   groups: Object.freeze([
     Object.freeze({
       id: 'external-tools',
       name: 'เครื่องมือภายนอก',
       links: Object.freeze([
-        Object.freeze({ id: 'delivery-system', label: 'ระบบส่งของ', url: 'https://repo-rho-livid.vercel.app/' }),
-        Object.freeze({ id: 'wrong-delivery', label: 'จัดการส่งของผิด', url: 'https://script.google.com/a/macros/hillkoff.com/s/AKfycbxQENSgzP-0IzDX0J_pY2g9HoMlCKMaNQYJlnxPbudqELr79oKdwYpoNflqrSAfsgw2/exec' }),
-        Object.freeze({ id: 'label-checker', label: 'พิมพ์ใบเช็ค ใบปะหน้า', url: 'https://barcode-checker-ashy.vercel.app/' }),
-        Object.freeze({ id: 'coffee-stock', label: 'เบิกออก/รับเข้ากาแฟถัง', url: 'https://script.google.com/a/macros/hillkoff.com/s/AKfycbxETrRx_gJBuVTdl2MUaumr5Pem4LzahebQ6HZzrknPOr-PPCPmJHQ0I9f-p-kYJB-J/exec' }),
-        Object.freeze({ id: 'coffee-shop-grinder', label: 'บดกาแฟหน้าร้าน', url: 'https://coffee-grinder-system.vercel.app/' }),
-        Object.freeze({ id: 'coffee-stock-count', label: 'ตรวจนับสต็อกกาแฟ', url: 'https://script.google.com/macros/s/AKfycbyulSX89Q-eXvcd33QypMp8uP2_PrqjGjpBiYre_j2rJDXg74dNqGQ44jBgU1N_WNIXnA/exec' }),
+        Object.freeze({ id: 'delivery-system', label: 'ระบบส่งของ', url: 'https://repo-rho-livid.vercel.app/', accentColor: 'blue' }),
+        Object.freeze({ id: 'wrong-delivery', label: 'จัดการส่งของผิด', url: 'https://script.google.com/a/macros/hillkoff.com/s/AKfycbxQENSgzP-0IzDX0J_pY2g9HoMlCKMaNQYJlnxPbudqELr79oKdwYpoNflqrSAfsgw2/exec', accentColor: 'purple' }),
+        Object.freeze({ id: 'label-checker', label: 'พิมพ์ใบเช็ค ใบปะหน้า', url: 'https://barcode-checker-ashy.vercel.app/', accentColor: 'teal' }),
+        Object.freeze({ id: 'coffee-stock', label: 'เบิกออก/รับเข้ากาแฟถัง', url: 'https://script.google.com/a/macros/hillkoff.com/s/AKfycbxETrRx_gJBuVTdl2MUaumr5Pem4LzahebQ6HZzrknPOr-PPCPmJHQ0I9f-p-kYJB-J/exec', accentColor: 'amber' }),
+        Object.freeze({ id: 'coffee-shop-grinder', label: 'บดกาแฟหน้าร้าน', url: 'https://coffee-grinder-system.vercel.app/', accentColor: 'rose' }),
+        Object.freeze({ id: 'coffee-stock-count', label: 'ตรวจนับสต็อกกาแฟ', url: 'https://script.google.com/macros/s/AKfycbyulSX89Q-eXvcd33QypMp8uP2_PrqjGjpBiYre_j2rJDXg74dNqGQ44jBgU1N_WNIXnA/exec', accentColor: 'neutral' }),
       ]),
     }),
   ]),
 });
+
+export const SIDEBAR_TEXT_SIZES = Object.freeze([
+  Object.freeze({ value: 'small', label: 'เล็ก' }),
+  Object.freeze({ value: 'normal', label: 'ปกติ' }),
+  Object.freeze({ value: 'large', label: 'ใหญ่' }),
+]);
+
+export const EXTERNAL_LINK_ACCENT_COLORS = Object.freeze([
+  Object.freeze({ value: 'neutral', label: 'เทา' }),
+  Object.freeze({ value: 'blue', label: 'ฟ้า' }),
+  Object.freeze({ value: 'teal', label: 'เขียวฟ้า' }),
+  Object.freeze({ value: 'purple', label: 'ม่วง' }),
+  Object.freeze({ value: 'amber', label: 'เหลือง' }),
+  Object.freeze({ value: 'rose', label: 'ชมพู' }),
+]);
+
+const VALID_SIDEBAR_TEXT_SIZES = new Set(SIDEBAR_TEXT_SIZES.map(({ value }) => value));
+const VALID_ACCENT_COLORS = new Set(EXTERNAL_LINK_ACCENT_COLORS.map(({ value }) => value));
 
 export const EXTERNAL_TOOL_TEST_IDS = Object.freeze({
   'delivery-system': 'delivery-system-link',
@@ -61,6 +80,8 @@ function normalizeUrl(value) {
 
 export function normalizeExternalToolsConfig(value) {
   if (!isRecord(value) || !Array.isArray(value.groups) || value.groups.length > MAX_GROUPS) return null;
+  const sidebarTextSize = value.sidebarTextSize ?? 'normal';
+  if (!VALID_SIDEBAR_TEXT_SIZES.has(sidebarTextSize)) return null;
 
   const ids = new Set();
   let linkCount = 0;
@@ -82,15 +103,16 @@ export function normalizeExternalToolsConfig(value) {
       const linkId = normalizeId(rawLink.id);
       const label = normalizeName(rawLink.label);
       const url = normalizeUrl(rawLink.url);
-      if (!linkId || !label || !url || ids.has(linkId)) return null;
+      const accentColor = rawLink.accentColor ?? 'neutral';
+      if (!linkId || !label || !url || ids.has(linkId) || !VALID_ACCENT_COLORS.has(accentColor)) return null;
       ids.add(linkId);
-      links.push({ id: linkId, label, url });
+      links.push({ id: linkId, label, url, accentColor });
     }
 
     groups.push({ id, name, links });
   }
 
-  return { groups };
+  return { sidebarTextSize, groups };
 }
 
 export function validateExternalToolsConfig(value) {

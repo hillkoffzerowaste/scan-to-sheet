@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Plus, Save, Trash2 } from 'lucide-react';
-import { validateExternalToolsConfig } from './externalToolsConfig.js';
+import { EXTERNAL_LINK_ACCENT_COLORS, SIDEBAR_TEXT_SIZES, validateExternalToolsConfig } from './externalToolsConfig.js';
 
 function copyConfig(config) {
   return {
+    sidebarTextSize: config?.sidebarTextSize ?? 'normal',
     groups: (config?.groups ?? []).map((group) => ({
       ...group,
       links: group.links.map((link) => ({ ...link })),
@@ -70,6 +71,7 @@ function ExternalToolsSettings({ config, version, loadStatus, saving, onSave }) 
 
   function updateGroup(groupId, update) {
     updateDraft((current) => ({
+      ...current,
       groups: current.groups.map((group) => (
         group.id === groupId ? update(group) : group
       )),
@@ -87,6 +89,7 @@ function ExternalToolsSettings({ config, version, loadStatus, saving, onSave }) 
 
   function addGroup() {
     updateDraft((current) => ({
+      ...current,
       groups: [...current.groups, { id: createId(), name: 'หมวดใหม่', links: [] }],
     }));
   }
@@ -99,6 +102,7 @@ function ExternalToolsSettings({ config, version, loadStatus, saving, onSave }) 
       if (!confirmed) return;
     }
     updateDraft((current) => ({
+      ...current,
       groups: current.groups.filter((item) => item.id !== group.id),
     }));
   }
@@ -196,6 +200,24 @@ function ExternalToolsSettings({ config, version, loadStatus, saving, onSave }) 
       )}
 
       <form id="external-tools-settings-form" onSubmit={handleSubmit} noValidate>
+        <section className="external-tools-appearance" aria-labelledby="external-tools-appearance-title">
+          <div>
+            <h2 id="external-tools-appearance-title">การแสดงผลเมนู</h2>
+            <p>ปรับขนาดตัวอักษรและสีแถบลิงก์ใน sidebar ของทุกเครื่อง</p>
+          </div>
+          <div className="external-tools-field external-tools-sidebar-size">
+            <label htmlFor="external-tools-sidebar-text-size">ขนาดตัวอักษร sidebar</label>
+            <select
+              id="external-tools-sidebar-text-size"
+              data-testid="external-tools-sidebar-text-size"
+              value={draft.sidebarTextSize}
+              onChange={(event) => updateDraft((current) => ({ ...current, sidebarTextSize: event.target.value }))}
+              disabled={disabled}
+            >
+              {SIDEBAR_TEXT_SIZES.map((size) => <option key={size.value} value={size.value}>{size.label}</option>)}
+            </select>
+          </div>
+        </section>
         <div className="external-tools-groups">
           {draft.groups.map((group, groupIndex) => (
             <section className="external-tools-group" data-testid={'external-tools-group-' + group.id} key={group.id}>
@@ -250,6 +272,18 @@ function ExternalToolsSettings({ config, version, loadStatus, saving, onSave }) 
                         disabled={disabled}
                         required
                       />
+                    </div>
+                    <div className="external-tools-field external-tools-link-color">
+                      <label htmlFor={'external-tools-link-color-' + link.id}>สีแถบ</label>
+                      <select
+                        id={'external-tools-link-color-' + link.id}
+                        data-testid={'external-tools-link-color-' + link.id}
+                        value={link.accentColor ?? 'neutral'}
+                        onChange={(event) => updateLink(group.id, link.id, { accentColor: event.target.value })}
+                        disabled={disabled}
+                      >
+                        {EXTERNAL_LINK_ACCENT_COLORS.map((color) => <option key={color.value} value={color.value}>{color.label}</option>)}
+                      </select>
                     </div>
                     <button
                       className="ghost-button external-tools-delete-link"

@@ -151,3 +151,11 @@ test("a remote control write carries exactly five keys, a server timestamp and t
   assert.match(block[1], /request\.resource\.data\.updatedAt == request\.time/);
   assert.match(block[1], /request\.resource\.data\.updatedByUid == request\.auth\.uid/);
 });
+
+test('external tool preferences are accepted by the shared settings rules with a known size', async () => {
+  const rules = await readRules();
+  const block = rules.match(/match \/staffSettings\/externalTools \{([\s\S]*?)\n    \}/);
+  assert.ok(block, 'externalTools settings rules must exist');
+  assert.match(block[1], /'sidebarTextSize'/);
+  assert.match(block[1], /sidebarTextSize in \['small', 'normal', 'large'\]/);
+});

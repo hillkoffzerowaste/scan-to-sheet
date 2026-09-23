@@ -4,7 +4,7 @@
 
 ## 1. หลักการและขอบเขต
 
-Modern Windows workspace ใช้กับ Packer/Admin รายงาน และพนักงาน/ตารางงาน โดยเน้นการอ่านข้อมูลและคำสั่งภายในมากกว่าการตกแต่ง แต่คง popup สแกน พฤติกรรม QR และระบบบันทึกเดิม ไม่เปลี่ยน API, Firestore schema หรือ Sheet
+Modern Windows workspace ใช้กับ Packer/Admin รายงาน และพนักงาน/ตารางงาน โดยเน้นการอ่านข้อมูลและคำสั่งภายในมากกว่าการตกแต่ง แต่คง popup สแกน พฤติกรรม QR และระบบบันทึกเดิม ไม่เปลี่ยน API หรือข้อมูลปฏิบัติงานใน Firestore/Sheet; เอกสารตั้งค่า UI ส่วนกลางอาจเพิ่ม preference ได้เมื่อมีฟีเจอร์รองรับ
 
 - Desktop-only: ตรวจที่ 1280/1440/1920px และให้ช่องสแกนเห็นได้ที่ 1280×720 ไม่มีการเพิ่ม mobile layout
 - แถบบนเดียว 56px; เมนูซ้าย 224px ยุบเหลือ 64px; หัวหน้าและคำสั่งอยู่ด้วยกัน; แถบสถานะล่าง 24px
@@ -31,6 +31,17 @@ Modern Windows workspace ใช้กับ Packer/Admin รายงาน แ�
 | `--wire-text` | `#202932` | `#edf4fb` | ตัวหนังสือหลัก |
 | `--wire-muted` | `#536170` | `#b7c3cf` | label และข้อความรอง |
 | `--wire-radius` | `6px` | `6px` | มุมทุก component ใน shell |
+
+สีแถบลิงก์ภายนอกเป็นสีจัดหมวด (ไม่สื่อสถานะ) และคงค่าเดียวกันทั้งสองธีม เพราะ sidebar ทั้ง light/dark เป็นพื้นเข้ม
+
+| token | light / dark | contrast บน sidebar light / dark |
+|---|---|---|
+| `--wire-sidebar-accent-neutral` | `#cbd5e1` | 9.10 / 10.81 |
+| `--wire-sidebar-accent-blue` | `#93c5fd` | 7.49 / 8.90 |
+| `--wire-sidebar-accent-teal` | `#5eead4` | 9.14 / 10.85 |
+| `--wire-sidebar-accent-purple` | `#c4b5fd` | 7.32 / 8.69 |
+| `--wire-sidebar-accent-amber` | `#fcd34d` | 9.37 / 11.13 |
+| `--wire-sidebar-accent-rose` | `#fda4af` | 7.15 / 8.49 |
 
 ### สถานะใน Modern Windows workspace
 

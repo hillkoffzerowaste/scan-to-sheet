@@ -92,27 +92,27 @@ function ReportsView({
           </div>
 
           <div className="report-summary">
-            <div>
+            <div className="report-summary-total">
               <span>ช่วงรายงาน</span>
               <strong>{reportData?.label ?? '-'}</strong>
             </div>
-            <div>
+            <div className="report-summary-sent">
               <span>ยอดส่งจริง</span>
               <strong>{reportData?.total ?? 0}</strong>
             </div>
-            <div>
+            <div className="report-summary-cancelled">
               <span>ยกเลิก</span>
               <strong>{reportData?.cancelledTotal ?? 0}</strong>
             </div>
-            <div>
+            <div className="report-summary-returned">
               <span>ตีกลับ</span>
               <strong>{reportData?.returnedTotal ?? 0}</strong>
             </div>
-            <div>
+            <div className="report-summary-damaged">
               <span>สินค้าเสียหาย</span>
               <strong>{reportData?.damagedTotal ?? 0}</strong>
             </div>
-            <div>
+            <div className="report-summary-days">
               <span>จำนวนวัน</span>
               <strong>{reportData?.days?.length ?? 0}</strong>
             </div>

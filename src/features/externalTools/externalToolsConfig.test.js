@@ -17,12 +17,12 @@ test('preserves the six existing external tools and their stable test IDs', () =
     id: 'external-tools',
     name: 'เครื่องมือภายนอก',
     links: [
-      { id: 'delivery-system', label: 'ระบบส่งของ', url: 'https://repo-rho-livid.vercel.app/' },
-      { id: 'wrong-delivery', label: 'จัดการส่งของผิด', url: 'https://script.google.com/a/macros/hillkoff.com/s/AKfycbxQENSgzP-0IzDX0J_pY2g9HoMlCKMaNQYJlnxPbudqELr79oKdwYpoNflqrSAfsgw2/exec' },
-      { id: 'label-checker', label: 'พิมพ์ใบเช็ค ใบปะหน้า', url: 'https://barcode-checker-ashy.vercel.app/' },
-      { id: 'coffee-stock', label: 'เบิกออก/รับเข้ากาแฟถัง', url: 'https://script.google.com/a/macros/hillkoff.com/s/AKfycbxETrRx_gJBuVTdl2MUaumr5Pem4LzahebQ6HZzrknPOr-PPCPmJHQ0I9f-p-kYJB-J/exec' },
-      { id: 'coffee-shop-grinder', label: 'บดกาแฟหน้าร้าน', url: 'https://coffee-grinder-system.vercel.app/' },
-      { id: 'coffee-stock-count', label: 'ตรวจนับสต็อกกาแฟ', url: 'https://script.google.com/macros/s/AKfycbyulSX89Q-eXvcd33QypMp8uP2_PrqjGjpBiYre_j2rJDXg74dNqGQ44jBgU1N_WNIXnA/exec' },
+      { id: 'delivery-system', label: 'ระบบส่งของ', url: 'https://repo-rho-livid.vercel.app/', accentColor: 'blue' },
+      { id: 'wrong-delivery', label: 'จัดการส่งของผิด', url: 'https://script.google.com/a/macros/hillkoff.com/s/AKfycbxQENSgzP-0IzDX0J_pY2g9HoMlCKMaNQYJlnxPbudqELr79oKdwYpoNflqrSAfsgw2/exec', accentColor: 'purple' },
+      { id: 'label-checker', label: 'พิมพ์ใบเช็ค ใบปะหน้า', url: 'https://barcode-checker-ashy.vercel.app/', accentColor: 'teal' },
+      { id: 'coffee-stock', label: 'เบิกออก/รับเข้ากาแฟถัง', url: 'https://script.google.com/a/macros/hillkoff.com/s/AKfycbxETrRx_gJBuVTdl2MUaumr5Pem4LzahebQ6HZzrknPOr-PPCPmJHQ0I9f-p-kYJB-J/exec', accentColor: 'amber' },
+      { id: 'coffee-shop-grinder', label: 'บดกาแฟหน้าร้าน', url: 'https://coffee-grinder-system.vercel.app/', accentColor: 'rose' },
+      { id: 'coffee-stock-count', label: 'ตรวจนับสต็อกกาแฟ', url: 'https://script.google.com/macros/s/AKfycbyulSX89Q-eXvcd33QypMp8uP2_PrqjGjpBiYre_j2rJDXg74dNqGQ44jBgU1N_WNIXnA/exec', accentColor: 'neutral' },
     ],
   }]);
   assert.deepEqual(EXTERNAL_TOOL_TEST_IDS, {
@@ -36,7 +36,7 @@ test('preserves the six existing external tools and their stable test IDs', () =
 });
 
 test('keeps an intentionally empty saved configuration', () => {
-  assert.deepEqual(normalizeExternalToolsConfig({ groups: [] }), { groups: [] });
+  assert.deepEqual(normalizeExternalToolsConfig({ groups: [] }), { sidebarTextSize: 'normal', groups: [] });
 });
 
 test('normalizes whitespace while retaining valid group and link IDs', () => {
@@ -47,12 +47,24 @@ test('normalizes whitespace while retaining valid group and link IDs', () => {
       links: [{ id: 'link-a', label: '  Search  ', url: ' https://example.com/path ' }],
     }],
   }), {
+    sidebarTextSize: 'normal',
     groups: [{
       id: 'group-a',
       name: 'Tools',
-      links: [{ id: 'link-a', label: 'Search', url: 'https://example.com/path' }],
+      links: [{ id: 'link-a', label: 'Search', url: 'https://example.com/path', accentColor: 'neutral' }],
     }],
   });
+});
+
+test('normalizes supported sidebar preferences and rejects unknown values', () => {
+  const configured = normalizeExternalToolsConfig({
+    sidebarTextSize: 'large',
+    groups: [{ id: 'g', name: 'Tools', links: [{ id: 'l', label: 'Search', url: 'https://example.com', accentColor: 'blue' }] }],
+  });
+  assert.equal(configured.sidebarTextSize, 'large');
+  assert.equal(configured.groups[0].links[0].accentColor, 'blue');
+  assert.equal(normalizeExternalToolsConfig({ sidebarTextSize: 'huge', groups: [] }), null);
+  assert.equal(normalizeExternalToolsConfig({ groups: [{ id: 'g', name: 'Tools', links: [{ id: 'l', label: 'Link', url: 'https://example.com', accentColor: 'custom' }] }] }), null);
 });
 
 test('rejects malformed payloads and duplicate IDs', () => {

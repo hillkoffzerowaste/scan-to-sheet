@@ -3358,6 +3358,7 @@ function App() {
           collapsed={sidebarCollapsed}
           setCollapsed={setSidebarCollapsed}
           externalToolsGroups={externalToolsConfig.groups}
+          sidebarTextSize={externalToolsConfig.sidebarTextSize}
           canManageExternalTools={canManageExternalTools}
         />
         <main id="main" tabIndex={-1} className="win-main">
