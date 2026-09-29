@@ -8,7 +8,12 @@ import {
 } from './_auth.js';
 
 function trustedRedirectUri(req, value) {
-  const candidate = new URL(String(value ?? ''));
+  let candidate;
+  try {
+    candidate = new URL(String(value ?? ''));
+  } catch {
+    return null;
+  }
   const configured = process.env.GOOGLE_OAUTH_REDIRECT_URI;
   if (configured) return candidate.href === configured ? candidate.href : null;
   const host = req.headers['x-forwarded-host'] || req.headers.host;
