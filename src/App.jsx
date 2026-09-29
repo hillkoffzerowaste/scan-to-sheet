@@ -1930,16 +1930,39 @@ function App() {
                   adminCode: firestorePrimary.adminCode || firestorePrimary.code || validation.code,
                 }
               : {};
+            const existingPackerOrder = firestorePrimary?.existing ?? null;
+            const existingPackerScan = existingPackerOrder?.packerScan;
+            const packerRetryTiming = getAdminScanTiming(existingPackerOrder, {
+              fallbackDate: nowParts.date,
+              fallbackTime: nowParts.time,
+            });
+            const packerScanDate = existingPackerScan?.scannedAt
+              ? packerRetryTiming.sheetDate
+              : nowParts.date;
+            const packerScanTime = existingPackerScan?.scannedAt
+              ? packerRetryTiming.sheetTime
+              : nowParts.time;
+            const packerScanName = existingPackerScan?.scannedAt
+              ? (existingPackerScan.packer || existingPackerOrder?.packer || packerName)
+              : packerName;
+            const packerScanNote = existingPackerScan?.scannedAt
+              ? (existingPackerScan.note ?? existingPackerOrder?.note ?? scanNote)
+              : scanNote;
+            const packerScanEmail = existingPackerScan?.scannedAt
+              ? (existingPackerScan.scannedBy?.email || existingPackerOrder?.user?.email || scanEmail)
+              : scanEmail;
             const sheetResult = await runWithGoogleRetry((accessToken, googleConfig) =>
               appendScanGoogle({
                 token: accessToken,
                 config: googleConfig,
                 courier: scanCourier,
                 code: validation.code,
-                email: scanEmail,
-                packer: packerName,
-                note: scanNote,
+                email: packerScanEmail,
+                packer: packerScanName,
+                note: packerScanNote,
                 marketplaceOrder,
+                scanDate: packerScanDate,
+                scanTime: packerScanTime,
                 ...adminData,
               }),
             { sheetWrite: true });
@@ -2181,9 +2204,12 @@ function App() {
         }
         
         // Failed → reclaim: write to Sheet with admin data from Firestore
+        const adminReclaimTiming = getAdminScanTiming(order, {
+          fallbackDate: nowParts.date,
+          fallbackTime: nowParts.time,
+        });
         const adminReclaim = {
-          adminDate: order.admin?.date || order.date || nowParts.date,
-          adminTime: order.admin?.time || nowParts.time,
+          ...adminReclaimTiming,
           adminCode: order.adminCode || order.code || validation.code,
         };
         
@@ -2230,8 +2256,13 @@ function App() {
                 config: googleConfig,
                 courier: scanCourier,
                 code: adminReclaim.adminCode,
-                email: user.email,
+                email: order.admin?.scannedBy?.email || order.user?.email || user.email,
                 marketplaceOrder,
+                scanDate: adminReclaim.sheetDate,
+                scanTime: adminReclaim.sheetTime,
+                adminDate: adminReclaim.adminDate,
+                adminTime: adminReclaim.adminTime,
+                adminCode: adminReclaim.adminCode,
               }),
             { sheetWrite: true });
             // This branch runs precisely because the Sheet row was incomplete, and

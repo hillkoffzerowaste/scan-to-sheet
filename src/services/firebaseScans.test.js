@@ -112,6 +112,39 @@ test('primary scans confirm before their background Marketplace lookup', async (
   );
 });
 
+test('Admin Sheet retry keeps the original Firestore scan date and time', async () => {
+  const appSource = await readFile(new URL('../App.jsx', import.meta.url), 'utf8');
+  const reclaimStart = appSource.indexOf('const adminReclaim = {');
+  const reclaimEnd = appSource.indexOf('setScanFlash(true);', reclaimStart);
+  const reclaimBlock = appSource.slice(reclaimStart, reclaimEnd);
+  const writeStart = appSource.indexOf('appendAdminScanGoogle({', reclaimEnd);
+  const writeEnd = appSource.indexOf('}),', writeStart);
+  const writeBlock = appSource.slice(writeStart, writeEnd);
+
+  assert.ok(reclaimStart >= 0, 'Admin reclaim branch missing');
+  assert.match(appSource, /const adminReclaimTiming = getAdminScanTiming\(order/);
+  assert.match(writeBlock, /scanDate: adminReclaim\.sheetDate/);
+  assert.match(writeBlock, /scanTime: adminReclaim\.sheetTime/);
+});
+
+test('Packer Sheet retry keeps the original Firestore scan timestamp and actor', async () => {
+  const appSource = await readFile(new URL('../App.jsx', import.meta.url), 'utf8');
+  const packerWriteStart = appSource.indexOf(
+    'appendScanGoogle({',
+    appSource.indexOf('const existingPackerScan ='),
+  );
+  const packerWriteEnd = appSource.indexOf('}),', packerWriteStart);
+  const packerWriteBlock = appSource.slice(packerWriteStart, packerWriteEnd);
+
+  assert.match(appSource, /const existingPackerScan = firestorePrimary\?\.existing\?\.packerScan/);
+  assert.match(appSource, /const packerRetryTiming = getAdminScanTiming\(/);
+  assert.match(appSource, /const packerScanDate = existingPackerScan\?\.scannedAt/);
+  assert.match(appSource, /const packerScanTime = existingPackerScan\?\.scannedAt/);
+  assert.match(packerWriteBlock, /scanDate: packerScanDate/);
+  assert.match(packerWriteBlock, /scanTime: packerScanTime/);
+  assert.match(packerWriteBlock, /packer: packerScanName/);
+});
+
 test('pending badge fallback stays capped and still reads the newest orders first', async () => {
   const source = await readFile(new URL('./firebaseScans.js', import.meta.url), 'utf8');
   const marker = "console.warn('Pending badge query failed; falling back to document-id order:', error);";
