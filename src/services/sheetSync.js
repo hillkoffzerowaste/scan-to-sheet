@@ -1,4 +1,5 @@
 import { userErrorMessage } from './authErrors.js';
+import { SHEET_RECOVERY_MAX_ROWS } from './sheetSyncPolicy.js';
 
 export const SHEET_SYNC_STALE_MS = 2 * 60 * 1000;
 
@@ -90,7 +91,7 @@ export async function collectManualSheetRecoveryCandidates({ dates, role = 'both
 // Claim only the next bounded batch. Claiming a whole day first lets later leases expire
 // before their Sheet request starts, and one failed transaction used to strand the rest.
 export async function runSheetRecovery({
-  candidates = [], batchSize = 20, claim, markWriting, write, markResult, isConfirmed, onProgress,
+  candidates = [], batchSize = SHEET_RECOVERY_MAX_ROWS, claim, markWriting, write, markResult, isConfirmed, onProgress,
 }) {
   if (!Number.isInteger(batchSize) || batchSize < 1) throw new RangeError('Invalid recovery batch size');
   const state = { considered: 0, claimed: 0, synced: 0, failed: 0, skipped: 0 };

@@ -1,6 +1,7 @@
 import { buildSheetBackfillUpdates, classifyLateOrder, normalizeMarketplaceTracking } from './marketplaceImport.js';
 import { hasMinimumTrackingLength, MIN_TRACKING_CODE_LENGTH } from './trackingValidation.js';
 import { findHistoricalIssueRow, findScanReconciliation, getScanIssueMeta, resolveCrossDayPackerRow } from './sheetSyncReconciliation.js';
+import { isSheetsApiRequest, scheduleSheetRequest } from './sheetRequestScheduler.js';
 
 const DRIVE_API = 'https://www.googleapis.com/drive/v3';
 export const SHEETS_API = 'https://sheets.googleapis.com/v4/spreadsheets';
@@ -220,18 +221,27 @@ export async function apiFetch(url, token, options = {}) {
   const maxRetries = 4;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const response = await fetch(url, {
-        ...requestOptions,
-        signal: controller.signal,
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-          ...(requestOptions.headers ?? {}),
-        },
-      });
+      // Start the timeout inside the scheduler task. A request can wait behind other Sheets
+      // requests for tens of seconds by design; queue time is not a network timeout.
+      const fetchRequest = async () => {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), timeoutMs);
+        try {
+          return await fetch(url, {
+            ...requestOptions,
+            signal: controller.signal,
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+              ...(requestOptions.headers ?? {}),
+            },
+          });
+        } finally {
+          clearTimeout(timeout);
+        }
+      };
+      const response = await (isSheetsApiRequest(url) ? scheduleSheetRequest(fetchRequest) : fetchRequest());
 
       if (response.status === 429) {
         // The last 429 used to fall through to the generic !response.ok branch, so the
@@ -280,8 +290,6 @@ export async function apiFetch(url, token, options = {}) {
         );
       }
       throw error;
-    } finally {
-      clearTimeout(timeout);
     }
   }
 

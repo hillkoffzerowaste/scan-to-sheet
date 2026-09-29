@@ -90,6 +90,11 @@ import {
   parseCsvText,
   parseMarketplaceRows,
 } from './services/marketplaceImport.js';
+import {
+  SHEET_RECOVERY_COOLDOWN_MS,
+  SHEET_RECOVERY_INTERVAL_MS,
+  SHEET_RECOVERY_MAX_ROWS,
+} from './services/sheetSyncPolicy.js';
 import { parseXlsxArrayBuffer } from './services/xlsxImport.js';
 import { loadHtml5Qrcode } from './services/cameraLoader.js';
 import { commitFallbackScan } from './services/scanCommit.js';
@@ -141,10 +146,9 @@ const GOOGLE_SCOPES = [
 ];
 const SCOPES = GOOGLE_SCOPES.join(' ');
 const MARKETPLACE_IMPORT_MAX_ORDERS = 100;
-// Manual recovery drains the selected snapshot; background work stays quota-bounded.
-const SHEET_RECOVERY_BATCH_SIZE = 20;
-const SHEET_RECOVERY_COOLDOWN_MS = 5 * 1000;
-const SHEET_RECOVERY_INTERVAL_MS = 15 * 60 * 1000;
+// Keep every automatic/manual recovery run bounded because one row can require several
+// Sheets API reads/writes. The API-level scheduler spaces each request separately.
+const SHEET_RECOVERY_BATCH_SIZE = SHEET_RECOVERY_MAX_ROWS;
 const COUNT_REFRESH_DELAY_MS = 1000;
 const DEPLOYMENT_UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;
 // ปิดธงจาก hosting environment ได้ทันทีถ้าการ sync จากรีโมทก่อกวนหน้างาน โดยไม่ต้อง rollback
@@ -1656,7 +1660,6 @@ function App() {
         });
         return { busy: false, ...progress, limited };
       }
-      sheetRecoveryNextAllowedAtRef.current = Date.now() + SHEET_RECOVERY_COOLDOWN_MS;
       const outcome = await runSheetRecovery({
         candidates,
         batchSize: SHEET_RECOVERY_BATCH_SIZE,
@@ -1719,6 +1722,9 @@ function App() {
       });
       return { busy: false, ...progress, error: true };
     } finally {
+      // Start the cooldown after the whole recovery run, not before it. This prevents a
+      // long batch from becoming immediately eligible for another run when it finishes.
+      sheetRecoveryNextAllowedAtRef.current = Date.now() + SHEET_RECOVERY_COOLDOWN_MS;
       sheetRecoveryRunningRef.current = false;
       setSheetRecoveryBusy(false);
       if (showStatus) setDriveSyncBusy(false);

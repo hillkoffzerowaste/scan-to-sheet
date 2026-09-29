@@ -65,7 +65,7 @@ test('manual candidate read failures are not silently treated as a complete day'
   }), { code: 'unavailable' });
 });
 
-test('manual recovery drains all 45 candidates in bounded batches exactly once', async () => {
+test('manual recovery drains all 45 candidates in ten-row batches exactly once', async () => {
   assert.equal(typeof sheetSync.runSheetRecovery, 'function');
   const written = [];
   const progress = [];
@@ -79,9 +79,9 @@ test('manual recovery drains all 45 candidates in bounded batches exactly once',
     }),
     onProgress: (state) => progress.push(state.considered),
   });
-  assert.deepEqual(written.map((batch) => batch.length), [20, 20, 5]);
+  assert.deepEqual(written.map((batch) => batch.length), [10, 10, 10, 10, 5]);
   assert.equal(new Set(written.flat()).size, 45);
-  assert.deepEqual(progress, [20, 40, 45]);
+  assert.deepEqual(progress, [10, 20, 30, 40, 45]);
   assert.deepEqual(outcome, { considered: 45, claimed: 45, synced: 45, failed: 0, skipped: 0 });
 });
 
@@ -136,9 +136,9 @@ test('a failed batch stays recoverable while subsequent batches still run', asyn
       markResult: async (order, update) => { marked.push([order.id, update.ok]); return true; },
     }),
   });
-  assert.equal(outcome.failed, 20);
-  assert.equal(outcome.synced, 1);
-  assert.equal(marked.filter(([, ok]) => !ok).length, 20);
+  assert.equal(outcome.failed, 10);
+  assert.equal(outcome.synced, 11);
+  assert.equal(marked.filter(([, ok]) => !ok).length, 10);
   assert.deepEqual(marked.at(-1), ['order-20', true]);
 });
 

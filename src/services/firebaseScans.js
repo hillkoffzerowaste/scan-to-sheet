@@ -24,6 +24,7 @@ import {
   shouldReconcileSheetOnRescan,
   isSheetSyncVerified,
 } from './sheetSync.js';
+import { SHEET_RECOVERY_MAX_ROWS } from './sheetSyncPolicy.js';
 import { collectFirestorePages } from './firestorePagination.js';
 import { buildRecoveredOrderFields, chooseCanonicalOrder, mergeExistingOrderWithCandidate, mergeScanEventIntoOrder } from './orderRecovery.js';
 import { getScanEventDate } from './scanRow.js';
@@ -944,7 +945,7 @@ export async function markSheetSyncResult({ orderId: id, attemptId = '', ok, res
 }
 
 export async function getSheetRecoveryCandidates({
-  maxRows = 20,
+  maxRows = SHEET_RECOVERY_MAX_ROWS,
   includeSynced = false,
   role = 'both',
   dates = [],
@@ -955,12 +956,17 @@ export async function getSheetRecoveryCandidates({
     if (!recoveryDates.length || recoveryDates.length > MAX_ORDER_QUERY_DATES) {
       throw Object.assign(new RangeError(`เลือกช่วงวันที่ได้ตั้งแต่ 1 ถึง ${MAX_ORDER_QUERY_DATES} วัน`), { code: 'SHEET_RECOVERY_DATE_RANGE' });
     }
-    return collectManualSheetRecoveryCandidates({
+    const result = await collectManualSheetRecoveryCandidates({
       dates: recoveryDates, role, cap: DAILY_ORDER_SCAN_LIMIT,
       readDate: getOrdersByDate,
       readPacker: (date) => getPackerOrdersByScanDate(date, { strict: true }),
       readAdmin: (date) => getAdminOrdersByScanDate(date, { strict: true }),
     });
+    return {
+      ...result,
+      candidates: result.candidates.slice(0, maxRows),
+      limited: result.limited || result.candidates.length > maxRows,
+    };
   }
   const statuses = ['failed', 'pending', 'writing'];
   const snapshots = await Promise.all(statuses.map((status) => getDocs(query(
