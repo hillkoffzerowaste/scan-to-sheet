@@ -30,6 +30,23 @@ test('recovery requires both recorded scan roles and native timestamps before co
   assert.equal(isSheetSyncResultConfirmed({ ...result, status: 'duplicate', row: { ...result.row, status: 'รอแพ็ค' } }, order), false);
 });
 
+test('confirmation tolerates a small Sheet write-time drift but rejects a larger one', () => {
+  const order = {
+    code: 'TH123',
+    packerScan: { scannedAt: '2026-09-09T13:31:36', packer: 'P1', note: '' },
+  };
+  const result = {
+    status: 'success',
+    code: 'TH123',
+    isPacker: true,
+    nativeDataTypesVerified: true,
+    row: { code: 'TH123', status: 'Success', date: '2026-09-09', time: '13:31:39', packer: 'P1', note: '' },
+  };
+
+  assert.equal(isSheetSyncResultConfirmed(result, order), true);
+  assert.equal(isSheetSyncResultConfirmed({ ...result, row: { ...result.row, time: '13:31:42' } }, order), false);
+});
+
 test('Admin confirmation cannot fall back to the Packer tracking column', () => {
   assert.equal(isSheetSyncResultConfirmed({
     status: 'admin_matched', code: 'TH123', isPacker: false,

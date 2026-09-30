@@ -8,6 +8,18 @@ function scanParts(value) {
   return { date, time: time.slice(0, 8) };
 }
 
+const SHEET_TIME_DRIFT_SECONDS = 5;
+
+function clockSeconds(value) {
+  const match = String(value ?? '').trim().match(/^(\d{1,2}):(\d{2}):(\d{2})$/);
+  if (!match) return NaN;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  const seconds = Number(match[3]);
+  if (hours > 23 || minutes > 59 || seconds > 59) return NaN;
+  return hours * 3600 + minutes * 60 + seconds;
+}
+
 export function getScanIssueMeta(note = '') {
   if (note === 'ลูกค้ายกเลิก') {
     return { isIssue: true, sheetStatus: 'Cancelled', resultStatus: 'cancelled', firestoreStatus: 'cancelled' };
@@ -147,8 +159,11 @@ export function isSheetSyncResultConfirmed(result, expectedOrder = null) {
     if (!code || code !== normalizeCode(result.code)) return false;
     if (result.nativeDataTypesVerified !== true && row.nativeDataTypesVerified !== true) return false;
     const sameTime = (actual, expected) => {
-      const normalize = (value) => String(value ?? '').split(':').map((part) => part.padStart(2, '0')).join(':');
-      return normalize(actual) === normalize(expected);
+      const actualSeconds = clockSeconds(actual);
+      const expectedSeconds = clockSeconds(expected);
+      return Number.isFinite(actualSeconds)
+        && Number.isFinite(expectedSeconds)
+        && Math.abs(actualSeconds - expectedSeconds) <= SHEET_TIME_DRIFT_SECONDS;
     };
     if (expectedOrder.packerScan?.scannedAt) {
       const parts = scanParts(expectedOrder.packerScan.scannedAt);
