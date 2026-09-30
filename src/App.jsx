@@ -26,7 +26,6 @@ import {
   appendAdminScanGoogle,
   batchAppendScanGoogle,
   backfillMarketplaceOrdersGoogle,
-  colorAllHistoricalSheetsGoogle,
   ensureGoogleSheetOrganization,
   checkMissingOrders,
   fetchGoogleProfile,
@@ -104,6 +103,7 @@ import { hasDeploymentUpdate } from './services/deploymentUpdate.js';
 import { getScanPopupCourierOptions, getScanPopupStatusMeta } from './services/scanPopup.js';
 import { getScanQrAnnouncement, parseScanQrCommand, resolveScanQrCommand, resolveScanQrName } from './services/scanQrCommand.js';
 import { DEFAULT_SCAN_METHOD, getScanReadinessMessage, SCAN_READINESS } from './services/scanPreferences.js';
+import { scheduleDeferredGoogleSheetMaintenance } from './services/sessionMaintenance.js';
 import {
   DEFAULT_QR_LAYOUT_PREFERENCES,
   loadQrLayoutPreferences,
@@ -397,6 +397,7 @@ function App() {
   const sheetRecoveryRunningRef = useRef(false);
   const refreshRowsRequestRef = useRef(0);
   const sheetRecoveryNextAllowedAtRef = useRef(0);
+  const googleSheetMaintenanceCancelRef = useRef(null);
 
   const isGoogleReady = isFirebaseConfigured || Boolean(GOOGLE_CLIENT_ID);
   const isSheetConnected = Boolean(token && config);
@@ -1307,6 +1308,7 @@ function App() {
     const profile = data.profile ?? (await fetchGoogleProfile(accessToken));
     const serverConfig = data.config ?? (await loadServerGoogleConfig().catch(() => null));
     const prepared = serverConfig ?? (await prepareGoogleSheets(accessToken));
+    const shouldPersistConfig = !serverConfig;
     const nextUser = {
       email: profile.email ?? 'google-user',
       name: profile.name ?? 'Google User',
@@ -1322,23 +1324,14 @@ function App() {
       // A KV outage means there is no revocable server session; keep the bearer token in memory only.
       clearStoredGoogleSession();
     }
-    await saveServerGoogleConfig(prepared).catch(() => {});
+    if (shouldPersistConfig) await saveServerGoogleConfig(prepared).catch(() => {});
 
     setToken(accessToken);
     setUser(nextUser);
-    await ensureGoogleSheetOrganization({ token: accessToken, config: prepared }).catch((error) => {
-      console.warn('Google Sheet organization failed:', error);
-    });
+    setConfig(prepared);
+    // Organization cleanup is maintenance, not an authentication prerequisite. Keep it out
+    // of the login critical path so a slow Sheets read cannot hold the scanner at the login page.
     organizationSyncAtRef.current = Date.now();
-    const marketplaceColorBackfillKey = `scan-to-sheet:marketplace-colors:${prepared.master?.id}:v2`;
-    if (prepared.master?.id && localStorage.getItem(marketplaceColorBackfillKey) !== '1') {
-      try {
-        await colorAllHistoricalSheetsGoogle({ token: accessToken, config: prepared });
-        localStorage.setItem(marketplaceColorBackfillKey, '1');
-      } catch (error) {
-        console.warn('Historical Marketplace colors failed:', error);
-      }
-    }
 
     let firebaseSignInFailed = false;
     if (firebaseAuth && idToken) {
@@ -1346,7 +1339,7 @@ function App() {
         const credential = GoogleAuthProvider.credential(idToken, accessToken);
         const result = await signInWithCredential(firebaseAuth, credential);
         setFirebaseUser(result.user);
-        await upsertFirebaseUser(result.user).catch(() => {});
+        void upsertFirebaseUser(result.user).catch(() => {});
       } catch (error) {
         const existingFirebaseUser = firebaseAuth.currentUser;
         firebaseSignInFailed = !existingFirebaseUser;
@@ -1355,11 +1348,20 @@ function App() {
       }
     } else if (data.firebaseUser) {
       setFirebaseUser(data.firebaseUser);
-      await upsertFirebaseUser(data.firebaseUser).catch(() => {});
+      void upsertFirebaseUser(data.firebaseUser).catch(() => {});
     }
 
-    await refreshAllCounts(accessToken, prepared);
-    setConfig(prepared);
+    googleSheetMaintenanceCancelRef.current?.();
+    googleSheetMaintenanceCancelRef.current = scheduleDeferredGoogleSheetMaintenance(
+      async () => {
+        if (signingOutRef.current) return;
+        await ensureGoogleSheetOrganization({ token: accessToken, config: prepared });
+        organizationSyncAtRef.current = Date.now();
+      },
+      {
+        onError: (error) => console.warn('Deferred Google Sheet organization failed:', error),
+      },
+    );
     return { accessToken, config: prepared, user: nextUser, firebaseSignInFailed };
   }
 
@@ -1430,6 +1432,8 @@ function App() {
 
   async function signOut() {
     signingOutRef.current = true;
+    googleSheetMaintenanceCancelRef.current?.();
+    googleSheetMaintenanceCancelRef.current = null;
     refreshRowsRequestRef.current += 1;
     if (refreshTimerRef.current) {
       clearTimeout(refreshTimerRef.current);
