@@ -395,6 +395,7 @@ function App() {
   const autoCheckTimerRef = useRef(null);
   const lastAutoCheckRef = useRef(0);
   const sheetRecoveryRunningRef = useRef(false);
+  const sheetRecoveryOrderIdsRef = useRef(new Set());
   const refreshRowsRequestRef = useRef(0);
   const sheetRecoveryNextAllowedAtRef = useRef(0);
   const googleSheetMaintenanceCancelRef = useRef(null);
@@ -960,7 +961,9 @@ function App() {
   // setInterval: a long batch must not collide with the cooldown and skip the next round.
   useEffect(() => {
     if (!firebaseUser || !token || !config?.master?.id) return;
-    return createSheetRecoveryScheduler(() => recoverPendingSheetSyncs(), { runImmediately: true });
+    return createSheetRecoveryScheduler(() => recoverPendingSheetSyncs({
+      orderIds: [...sheetRecoveryOrderIdsRef.current],
+    }), { runImmediately: true });
   }, [firebaseUser, token, config]);
 
   // Auto-check for missing orders
@@ -1610,12 +1613,18 @@ function App() {
     }
   }
 
+  function queueSheetRecoveryOrder(orderId) {
+    const normalizedId = String(orderId ?? '').trim();
+    if (normalizedId) sheetRecoveryOrderIdsRef.current.add(normalizedId);
+  }
+
   async function recoverPendingSheetSyncs({
     showStatus = false,
     includeSynced = false,
     role = 'both',
     dates = [],
     routineVerification = false,
+    orderIds = [],
   } = {}) {
     if (sheetRecoveryRunningRef.current) {
       if (showStatus) {
@@ -1646,9 +1655,16 @@ function App() {
     if (showStatus) setDriveSyncBusy(true);
     let progress = { considered: 0, claimed: 0, synced: 0, failed: 0, skipped: 0 };
     try {
+      const targetedOrderIds = [...new Set(orderIds.map((id) => String(id ?? '').trim()).filter(Boolean))];
       const { candidates, limited } = await getSheetRecoveryCandidates({
-        maxRows: SHEET_RECOVERY_BATCH_SIZE, includeSynced, role, dates,
+        maxRows: SHEET_RECOVERY_BATCH_SIZE, includeSynced, role, dates, orderIds: targetedOrderIds,
       });
+      if (targetedOrderIds.length && !limited) {
+        const returnedIds = new Set(candidates.map((candidate) => candidate.id));
+        targetedOrderIds.forEach((orderId) => {
+          if (!returnedIds.has(orderId)) sheetRecoveryOrderIdsRef.current.delete(orderId);
+        });
+      }
       if (!candidates.length) {
         if (showStatus) setStatus({
           type: 'warning', title: 'ไม่พบรายการที่กู้คืนได้ในรอบนี้',
@@ -1701,6 +1717,11 @@ function App() {
             type: 'warning', title: 'กำลังตรวจและกู้คืน Sheet',
             message: `ตรวจแล้ว ${state.considered}/${candidates.length} รายการ · ยืนยันสำเร็จ ${state.synced} รายการ`,
           });
+        },
+        onOrderResult: (order, result) => {
+          if (!order?.id) return;
+          if (result?.ok === true) sheetRecoveryOrderIdsRef.current.delete(order.id);
+          else sheetRecoveryOrderIdsRef.current.add(order.id);
         },
       });
       scheduleCountRefresh();
@@ -1978,10 +1999,11 @@ function App() {
             backgroundResult = { ...result, ...sheetResult, sheetSyncStatus: 'verified' };
           } catch (sheetError) {
             await markSheetSyncResult({ orderId: firestorePrimary.id, attemptId: firestorePrimary.sheetSyncAttemptId, ok: false, error: sheetError }).catch(() => {});
+            queueSheetRecoveryOrder(firestorePrimary.id);
             setStatus({
               type: 'warning',
               title: 'บันทึก Firestore แล้ว แต่ Sheet ยังไม่สำเร็จ',
-              message: `${validation.code} ถูกเก็บไว้ในคิวกู้คืนอัตโนมัติ: ${userErrorMessage(sheetError, 'ซิงก์ Google Sheet ไม่สำเร็จ กรุณารอระบบลองใหม่')}`,
+              message: `${validation.code} ถูกเก็บไว้ในคิวกู้คืนเฉพาะออเดอร์นี้อัตโนมัติ: ${userErrorMessage(sheetError, 'ซิงก์ Google Sheet ไม่สำเร็จ กรุณารอระบบลองใหม่')}`,
             });
             showCameraMessage(`${validation.code} รอซิงก์ Sheet`, 'warning');
             backgroundResult = {
@@ -2292,10 +2314,11 @@ function App() {
               ok: false,
               error: sheetError,
             }).catch(() => {});
+            queueSheetRecoveryOrder(order.id);
             setStatus({
               type: 'warning',
               title: 'บันทึก Firestore แล้ว แต่ Sheet ยังไม่สำเร็จ',
-              message: `${validation.code} ถูกเก็บไว้ในคิวกู้คืนอัตโนมัติ: ${userErrorMessage(sheetError, 'ซิงก์ Google Sheet ไม่สำเร็จ กรุณารอระบบลองใหม่')}`,
+              message: `${validation.code} ถูกเก็บไว้ในคิวกู้คืนเฉพาะออเดอร์นี้อัตโนมัติ: ${userErrorMessage(sheetError, 'ซิงก์ Google Sheet ไม่สำเร็จ กรุณารอระบบลองใหม่')}`,
             });
             showCameraMessage(`${validation.code} รอซิงก์ Sheet`, 'warning');
           }
@@ -2401,6 +2424,7 @@ function App() {
             backgroundResult = { ...result, ...sheetResult, sheetSyncStatus: 'verified' };
           } catch (sheetError) {
             await markSheetSyncResult({ orderId: firestorePrimary.id, attemptId: firestorePrimary.sheetSyncAttemptId, ok: false, error: sheetError }).catch(() => {});
+            queueSheetRecoveryOrder(firestorePrimary.id);
             backgroundResult = {
               ...result,
               sheetSyncStatus: 'failed',

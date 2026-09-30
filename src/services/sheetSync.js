@@ -112,6 +112,7 @@ export async function collectManualSheetRecoveryCandidates({ dates, role = 'both
 // before their Sheet request starts, and one failed transaction used to strand the rest.
 export async function runSheetRecovery({
   candidates = [], batchSize = SHEET_RECOVERY_MAX_ROWS, claim, markWriting, write, markResult, isConfirmed, onProgress,
+  onOrderResult,
 }) {
   if (!Number.isInteger(batchSize) || batchSize < 1) throw new RangeError('Invalid recovery batch size');
   const state = { considered: 0, claimed: 0, synced: 0, failed: 0, skipped: 0 };
@@ -121,12 +122,21 @@ export async function runSheetRecovery({
     for (const candidate of batch) {
       try {
         const order = await claim(candidate);
-        if (!order) { state.skipped += 1; continue; }
+        if (!order) {
+          state.skipped += 1;
+          onOrderResult?.(candidate, { ok: false, skipped: true });
+          continue;
+        }
         state.claimed += 1;
-        if (await markWriting(order) !== true) { state.skipped += 1; continue; }
+        if (await markWriting(order) !== true) {
+          state.skipped += 1;
+          onOrderResult?.(order, { ok: false, skipped: true });
+          continue;
+        }
         writing.push(order);
-      } catch {
+      } catch (error) {
         state.failed += 1;
+        onOrderResult?.(candidate, { ok: false, error });
       }
     }
     let results = [];
@@ -151,11 +161,17 @@ export async function runSheetRecovery({
           error: ok ? null : error,
           retryable: !ok && isRetryableSheetSyncError(error),
         });
-        if (ok && acknowledged === true) state.synced += 1;
-        else state.failed += 1;
-      } catch {
+        if (ok && acknowledged === true) {
+          state.synced += 1;
+          onOrderResult?.(order, { ok: true, result: item?.result });
+        } else {
+          state.failed += 1;
+          onOrderResult?.(order, { ok: false, error });
+        }
+      } catch (error) {
         // A Sheet write alone is not a completed sync when Firestore rejects its ack.
         state.failed += 1;
+        onOrderResult?.(order, { ok: false, error });
       }
     }
     state.considered += batch.length;

@@ -951,6 +951,7 @@ export async function getSheetRecoveryCandidates({
   includeSynced = false,
   role = 'both',
   dates = [],
+  orderIds = [],
 } = {}) {
   if (!canWriteFirestore()) throw Object.assign(new Error('กรุณาเข้าสู่ระบบ Firebase ก่อนกู้คืนข้อมูล'), { code: 'FIREBASE_AUTH_REQUIRED' });
   if (includeSynced) {
@@ -968,6 +969,28 @@ export async function getSheetRecoveryCandidates({
       ...result,
       candidates: result.candidates.slice(0, maxRows),
       limited: result.limited || result.candidates.length > maxRows,
+    };
+  }
+  const targetedIds = [...new Set(orderIds.map((id) => String(id ?? '').trim()).filter(Boolean))];
+  if (targetedIds.length) {
+    const targetedOrders = [];
+    // Firestore limits `in` filters to 30 values. Targeted recovery normally contains one
+    // order, but chunking keeps a burst of failures bounded without falling back to a broad
+    // collection scan.
+    for (let offset = 0; offset < targetedIds.length; offset += 30) {
+      const chunk = targetedIds.slice(offset, offset + 30);
+      const snap = await getDocs(query(
+        collection(firestoreDb, 'orders'),
+        where(documentId(), 'in', chunk),
+      ));
+      targetedOrders.push(...snap.docs.map((item) => ({ id: item.id, ...item.data() })));
+    }
+    const candidates = targetedOrders
+      .filter((order) => isSheetSyncClaimable(order))
+      .slice(0, maxRows);
+    return {
+      candidates,
+      limited: targetedIds.length > maxRows || targetedOrders.length > maxRows,
     };
   }
   const statuses = ['failed', 'pending', 'writing'];

@@ -163,6 +163,23 @@ test('recovery keeps transient Sheet contention pending instead of marking it fa
   assert.equal(outcome.failed, 1);
 });
 
+test('reports each recovery outcome so failed orders can stay targeted', async () => {
+  const outcomes = [];
+  const outcome = await sheetSync.runSheetRecovery({
+    candidates: recoveryOrders(2),
+    ...recoveryDependencies({
+      markWriting: async (order) => order.id !== 'order-1',
+      onOrderResult: (order, result) => outcomes.push([order.id, result.ok, result.skipped === true]),
+    }),
+  });
+  assert.deepEqual(outcomes, [
+    ['order-1', false, true],
+    ['order-0', true, false],
+  ]);
+  assert.equal(outcome.synced, 1);
+  assert.equal(outcome.skipped, 1);
+});
+
 test('HTTP 500 and readback failures are retryable Sheet errors', () => {
   assert.equal(isRetryableSheetSyncError(Object.assign(new Error('server error'), { status: 500 })), true);
   assert.equal(isRetryableSheetSyncError(Object.assign(new Error('unconfirmed'), { code: 'SHEET_RECOVERY_UNCONFIRMED' })), true);
