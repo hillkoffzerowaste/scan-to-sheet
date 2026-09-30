@@ -619,6 +619,12 @@ test('apiFetch aborts a Google request that never responds', async () => {
   }
 });
 
+test('apiFetch reserves a shared server-side quota slot before Sheets calls', async () => {
+  const source = await (await import('node:fs/promises')).readFile(new URL('./googleSheets.js', import.meta.url), 'utf8');
+  assert.match(source, /reserveSheetRequest/);
+  assert.match(source, /scheduleSheetRequest\(fetchRequest\)/);
+});
+
 test('findCancellationRow matches the previous-day packer row before an admin-only row', () => {
   const rows = [
     { no: 1, courier: 'Kerry', code: '', adminCode: 'TH123' },

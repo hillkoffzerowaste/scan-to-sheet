@@ -7,6 +7,7 @@ const DRIVE_API = 'https://www.googleapis.com/drive/v3';
 export const SHEETS_API = 'https://sheets.googleapis.com/v4/spreadsheets';
 const USERINFO_API = 'https://www.googleapis.com/oauth2/v3/userinfo';
 export const GOOGLE_API_TIMEOUT_MS = 25_000;
+const SHEET_RATE_LIMIT_ENDPOINT = '/api/sheet-lock';
 const MIME_FOLDER = 'application/vnd.google-apps.folder';
 export const MIME_SHEET = 'application/vnd.google-apps.spreadsheet';
 
@@ -216,6 +217,37 @@ export function validateScanCode(courier, value, { allowAnyFormat = false } = {}
   };
 }
 
+function sheetResourceFromUrl(url) {
+  const match = String(url).match(/^https:\/\/sheets\.googleapis\.com\/v4\/spreadsheets\/([^/?]+)/);
+  return match?.[1] || '';
+}
+
+export async function reserveSheetRequest(url) {
+  if (typeof window === 'undefined' || !isSheetsApiRequest(url)) return;
+  const resource = sheetResourceFromUrl(url);
+  if (!resource) return;
+
+  while (true) {
+    const response = await fetch(SHEET_RATE_LIMIT_ENDPOINT, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'throttle',
+        resource,
+        requestId: globalThis.crypto?.randomUUID?.() || `${Date.now()}_${Math.random()}`,
+      }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error('Google Sheets quota gate ติดต่อไม่ได้ กรุณาลองใหม่');
+    }
+    if (result.acquired) return;
+    const retryAfterMs = Math.min(60_000, Math.max(250, Number(result.retryAfterMs) || 1000));
+    await new Promise((resolve) => setTimeout(resolve, retryAfterMs));
+  }
+}
+
 export async function apiFetch(url, token, options = {}) {
   const { timeoutMs = GOOGLE_API_TIMEOUT_MS, ...requestOptions } = options;
   const maxRetries = 4;
@@ -225,6 +257,7 @@ export async function apiFetch(url, token, options = {}) {
       // Start the timeout inside the scheduler task. A request can wait behind other Sheets
       // requests for tens of seconds by design; queue time is not a network timeout.
       const fetchRequest = async () => {
+        if (isSheetsApiRequest(url)) await reserveSheetRequest(url);
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), timeoutMs);
         try {
