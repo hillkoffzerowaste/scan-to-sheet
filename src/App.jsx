@@ -2425,6 +2425,12 @@ function App() {
           } catch (sheetError) {
             await markSheetSyncResult({ orderId: firestorePrimary.id, attemptId: firestorePrimary.sheetSyncAttemptId, ok: false, error: sheetError }).catch(() => {});
             queueSheetRecoveryOrder(firestorePrimary.id);
+            setStatus({
+              type: 'warning',
+              title: 'บันทึก Firestore แล้ว แต่ Sheet ยังไม่สำเร็จ',
+              message: `${validation.code} ถูกเก็บไว้ในคิวกู้คืนเฉพาะออเดอร์นี้อัตโนมัติ: ${userErrorMessage(sheetError, 'ซิงก์ Google Sheet ไม่สำเร็จ กรุณารอระบบลองใหม่')}`,
+            });
+            showCameraMessage(`${validation.code} รอซิงก์ Sheet`, 'warning');
             backgroundResult = {
               ...result,
               sheetSyncStatus: 'failed',
