@@ -8,6 +8,7 @@ import {
   SHEET_SYNC_STALE_MS,
   isSheetSyncVerified,
   isSheetSyncClaimable,
+  collectManualSheetRecoveryCandidates,
   prioritizeSheetSyncCandidates,
   shouldIncludeInManualSheetRecovery,
   shouldReconcileSheetOnRescan,
@@ -90,6 +91,20 @@ test('manual Sheet recovery includes synced orders when the selected scan exists
     sheetSyncStatus: 'synced',
     admin: { scannedAt: '2026-07-25T10:00:00' },
   }, 'admin'), true);
+});
+
+test('manual recovery keeps verified rows out of a batch while unsynced rows remain', async () => {
+  const result = await collectManualSheetRecoveryCandidates({
+    dates: ['2026-09-30'],
+    readDate: async () => [
+      { id: 'verified', code: 'TH1', sheetSyncStatus: 'verified', admin: { scannedAt: '2026-09-30T09:00:00' } },
+      { id: 'pending', code: 'TH2', sheetSyncStatus: 'pending', admin: { scannedAt: '2026-09-30T09:01:00' } },
+    ],
+    readPacker: async () => [],
+    readAdmin: async () => [],
+  });
+
+  assert.deepEqual(result.candidates.map((order) => order.id), ['pending']);
 });
 
 test('primary scans confirm before their background Marketplace lookup', async () => {

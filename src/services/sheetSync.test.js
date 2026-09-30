@@ -51,7 +51,7 @@ function recoveryDependencies(overrides = {}) {
   };
 }
 
-test('manual candidate reads cover selected historical scan dates, include stale writing and legacy states', async () => {
+test('manual candidate reads cover selected historical scan dates and defer verified rows', async () => {
   assert.equal(typeof sheetSync.collectManualSheetRecoveryCandidates, 'function');
   const reads = [];
   const orders = [
@@ -66,7 +66,7 @@ test('manual candidate reads cover selected historical scan dates, include stale
     readAdmin: async (date) => { reads.push(['admin', date]); return [orders[0]]; },
   });
   assert.deepEqual(reads, [['date', '2026-09-09'], ['packer', '2026-09-09'], ['admin', '2026-09-09']]);
-  assert.deepEqual(result.candidates.map((order) => order.id), ['writing', 'legacy', 'verified']);
+  assert.deepEqual(result.candidates.map((order) => order.id), ['writing', 'legacy']);
   assert.equal(result.limited, true);
 });
 

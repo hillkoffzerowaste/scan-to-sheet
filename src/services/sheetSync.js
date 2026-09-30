@@ -109,7 +109,11 @@ export async function collectManualSheetRecoveryCandidates({ dates, role = 'both
   const priority = (order) => order.sheetSyncStatus === 'failed' ? 0 : isSheetSyncVerified(order) ? 2 : 1;
   const candidates = [...byId.values()].sort((a, b) => priority(a) - priority(b)
     || (priority(a) === 2 ? String(a.sheetVerifiedAtIso ?? '').localeCompare(String(b.sheetVerifiedAtIso ?? '')) : 0));
-  return { candidates, limited };
+  // Keep already verified rows out of a batch while there is actionable work. If a mixed
+  // batch hits a transient Sheets error, claiming verified rows would unnecessarily turn
+  // them back into pending work and multiply the quota load.
+  const unverified = candidates.filter((order) => !isSheetSyncVerified(order));
+  return { candidates: unverified.length ? unverified : candidates, limited };
 }
 
 // Claim only the next bounded batch. Claiming a whole day first lets later leases expire
