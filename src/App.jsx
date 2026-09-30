@@ -91,7 +91,6 @@ import {
 } from './services/marketplaceImport.js';
 import {
   SHEET_RECOVERY_COOLDOWN_MS,
-  SHEET_RECOVERY_INTERVAL_MS,
   SHEET_RECOVERY_MAX_ROWS,
   shouldApplySheetRecoveryCooldown,
 } from './services/sheetSyncPolicy.js';
@@ -104,6 +103,7 @@ import { getScanPopupCourierOptions, getScanPopupStatusMeta } from './services/s
 import { getScanQrAnnouncement, parseScanQrCommand, resolveScanQrCommand, resolveScanQrName } from './services/scanQrCommand.js';
 import { DEFAULT_SCAN_METHOD, getScanReadinessMessage, SCAN_READINESS } from './services/scanPreferences.js';
 import { isGoogleAuthError, scheduleDeferredGoogleSheetMaintenance } from './services/sessionMaintenance.js';
+import { createSheetRecoveryScheduler } from './services/sheetRecoveryScheduler.js';
 import {
   DEFAULT_QR_LAYOUT_PREFERENCES,
   loadQrLayoutPreferences,
@@ -947,11 +947,6 @@ function App() {
   }, [isSignedIn, token, config?.master?.id, firebaseUser?.uid]);
 
   useEffect(() => {
-    if (!firebaseUser || !token || !config?.master?.id || sheetRecoveryRunningRef.current) return;
-    void recoverPendingSheetSyncs();
-  }, [firebaseUser, token, config]);
-
-  useEffect(() => {
     setShowAllRecentRows(false);
   }, [selectedCourier, today.date, activeTab]);
 
@@ -961,14 +956,11 @@ function App() {
     }
   }, [isSignedIn]);
 
-  // Retry stranded Sheet syncs periodically, but keep the interval long enough that every
-  // open client does not repeatedly scan the same three Firestore status queries.
+  // Retry stranded Sheet syncs periodically. Schedule from completion rather than using
+  // setInterval: a long batch must not collide with the cooldown and skip the next round.
   useEffect(() => {
     if (!firebaseUser || !token || !config?.master?.id) return;
-    const interval = setInterval(() => {
-      void recoverPendingSheetSyncs();
-    }, SHEET_RECOVERY_INTERVAL_MS);
-    return () => clearInterval(interval);
+    return createSheetRecoveryScheduler(() => recoverPendingSheetSyncs(), { runImmediately: true });
   }, [firebaseUser, token, config]);
 
   // Auto-check for missing orders
