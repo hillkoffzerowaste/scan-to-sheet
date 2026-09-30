@@ -1,6 +1,6 @@
 import { buildSheetBackfillUpdates, classifyLateOrder, normalizeMarketplaceTracking } from './marketplaceImport.js';
 import { hasMinimumTrackingLength, MIN_TRACKING_CODE_LENGTH } from './trackingValidation.js';
-import { findHistoricalIssueRow, findScanReconciliation, getScanIssueMeta, resolveCrossDayPackerRow } from './sheetSyncReconciliation.js';
+import { findHistoricalIssueRow, findMarketplaceOrderRow, findScanReconciliation, findTrackingAliasRow, getScanIssueMeta, resolveCrossDayPackerRow } from './sheetSyncReconciliation.js';
 import { isSheetsApiRequest, scheduleSheetRequest } from './sheetRequestScheduler.js';
 
 const DRIVE_API = 'https://www.googleapis.com/drive/v3';
@@ -2103,6 +2103,73 @@ export async function appendScanGoogle({
   });
   const duplicateRow = reconciliation.action === 'skip' ? reconciliation.row : null;
   const duplicate = Boolean(duplicateRow);
+  const marketplaceAliasRow = !duplicate && marketplaceOrder?.orderId
+    ? findMarketplaceOrderRow(parsedRows, marketplaceOrder)
+    : null;
+  const trackingAliasRow = !duplicate && !marketplaceAliasRow
+    ? findTrackingAliasRow(parsedRows, { courier, code: normalizedCode })
+    : null;
+  const aliasRow = marketplaceAliasRow ?? trackingAliasRow;
+
+  // Marketplace exports can expose the same parcel with a short Admin barcode and a full
+  // carrier barcode (for example 2602788293138 / TH2602788293138). The tracking columns
+  // must still be one row when the marketplace order identity proves they are the same order.
+  if (aliasRow && !isIssueScan) {
+    const verifyRows = await readDailyRows({ token, spreadsheetId: sheet.id, date });
+    const verifyParsed = verifyRows.map(rowFromSheet);
+    const targetIdx = verifyParsed.findIndex(
+      (row) => row.sheetRowNumber === aliasRow.sheetRowNumber
+        || (marketplaceOrder?.orderId && findMarketplaceOrderRow([row], marketplaceOrder))
+        || findTrackingAliasRow([row], { courier, code: normalizedCode }),
+    );
+    if (targetIdx !== -1) {
+      const currentRow = verifyParsed[targetIdx];
+      const wrongCourier = currentRow.courier !== courier;
+      const mergedNote = wrongCourier
+        ? `แพ็คเกอร์เลือกขนส่งไม่ตรงกับแอดมิน (เลือก ${courier})`
+        : currentRow.note || note;
+      const mergedRow = withMarketplaceCells([
+        currentRow.no,
+        currentRow.courierNo,
+        date,
+        time,
+        currentRow.courier,
+        normalizedCode,
+        email,
+        packer,
+        'Success',
+        mergedNote,
+        currentRow.adminDate || effectiveAdminDate,
+        currentRow.adminTime || effectiveAdminTime,
+        currentRow.adminCode || effectiveAdminCode,
+      ], marketplaceOrder ?? marketplaceOrderFromRow(currentRow));
+      const confirmedRow = await updateDailyRow({
+        token,
+        spreadsheetId: sheet.id,
+        date,
+        rowNumber: targetIdx + 2,
+        row: mergedRow,
+      });
+      return {
+        status: 'success',
+        courier: currentRow.courier,
+        selectedCourier: courier,
+        date,
+        time,
+        code: normalizedCode,
+        row: confirmedRow,
+        rows: verifyParsed
+          .map((row) => row.sheetRowNumber === targetIdx + 2 ? rowFromSheet(mergedRow) : row)
+          .filter((row) => row.courier === currentRow.courier)
+          .reverse()
+          .slice(0, 20),
+        sheetUrl: sheet.webViewLink,
+        merged: true,
+        matchedBy: marketplaceAliasRow ? 'marketplace-order' : 'tracking-alias',
+        wrongCourier,
+      };
+    }
+  }
 
   // A cancellation can be scanned after the original packer row's day has
   // rolled over. Find and update that historical row before appending today.
@@ -2712,7 +2779,10 @@ export async function appendAdminScanGoogle({
   }
 
   // 2) If Packer already scanned, merge Admin data into that row.
-  const packerRow = reconciliation.action === 'merge-admin' ? reconciliation.row : null;
+  const packerRow = reconciliation.action === 'merge-admin'
+    ? reconciliation.row
+    : (marketplaceOrder?.orderId ? findMarketplaceOrderRow(parsedRows, marketplaceOrder) : null)
+      ?? findTrackingAliasRow(parsedRows, { courier, code: normalizedCode });
 
   if (packerRow) {
     // Merge: update existing row with admin fields
@@ -2720,7 +2790,10 @@ export async function appendAdminScanGoogle({
     const verifyRows = await readDailyRows({ token, spreadsheetId: sheet.id, date });
     const verifyParsed = verifyRows.map(rowFromSheet);
     const targetIdx = verifyParsed.findIndex(
-      (row) => normalizeScanCode(row.code) === normalizedCode,
+      (row) => normalizeScanCode(row.code) === normalizedCode
+        || (packerRow && row.sheetRowNumber === packerRow.sheetRowNumber)
+        || (marketplaceOrder?.orderId && findMarketplaceOrderRow([row], marketplaceOrder))
+        || findTrackingAliasRow([row], { courier, code: normalizedCode }),
     );
     if (targetIdx !== -1) {
       const currentRow = verifyParsed[targetIdx];
@@ -3336,6 +3409,8 @@ export async function batchAppendScanGoogle({ token, config, orders, repairExist
           isPacker: order.isPacker,
           packerName: order.packer,
         }).action === 'create'
+        && !findMarketplaceOrderRow(existingParsed, order.marketplaceOrder ?? {})
+        && !findTrackingAliasRow(existingParsed, { courier: order.courier, code: order.normalizedCode })
       ));
       if (needsHistoricalRows) {
         for (const historicalDate of getLookbackDates(date).slice(1)) {
@@ -3376,9 +3451,19 @@ export async function batchAppendScanGoogle({ token, config, orders, repairExist
         const issueMeta = isPacker ? getScanIssueMeta(note) : null;
         const expectedStatus = isPacker ? issueMeta.sheetStatus : 'รอแพ็ค';
         const resultStatus = isPacker ? issueMeta.resultStatus : 'admin_scan';
-        const reconciliation = findScanReconciliation(reconciliationRows, {
+        const exactReconciliation = findScanReconciliation(reconciliationRows, {
           courier, code: normalizedCode, isPacker, packerName: packer,
         });
+        const marketplaceMatch = exactReconciliation.action === 'create'
+          ? findMarketplaceOrderRow(reconciliationRows, order.marketplaceOrder ?? {})
+          : null;
+        const trackingAliasMatch = exactReconciliation.action === 'create' && !marketplaceMatch
+          ? findTrackingAliasRow(reconciliationRows, { courier, code: normalizedCode })
+          : null;
+        const aliasMatch = marketplaceMatch ?? trackingAliasMatch;
+        const reconciliation = aliasMatch
+          ? { action: isPacker ? 'merge-packer' : 'merge-admin', row: aliasMatch }
+          : exactReconciliation;
 
         if (reconciliation.action === 'skip') {
           const currentRow = reconciliation.row;

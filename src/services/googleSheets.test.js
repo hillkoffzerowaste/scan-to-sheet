@@ -180,6 +180,70 @@ test('batch recovery fills missing Admin fields from the order and preserves buy
   assert.equal(sheet.rowsByDate.get(recoveryDate)[0][15], 'Manual buyer');
 });
 
+test('batch recovery merges alternate Admin and Packer barcodes by marketplace order', async (t) => {
+  const sheet = recoverySheet(t, {
+    [recoveryDate]: [recoveryRow({
+      5: '',
+      7: '',
+      8: 'รอแพ็ค',
+      10: 46259,
+      11: 9 / 24,
+      12: '2602788293138',
+      13: 'shopee',
+      14: '260930CJ1XXVTY',
+      16: 'มัทฉะ x1',
+      17: 'TE-HK-0168',
+      18: 1,
+      20: 'รอแพ็ค',
+      21: 'ไม่ใช่',
+      22: '',
+    })],
+  });
+  const items = await sheet.run([recoveryOrder({
+    code: 'TH2602788293138',
+    packer: 'มุก',
+    marketplaceOrder: {
+      platform: 'shopee',
+      orderId: '260930CJ1XXVTY',
+      items: [{ name: 'มัทฉะ', sku: 'TE-HK-0168', quantity: 1 }],
+    },
+  })]);
+
+  assert.equal(items[0].result.merged, true);
+  assert.equal(items[0].result.row.code, 'TH2602788293138');
+  assert.equal(items[0].result.row.adminCode, '2602788293138');
+  assert.equal(sheet.rowsByDate.get(recoveryDate).length, 1);
+  assert.equal(sheet.rowsByDate.get(recoveryDate)[0][5], 'TH2602788293138');
+  assert.equal(sheet.rowsByDate.get(recoveryDate)[0][12], '2602788293138');
+});
+
+test('batch recovery merges Shopee short/full barcodes without marketplace catalog data', async (t) => {
+  const sheet = recoverySheet(t, {
+    [recoveryDate]: [recoveryRow({
+      5: '',
+      7: '',
+      8: 'รอแพ็ค',
+      10: 46259,
+      11: 9 / 24,
+      12: '2602788293138',
+      13: 'shopee',
+      14: '',
+      16: '',
+      17: '',
+      18: '',
+      20: 'รอแพ็ค',
+      21: 'ไม่ใช่',
+      22: '',
+    })],
+  });
+  const items = await sheet.run([recoveryOrder({ code: 'TH2602788293138', packer: 'มุก' })]);
+
+  assert.equal(items[0].result.merged, true);
+  assert.equal(items[0].result.row.code, 'TH2602788293138');
+  assert.equal(items[0].result.row.adminCode, '2602788293138');
+  assert.equal(sheet.rowsByDate.get(recoveryDate).length, 1);
+});
+
 test('batch recovery repairs Packer metadata when the tracking row already exists', async (t) => {
   const sheet = recoverySheet(t, { [recoveryDate]: [recoveryRow({ 9: '' })] });
   const note = 'แพ็คเกอร์เลือกขนส่งไม่ตรงกับแอดมิน (เลือก Shopee)';

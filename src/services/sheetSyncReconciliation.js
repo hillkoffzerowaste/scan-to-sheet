@@ -26,6 +26,30 @@ export function findHistoricalIssueRow(rows, { courier, code }) {
     ?? null;
 }
 
+export function findMarketplaceOrderRow(rows, { platform = '', orderId = '' } = {}) {
+  const normalizedPlatform = String(platform ?? '').trim().toLowerCase();
+  const normalizedOrderId = String(orderId ?? '').trim();
+  if (!normalizedOrderId) return null;
+
+  return rows.find((row) => (
+    String(row.marketplaceOrderId ?? '').trim() === normalizedOrderId
+    && (!normalizedPlatform || String(row.marketplacePlatform ?? '').trim().toLowerCase() === normalizedPlatform)
+  )) ?? null;
+}
+
+export function findTrackingAliasRow(rows, { courier = '', code = '' } = {}) {
+  const normalizedCode = normalizeCode(code);
+  const aliases = [];
+  if (/^TH\d{10,14}$/.test(normalizedCode)) aliases.push(normalizedCode.slice(2));
+  if (/^\d{10,14}$/.test(normalizedCode)) aliases.push(`TH${normalizedCode}`);
+  if (!aliases.length) return null;
+
+  return rows.find((row) => (
+    (!courier || row.courier === courier)
+    && (aliases.includes(normalizeCode(row.code)) || aliases.includes(normalizeCode(row.adminCode)))
+  )) ?? null;
+}
+
 /**
  * What to do with a Packer row found on an earlier day's sheet.
  *
@@ -118,6 +142,7 @@ export function isSheetSyncResultConfirmed(result, expectedOrder = null) {
   if (!row || normalizeCode(rowCode) !== normalizeCode(result.code)) return false;
 
   if (expectedOrder) {
+    if (expectedOrder.courier && String(row.courier ?? '').trim() !== String(expectedOrder.courier).trim()) return false;
     const code = normalizeCode(expectedOrder.code || expectedOrder.normalizedCode);
     if (!code || code !== normalizeCode(result.code)) return false;
     if (result.nativeDataTypesVerified !== true && row.nativeDataTypesVerified !== true) return false;

@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 
 import {
   findScanReconciliation,
+  findMarketplaceOrderRow,
+  findTrackingAliasRow,
   findHistoricalIssueRow,
   getAdminScanTiming,
   isSheetSyncResultConfirmed,
@@ -32,6 +34,53 @@ test('Admin confirmation cannot fall back to the Packer tracking column', () => 
   assert.equal(isSheetSyncResultConfirmed({
     status: 'admin_matched', code: 'TH123', isPacker: false,
     row: { code: 'TH123', adminCode: '', status: 'Success' },
+  }), false);
+});
+
+test('finds the same marketplace order when Admin and Packer use different barcode forms', () => {
+  const row = {
+    courier: 'Shopee',
+    code: 'TH2602788293138',
+    adminCode: '2602788293138',
+    marketplacePlatform: 'shopee',
+    marketplaceOrderId: '260930CJ1XXVTY',
+  };
+
+  assert.equal(findMarketplaceOrderRow([row], {
+    platform: 'shopee',
+    orderId: '260930CJ1XXVTY',
+  }), row);
+  assert.equal(findMarketplaceOrderRow([row], {
+    platform: 'lazada',
+    orderId: '260930CJ1XXVTY',
+  }), null);
+});
+
+test('finds the Shopee short/full barcode alias only within the same courier', () => {
+  const row = { courier: 'Shopee', code: '', adminCode: '2602788293138' };
+  assert.equal(findTrackingAliasRow([row], { courier: 'Shopee', code: 'TH2602788293138' }), row);
+  assert.equal(findTrackingAliasRow([row], { courier: 'Flash', code: 'TH2602788293138' }), null);
+  assert.equal(findTrackingAliasRow([row], { courier: 'Shopee', code: 'TH2602788293138A' }), null);
+});
+
+test('does not certify a Sheet row stored under a different courier', () => {
+  assert.equal(isSheetSyncResultConfirmed({
+    status: 'admin_scan',
+    code: '2602788293138',
+    isPacker: false,
+    nativeDataTypesVerified: true,
+    row: {
+      courier: 'Shopee',
+      code: '',
+      adminCode: '2602788293138',
+      adminDate: '2026-09-30',
+      adminTime: '09:36:28',
+      status: 'รอแพ็ค',
+    },
+  }, {
+    courier: 'Thaimart',
+    code: '2602788293138',
+    admin: { scannedAt: '2026-09-30T09:36:28' },
   }), false);
 });
 

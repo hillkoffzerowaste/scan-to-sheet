@@ -112,6 +112,14 @@ test('primary scans confirm before their background Marketplace lookup', async (
   );
 });
 
+test('background Sheet confirmation validates the Firestore order identity', async () => {
+  const appSource = await readFile(new URL('../App.jsx', import.meta.url), 'utf8');
+  assert.ok(
+    (appSource.match(/isSheetSyncResultConfirmed\(sheetResult, expectedSheetOrder\)/g) ?? []).length >= 2,
+    'primary Admin and Packer writes must validate the returned Sheet row against Firestore',
+  );
+});
+
 test('Admin Sheet retry keeps the original Firestore scan date and time', async () => {
   const appSource = await readFile(new URL('../App.jsx', import.meta.url), 'utf8');
   const reclaimStart = appSource.indexOf('const adminReclaim = {');

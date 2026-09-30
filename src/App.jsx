@@ -2024,7 +2024,11 @@ function App() {
                 ...adminData,
               }),
             { sheetWrite: true });
-            if (!isSheetSyncResultConfirmed(sheetResult)) {
+            const expectedSheetOrder = {
+              ...firestorePrimary,
+              courier: firestorePrimary?.courier || existingPackerOrder?.courier || scanCourier,
+            };
+            if (!isSheetSyncResultConfirmed(sheetResult, expectedSheetOrder)) {
               // This is the Packer commit path; the guard used to name the Admin row.
               throw Object.assign(new Error('Google Sheet แจ้งว่าซ้ำ แต่ยืนยันแถว Packer ไม่ได้'), {
                 code: 'SHEET_RECOVERY_UNCONFIRMED',
@@ -2447,7 +2451,11 @@ function App() {
                     adminCode: firestorePrimary?.existing?.code || validation.code,
                   }),
             { sheetWrite: true });
-            if (!isSheetSyncResultConfirmed(sheetResult)) {
+            const expectedSheetOrder = {
+              ...firestorePrimary,
+              courier: firestorePrimary?.courier || firestorePrimary?.existing?.courier || scanCourier,
+            };
+            if (!isSheetSyncResultConfirmed(sheetResult, expectedSheetOrder)) {
               // Name the row that was actually attempted: this path writes the Packer row
               // only when a Packer scan already exists, otherwise it writes the Admin row.
               throw Object.assign(
