@@ -10,6 +10,9 @@ mirror and recovery target, so a Sheets failure must leave the Firestore order r
   per minute per open app session. This includes reads used for verification, not only writes.
 - Recovery processes at most 10 orders per run.
 - Automatic recovery checks every 10 minutes.
+- When a foreground scan fails, its Firestore order is queued for a targeted retry after 60
+  seconds. One shared timer handles all queued order ids, so a burst cannot create overlapping
+  retries; the ten-minute sweep remains the fallback when no app session is open.
 - The recovery cooldown starts after the previous run finishes, so manual and automatic recovery
   cannot immediately start a second batch while the first is still draining.
 - Marketplace/Drive requests and Firestore scan writes are not put behind the Sheets queue.

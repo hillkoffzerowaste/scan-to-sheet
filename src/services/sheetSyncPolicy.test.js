@@ -18,3 +18,9 @@ test('manual recovery can continue after one bounded batch without the backgroun
   assert.equal(shouldApplySheetRecoveryCooldown({ showStatus: false, includeSynced: false }), true);
   assert.equal(shouldApplySheetRecoveryCooldown({ showStatus: true, includeSynced: true }), false);
 });
+
+test('targeted recovery bypasses only the background cooldown', () => {
+  assert.equal(shouldApplySheetRecoveryCooldown({ targeted: true }), false);
+  assert.equal(shouldApplySheetRecoveryCooldown({ targeted: true, showStatus: true }), false);
+  assert.equal(shouldApplySheetRecoveryCooldown({ targeted: true, includeSynced: true }), false);
+});

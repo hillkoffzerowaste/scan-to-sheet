@@ -1,7 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildSheetSyncFailureUpdates, isRetryableSheetSyncError } from './sheetSync.js';
+import {
+  buildSheetSyncFailureUpdates,
+  isRetryableSheetSyncError,
+  shouldKeepTargetedSheetRecovery,
+} from './sheetSync.js';
 import * as sheetSync from './sheetSync.js';
 
 const recoveryOrders = (count) => Array.from({ length: count }, (_, index) => ({
@@ -14,6 +18,16 @@ test('a rejected Firestore acknowledgement cannot be reported as a verified scan
   for (const value of [false, null, undefined]) {
     assert.throws(() => sheetSync.requireSheetSyncAcknowledgement(value), { code: 'SHEET_SYNC_NOT_ACKNOWLEDGED' });
   }
+});
+
+test('targeted recovery keeps a live writing lease queued for the next retry', () => {
+  const now = Date.parse('2026-09-30T06:00:00.000Z');
+  assert.equal(shouldKeepTargetedSheetRecovery({
+    sheetSyncStatus: 'writing',
+    sheetSyncStartedAtIso: '2026-09-30T05:59:30.000Z',
+  }, now), true);
+  assert.equal(shouldKeepTargetedSheetRecovery({ sheetSyncStatus: 'failed' }, now), false);
+  assert.equal(shouldKeepTargetedSheetRecovery({ sheetSyncStatus: 'verified' }, now), false);
 });
 
 test('a late failure cannot downgrade an already verified attempt', () => {

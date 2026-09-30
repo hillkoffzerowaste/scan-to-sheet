@@ -24,6 +24,7 @@ import {
   shouldIncludeInManualSheetRecovery,
   shouldReconcileSheetOnRescan,
   isSheetSyncVerified,
+  shouldKeepTargetedSheetRecovery,
 } from './sheetSync.js';
 import { SHEET_RECOVERY_MAX_ROWS } from './sheetSyncPolicy.js';
 import { collectFirestorePages } from './firestorePagination.js';
@@ -991,6 +992,9 @@ export async function getSheetRecoveryCandidates({
     return {
       candidates,
       limited: targetedIds.length > maxRows || targetedOrders.length > maxRows,
+      deferredOrderIds: targetedOrders
+        .filter((order) => shouldKeepTargetedSheetRecovery(order))
+        .map((order) => order.id),
     };
   }
   const statuses = ['failed', 'pending', 'writing'];

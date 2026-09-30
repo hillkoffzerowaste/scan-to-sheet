@@ -92,6 +92,7 @@ import {
 import {
   SHEET_RECOVERY_COOLDOWN_MS,
   SHEET_RECOVERY_MAX_ROWS,
+  SHEET_RECOVERY_TARGETED_RETRY_MS,
   shouldApplySheetRecoveryCooldown,
 } from './services/sheetSyncPolicy.js';
 import { parseXlsxArrayBuffer } from './services/xlsxImport.js';
@@ -103,7 +104,7 @@ import { getScanPopupCourierOptions, getScanPopupStatusMeta } from './services/s
 import { getScanQrAnnouncement, parseScanQrCommand, resolveScanQrCommand, resolveScanQrName } from './services/scanQrCommand.js';
 import { DEFAULT_SCAN_METHOD, getScanReadinessMessage, SCAN_READINESS } from './services/scanPreferences.js';
 import { isGoogleAuthError, scheduleDeferredGoogleSheetMaintenance } from './services/sessionMaintenance.js';
-import { createSheetRecoveryScheduler } from './services/sheetRecoveryScheduler.js';
+import { createSheetRecoveryRetryScheduler, createSheetRecoveryScheduler } from './services/sheetRecoveryScheduler.js';
 import {
   DEFAULT_QR_LAYOUT_PREFERENCES,
   loadQrLayoutPreferences,
@@ -396,6 +397,7 @@ function App() {
   const lastAutoCheckRef = useRef(0);
   const sheetRecoveryRunningRef = useRef(false);
   const sheetRecoveryOrderIdsRef = useRef(new Set());
+  const sheetRecoveryRetrySchedulerRef = useRef(null);
   const refreshRowsRequestRef = useRef(0);
   const sheetRecoveryNextAllowedAtRef = useRef(0);
   const googleSheetMaintenanceCancelRef = useRef(null);
@@ -964,6 +966,32 @@ function App() {
     return createSheetRecoveryScheduler(() => recoverPendingSheetSyncs({
       orderIds: [...sheetRecoveryOrderIdsRef.current],
     }), { runImmediately: true });
+  }, [firebaseUser, token, config]);
+
+  // A failed foreground scan is already durable in Firestore. Retry only those queued ids after
+  // a short delay so a temporary Sheet lock does not leave the operator waiting for the sweep.
+  useEffect(() => {
+    if (!firebaseUser || !token || !config?.master?.id) {
+      sheetRecoveryRetrySchedulerRef.current?.cancel();
+      sheetRecoveryRetrySchedulerRef.current = null;
+      return undefined;
+    }
+    const scheduler = createSheetRecoveryRetryScheduler(async () => {
+      const orderIds = [...sheetRecoveryOrderIdsRef.current];
+      if (!orderIds.length) return { retry: false };
+      const outcome = await recoverPendingSheetSyncs({ orderIds, targeted: true });
+      return {
+        retry: Boolean(outcome.busy || outcome.error || outcome.failed > 0 || outcome.deferred > 0),
+      };
+    }, { delayMs: SHEET_RECOVERY_TARGETED_RETRY_MS });
+    sheetRecoveryRetrySchedulerRef.current = scheduler;
+    if (sheetRecoveryOrderIdsRef.current.size > 0) scheduler.schedule();
+    return () => {
+      scheduler.cancel();
+      if (sheetRecoveryRetrySchedulerRef.current === scheduler) {
+        sheetRecoveryRetrySchedulerRef.current = null;
+      }
+    };
   }, [firebaseUser, token, config]);
 
   // Auto-check for missing orders
@@ -1615,7 +1643,9 @@ function App() {
 
   function queueSheetRecoveryOrder(orderId) {
     const normalizedId = String(orderId ?? '').trim();
-    if (normalizedId) sheetRecoveryOrderIdsRef.current.add(normalizedId);
+    if (!normalizedId) return;
+    sheetRecoveryOrderIdsRef.current.add(normalizedId);
+    sheetRecoveryRetrySchedulerRef.current?.schedule();
   }
 
   async function recoverPendingSheetSyncs({
@@ -1625,6 +1655,7 @@ function App() {
     dates = [],
     routineVerification = false,
     orderIds = [],
+    targeted = false,
   } = {}) {
     if (sheetRecoveryRunningRef.current) {
       if (showStatus) {
@@ -1638,7 +1669,8 @@ function App() {
       }
       return { busy: false, claimed: 0, synced: 0, failed: 0 };
     }
-    const applyCooldown = shouldApplySheetRecoveryCooldown({ showStatus, includeSynced });
+    const targetedOrderIds = [...new Set(orderIds.map((id) => String(id ?? '').trim()).filter(Boolean))];
+    const applyCooldown = shouldApplySheetRecoveryCooldown({ showStatus, includeSynced, targeted });
     const waitMs = sheetRecoveryNextAllowedAtRef.current - Date.now();
     if (applyCooldown && waitMs > 0) {
       if (showStatus) {
@@ -1655,14 +1687,17 @@ function App() {
     if (showStatus) setDriveSyncBusy(true);
     let progress = { considered: 0, claimed: 0, synced: 0, failed: 0, skipped: 0 };
     try {
-      const targetedOrderIds = [...new Set(orderIds.map((id) => String(id ?? '').trim()).filter(Boolean))];
-      const { candidates, limited } = await getSheetRecoveryCandidates({
+      const { candidates, limited, deferredOrderIds = [] } = await getSheetRecoveryCandidates({
         maxRows: SHEET_RECOVERY_BATCH_SIZE, includeSynced, role, dates, orderIds: targetedOrderIds,
       });
+      deferredOrderIds.forEach((orderId) => queueSheetRecoveryOrder(orderId));
       if (targetedOrderIds.length && !limited) {
         const returnedIds = new Set(candidates.map((candidate) => candidate.id));
+        const deferredIds = new Set(deferredOrderIds);
         targetedOrderIds.forEach((orderId) => {
-          if (!returnedIds.has(orderId)) sheetRecoveryOrderIdsRef.current.delete(orderId);
+          if (!returnedIds.has(orderId) && !deferredIds.has(orderId)) {
+            sheetRecoveryOrderIdsRef.current.delete(orderId);
+          }
         });
       }
       if (!candidates.length) {
@@ -1670,7 +1705,7 @@ function App() {
           type: 'warning', title: 'ไม่พบรายการที่กู้คืนได้ในรอบนี้',
           message: 'อาจไม่มีรายการในช่วงที่เลือก หรือรายการกำลังถูกเขียนโดยเครื่องอื่น ยังไม่ได้ยืนยันว่า Sheet ครบทั้งหมด',
         });
-        return { busy: false, ...progress, limited };
+        return { busy: false, ...progress, limited, deferred: deferredOrderIds.length };
       }
       const outcome = await runSheetRecovery({
         candidates,
@@ -1721,7 +1756,7 @@ function App() {
         onOrderResult: (order, result) => {
           if (!order?.id) return;
           if (result?.ok === true) sheetRecoveryOrderIdsRef.current.delete(order.id);
-          else sheetRecoveryOrderIdsRef.current.add(order.id);
+          else queueSheetRecoveryOrder(order.id);
         },
       });
       scheduleCountRefresh();
@@ -1735,7 +1770,7 @@ function App() {
           message: `ตรวจ ${outcome.considered} รายการ · ยืนยันสำเร็จ ${outcome.synced} · ไม่สำเร็จ ${outcome.failed} · ข้ามรายการที่กำลังเขียน ${outcome.skipped}${limited ? ' · พบขีดจำกัดการอ่านข้อมูล ผลตรวจยังไม่ครอบคลุมทั้งหมด' : ''}`,
         });
       }
-      return { busy: false, ...outcome, limited };
+      return { busy: false, ...outcome, limited, deferred: deferredOrderIds.length };
     } catch (error) {
       if (showStatus) setStatus({
         type: 'error', title: 'ตรวจและกู้คืน Sheet ไม่สำเร็จ',

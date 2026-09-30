@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { SHEET_RECOVERY_INTERVAL_MS } from './sheetSyncPolicy.js';
-import { createSheetRecoveryScheduler } from './sheetRecoveryScheduler.js';
+import { createSheetRecoveryRetryScheduler, createSheetRecoveryScheduler } from './sheetRecoveryScheduler.js';
 
 function fakeTimers() {
   let nextId = 0;
@@ -56,6 +56,37 @@ test('schedules the next recovery interval after the previous batch finishes', a
   assert.equal(timers.get(2).delay, SHEET_RECOVERY_INTERVAL_MS);
 
   scheduler();
+});
+
+test('automatically retries a failed targeted recovery without overlapping timers', async () => {
+  const timers = fakeTimers();
+  const attempts = [];
+  const scheduler = createSheetRecoveryRetryScheduler(async () => {
+    attempts.push('run');
+    return { retry: attempts.length === 1 };
+  }, {
+    delayMs: 60_000,
+    setTimeoutFn: timers.setTimeout,
+    clearTimeoutFn: timers.clearTimeout,
+  });
+
+  scheduler.schedule();
+  scheduler.schedule();
+  assert.equal(timers.size, 1);
+  assert.equal(timers.get(1).delay, 60_000);
+
+  await timers.run(1);
+  await Promise.resolve();
+  assert.deepEqual(attempts, ['run']);
+  assert.equal(timers.size, 1);
+  assert.equal(timers.get(2).delay, 60_000);
+
+  await timers.run(2);
+  await Promise.resolve();
+  assert.deepEqual(attempts, ['run', 'run']);
+  assert.equal(timers.size, 0);
+
+  scheduler.cancel();
 });
 
 test('cancels a pending recovery without scheduling another batch', async () => {

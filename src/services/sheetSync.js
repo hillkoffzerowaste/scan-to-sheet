@@ -58,6 +58,10 @@ export function isSheetSyncClaimable(order, now = Date.now()) {
   return !Number.isFinite(startedAt) || now - startedAt >= SHEET_SYNC_STALE_MS;
 }
 
+export function shouldKeepTargetedSheetRecovery(order, now = Date.now()) {
+  return Boolean(order && !isSheetSyncVerified(order) && !isSheetSyncClaimable(order, now));
+}
+
 export function shouldReconcileSheetOnRescan(order, scanType) {
   return Boolean(
     order?.[scanType]?.scannedAt
