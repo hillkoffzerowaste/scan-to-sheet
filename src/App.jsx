@@ -91,8 +91,8 @@ import {
 } from './services/marketplaceImport.js';
 import {
   SHEET_RECOVERY_COOLDOWN_MS,
-  SHEET_RECOVERY_MAX_ROWS,
   SHEET_RECOVERY_TARGETED_RETRY_MS,
+  getSheetRecoveryBatchSize,
   shouldApplySheetRecoveryCooldown,
 } from './services/sheetSyncPolicy.js';
 import { parseXlsxArrayBuffer } from './services/xlsxImport.js';
@@ -148,9 +148,6 @@ const GOOGLE_SCOPES = [
 ];
 const SCOPES = GOOGLE_SCOPES.join(' ');
 const MARKETPLACE_IMPORT_MAX_ORDERS = 100;
-// Keep every automatic/manual recovery run bounded because one row can require several
-// Sheets API reads/writes. The API-level scheduler spaces each request separately.
-const SHEET_RECOVERY_BATCH_SIZE = SHEET_RECOVERY_MAX_ROWS;
 const COUNT_REFRESH_DELAY_MS = 1000;
 const DEPLOYMENT_UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;
 // ปิดธงจาก hosting environment ได้ทันทีถ้าการ sync จากรีโมทก่อกวนหน้างาน โดยไม่ต้อง rollback
@@ -1687,8 +1684,9 @@ function App() {
     if (showStatus) setDriveSyncBusy(true);
     let progress = { considered: 0, claimed: 0, synced: 0, failed: 0, skipped: 0 };
     try {
+      const recoveryBatchSize = getSheetRecoveryBatchSize({ targeted: targetedOrderIds.length > 0 });
       const { candidates, limited, deferredOrderIds = [] } = await getSheetRecoveryCandidates({
-        maxRows: SHEET_RECOVERY_BATCH_SIZE, includeSynced, role, dates, orderIds: targetedOrderIds,
+        maxRows: recoveryBatchSize, includeSynced, role, dates, orderIds: targetedOrderIds,
       });
       deferredOrderIds.forEach((orderId) => queueSheetRecoveryOrder(orderId));
       if (targetedOrderIds.length && !limited) {
@@ -1709,7 +1707,7 @@ function App() {
       }
       const outcome = await runSheetRecovery({
         candidates,
-        batchSize: SHEET_RECOVERY_BATCH_SIZE,
+        batchSize: recoveryBatchSize,
         claim: (candidate) => claimSheetRecoveryOrder({ candidate, includeSynced, role, recordAudit: !routineVerification }),
         markWriting: (order) => markSheetSyncWriting({
           orderId: order.id, attemptId: order.sheetSyncAttemptId, recordAudit: !routineVerification,
@@ -1756,7 +1754,10 @@ function App() {
         onOrderResult: (order, result) => {
           if (!order?.id) return;
           if (result?.ok === true) sheetRecoveryOrderIdsRef.current.delete(order.id);
-          else queueSheetRecoveryOrder(order.id);
+          // The broad ten-minute sweep is already the retry mechanism for historical
+          // failures. Only a targeted foreground retry may requeue its own order;
+          // otherwise one failed ten-row sweep would create a one-minute quota loop.
+          else if (targeted) queueSheetRecoveryOrder(order.id);
         },
       });
       scheduleCountRefresh();
