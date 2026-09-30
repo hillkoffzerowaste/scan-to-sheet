@@ -259,6 +259,32 @@ test('batch recovery repairs Packer metadata when the tracking row already exist
   }), true);
 });
 
+test('batch recovery repairs a later cancellation timestamp on an existing Packer row', async (t) => {
+  const oldTime = (13 * 60 * 60 + 2 * 60 + 43) / 86400;
+  const sheet = recoverySheet(t, {
+    [recoveryDate]: [recoveryRow({
+      3: oldTime,
+      7: 'กิต',
+      8: 'Cancelled',
+      9: 'ลูกค้ายกเลิก',
+    })],
+  });
+  const [item] = await sheet.run([recoveryOrder({
+    time: '15:38:42',
+    packer: 'กิต',
+    note: 'ลูกค้ายกเลิก',
+  })]);
+
+  assert.equal(item.error, undefined);
+  assert.equal(item.result.repaired, true);
+  assert.equal(item.result.row.time, '15:38:42');
+  assert.equal(sheet.rowsByDate.get(recoveryDate)[0][3], (15 * 60 * 60 + 38 * 60 + 42) / 86400);
+  assert.equal(isSheetSyncResultConfirmed(item.result, {
+    ...recoveryOrder({ time: '15:38:42', packer: 'กิต', note: 'ลูกค้ายกเลิก' }),
+    packerScan: { scannedAt: `${recoveryDate}T15:38:42`, packer: 'กิต', note: 'ลูกค้ายกเลิก' },
+  }), true);
+});
+
 test('batch Admin retry preserves packed status and original Admin time', async (t) => {
   const sheet = recoverySheet(t, { [recoveryDate]: [recoveryRow({ 10: 46259, 11: 0.375, 12: recoveryCode })] });
   const [item] = await sheet.run([recoveryOrder({ isPacker: false, adminCode: recoveryCode, adminDate: recoveryDate, adminTime: '11:00:00' })]);

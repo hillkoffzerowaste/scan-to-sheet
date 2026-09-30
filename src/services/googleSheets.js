@@ -3480,11 +3480,22 @@ export async function batchAppendScanGoogle({ token, config, orders, repairExist
             const repairedNote = isPacker
               ? (String(note ?? '').trim() || currentRow.note || '')
               : currentRow.note;
+            // Firestore is the source of truth for a later issue scan (for example a
+            // cancellation rescanned after the original Packer row was written). Keep the
+            // existing-row path from returning `duplicate` with an old Packer timestamp;
+            // that leaves the order permanently unconfirmable even though the status/note
+            // look correct.
+            const repairedDate = isPacker
+              ? (order.date || currentRow.date || date)
+              : (currentRow.date || date);
+            const repairedTime = isPacker
+              ? (order.time || currentRow.time || '')
+              : (currentRow.time || order.time || '');
             const repairedRow = withMarketplaceCells([
               currentRow.no,
               currentRow.courierNo,
-              currentRow.date || date,
-              currentRow.time || order.time,
+              repairedDate,
+              repairedTime,
               currentRow.courier,
               currentRow.code,
               currentRow.email,
