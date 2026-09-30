@@ -285,6 +285,37 @@ test('batch recovery repairs a later cancellation timestamp on an existing Packe
   }), true);
 });
 
+test('same-day cancellation updates the existing Packer row timestamp immediately', async (t) => {
+  const oldTime = (13 * 60 * 60 + 2 * 60 + 43) / 86400;
+  const sheet = recoverySheet(t, {
+    [recoveryDate]: [recoveryRow({
+      3: oldTime,
+      7: 'กิต',
+      8: 'Cancelled',
+      9: 'ลูกค้ายกเลิก',
+    })],
+  });
+  const result = await appendScanGoogle({
+    token: 'test-token',
+    config: { master: { id: 'same-day-cancellation-test', webViewLink: 'https://example.test/sheet' } },
+    courier: 'Shopee',
+    code: recoveryCode,
+    email: 'packer@example.test',
+    packer: 'กิต',
+    note: 'ลูกค้ายกเลิก',
+    scanDate: recoveryDate,
+    scanTime: '15:38:42',
+  });
+
+  assert.equal(result.status, 'cancelled');
+  assert.equal(result.row.time, '15:38:42');
+  assert.equal(sheet.rowsByDate.get(recoveryDate)[0][3], (15 * 60 * 60 + 38 * 60 + 42) / 86400);
+  assert.equal(isSheetSyncResultConfirmed(result, {
+    ...recoveryOrder({ time: '15:38:42', packer: 'กิต', note: 'ลูกค้ายกเลิก' }),
+    packerScan: { scannedAt: `${recoveryDate}T15:38:42`, packer: 'กิต', note: 'ลูกค้ายกเลิก' },
+  }), true);
+});
+
 test('batch Admin retry preserves packed status and original Admin time', async (t) => {
   const sheet = recoverySheet(t, { [recoveryDate]: [recoveryRow({ 10: 46259, 11: 0.375, 12: recoveryCode })] });
   const [item] = await sheet.run([recoveryOrder({ isPacker: false, adminCode: recoveryCode, adminDate: recoveryDate, adminTime: '11:00:00' })]);

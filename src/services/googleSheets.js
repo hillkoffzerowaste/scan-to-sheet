@@ -2189,8 +2189,8 @@ export async function appendScanGoogle({
       const updatedRow = withMarketplaceCells([
         currentRow.no,
         currentRow.courierNo,
-        currentRow.date,
-        currentRow.time,
+        date,
+        time,
         currentRow.courier,
         currentRow.code,
         currentRow.email,
@@ -2438,8 +2438,8 @@ export async function appendScanGoogle({
       const updatedRow = withMarketplaceCells([
         currentRow.no,
         currentRow.courierNo,
-        currentRow.date,
-        currentRow.time,
+        date,
+        time,
         currentRow.courier,
         currentRow.code,
         currentRow.email,
