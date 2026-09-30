@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   createSheetRequestScheduler,
+  SHEET_REQUEST_BURST_SIZE,
   SHEET_REQUEST_MIN_INTERVAL_MS,
   isSheetsApiRequest,
 } from './sheetRequestScheduler.js';
@@ -10,6 +11,31 @@ import {
 test('production Sheets request policy stays below the per-user quota', () => {
   assert.equal(SHEET_REQUEST_MIN_INTERVAL_MS, 2_000);
   assert.equal(Math.floor(60_000 / SHEET_REQUEST_MIN_INTERVAL_MS), 30);
+  assert.equal(SHEET_REQUEST_BURST_SIZE, 3);
+});
+
+test('allows a small initial burst before refilling at the quota-safe rate', async () => {
+  let now = 0;
+  const waits = [];
+  const starts = [];
+  const scheduler = createSheetRequestScheduler({
+    minIntervalMs: 2_000,
+    burstCapacity: SHEET_REQUEST_BURST_SIZE,
+    now: () => now,
+    sleep: async (ms) => {
+      waits.push(ms);
+      now += ms;
+    },
+  });
+
+  const requests = [0, 1, 2, 3].map((id) => scheduler.schedule(async () => {
+    starts.push([id, now]);
+    return id;
+  }));
+
+  assert.deepEqual(await Promise.all(requests), [0, 1, 2, 3]);
+  assert.deepEqual(starts, [[0, 0], [1, 0], [2, 0], [3, 2_000]]);
+  assert.deepEqual(waits, [2_000]);
 });
 
 test('serializes concurrent requests and spaces their start times', async () => {
@@ -20,6 +46,7 @@ test('serializes concurrent requests and spaces their start times', async () => 
   let maxActive = 0;
   const scheduler = createSheetRequestScheduler({
     minIntervalMs: 2_000,
+    burstCapacity: 1,
     now: () => now,
     sleep: async (ms) => {
       waits.push(ms);
@@ -46,6 +73,7 @@ test('a failed request does not block the next queued request', async () => {
   let now = 0;
   const scheduler = createSheetRequestScheduler({
     minIntervalMs: 1_000,
+    burstCapacity: 1,
     now: () => now,
     sleep: async (ms) => { now += ms; },
   });

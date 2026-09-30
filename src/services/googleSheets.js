@@ -1183,9 +1183,9 @@ export function buildDailyRowDataTypeFormattingRequests(sheetId, rowNumbers) {
  * with a limited TTL. Passing nothing still repaints the whole day, which is what the
  * historical-recolour pass wants.
  */
-async function applyStatusCellColors({ token, spreadsheetId, date, sheetId, rowNumbers = null }) {
+async function applyStatusCellColors({ token, spreadsheetId, date, sheetId, rowNumbers = null, targetRows = null }) {
   const only = rowNumbers ? new Set(rowNumbers) : null;
-  const rows = await readDailyRows({ token, spreadsheetId, date });
+  const rows = targetRows ? null : await readDailyRows({ token, spreadsheetId, date });
   const requests = rowNumbers
     ? buildDailyRowDataTypeFormattingRequests(sheetId, rowNumbers)
     : [];
@@ -1198,9 +1198,14 @@ async function applyStatusCellColors({ token, spreadsheetId, date, sheetId, rowN
   };
   // The 500 cap bounds a full repaint. A targeted repaint must not be capped, or a row past
   // the cap would silently keep the colour of whatever it used to be.
-  (only ? rows : rows.slice(0, 500)).forEach((row, index) => {
-    // index 0 is sheet row 2, the first data row.
-    if (only && !only.has(index + 2)) return;
+  const rowsToColor = targetRows
+    ? targetRows
+      .filter(({ rowNumber }) => !only || only.has(rowNumber))
+      .map(({ row, rowNumber }) => ({ row, rowNumber }))
+    : (only
+      ? [...only].map((rowNumber) => ({ row: rows[rowNumber - 2] ?? [], rowNumber }))
+      : rows.slice(0, 500).map((row, index) => ({ row, rowNumber: index + 2 })));
+  rowsToColor.forEach(({ row, rowNumber }) => {
     const status = String(row[8] ?? '').trim();
     const hasPacker = Boolean(String(row[5] ?? '').trim());
     const hasAdmin = Boolean(String(row[12] ?? '').trim());
@@ -1216,7 +1221,7 @@ async function applyStatusCellColors({ token, spreadsheetId, date, sheetId, rowN
       : hasAdmin && !hasPacker
         ? overdue ? colors.overdue : colors.pending
         : null;
-    const rowStart = index + 1;
+    const rowStart = rowNumber - 1;
     if (style) requests.push({ repeatCell: { range: { sheetId, startRowIndex: rowStart, endRowIndex: rowStart + 1, startColumnIndex: 8, endColumnIndex: 9 }, cell: { userEnteredFormat: { backgroundColor: style.backgroundColor, textFormat: { foregroundColor: style.foregroundColor, bold: status !== 'Success' } } }, fields: 'userEnteredFormat(backgroundColor,textFormat)' } });
     if (style) requests.push({ repeatCell: { range: { sheetId, startRowIndex: rowStart, endRowIndex: rowStart + 1, startColumnIndex: 20, endColumnIndex: 21 }, cell: { userEnteredFormat: { backgroundColor: style.backgroundColor, textFormat: { foregroundColor: style.foregroundColor, bold: status !== 'Success' } } }, fields: 'userEnteredFormat(backgroundColor,textFormat)' } });
     if (hasAdmin && hasPacker && scanDate && adminDate && scanDate !== adminDate) requests.push({ repeatCell: { range: { sheetId, startRowIndex: rowStart, endRowIndex: rowStart + 1, startColumnIndex: 21, endColumnIndex: 22 }, cell: { userEnteredFormat: { backgroundColor: colors.crossDay.backgroundColor, textFormat: { foregroundColor: colors.crossDay.foregroundColor, bold: true } } }, fields: 'userEnteredFormat(backgroundColor,textFormat)' } });
@@ -1582,7 +1587,16 @@ async function updateDailyRow({ token, spreadsheetId, date, rowNumber, row }) {
   );
   const spreadsheet = await getSpreadsheet(token, spreadsheetId);
   const sheetId = spreadsheet.sheets?.find((sheet) => sheet.properties.title === date)?.properties.sheetId;
-  if (sheetId) await applyStatusCellColors({ token, spreadsheetId, date, sheetId, rowNumbers: [rowNumber] });
+  if (sheetId) {
+    await applyStatusCellColors({
+      token,
+      spreadsheetId,
+      date,
+      sheetId,
+      rowNumbers: [rowNumber],
+      targetRows: [{ row, rowNumber }],
+    });
+  }
   const confirmedRow = await readDailyRow({ token, spreadsheetId, date, rowNumber });
   const nativeDataTypesVerified = await verifyDailyRowNativeDataTypes({
     token, spreadsheetId, date, rowNumber, row: confirmedRow,
@@ -3180,7 +3194,9 @@ async function findRowsAcrossDays({ token, spreadsheetId, currentDate, courier =
     memo.titles = new Set((spreadsheet.sheets ?? []).map((item) => item.properties.title));
   }
   const titles = memo.titles;
-  for (const date of getLookbackDates(currentDate)) {
+  // Callers already loaded the current worksheet for reconciliation. Searching it again here
+  // only spends one more Sheets read per scan; cross-day reconciliation needs prior tabs only.
+  for (const date of getLookbackDates(currentDate).slice(1)) {
     if (!titles.has(date)) continue;
     if (!memo.rows.has(date)) {
       memo.rows.set(date, await readDailyRows({ token, spreadsheetId, date }));

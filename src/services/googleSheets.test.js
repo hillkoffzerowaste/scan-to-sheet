@@ -743,6 +743,7 @@ test('appendScanGoogle returns the newly written Packer row after placeholder re
     }],
   };
   let storedRows = [];
+  let fullDayReads = 0;
 
   const jsonResponse = (payload) => new Response(JSON.stringify(payload), {
     status: 200,
@@ -753,6 +754,9 @@ test('appendScanGoogle returns the newly written Packer row after placeholder re
     const decodedUrl = decodeURIComponent(String(url));
     const method = options.method ?? 'GET';
     const body = options.body ? JSON.parse(options.body) : null;
+    if (new RegExp(`'${date}'!A2:W(?:\\?|$)`).test(decodedUrl) && method === 'GET') {
+      fullDayReads += 1;
+    }
 
     if (decodedUrl.includes('/values/') && decodedUrl.includes('!A1:W1') && method === 'PUT') {
       return jsonResponse({});
@@ -806,6 +810,7 @@ test('appendScanGoogle returns the newly written Packer row after placeholder re
     assert.equal(result.rows[0].code, 'TH1234567890');
     assert.equal(result.row.code, 'TH1234567890');
     assert.equal(result.row.status, 'Success');
+    assert.equal(fullDayReads, 3, 'targeted status coloring should reuse the row being written');
   } finally {
     globalThis.fetch = originalFetch;
   }
