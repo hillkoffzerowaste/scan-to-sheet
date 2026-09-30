@@ -103,7 +103,7 @@ import { hasDeploymentUpdate } from './services/deploymentUpdate.js';
 import { getScanPopupCourierOptions, getScanPopupStatusMeta } from './services/scanPopup.js';
 import { getScanQrAnnouncement, parseScanQrCommand, resolveScanQrCommand, resolveScanQrName } from './services/scanQrCommand.js';
 import { DEFAULT_SCAN_METHOD, getScanReadinessMessage, SCAN_READINESS } from './services/scanPreferences.js';
-import { scheduleDeferredGoogleSheetMaintenance } from './services/sessionMaintenance.js';
+import { isGoogleAuthError, scheduleDeferredGoogleSheetMaintenance } from './services/sessionMaintenance.js';
 import {
   DEFAULT_QR_LAYOUT_PREFERENCES,
   loadQrLayoutPreferences,
@@ -920,7 +920,14 @@ function App() {
       setScanReadiness(SCAN_READINESS.CHECKING);
       try {
         if (isFirebaseConfigured) await getFirebaseUserForPrimary();
-        await fetchGoogleProfile(token);
+        try {
+          await fetchGoogleProfile(token);
+        } catch (error) {
+          if (!isGoogleAuthError(error)) throw error;
+          const refreshed = await refreshGoogleSessionFromServer({ silent: true });
+          if (refreshed?.accessToken && refreshed.accessToken !== token) return;
+          throw error;
+        }
         if (!cancelled) setScanReadiness(SCAN_READINESS.READY);
       } catch {
         if (cancelled) return;
@@ -1417,17 +1424,6 @@ function App() {
     return runWithGoogleRetry((accessToken, googleConfig) => (
       findMarketplaceOrderGoogle({ token: accessToken, config: googleConfig, trackingNo })
     ));
-  }
-
-  function isGoogleAuthError(error) {
-    const message = String(error?.message ?? '').toLowerCase();
-    return (
-      message.includes('401') ||
-      message.includes('invalid authentication') ||
-      message.includes('invalid credentials') ||
-      message.includes('unauthorized') ||
-      (message.includes('google api error 403') && message.includes('permission_denied'))
-    );
   }
 
   async function signOut() {

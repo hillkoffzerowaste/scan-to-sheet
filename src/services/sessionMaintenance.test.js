@@ -2,8 +2,15 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   GOOGLE_SHEET_MAINTENANCE_DELAY_MS,
+  isGoogleAuthError,
   scheduleDeferredGoogleSheetMaintenance,
 } from './sessionMaintenance.js';
+
+test('recognizes an expired Google session as refreshable', () => {
+  assert.equal(isGoogleAuthError(Object.assign(new Error('Google API error 401'), { status: 401 })), true);
+  assert.equal(isGoogleAuthError(new Error('Google API error 403 permission_denied')), true);
+  assert.equal(isGoogleAuthError(new Error('Google API error 500')), false);
+});
 
 test('defers Google Sheet maintenance until after the login critical path', async () => {
   let scheduledTask = null;
