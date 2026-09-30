@@ -3724,11 +3724,17 @@ export async function batchAppendScanGoogle({ token, config, orders, repairExist
       }
     } catch (error) {
       // If the whole date batch fails, mark all orders in this group as failed
+      // only as a recoverable batch. Some rows may already have reached the Sheet before
+      // verification or a later API call failed; treating this as a permanent failure makes
+      // Firestore disagree with a row that is already physically present.
+      const batchError = error instanceof Error ? error : new Error('Google Sheet batch ไม่สมบูรณ์ กรุณาลองใหม่');
+      batchError.batchIncomplete = true;
+      batchError.code ||= 'SHEET_BATCH_INCOMPLETE';
       for (let index = results.length - 1; index >= 0; index -= 1) {
         if (dateOrders.includes(results[index].order)) results.splice(index, 1);
       }
       for (const order of dateOrders) {
-        results.push({ order, result: null, error });
+        results.push({ order, result: null, error: batchError });
       }
     }
   }

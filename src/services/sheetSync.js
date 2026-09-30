@@ -19,13 +19,18 @@ const RETRYABLE_SHEET_SYNC_CODES = new Set([
   'SHEET_LOCK_BUSY',
   'SHEET_RATE_LIMIT_UNAVAILABLE',
   'SHEET_RECOVERY_UNCONFIRMED',
+  'SHEET_BATCH_INCOMPLETE',
 ]);
 
 export function isRetryableSheetSyncError(error) {
   const code = String(error?.code ?? '');
   if (RETRYABLE_SHEET_SYNC_CODES.has(code)) return true;
-  if (Number(error?.status) >= 500) return true;
-  return /Google Sheet กำลังถูกใช้งาน|Google ตอบสนองช้า|Google จำกัดการเรียกใช้/.test(String(error?.message ?? ''));
+  if (error?.batchIncomplete === true) return true;
+  if ([408, 409, 425, 429].includes(Number(error?.status)) || Number(error?.status) >= 500) return true;
+  const diagnostic = [error?.message, error?.detail, error?.cause]
+    .map((value) => typeof value === 'string' ? value : JSON.stringify(value ?? ''))
+    .join(' ');
+  return /Google Sheet กำลังถูกใช้งาน|Google ตอบสนองช้า|Google จำกัดการเรียกใช้|rateLimitExceeded|userRateLimitExceeded|quotaExceeded|resource_exhausted|backendError|temporarilyUnavailable/i.test(diagnostic);
 }
 
 export function isSheetSyncVerified(order) {

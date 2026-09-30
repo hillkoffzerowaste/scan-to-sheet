@@ -166,6 +166,13 @@ test('recovery keeps transient Sheet contention pending instead of marking it fa
 test('HTTP 500 and readback failures are retryable Sheet errors', () => {
   assert.equal(isRetryableSheetSyncError(Object.assign(new Error('server error'), { status: 500 })), true);
   assert.equal(isRetryableSheetSyncError(Object.assign(new Error('unconfirmed'), { code: 'SHEET_RECOVERY_UNCONFIRMED' })), true);
+  assert.equal(isRetryableSheetSyncError(Object.assign(new Error('Google ปฏิเสธคำขอ (รหัส 403) กรุณาลองใหม่'), {
+    status: 403,
+    detail: '{"error":{"errors":[{"reason":"userRateLimitExceeded"}]}}',
+  })), true);
+  assert.equal(isRetryableSheetSyncError(Object.assign(new Error('batch may have written before verification failed'), {
+    code: 'SHEET_BATCH_INCOMPLETE',
+  })), true);
   assert.equal(isRetryableSheetSyncError(new Error('ช่วงวันที่ไม่ถูกต้อง')), false);
 });
 

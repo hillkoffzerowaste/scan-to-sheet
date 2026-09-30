@@ -145,6 +145,22 @@ const recoveryRow = (cells = {}) => Object.assign([
   '', '', '', '', '', 'Manual buyer', '', '', '', '', 'ส่งออกแล้ว', 'ไม่ใช่', 'verified',
 ], cells);
 
+test('batch recovery labels partial-date failures as recoverable', async (t) => {
+  const sheet = recoverySheet(t, { [recoveryDate]: [] }, {
+    afterAppend: () => { throw new Error('verification request failed after append'); },
+  });
+  const items = await sheet.run([
+    recoveryOrder({ code: 'TH999999999999' }),
+    recoveryOrder({ code: 'TH888888888888' }),
+  ]);
+
+  assert.equal(items.length, 2);
+  assert.ok(items.every((item) => item.result === null));
+  assert.ok(items.every((item) => item.error?.code === 'SHEET_BATCH_INCOMPLETE'));
+  assert.ok(items.every((item) => item.error?.batchIncomplete === true));
+  assert.equal(sheet.rowsByDate.get(recoveryDate).length, 2);
+});
+
 test('batch native verification accepts Packer-only rows with empty Admin dates and midnight', async (t) => {
   const sheet = recoverySheet(t, { [recoveryDate]: [recoveryRow({ 3: 0 })] });
   const [item] = await sheet.run([recoveryOrder({ time: '00:00:00' })], false);
