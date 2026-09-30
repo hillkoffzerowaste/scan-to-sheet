@@ -3325,12 +3325,26 @@ export async function batchAppendScanGoogle({ token, config, orders, repairExist
       });
       const workingParsed = existingParsed.slice();
       const historicalParsed = [];
-      for (const historicalDate of getLookbackDates(date).slice(1)) {
-        if (!availableSheetTitles.has(historicalDate)) continue;
-        const historicalRows = await readDailyRows({ token, spreadsheetId: sheet.id, date: historicalDate });
-        historicalParsed.push(
-          ...historicalRows.map((row, idx) => ({ ...rowFromSheet(row, idx), _sheetDate: historicalDate })),
-        );
+      // A recovery batch usually contains rows that are already on today's tab after a
+      // previous write whose acknowledgement timed out. Reading three historical tabs for
+      // those duplicates only consumes quota and prolongs the shared Sheet lock. Search old
+      // tabs only when at least one candidate is not present on the current tab.
+      const needsHistoricalRows = dateOrders.some((order) => (
+        findScanReconciliation(existingParsed, {
+          courier: order.courier,
+          code: order.normalizedCode,
+          isPacker: order.isPacker,
+          packerName: order.packer,
+        }).action === 'create'
+      ));
+      if (needsHistoricalRows) {
+        for (const historicalDate of getLookbackDates(date).slice(1)) {
+          if (!availableSheetTitles.has(historicalDate)) continue;
+          const historicalRows = await readDailyRows({ token, spreadsheetId: sheet.id, date: historicalDate });
+          historicalParsed.push(
+            ...historicalRows.map((row, idx) => ({ ...rowFromSheet(row, idx), _sheetDate: historicalDate })),
+          );
+        }
       }
       const reconciliationRows = [...workingParsed, ...historicalParsed];
       const existingNativeRows = new Map();
@@ -3394,6 +3408,13 @@ export async function batchAppendScanGoogle({ token, config, orders, repairExist
               ))
               || (!isPlaceholderNo(currentRow.no) && !hasNativeDailyDateTimeValues(nativeValues, currentRow));
             if (!needsRepair) {
+              // A placeholder is only an in-memory row created earlier in this same batch;
+              // it still needs the normal final readback. Real rows were read and native-type
+              // checked under the lock, so they can skip that duplicate verification request.
+              const canSkipReadback = !isPlaceholderNo(currentRow.no);
+              const nativeDataTypesVerified = canSkipReadback
+                ? hasNativeDailyDateTimeValues(nativeValues, currentRow)
+                : undefined;
               results.push({
                 order,
                 result: {
@@ -3403,9 +3424,17 @@ export async function batchAppendScanGoogle({ token, config, orders, repairExist
                   time: order.time,
                   code: normalizedCode,
                   isPacker: Boolean(isPacker),
-                  row: currentRow,
+                  row: nativeDataTypesVerified === undefined
+                    ? currentRow
+                    : { ...currentRow, nativeDataTypesVerified },
                   rows: existingParsed.filter((row) => row.courier === courier).reverse().slice(0, 20),
                   sheetUrl: sheet.webViewLink,
+                  ...(nativeDataTypesVerified === undefined ? {} : {
+                    nativeDataTypesVerified,
+                    // The row was read under the write lock and no repair was needed, so a
+                    // second formatted-value read would only spend another quota slot.
+                    skipReadback: true,
+                  }),
                 },
               });
               continue;
@@ -3662,7 +3691,7 @@ export async function batchAppendScanGoogle({ token, config, orders, repairExist
 
       // Read every physical tab again, including no-write duplicates. Reconciliation may
       // contain provisional rows or rows removed by another operator since the first read.
-      const readbackDates = new Set(results.filter((item) => dateOrders.includes(item.order) && item.result?.row)
+      const readbackDates = new Set(results.filter((item) => dateOrders.includes(item.order) && item.result?.row && !item.result?.skipReadback)
         .map((item) => item.result.row._sheetDate || date));
       for (const rowDate of readbackDates) {
         const verifiedRows = (await readDailyRows({ token, spreadsheetId: sheet.id, date: rowDate }))

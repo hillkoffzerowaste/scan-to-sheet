@@ -1142,6 +1142,23 @@ test('batch recovery read-verifies an existing duplicate before certifying it', 
   }
 });
 
+test('batch recovery skips historical reads when every candidate is already on today\'s sheet', async (t) => {
+  const readDates = [];
+  const historicalDate = '2026-08-24';
+  const sheet = recoverySheet(t, {
+    [recoveryDate]: [recoveryRow()],
+    [historicalDate]: [recoveryRow({ 5: 'TH999999999999' })],
+  }, {
+    beforeRead: ({ date }) => readDates.push(date),
+  });
+
+  const [outcome] = await sheet.run([recoveryOrder()]);
+
+  assert.equal(outcome.result.status, 'duplicate');
+  assert.equal(outcome.result.nativeDataTypesVerified, true);
+  assert.equal(readDates.includes(historicalDate), false);
+});
+
 test('batch recovery removes a stale cross-day Remark even when the Status is already correct', async () => {
   const originalFetch = globalThis.fetch;
   const date = '2026-08-24';
