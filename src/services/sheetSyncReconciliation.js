@@ -2,6 +2,19 @@ function normalizeCode(value) {
   return String(value ?? '').trim().toUpperCase();
 }
 
+function trackingCodeForms(value) {
+  const normalized = normalizeCode(value);
+  if (/^TH\d{10,14}$/.test(normalized)) return [normalized, normalized.slice(2)];
+  if (/^\d{10,14}$/.test(normalized)) return [normalized, `TH${normalized}`];
+  return [normalized];
+}
+
+export function areTrackingCodesEquivalent(left, right) {
+  const leftForms = trackingCodeForms(left);
+  const rightForms = new Set(trackingCodeForms(right));
+  return Boolean(leftForms[0]) && leftForms.some((form) => rightForms.has(form));
+}
+
 function scanParts(value) {
   const text = String(value ?? '');
   const [date = '', time = ''] = text.split('T');
@@ -151,12 +164,12 @@ export function isSheetSyncResultConfirmed(result, expectedOrder = null) {
     ? result.isPacker
     : !['admin_scan', 'admin_matched'].includes(result.status);
   const rowCode = isPacker ? row?.code : row?.adminCode;
-  if (!row || normalizeCode(rowCode) !== normalizeCode(result.code)) return false;
+  if (!row || !areTrackingCodesEquivalent(rowCode, result.code)) return false;
 
   if (expectedOrder) {
     if (expectedOrder.courier && String(row.courier ?? '').trim() !== String(expectedOrder.courier).trim()) return false;
     const code = normalizeCode(expectedOrder.code || expectedOrder.normalizedCode);
-    if (!code || code !== normalizeCode(result.code)) return false;
+    if (!code || !areTrackingCodesEquivalent(code, result.code)) return false;
     if (result.nativeDataTypesVerified !== true && row.nativeDataTypesVerified !== true) return false;
     const sameTime = (actual, expected) => {
       const actualSeconds = clockSeconds(actual);
@@ -169,14 +182,14 @@ export function isSheetSyncResultConfirmed(result, expectedOrder = null) {
       const parts = scanParts(expectedOrder.packerScan.scannedAt);
       const note = expectedOrder.packerScan.note ?? expectedOrder.note ?? '';
       const packer = String(expectedOrder.packerScan.packer ?? expectedOrder.packer ?? '').trim();
-      if (normalizeCode(row.code) !== code || row.date !== parts.date || !sameTime(row.time, parts.time)) return false;
+      if (!areTrackingCodesEquivalent(row.code, code) || row.date !== parts.date || !sameTime(row.time, parts.time)) return false;
       if (row.status !== getScanIssueMeta(note).sheetStatus) return false;
       if (packer && String(row.packer ?? '').trim() !== packer) return false;
       if (note && !String(row.note ?? '').includes(note)) return false;
     }
     if (expectedOrder.admin?.scannedAt) {
       const parts = scanParts(expectedOrder.admin.scannedAt);
-      if (normalizeCode(row.adminCode) !== code || row.adminDate !== parts.date || !sameTime(row.adminTime, parts.time)) return false;
+      if (!areTrackingCodesEquivalent(row.adminCode, code) || row.adminDate !== parts.date || !sameTime(row.adminTime, parts.time)) return false;
     }
   }
 

@@ -5,6 +5,7 @@ import {
   findScanReconciliation,
   findMarketplaceOrderRow,
   findTrackingAliasRow,
+  areTrackingCodesEquivalent,
   findHistoricalIssueRow,
   getAdminScanTiming,
   isSheetSyncResultConfirmed,
@@ -78,6 +79,33 @@ test('finds the Shopee short/full barcode alias only within the same courier', (
   assert.equal(findTrackingAliasRow([row], { courier: 'Shopee', code: 'TH2602788293138' }), row);
   assert.equal(findTrackingAliasRow([row], { courier: 'Flash', code: 'TH2602788293138' }), null);
   assert.equal(findTrackingAliasRow([row], { courier: 'Shopee', code: 'TH2602788293138A' }), null);
+});
+
+test('confirms a full Packer order when the Sheet keeps the short Admin barcode', () => {
+  assert.equal(areTrackingCodesEquivalent('2602788293138', 'TH2602788293138'), true);
+  assert.equal(isSheetSyncResultConfirmed({
+    status: 'duplicate',
+    code: 'TH2602788293138',
+    isPacker: true,
+    nativeDataTypesVerified: true,
+    row: {
+      code: 'TH2602788293138',
+      courier: 'Shopee',
+      date: '2026-09-30',
+      time: '10:08:28',
+      status: 'Success',
+      packer: 'มุก',
+      adminDate: '2026-09-30',
+      adminTime: '9:36:28',
+      adminCode: '2602788293138',
+    },
+  }, {
+    code: 'TH2602788293138',
+    courier: 'Shopee',
+    admin: { scannedAt: '2026-09-30T09:36:28' },
+    packer: 'มุก',
+    packerScan: { scannedAt: '2026-09-30T10:08:28', packer: 'มุก', note: '' },
+  }), true);
 });
 
 test('does not certify a Sheet row stored under a different courier', () => {
