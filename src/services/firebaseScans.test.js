@@ -143,6 +143,8 @@ test('Packer Sheet retry keeps the original Firestore scan timestamp and actor',
   assert.match(packerWriteBlock, /scanDate: packerScanDate/);
   assert.match(packerWriteBlock, /scanTime: packerScanTime/);
   assert.match(packerWriteBlock, /packer: packerScanName/);
+  assert.match(packerWriteBlock, /note: packerScanNote/);
+  assert.match(appSource, /firestorePrimary\.sheetNote \?\? scanNote/);
 });
 
 test('pending badge fallback stays capped and still reads the newest orders first', async () => {

@@ -2005,7 +2005,7 @@ function App() {
               : packerName;
             const packerScanNote = existingPackerScan?.scannedAt
               ? (existingPackerScan.note ?? existingPackerOrder?.note ?? scanNote)
-              : scanNote;
+              : (firestorePrimary.sheetNote ?? scanNote);
             const packerScanEmail = existingPackerScan?.scannedAt
               ? (existingPackerScan.scannedBy?.email || existingPackerOrder?.user?.email || scanEmail)
               : scanEmail;

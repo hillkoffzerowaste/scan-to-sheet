@@ -180,6 +180,21 @@ test('batch recovery fills missing Admin fields from the order and preserves buy
   assert.equal(sheet.rowsByDate.get(recoveryDate)[0][15], 'Manual buyer');
 });
 
+test('batch recovery repairs Packer metadata when the tracking row already exists', async (t) => {
+  const sheet = recoverySheet(t, { [recoveryDate]: [recoveryRow({ 9: '' })] });
+  const note = 'แพ็คเกอร์เลือกขนส่งไม่ตรงกับแอดมิน (เลือก Shopee)';
+  const [item] = await sheet.run([recoveryOrder({ note })]);
+
+  assert.equal(item.error, undefined);
+  assert.equal(item.result.repaired, true);
+  assert.equal(item.result.row.note, note);
+  assert.equal(sheet.rowsByDate.get(recoveryDate)[0][9], note);
+  assert.equal(isSheetSyncResultConfirmed(item.result, {
+    ...recoveryOrder({ note }),
+    packerScan: { scannedAt: `${recoveryDate}T12:00:00`, packer: 'Ben', note },
+  }), true);
+});
+
 test('batch Admin retry preserves packed status and original Admin time', async (t) => {
   const sheet = recoverySheet(t, { [recoveryDate]: [recoveryRow({ 10: 46259, 11: 0.375, 12: recoveryCode })] });
   const [item] = await sheet.run([recoveryOrder({ isPacker: false, adminCode: recoveryCode, adminDate: recoveryDate, adminTime: '11:00:00' })]);

@@ -3384,6 +3384,17 @@ export async function batchAppendScanGoogle({ token, config, orders, repairExist
           const currentRow = reconciliation.row;
           if (repairExisting) {
             const repairedStatus = !isPacker && currentRow.code ? currentRow.status : expectedStatus;
+            // Firestore is the source of truth for the Packer metadata. A row can already
+            // contain the tracking number while still missing the corrected packer name or
+            // diagnostic note (for example after a courier mismatch). Treat those fields as
+            // repairable too; otherwise recovery returns `duplicate` and leaves the row
+            // permanently unconfirmable against the Firestore order.
+            const repairedPacker = isPacker
+              ? (String(packer ?? '').trim() || currentRow.packer || '')
+              : currentRow.packer;
+            const repairedNote = isPacker
+              ? (String(note ?? '').trim() || currentRow.note || '')
+              : currentRow.note;
             const repairedRow = withMarketplaceCells([
               currentRow.no,
               currentRow.courierNo,
@@ -3392,9 +3403,9 @@ export async function batchAppendScanGoogle({ token, config, orders, repairExist
               currentRow.courier,
               currentRow.code,
               currentRow.email,
-              currentRow.packer,
+              repairedPacker,
               repairedStatus,
-              currentRow.note,
+              repairedNote,
               currentRow.adminDate || adminDate || (!isPacker ? date : ''),
               currentRow.adminTime || adminTime || (!isPacker ? order.time : ''),
               currentRow.adminCode || adminCode || (!isPacker ? normalizedCode : ''),
@@ -3402,6 +3413,7 @@ export async function batchAppendScanGoogle({ token, config, orders, repairExist
             repairedRow[22] = currentRow.syncStatus ?? '';
             const nativeValues = existingNativeRows.get(currentRow._sheetDate)?.get(currentRow.sheetRowNumber) ?? [];
             const needsRepair = String(currentRow.status ?? '').trim() !== repairedStatus
+              || String(currentRow.packer ?? '').trim() !== String(repairedPacker ?? '').trim()
               || String(currentRow.note ?? '') !== String(repairedRow[9] ?? '')
               || [2, 3, 10, 11, 12].some((index) => (
                 String(dailyCellsFromParsedRow(currentRow)[index] ?? '') !== String(repairedRow[index] ?? '')

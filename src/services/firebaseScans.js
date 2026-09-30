@@ -746,6 +746,10 @@ export async function recordPackerScanPrimary({ code, courier, date, time, user,
       adminDate: adminScannedAt.split('T')[0] || effectiveDate,
       adminTime: adminScannedAt.split('T')[1] || '',
       adminCode: effectiveExisting?.code || normalizedCode,
+      // The Sheet writer must receive the same note that was persisted in Firestore.
+      // In particular, a courier mismatch adds a diagnostic note during the transaction;
+      // returning it avoids writing a visually correct but semantically incomplete row.
+      sheetNote: correctedNote,
       sheetSyncStatus: 'pending',
       sheetSyncAttemptId: attemptId,
     };
