@@ -13,6 +13,21 @@ export const SHEET_SYNC_STATES = Object.freeze({
   LEGACY_SYNCED: 'synced',
 });
 
+const RETRYABLE_SHEET_SYNC_CODES = new Set([
+  'GOOGLE_RATE_LIMITED',
+  'GOOGLE_TIMEOUT',
+  'SHEET_LOCK_BUSY',
+  'SHEET_RATE_LIMIT_UNAVAILABLE',
+  'SHEET_RECOVERY_UNCONFIRMED',
+]);
+
+export function isRetryableSheetSyncError(error) {
+  const code = String(error?.code ?? '');
+  if (RETRYABLE_SHEET_SYNC_CODES.has(code)) return true;
+  if (Number(error?.status) >= 500) return true;
+  return /Google Sheet กำลังถูกใช้งาน|Google ตอบสนองช้า|Google จำกัดการเรียกใช้/.test(String(error?.message ?? ''));
+}
+
 export function isSheetSyncVerified(order) {
   return ['verified', 'synced'].includes(order?.sheetSyncStatus);
 }
@@ -125,7 +140,12 @@ export async function runSheetRecovery({
           new Error('ยังยืนยันข้อมูลสแกนใน Google Sheet ไม่ได้ กรุณากู้คืนอีกครั้ง'),
           { code: 'SHEET_RECOVERY_UNCONFIRMED' },
         );
-        const acknowledged = await markResult(order, { ok: Boolean(ok), result: item?.result, error: ok ? null : error });
+        const acknowledged = await markResult(order, {
+          ok: Boolean(ok),
+          result: item?.result,
+          error: ok ? null : error,
+          retryable: !ok && isRetryableSheetSyncError(error),
+        });
         if (ok && acknowledged === true) state.synced += 1;
         else state.failed += 1;
       } catch {

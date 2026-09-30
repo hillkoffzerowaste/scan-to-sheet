@@ -94,6 +94,7 @@ import {
   SHEET_RECOVERY_COOLDOWN_MS,
   SHEET_RECOVERY_INTERVAL_MS,
   SHEET_RECOVERY_MAX_ROWS,
+  shouldApplySheetRecoveryCooldown,
 } from './services/sheetSyncPolicy.js';
 import { parseXlsxArrayBuffer } from './services/xlsxImport.js';
 import { loadHtml5Qrcode } from './services/cameraLoader.js';
@@ -202,7 +203,10 @@ async function apiJson(url, options = {}) {
     clearTimeout(t);
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
-      throw new Error(apiResponseErrorMessage(data, response.status));
+      throw Object.assign(new Error(apiResponseErrorMessage(data, response.status)), {
+        code: data?.code,
+        status: response.status,
+      });
     }
     return data;
   } catch (error) {
@@ -238,7 +242,9 @@ async function acquireSheetWriteLock(resource) {
     }
     await new Promise((resolve) => setTimeout(resolve, result.retryAfterMs ?? 250));
   }
-  throw new Error('Google Sheet กำลังถูกใช้งานอยู่ กรุณาลองอีกครั้ง');
+  throw Object.assign(new Error('Google Sheet กำลังถูกใช้งานอยู่ กรุณาลองอีกครั้ง'), {
+    code: 'SHEET_LOCK_BUSY',
+  });
 }
 
 async function loadServerGoogleConfig() {
@@ -1631,16 +1637,14 @@ function App() {
       }
       return { busy: false, claimed: 0, synced: 0, failed: 0 };
     }
-    // `showStatus` decides whether the packer sees a banner, never whether the quota gate
-    // applies. All background and manual callers share this cooldown so a retry cannot
-    // immediately start another Sheet batch after the previous one finishes.
+    const applyCooldown = shouldApplySheetRecoveryCooldown({ showStatus, includeSynced });
     const waitMs = sheetRecoveryNextAllowedAtRef.current - Date.now();
-    if (waitMs > 0) {
+    if (applyCooldown && waitMs > 0) {
       if (showStatus) {
         setStatus({
           type: 'warning',
-          title: 'รอ Google Sheets quota',
-          message: `กรุณารออีกประมาณ ${Math.ceil(waitMs / 1000)} วินาทีก่อนอัปเดตรอบถัดไป`,
+          title: 'รอรอบตรวจอัตโนมัติ',
+          message: `ระบบจะตรวจรายการค้างอีกประมาณ ${Math.ceil(waitMs / 1000)} วินาที`,
         });
       }
       return { busy: false, claimed: 0, synced: 0, failed: 0 };
@@ -1667,7 +1671,9 @@ function App() {
         markWriting: (order) => markSheetSyncWriting({
           orderId: order.id, attemptId: order.sheetSyncAttemptId, recordAudit: !routineVerification,
         }),
-        write: async (orders) => {
+        write: async (orders) => runWithGoogleRetry(async (accessToken, googleConfig) => {
+          // Acquire the write lock before the marketplace lookup. A busy Sheet must not spend
+          // more Sheets quota loading metadata for a batch that cannot write yet.
           const batchOrders = await Promise.all(orders.map(async (order) => {
             const isPacker = Boolean(order.packerScan?.scannedAt);
             const timing = getAdminScanTiming(order);
@@ -1683,13 +1689,15 @@ function App() {
               adminDate: hasAdmin ? timing.adminDate : '',
               adminTime: hasAdmin ? timing.adminTime : '',
               adminCode: hasAdmin ? code : '',
-              marketplaceOrder: await findMarketplaceOrderForScan(code).catch(() => null),
+              marketplaceOrder: await findMarketplaceOrderGoogle({
+                token: accessToken, config: googleConfig, trackingNo: code,
+              }).catch(() => null),
             };
           }));
-          return runWithGoogleRetry((accessToken, googleConfig) => batchAppendScanGoogle({
+          return batchAppendScanGoogle({
             token: accessToken, config: googleConfig, orders: batchOrders, repairExisting: true,
-          }), { sheetWrite: true });
-        },
+          });
+        }, { sheetWrite: true }),
         isConfirmed: isSheetSyncResultConfirmed,
         markResult: (order, update) => markSheetSyncResult({
           orderId: order.id, attemptId: order.sheetSyncAttemptId, ...update,
@@ -1722,9 +1730,11 @@ function App() {
       });
       return { busy: false, ...progress, error: true };
     } finally {
-      // Start the cooldown after the whole recovery run, not before it. This prevents a
-      // long batch from becoming immediately eligible for another run when it finishes.
-      sheetRecoveryNextAllowedAtRef.current = Date.now() + SHEET_RECOVERY_COOLDOWN_MS;
+      // Keep the ten-minute guard for background recovery only; manual recovery is allowed to
+      // request the next bounded batch immediately after this one finishes.
+      if (applyCooldown) {
+        sheetRecoveryNextAllowedAtRef.current = Date.now() + SHEET_RECOVERY_COOLDOWN_MS;
+      }
       sheetRecoveryRunningRef.current = false;
       setSheetRecoveryBusy(false);
       if (showStatus) setDriveSyncBusy(false);
@@ -1968,7 +1978,9 @@ function App() {
             { sheetWrite: true });
             if (!isSheetSyncResultConfirmed(sheetResult)) {
               // This is the Packer commit path; the guard used to name the Admin row.
-              throw new Error('Google Sheet แจ้งว่าซ้ำ แต่ยืนยันแถว Packer ไม่ได้');
+              throw Object.assign(new Error('Google Sheet แจ้งว่าซ้ำ แต่ยืนยันแถว Packer ไม่ได้'), {
+                code: 'SHEET_RECOVERY_UNCONFIRMED',
+              });
             }
             requireSheetSyncAcknowledgement(await markSheetSyncResult({ orderId: firestorePrimary.id, attemptId: firestorePrimary.sheetSyncAttemptId, ok: true, result: sheetResult }));
             backgroundResult = { ...result, ...sheetResult, sheetSyncStatus: 'verified' };
@@ -2270,7 +2282,9 @@ function App() {
             // it synced unconditionally would drop the order from the recovery queue while
             // the row stayed broken, so require the same confirmation every other site does.
             if (!isSheetSyncResultConfirmed(sheetResult)) {
-              throw new Error('Google Sheet แจ้งว่าซ้ำ แต่ยืนยันแถว Admin ไม่ได้');
+              throw Object.assign(new Error('Google Sheet แจ้งว่าซ้ำ แต่ยืนยันแถว Admin ไม่ได้'), {
+                code: 'SHEET_RECOVERY_UNCONFIRMED',
+              });
             }
             requireSheetSyncAcknowledgement(await markSheetSyncResult({
               orderId: order.id,
@@ -2386,7 +2400,10 @@ function App() {
             if (!isSheetSyncResultConfirmed(sheetResult)) {
               // Name the row that was actually attempted: this path writes the Packer row
               // only when a Packer scan already exists, otherwise it writes the Admin row.
-              throw new Error(`Google Sheet แจ้งว่าซ้ำ แต่ยืนยันแถว ${hasPackerScan ? 'Packer' : 'Admin'} ไม่ได้`);
+              throw Object.assign(
+                new Error(`Google Sheet แจ้งว่าซ้ำ แต่ยืนยันแถว ${hasPackerScan ? 'Packer' : 'Admin'} ไม่ได้`),
+                { code: 'SHEET_RECOVERY_UNCONFIRMED' },
+              );
             }
             requireSheetSyncAcknowledgement(await markSheetSyncResult({ orderId: firestorePrimary.id, attemptId: firestorePrimary.sheetSyncAttemptId, ok: true, result: sheetResult }));
             backgroundResult = { ...result, ...sheetResult, sheetSyncStatus: 'verified' };

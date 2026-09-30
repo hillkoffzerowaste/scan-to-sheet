@@ -20,6 +20,7 @@ import {
   isSheetSyncClaimable,
   canApplySheetSyncResult,
   collectManualSheetRecoveryCandidates,
+  isRetryableSheetSyncError,
   shouldIncludeInManualSheetRecovery,
   shouldReconcileSheetOnRescan,
   isSheetSyncVerified,
@@ -897,7 +898,7 @@ export async function markSheetSyncWriting({ orderId: id, attemptId = '', record
   });
 }
 
-export async function markSheetSyncResult({ orderId: id, attemptId = '', ok, result = null, error = null, recordAudit = true }) {
+export async function markSheetSyncResult({ orderId: id, attemptId = '', ok, result = null, error = null, retryable = false, recordAudit = true }) {
   if (!canWriteFirestore() || !id) {
     return false;
   }
@@ -908,7 +909,8 @@ export async function markSheetSyncResult({ orderId: id, attemptId = '', ok, res
     if (!snap.exists()) return false;
     const current = snap.data();
     if (!canApplySheetSyncResult(current, { attemptId, ok })) return false;
-    const nextStatus = ok ? 'verified' : 'failed';
+    const shouldRetry = !ok && (retryable || isRetryableSheetSyncError(error));
+    const nextStatus = ok ? 'verified' : shouldRetry ? 'pending' : 'failed';
     const safeError = ok ? '' : userErrorMessage(error, 'ซิงก์ Google Sheet ไม่สำเร็จ');
     transaction.update(ref, {
       sheetSyncStatus: nextStatus,
@@ -929,7 +931,7 @@ export async function markSheetSyncResult({ orderId: id, attemptId = '', ok, res
         : isSheetSyncVerified(current) && result?.status === 'duplicate'
           ? null
           : 'sheet_sync_verified'
-      : 'sheet_sync_failed';
+      : shouldRetry ? null : 'sheet_sync_failed';
     if (type && recordAudit) {
       addOrderAuditInTransaction(transaction, {
         orderId: id,

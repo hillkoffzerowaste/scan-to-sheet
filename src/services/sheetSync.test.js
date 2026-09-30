@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildSheetSyncFailureUpdates } from './sheetSync.js';
+import { buildSheetSyncFailureUpdates, isRetryableSheetSyncError } from './sheetSync.js';
 import * as sheetSync from './sheetSync.js';
 
 const recoveryOrders = (count) => Array.from({ length: count }, (_, index) => ({
@@ -140,6 +140,33 @@ test('a failed batch stays recoverable while subsequent batches still run', asyn
   assert.equal(outcome.synced, 11);
   assert.equal(marked.filter(([, ok]) => !ok).length, 10);
   assert.deepEqual(marked.at(-1), ['order-20', true]);
+});
+
+test('recovery keeps transient Sheet contention pending instead of marking it failed', async () => {
+  let markedUpdate = null;
+  const outcome = await sheetSync.runSheetRecovery({
+    candidates: recoveryOrders(1),
+    ...recoveryDependencies({
+      write: async () => {
+        throw Object.assign(new Error('Google Sheet กำลังถูกใช้งานอยู่ กรุณาลองอีกครั้ง'), {
+          code: 'SHEET_LOCK_BUSY',
+        });
+      },
+      markResult: async (_order, update) => {
+        markedUpdate = update;
+        return true;
+      },
+    }),
+  });
+  assert.equal(isRetryableSheetSyncError(markedUpdate.error), true);
+  assert.equal(markedUpdate.retryable, true);
+  assert.equal(outcome.failed, 1);
+});
+
+test('HTTP 500 and readback failures are retryable Sheet errors', () => {
+  assert.equal(isRetryableSheetSyncError(Object.assign(new Error('server error'), { status: 500 })), true);
+  assert.equal(isRetryableSheetSyncError(Object.assign(new Error('unconfirmed'), { code: 'SHEET_RECOVERY_UNCONFIRMED' })), true);
+  assert.equal(isRetryableSheetSyncError(new Error('ช่วงวันที่ไม่ถูกต้อง')), false);
 });
 
 test('one failed claim does not strand previously claimed orders', async () => {

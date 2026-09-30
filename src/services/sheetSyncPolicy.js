@@ -3,3 +3,9 @@
 export const SHEET_RECOVERY_MAX_ROWS = 10;
 export const SHEET_RECOVERY_INTERVAL_MS = 10 * 60 * 1000;
 export const SHEET_RECOVERY_COOLDOWN_MS = 10 * 60 * 1000;
+
+export function shouldApplySheetRecoveryCooldown({ showStatus = false, includeSynced = false } = {}) {
+  // The ten-minute interval belongs to the background worker. A manual recovery must be able
+  // to continue with the next bounded batch after a transient lock or quota failure.
+  return !showStatus && !includeSynced;
+}
