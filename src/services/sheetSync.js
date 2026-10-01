@@ -224,7 +224,15 @@ export async function runSheetRecovery({
     let results = [];
     let batchError = null;
     if (writing.length) {
-      try { results = await write(writing); } catch (error) { batchError = error; }
+      try {
+        results = await write(writing);
+      } catch (error) {
+        // A batch write has no per-order acknowledgement. Keep every claimed order in the
+        // retry path, even when the gateway returned a generic error without a machine code.
+        batchError = error instanceof Error ? error : new Error(String(error));
+        batchError.code ||= 'SHEET_BATCH_INCOMPLETE';
+        batchError.batchIncomplete = true;
+      }
     }
     for (const order of writing) {
       // Never match by array position: the Sheet service groups/reorders by date and may

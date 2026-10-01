@@ -218,6 +218,29 @@ test('a failed batch stays recoverable while subsequent batches still run', asyn
   assert.deepEqual(marked.at(-1), ['order-20', true]);
 });
 
+test('an unclassified batch write failure enters the targeted retry path', async () => {
+  const updates = [];
+  const results = [];
+  const outcome = await sheetSync.runSheetRecovery({
+    candidates: recoveryOrders(2),
+    ...recoveryDependencies({
+      write: async () => { throw new Error('temporary Sheet gateway failure'); },
+      markResult: async (order, update) => {
+        updates.push({ order: order.id, retryable: update.retryable, code: update.error?.code });
+        return true;
+      },
+      onOrderResult: (order, result) => results.push({ order: order.id, error: result.error }),
+    }),
+  });
+
+  assert.equal(outcome.failed, 2);
+  assert.deepEqual(updates, [
+    { order: 'order-0', retryable: true, code: 'SHEET_BATCH_INCOMPLETE' },
+    { order: 'order-1', retryable: true, code: 'SHEET_BATCH_INCOMPLETE' },
+  ]);
+  assert.equal(results.every(({ error }) => error?.code === 'SHEET_BATCH_INCOMPLETE'), true);
+});
+
 test('recovery keeps transient Sheet contention pending instead of marking it failed', async () => {
   let markedUpdate = null;
   const outcome = await sheetSync.runSheetRecovery({
