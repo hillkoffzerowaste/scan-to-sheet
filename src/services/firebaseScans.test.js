@@ -139,6 +139,25 @@ test('background Sheet recovery checks today before the historical backlog', asy
   );
 });
 
+test('background Sheet recovery keeps sweeping the backlog when targeted retry ids exist', async () => {
+  const appSource = await readFile(new URL('../App.jsx', import.meta.url), 'utf8');
+  const schedulerStart = appSource.indexOf('// Retry stranded Sheet syncs periodically.');
+  const schedulerEnd = appSource.indexOf('// A failed foreground scan is already durable', schedulerStart);
+  const schedulerBlock = appSource.slice(schedulerStart, schedulerEnd);
+
+  assert.ok(schedulerStart >= 0 && schedulerEnd > schedulerStart, 'background recovery scheduler block missing');
+  assert.match(
+    schedulerBlock,
+    /createSheetRecoveryScheduler\(\(\) => recoverPendingSheetSyncs\(\),/,
+    'background recovery must run the broad candidate sweep',
+  );
+  assert.doesNotMatch(
+    schedulerBlock,
+    /orderIds:/,
+    'targeted retry ids must stay on the short retry scheduler, not starve the broad sweep',
+  );
+});
+
 test('Sheet gateway timeouts keep scans in the retryable path', async () => {
   const appSource = await readFile(new URL('../App.jsx', import.meta.url), 'utf8');
   assert.match(

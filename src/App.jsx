@@ -971,9 +971,7 @@ function App() {
   // setInterval: a long batch must not collide with the cooldown and skip the next round.
   useEffect(() => {
     if (!firebaseUser || !token || !config?.master?.id) return;
-    return createSheetRecoveryScheduler(() => recoverPendingSheetSyncs({
-      orderIds: [...sheetRecoveryOrderIdsRef.current],
-    }), { runImmediately: true });
+    return createSheetRecoveryScheduler(() => recoverPendingSheetSyncs(), { runImmediately: true });
   }, [firebaseUser, token, config]);
 
   // A failed foreground scan is already durable in Firestore. Retry only those queued ids after
