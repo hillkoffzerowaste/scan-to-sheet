@@ -22,7 +22,13 @@ export function createSheetRecoveryScheduler(task, {
     }
     // A targeted retry can temporarily occupy the single recovery runner. Do not make
     // the ten-minute sweep wait a full interval after it only observed that contention.
-    schedule(result?.busy ? busyDelayMs : delayMs);
+    // A task may also return the exact remaining cooldown so a timer that fired just
+    // before the guard expires does not skip an entire ten-minute sweep.
+    const retryAfterMs = Number(result?.retryAfterMs);
+    const nextDelayMs = Number.isFinite(retryAfterMs) && retryAfterMs > 0
+      ? retryAfterMs
+      : result?.busy ? busyDelayMs : delayMs;
+    schedule(nextDelayMs);
   };
 
   const schedule = (nextDelayMs = delayMs) => {

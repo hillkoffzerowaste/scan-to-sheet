@@ -82,6 +82,20 @@ test('retries a background batch soon when another recovery is already running',
   scheduler();
 });
 
+test('honors a recovery retry delay returned by the task', async () => {
+  const timers = fakeTimers();
+  const scheduler = createSheetRecoveryScheduler(async () => ({ retryAfterMs: 3_000 }), {
+    setTimeoutFn: timers.setTimeout,
+    clearTimeoutFn: timers.clearTimeout,
+  });
+
+  await timers.run(1);
+  await Promise.resolve();
+  assert.equal(timers.get(2).delay, 3_000);
+
+  scheduler();
+});
+
 test('automatically retries a failed targeted recovery without overlapping timers', async () => {
   const timers = fakeTimers();
   const attempts = [];

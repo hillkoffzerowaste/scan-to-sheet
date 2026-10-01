@@ -1728,7 +1728,7 @@ function App() {
           message: `ระบบจะตรวจรายการค้างอีกประมาณ ${Math.ceil(waitMs / 1000)} วินาที`,
         });
       }
-      return { busy: false, claimed: 0, synced: 0, failed: 0 };
+      return { busy: false, claimed: 0, synced: 0, failed: 0, retryAfterMs: waitMs };
     }
     sheetRecoveryRunningRef.current = true;
     setSheetRecoveryBusy(true);
