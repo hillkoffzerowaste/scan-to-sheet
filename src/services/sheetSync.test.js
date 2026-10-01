@@ -161,6 +161,29 @@ test('manual recovery prioritizes the oldest failed rows before newer failures',
   assert.deepEqual(result.candidates.map((order) => order.id), ['old-failed', 'new-failed']);
 });
 
+test('manual recovery prioritizes a pending Sheet-lock retry before the older broad backlog', async () => {
+  const result = await sheetSync.collectManualSheetRecoveryCandidates({
+    dates: ['2026-09-28'], role: 'admin', cap: 3000,
+    readDate: async () => [
+      {
+        id: 'old-failed', code: 'THOLD', sheetSyncStatus: 'failed',
+        updatedAtIso: '2026-09-28T07:16:55.906Z',
+        admin: { scannedAt: '2026-09-28T09:23:34' },
+      },
+      {
+        id: 'pending-lock', code: 'THLOCK', sheetSyncStatus: 'pending',
+        sheetSyncError: 'Google Sheet กำลังถูกใช้งานอยู่ กรุณาลองอีกครั้ง',
+        updatedAtIso: '2026-10-01T09:28:50.428Z',
+        admin: { scannedAt: '2026-09-28T09:24:00' },
+      },
+    ],
+    readPacker: async () => [],
+    readAdmin: async () => [],
+  });
+
+  assert.deepEqual(result.candidates.map((order) => order.id), ['pending-lock', 'old-failed']);
+});
+
 test('manual recovery drains all 45 candidates in three-row batches exactly once', async () => {
   assert.equal(typeof sheetSync.runSheetRecovery, 'function');
   const written = [];

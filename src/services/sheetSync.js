@@ -180,7 +180,15 @@ export async function collectManualSheetRecoveryCandidates({ dates, role = 'both
       }
     }
   }
-  const priority = (order) => order.sheetSyncStatus === 'failed' ? 0 : isSheetSyncVerified(order) ? 2 : 1;
+  const priority = (order) => (
+    order.sheetSyncStatus === 'pending' && isRetryableSheetSyncError({ message: order.sheetSyncError })
+      ? -1
+      : order.sheetSyncStatus === 'failed'
+        ? 0
+        : isSheetSyncVerified(order)
+          ? 2
+          : 1
+  );
   const recoveryTimestamp = (order) => {
     const value = Date.parse(String(order.updatedAtIso ?? ''));
     return Number.isFinite(value) ? value : Number.MAX_SAFE_INTEGER;
