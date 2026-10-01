@@ -94,6 +94,7 @@ import {
   SHEET_RECOVERY_TARGETED_RETRY_MS,
   getSheetRecoveryBatchSize,
   shouldApplySheetRecoveryCooldown,
+  shouldPreflightSheetRecoveryLock,
 } from './services/sheetSyncPolicy.js';
 import { parseXlsxArrayBuffer } from './services/xlsxImport.js';
 import { loadHtml5Qrcode } from './services/cameraLoader.js';
@@ -1450,13 +1451,14 @@ function App() {
   async function runWithGoogleRetry(action, {
     sheetWrite = false,
     lockMaxAttempts = SHEET_LOCK_MAX_ATTEMPTS,
+    sheetLockAlreadyHeld = false,
   } = {}) {
     if (signingOutRef.current) {
       throw new Error('Google session is signing out');
     }
     let releaseLock = null;
     try {
-      if (sheetWrite) {
+      if (sheetWrite && !sheetLockAlreadyHeld) {
         releaseLock = await acquireSheetWriteLock(config?.master?.id || 'master', {
           maxAttempts: lockMaxAttempts,
         });
@@ -1728,6 +1730,7 @@ function App() {
     }
     const targetedOrderIds = [...new Set(orderIds.map((id) => String(id ?? '').trim()).filter(Boolean))];
     const applyCooldown = shouldApplySheetRecoveryCooldown({ showStatus, includeSynced, targeted });
+    const preflightRecoveryLock = shouldPreflightSheetRecoveryLock({ showStatus, includeSynced, targeted });
     const waitMs = sheetRecoveryNextAllowedAtRef.current - Date.now();
     if (applyCooldown && waitMs > 0) {
       if (showStatus) {
@@ -1743,6 +1746,7 @@ function App() {
     setSheetRecoveryBusy(true);
     if (showStatus) setDriveSyncBusy(true);
     let progress = { considered: 0, claimed: 0, synced: 0, failed: 0, skipped: 0 };
+    let recoveryLockRelease = null;
     try {
       const recoveryBatchSize = getSheetRecoveryBatchSize({ targeted: targetedOrderIds.length > 0 });
       const { candidates, limited, deferredOrderIds = [] } = await getSheetRecoveryCandidates({
@@ -1765,6 +1769,14 @@ function App() {
           message: 'อาจไม่มีรายการในช่วงที่เลือก หรือรายการกำลังถูกเขียนโดยเครื่องอื่น ยังไม่ได้ยืนยันว่า Sheet ครบทั้งหมด',
         });
         return { busy: false, ...progress, limited, deferred: deferredOrderIds.length };
+      }
+      if (preflightRecoveryLock) {
+        // Serialize the claim phase too. Without this gate every open browser can claim a
+        // different historical row, then strand it as pending when only one writer wins.
+        recoveryLockRelease = await acquireSheetWriteLock(
+          config?.master?.id || 'master',
+          { maxAttempts: SHEET_LOCK_BACKGROUND_MAX_ATTEMPTS },
+        );
       }
       const outcome = await runSheetRecovery({
         candidates,
@@ -1801,9 +1813,8 @@ function App() {
           });
         }, {
           sheetWrite: true,
-          lockMaxAttempts: !showStatus && !includeSynced && !targeted
-            ? SHEET_LOCK_BACKGROUND_MAX_ATTEMPTS
-            : SHEET_LOCK_MAX_ATTEMPTS,
+          lockMaxAttempts: SHEET_LOCK_MAX_ATTEMPTS,
+          sheetLockAlreadyHeld: preflightRecoveryLock,
         }),
         isConfirmed: isSheetSyncResultConfirmed,
         markResult: (order, update) => markSheetSyncResult({
@@ -1848,6 +1859,7 @@ function App() {
       });
       return { busy: false, ...progress, error: true };
     } finally {
+      await recoveryLockRelease?.();
       // Keep the ten-minute guard for background recovery only; manual recovery is allowed to
       // request the next bounded batch immediately after this one finishes.
       if (applyCooldown) {

@@ -7,6 +7,7 @@ import {
   SHEET_RECOVERY_MAX_ROWS,
   SHEET_RECOVERY_TARGETED_MAX_ROWS,
   getSheetRecoveryBatchSize,
+  shouldPreflightSheetRecoveryLock,
   shouldApplySheetRecoveryCooldown,
 } from './sheetSyncPolicy.js';
 
@@ -28,4 +29,11 @@ test('targeted recovery bypasses only the background cooldown', () => {
   assert.equal(shouldApplySheetRecoveryCooldown({ targeted: true }), false);
   assert.equal(shouldApplySheetRecoveryCooldown({ targeted: true, showStatus: true }), false);
   assert.equal(shouldApplySheetRecoveryCooldown({ targeted: true, includeSynced: true }), false);
+});
+
+test('background recovery must acquire the shared Sheet lock before claiming rows', () => {
+  assert.equal(shouldPreflightSheetRecoveryLock(), true);
+  assert.equal(shouldPreflightSheetRecoveryLock({ showStatus: true }), false);
+  assert.equal(shouldPreflightSheetRecoveryLock({ includeSynced: true }), false);
+  assert.equal(shouldPreflightSheetRecoveryLock({ targeted: true }), false);
 });

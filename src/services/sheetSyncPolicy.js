@@ -18,3 +18,10 @@ export function shouldApplySheetRecoveryCooldown({ showStatus = false, includeSy
   // to continue with the next bounded batch after a transient lock or quota failure.
   return !showStatus && !includeSynced && !targeted;
 }
+
+// Background browsers must serialize the claim and write phases behind the same distributed
+// lock. Claiming first lets several browsers strand different rows as `pending` before they
+// discover that only one of them can write the shared Sheet.
+export function shouldPreflightSheetRecoveryLock({ showStatus = false, includeSynced = false, targeted = false } = {}) {
+  return !showStatus && !includeSynced && !targeted;
+}
