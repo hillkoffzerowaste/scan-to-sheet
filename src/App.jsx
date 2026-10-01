@@ -3455,7 +3455,9 @@ function App() {
     <div className={`app-shell enterprise-shell win-shell wireframe-shell ${sidebarCollapsed ? 'collapsed' : ''}`}>
       <TitleBar
         user={user}
+        firebaseUser={firebaseUser}
         isSignedIn={isSignedIn}
+        isSheetConnected={isSheetConnected}
         isGoogleReady={isGoogleReady}
         busy={busy}
         signInWithGoogle={signInWithGoogle}

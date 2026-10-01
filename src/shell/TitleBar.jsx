@@ -1,10 +1,13 @@
 import React, { useEffect, useRef } from 'react';
 import { FileSpreadsheet, LogIn, LogOut, Menu, Moon, MoreHorizontal, RefreshCw, ScanSearch, Sun, Volume2, VolumeX } from 'lucide-react';
+import { getAuthPresentation } from '../services/authPresentation.js';
 
 // Global commands remain reachable from every workspace without a second menu bar.
 function TitleBar({
   user,
+  firebaseUser,
   isSignedIn,
+  isSheetConnected,
   isGoogleReady,
   busy,
   signInWithGoogle,
@@ -20,6 +23,13 @@ function TitleBar({
   sidebarCollapsed,
   setSidebarCollapsed,
 }) {
+  const authPresentation = getAuthPresentation({
+    user,
+    firebaseUser,
+    isSignedIn,
+    isSheetConnected,
+    isGoogleReady,
+  });
   const toolsRef = useRef(null);
   useEffect(() => {
     const closeOutside = event => {
@@ -46,7 +56,7 @@ function TitleBar({
       <div className="win-titlebar-right">
         <span className={`win-conn ${isSignedIn ? 'online' : 'offline'}`}>
           <span className="win-conn-dot" aria-hidden="true" />
-          {isSignedIn ? (user.email || 'เชื่อมต่อแล้ว') : 'ยังไม่ได้เข้าสู่ระบบ'}
+          {authPresentation.displayEmail}
         </span>
 
         {sheetUrl && (
@@ -101,21 +111,23 @@ function TitleBar({
           </div>
         </details>
 
-        {isSignedIn ? (
-          <button className="win-titlebar-btn" type="button" onClick={signOut}>
-            <LogOut size={14} />
-            <span>ออกจากระบบ</span>
-          </button>
-        ) : (
+        {authPresentation.showSignIn && (
           <button
             className="win-titlebar-btn"
             data-testid="google-sign-in"
             type="button"
             onClick={signInWithGoogle}
-            disabled={busy || !isGoogleReady}
+            disabled={busy || authPresentation.signInDisabled}
           >
             {busy ? <RefreshCw size={14} className="spin" /> : <LogIn size={14} />}
-            <span>{isGoogleReady ? 'เข้าสู่ระบบด้วย Google' : 'รอตั้งค่าการเข้าสู่ระบบ'}</span>
+            <span>{authPresentation.signInLabel}</span>
+          </button>
+        )}
+
+        {authPresentation.showSignOut && (
+          <button className="win-titlebar-btn" type="button" onClick={signOut}>
+            <LogOut size={14} />
+            <span>ออกจากระบบ</span>
           </button>
         )}
       </div>
