@@ -105,7 +105,11 @@ import { getScanQrAnnouncement, parseScanQrCommand, resolveScanQrCommand, resolv
 import { DEFAULT_SCAN_METHOD, getScanReadinessMessage, SCAN_READINESS } from './services/scanPreferences.js';
 import { isGoogleAuthError, scheduleDeferredGoogleSheetMaintenance } from './services/sessionMaintenance.js';
 import { createSheetRecoveryRetryScheduler, createSheetRecoveryScheduler } from './services/sheetRecoveryScheduler.js';
-import { getSheetLockRetryDelay, SHEET_LOCK_MAX_ATTEMPTS } from './services/sheetLockBackoff.js';
+import {
+  getSheetLockRetryDelay,
+  SHEET_LOCK_BACKGROUND_MAX_ATTEMPTS,
+  SHEET_LOCK_MAX_ATTEMPTS,
+} from './services/sheetLockBackoff.js';
 import {
   DEFAULT_QR_LAYOUT_PREFERENCES,
   loadQrLayoutPreferences,
@@ -229,9 +233,9 @@ async function apiJson(url, options = {}) {
   }
 }
 
-async function acquireSheetWriteLock(resource) {
+async function acquireSheetWriteLock(resource, { maxAttempts = SHEET_LOCK_MAX_ATTEMPTS } = {}) {
   const lockId = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
-  for (let attempt = 0; attempt < SHEET_LOCK_MAX_ATTEMPTS; attempt += 1) {
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     const result = await apiJson('/api/sheet-lock', {
       method: 'POST',
       body: JSON.stringify({ action: 'acquire', resource, lockId }),
@@ -1443,14 +1447,19 @@ function App() {
     return authUser;
   }
 
-  async function runWithGoogleRetry(action, { sheetWrite = false } = {}) {
+  async function runWithGoogleRetry(action, {
+    sheetWrite = false,
+    lockMaxAttempts = SHEET_LOCK_MAX_ATTEMPTS,
+  } = {}) {
     if (signingOutRef.current) {
       throw new Error('Google session is signing out');
     }
     let releaseLock = null;
     try {
       if (sheetWrite) {
-        releaseLock = await acquireSheetWriteLock(config?.master?.id || 'master');
+        releaseLock = await acquireSheetWriteLock(config?.master?.id || 'master', {
+          maxAttempts: lockMaxAttempts,
+        });
       }
       return await action(token, config);
     } catch (error) {
@@ -1790,7 +1799,12 @@ function App() {
           return batchAppendScanGoogle({
             token: accessToken, config: googleConfig, orders: batchOrders, repairExisting: true,
           });
-        }, { sheetWrite: true }),
+        }, {
+          sheetWrite: true,
+          lockMaxAttempts: !showStatus && !includeSynced && !targeted
+            ? SHEET_LOCK_BACKGROUND_MAX_ATTEMPTS
+            : SHEET_LOCK_MAX_ATTEMPTS,
+        }),
         isConfirmed: isSheetSyncResultConfirmed,
         markResult: (order, update) => markSheetSyncResult({
           orderId: order.id, attemptId: order.sheetSyncAttemptId, ...update,

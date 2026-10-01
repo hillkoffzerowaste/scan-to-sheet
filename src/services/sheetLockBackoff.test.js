@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  SHEET_LOCK_BACKGROUND_MAX_ATTEMPTS,
   SHEET_LOCK_MAX_ATTEMPTS,
   getSheetLockRetryDelay,
 } from './sheetLockBackoff.js';
@@ -12,6 +13,7 @@ test('backs off lock polling instead of retrying every 250ms', () => {
     [250, 500, 1000, 2000, 2000],
   );
   assert.equal(SHEET_LOCK_MAX_ATTEMPTS, 12);
+  assert.equal(SHEET_LOCK_BACKGROUND_MAX_ATTEMPTS, 1);
 });
 
 test('never ignores a longer server-provided retry delay', () => {

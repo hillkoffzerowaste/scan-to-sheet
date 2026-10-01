@@ -4,6 +4,9 @@ const MAX_EXPONENTIAL_DELAY_MS = 2_000;
 // A lock can legitimately be held while another batch reads and confirms a Sheet row.
 // Keep retrying for roughly the old 20-second window, but avoid hammering Redis every 250ms.
 export const SHEET_LOCK_MAX_ATTEMPTS = 12;
+// Background recovery is already scheduled again after a failed batch. One lock
+// attempt per batch avoids every open browser polling the shared lock in parallel.
+export const SHEET_LOCK_BACKGROUND_MAX_ATTEMPTS = 1;
 
 export function getSheetLockRetryDelay(attempt, serverRetryAfterMs = MIN_RETRY_DELAY_MS) {
   const normalizedAttempt = Number.isFinite(Number(attempt))
