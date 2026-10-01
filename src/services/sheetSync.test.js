@@ -119,7 +119,7 @@ test('manual candidate read failures are not silently treated as a complete day'
   }), { code: 'unavailable' });
 });
 
-test('manual recovery drains all 45 candidates in ten-row batches exactly once', async () => {
+test('manual recovery drains all 45 candidates in three-row batches exactly once', async () => {
   assert.equal(typeof sheetSync.runSheetRecovery, 'function');
   const written = [];
   const progress = [];
@@ -133,9 +133,9 @@ test('manual recovery drains all 45 candidates in ten-row batches exactly once',
     }),
     onProgress: (state) => progress.push(state.considered),
   });
-  assert.deepEqual(written.map((batch) => batch.length), [10, 10, 10, 10, 5]);
+  assert.deepEqual(written.map((batch) => batch.length), Array(15).fill(3));
   assert.equal(new Set(written.flat()).size, 45);
-  assert.deepEqual(progress, [10, 20, 30, 40, 45]);
+  assert.deepEqual(progress, Array.from({ length: 15 }, (_, index) => (index + 1) * 3));
   assert.deepEqual(outcome, { considered: 45, claimed: 45, synced: 45, failed: 0, skipped: 0 });
 });
 
@@ -162,6 +162,7 @@ test('recovery counts missing results and failed Firestore acknowledgements as f
   const marked = [];
   const outcome = await sheetSync.runSheetRecovery({
     candidates: recoveryOrders(4),
+    batchSize: 4,
     ...recoveryDependencies({
       write: async ([first, second, third]) => [third, second, first].map((order) => ({ order, result: { confirmed: true } })),
       markResult: async (order, update) => {
@@ -182,6 +183,7 @@ test('a failed batch stays recoverable while subsequent batches still run', asyn
   let batch = 0;
   const outcome = await sheetSync.runSheetRecovery({
     candidates: recoveryOrders(21),
+    batchSize: 10,
     ...recoveryDependencies({
       write: async (orders) => {
         if (batch++ === 0) throw new Error('timeout');
