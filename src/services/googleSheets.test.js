@@ -968,7 +968,85 @@ test('appendScanGoogle returns the newly written Packer row after placeholder re
   }
 });
 
-test('appendScanGoogle preserves today as Scan Date when it merges into yesterday’s Admin row', async () => {
+test('appendScanGoogle keeps a successful write when status coloring is rate-limited', async () => {
+  const originalFetch = globalThis.fetch;
+  const date = '2026-08-05';
+  const spreadsheetId = 'sheet-color-rate-limit-test';
+  const sheetProperties = {
+    sheets: [{
+      properties: {
+        sheetId: 123,
+        title: date,
+        gridProperties: { rowCount: 1000, columnCount: 23 },
+      },
+    }],
+  };
+  let storedRows = [];
+  const jsonResponse = (payload) => new Response(JSON.stringify(payload), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  });
+
+  globalThis.fetch = async (url, options = {}) => {
+    const decodedUrl = decodeURIComponent(String(url));
+    const method = options.method ?? 'GET';
+    const body = options.body ? JSON.parse(options.body) : null;
+    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A1:W1') && method === 'PUT') {
+      return jsonResponse({});
+    }
+    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A:A') && method === 'GET') {
+      return jsonResponse({ values: [['No.']] });
+    }
+    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A2:W') && method === 'GET') {
+      return jsonResponse({ values: storedRows });
+    }
+    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A2') && method === 'GET') {
+      return jsonResponse({ values: [[storedRows[0]?.[0] ?? '']] });
+    }
+    if (decodedUrl.includes('/values/') && method === 'PUT') {
+      storedRows = body?.values ?? storedRows;
+      return jsonResponse({});
+    }
+    if (decodedUrl.includes('/values:batchUpdate')) {
+      const rowUpdate = body?.data?.find((item) => item.range.includes('!A2:O2'));
+      if (rowUpdate) storedRows = [rowUpdate.values[0]];
+      return jsonResponse({});
+    }
+    if (decodedUrl.includes(':batchUpdate')) {
+      const isTargetedColorBatch = body?.requests?.length > 0
+        && body.requests.every((request) => request.repeatCell);
+      if (isTargetedColorBatch) {
+        throw new Error('Google Sheets quota exceeded while applying status color');
+      }
+      return jsonResponse({});
+    }
+    if (decodedUrl.includes('/spreadsheets/')) {
+      return jsonResponse(sheetProperties);
+    }
+    throw new Error(`Unexpected mock request: ${method} ${decodedUrl}`);
+  };
+
+  try {
+    const result = await appendScanGoogle({
+      token: 'token',
+      config: { master: { id: spreadsheetId, webViewLink: 'https://example.test/sheet' } },
+      courier: 'Shopee',
+      code: 'TH1234567890',
+      email: 'packer@example.com',
+      packer: 'เบ้น',
+      scanDate: date,
+      scanTime: '10:20:30',
+    });
+
+    assert.equal(result.status, 'success');
+    assert.equal(result.row.code, 'TH1234567890');
+    assert.equal(result.row.status, 'Success');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('appendScanGoogle merges a short Admin barcode into yesterday’s full Packer row', async () => {
   const originalFetch = globalThis.fetch;
   const today = '2026-08-25';
   const yesterday = '2026-08-24';
@@ -983,7 +1061,7 @@ test('appendScanGoogle preserves today as Scan Date when it merges into yesterda
   const rowsByDate = new Map([
     [yesterday, [[
       '1', '1', yesterday, '09:00:00', 'Shopee', '', '', '', 'รอแพ็ค', '',
-      yesterday, '09:00:00', code,
+      yesterday, '09:00:00', code.slice(2),
     ]]],
     [today, []],
   ]);

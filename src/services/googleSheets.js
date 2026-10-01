@@ -1,6 +1,6 @@
 import { buildSheetBackfillUpdates, classifyLateOrder, normalizeMarketplaceTracking } from './marketplaceImport.js';
 import { hasMinimumTrackingLength, MIN_TRACKING_CODE_LENGTH } from './trackingValidation.js';
-import { findHistoricalIssueRow, findMarketplaceOrderRow, findScanReconciliation, findTrackingAliasRow, getScanIssueMeta, resolveCrossDayPackerRow } from './sheetSyncReconciliation.js';
+import { areTrackingCodesEquivalent, findHistoricalIssueRow, findMarketplaceOrderRow, findScanReconciliation, findTrackingAliasRow, getScanIssueMeta, resolveCrossDayPackerRow } from './sheetSyncReconciliation.js';
 import { isSheetsApiRequest, scheduleSheetRequest } from './sheetRequestScheduler.js';
 
 const DRIVE_API = 'https://www.googleapis.com/drive/v3';
@@ -1588,14 +1588,20 @@ async function updateDailyRow({ token, spreadsheetId, date, rowNumber, row }) {
   const spreadsheet = await getSpreadsheet(token, spreadsheetId);
   const sheetId = spreadsheet.sheets?.find((sheet) => sheet.properties.title === date)?.properties.sheetId;
   if (sheetId) {
-    await applyStatusCellColors({
-      token,
-      spreadsheetId,
-      date,
-      sheetId,
-      rowNumbers: [rowNumber],
-      targetRows: [{ row, rowNumber }],
-    });
+    // Formatting is cosmetic. A quota/temporary error here must not turn a row that was
+    // already written into a false sync failure; the readback below is the source of truth.
+    try {
+      await applyStatusCellColors({
+        token,
+        spreadsheetId,
+        date,
+        sheetId,
+        rowNumbers: [rowNumber],
+        targetRows: [{ row, rowNumber }],
+      });
+    } catch (error) {
+      console.warn('Google Sheet status formatting skipped after data write', error);
+    }
   }
   const confirmedRow = await readDailyRow({ token, spreadsheetId, date, rowNumber });
   const nativeDataTypesVerified = await verifyDailyRowNativeDataTypes({
@@ -3279,7 +3285,7 @@ async function findRowsAcrossDays({ token, spreadsheetId, currentDate, courier =
     const match = matcher
       ? matcher(parsedRows)
       : parsedRows.find(
-          (row) => (!courier || row.courier === courier) && normalizeScanCode(row[field]) === normalizedCode,
+          (row) => (!courier || row.courier === courier) && areTrackingCodesEquivalent(row[field], normalizedCode),
         );
     if (match) return { date, parsedRows, row: match };
   }
