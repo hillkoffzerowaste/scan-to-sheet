@@ -129,6 +129,11 @@ import {
 } from './services/remoteControlRules.js';
 import { shouldPollMissingOrders } from './services/missingCheckPolicy.js';
 import { getSheetRecoveryDates } from './services/sheetRecoveryDates.js';
+import {
+  addSheetRecoveryOrderId,
+  loadSheetRecoveryOrderIds,
+  removeSheetRecoveryOrderId,
+} from './services/sheetRecoveryQueue.js';
 import { runSheetRecovery, isSheetSyncVerified, requireSheetSyncAcknowledgement } from './services/sheetSync.js';
 import {
   getAdminScanTiming,
@@ -393,7 +398,7 @@ function App() {
   const autoCheckTimerRef = useRef(null);
   const lastAutoCheckRef = useRef(0);
   const sheetRecoveryRunningRef = useRef(false);
-  const sheetRecoveryOrderIdsRef = useRef(new Set());
+  const sheetRecoveryOrderIdsRef = useRef(new Set(loadSheetRecoveryOrderIds()));
   const sheetRecoveryRetrySchedulerRef = useRef(null);
   const refreshRowsRequestRef = useRef(0);
   const sheetRecoveryNextAllowedAtRef = useRef(0);
@@ -1642,6 +1647,7 @@ function App() {
     const normalizedId = String(orderId ?? '').trim();
     if (!normalizedId) return;
     sheetRecoveryOrderIdsRef.current.add(normalizedId);
+    addSheetRecoveryOrderId(normalizedId);
     sheetRecoveryRetrySchedulerRef.current?.schedule();
   }
 
@@ -1695,6 +1701,7 @@ function App() {
         targetedOrderIds.forEach((orderId) => {
           if (!returnedIds.has(orderId) && !deferredIds.has(orderId)) {
             sheetRecoveryOrderIdsRef.current.delete(orderId);
+            removeSheetRecoveryOrderId(orderId);
           }
         });
       }
@@ -1753,7 +1760,10 @@ function App() {
         },
         onOrderResult: (order, result) => {
           if (!order?.id) return;
-          if (result?.ok === true) sheetRecoveryOrderIdsRef.current.delete(order.id);
+          if (result?.ok === true) {
+            sheetRecoveryOrderIdsRef.current.delete(order.id);
+            removeSheetRecoveryOrderId(order.id);
+          }
           // The broad ten-minute sweep is already the retry mechanism for historical
           // failures. Only a targeted foreground retry may requeue its own order;
           // otherwise one failed ten-row sweep would create a one-minute quota loop.
