@@ -679,6 +679,10 @@ export async function recordPackerScanPrimary({ code, courier, date, time, user,
         status: needsSheetRetry ? (existing.admin?.scannedAt ? 'matched' : 'created') : 'duplicate',
         id: ref.id,
         existing,
+        code: existing.code || existing.normalizedCode || normalizedCode,
+        normalizedCode: existing.normalizedCode || normalizeCode(existing.code || normalizedCode),
+        admin: existing.admin ?? null,
+        packerScan: existing.packerScan ?? null,
         sheetSyncAttemptId: needsSheetRetry ? attemptId : (existing.sheetSyncAttemptId ?? ''),
         sheetSyncStatus: needsSheetRetry ? 'pending' : (existing.sheetSyncStatus ?? 'pending'),
       };
@@ -710,6 +714,12 @@ export async function recordPackerScanPrimary({ code, courier, date, time, user,
           user,
         })
       : null;
+    const persistedPackerScan = {
+      scannedAt: `${date}T${time}`,
+      scannedBy: userPayload(user),
+      packer,
+      note: correctedNote,
+    };
     const payload = effectiveExisting
       ? {
           ...recoveredFields,
@@ -722,16 +732,12 @@ export async function recordPackerScanPrimary({ code, courier, date, time, user,
           updatedAt: serverTimestamp(),
           updatedAtIso: nowIso(),
           user: userPayload(user),
-          packerScan: {
-            scannedAt: `${date}T${time}`,
-            scannedBy: userPayload(user),
-            packer,
-            note: correctedNote,
-          },
+          packerScan: persistedPackerScan,
         }
       : {
           ...baseOrderPayload({ type: 'packer', code: normalizedCode, courier, date, time, user, packer, note, sheetSyncAttemptId: attemptId }),
           status: nextStatus,
+          packerScan: persistedPackerScan,
           createdAt: serverTimestamp(),
           createdAtIso: nowIso(),
         };
@@ -750,9 +756,12 @@ export async function recordPackerScanPrimary({ code, courier, date, time, user,
       status: effectiveExisting?.admin?.scannedAt ? 'matched' : 'created',
       id: ref.id,
       existing: existing ?? effectiveExisting,
+      code: effectiveExisting?.code || effectiveExisting?.normalizedCode || normalizedCode,
+      normalizedCode: effectiveExisting?.normalizedCode || normalizeCode(effectiveExisting?.code || normalizedCode),
       wrongCourier,
       courier: effectiveCourier,
       admin: effectiveExisting?.admin ?? null,
+      packerScan: persistedPackerScan,
       adminDate: adminScannedAt.split('T')[0] || effectiveDate,
       adminTime: adminScannedAt.split('T')[1] || '',
       adminCode: effectiveExisting?.code || normalizedCode,
@@ -807,6 +816,10 @@ export async function recordAdminScanPrimary({ code, courier, date, time, user }
         status: needsSheetRetry ? (existing.packerScan?.scannedAt ? 'matched' : 'retry') : 'duplicate',
         id: ref.id,
         existing,
+        code: existing.code || existing.normalizedCode || normalizedCode,
+        normalizedCode: existing.normalizedCode || normalizeCode(existing.code || normalizedCode),
+        admin: existing.admin ?? null,
+        packerScan: existing.packerScan ?? null,
         sheetSyncAttemptId: needsSheetRetry ? attemptId : (existing.sheetSyncAttemptId ?? ''),
         sheetSyncStatus: needsSheetRetry ? 'pending' : (existing.sheetSyncStatus ?? 'pending'),
       };
@@ -817,6 +830,10 @@ export async function recordAdminScanPrimary({ code, courier, date, time, user }
       ? mergeExistingOrderWithCandidate(existing, recoveryCandidate)
       : recoveryCandidate;
     const nextStatus = effectiveExisting?.packerScan?.scannedAt ? 'matched' : 'pending';
+    const persistedAdminScan = {
+      scannedAt: `${date}T${time}`,
+      scannedBy: userPayload(user),
+    };
     const payload = existing
       ? {
           code: effectiveExisting?.code || normalizedCode,
@@ -831,10 +848,7 @@ export async function recordAdminScanPrimary({ code, courier, date, time, user }
           updatedAt: serverTimestamp(),
           updatedAtIso: nowIso(),
           user: userPayload(user),
-          admin: {
-            scannedAt: `${date}T${time}`,
-            scannedBy: userPayload(user),
-          },
+          admin: persistedAdminScan,
         }
       : effectiveExisting
         ? {
@@ -845,10 +859,7 @@ export async function recordAdminScanPrimary({ code, courier, date, time, user }
             packer: effectiveExisting.packer || '',
             note: effectiveExisting.note || '',
             status: nextStatus,
-            admin: {
-              scannedAt: `${date}T${time}`,
-              scannedBy: userPayload(user),
-            },
+            admin: persistedAdminScan,
             packerScan: effectiveExisting.packerScan || null,
             ...pendingSheetSyncFields(attemptId),
             updatedAt: serverTimestamp(),
@@ -860,6 +871,7 @@ export async function recordAdminScanPrimary({ code, courier, date, time, user }
       : {
           ...baseOrderPayload({ type: 'admin', code: normalizedCode, courier, date, time, user, sheetSyncAttemptId: attemptId }),
           status: nextStatus,
+          admin: persistedAdminScan,
           createdAt: serverTimestamp(),
           createdAtIso: nowIso(),
         };
@@ -876,6 +888,10 @@ export async function recordAdminScanPrimary({ code, courier, date, time, user }
       status: effectiveExisting?.packerScan?.scannedAt ? 'matched' : 'created',
       id: ref.id,
       existing: existing ?? effectiveExisting,
+      code: effectiveExisting?.code || effectiveExisting?.normalizedCode || normalizedCode,
+      normalizedCode: effectiveExisting?.normalizedCode || normalizeCode(effectiveExisting?.code || normalizedCode),
+      admin: persistedAdminScan,
+      packerScan: effectiveExisting?.packerScan ?? null,
       sheetSyncStatus: 'pending',
       sheetSyncAttemptId: attemptId,
     };

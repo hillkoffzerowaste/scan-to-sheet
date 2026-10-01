@@ -175,6 +175,36 @@ test('primary scans keep Marketplace lookup inside the background Sheet write', 
   }
 });
 
+test('primary Firestore scan results preserve the identity and scan role needed for Sheet confirmation', async () => {
+  const source = await readFile(new URL('./firebaseScans.js', import.meta.url), 'utf8');
+  const packerStart = source.indexOf('export async function recordPackerScanPrimary');
+  const adminStart = source.indexOf('export async function recordAdminScanPrimary');
+  const packerBlock = source.slice(packerStart, adminStart);
+  const adminBlock = source.slice(adminStart, source.indexOf('export async function markSheetSyncWriting', adminStart));
+
+  assert.ok(packerStart >= 0 && adminStart > packerStart, 'primary scan functions missing');
+  assert.match(
+    packerBlock,
+    /status: needsSheetRetry[\s\S]*?code: existing\.code \|\| existing\.normalizedCode[\s\S]*?packerScan: existing\.packerScan(?: \?\? null)?/,
+    'Packer retries must expose the stored identity and scan role',
+  );
+  assert.match(
+    packerBlock,
+    /status: effectiveExisting\?\.admin\?\.scannedAt \? 'matched' : 'created',[\s\S]*?code: effectiveExisting\?\.code \|\| effectiveExisting\?\.normalizedCode \|\| normalizedCode[\s\S]*?packerScan: (?:\{|persistedPackerScan)/,
+    'new Packer scans must expose the persisted identity and scan role',
+  );
+  assert.match(
+    adminBlock,
+    /status: needsSheetRetry[\s\S]*?code: existing\.code \|\| existing\.normalizedCode[\s\S]*?admin: existing\.admin(?: \?\? null)?/,
+    'Admin retries must expose the stored identity and scan role',
+  );
+  assert.match(
+    adminBlock,
+    /status: effectiveExisting\?\.packerScan\?\.scannedAt \? 'matched' : 'created',[\s\S]*?code: effectiveExisting\?\.code \|\| effectiveExisting\?\.normalizedCode \|\| normalizedCode[\s\S]*?admin: (?:\{|persistedAdminScan)/,
+    'new Admin scans must expose the persisted identity and scan role',
+  );
+});
+
 test('background Sheet confirmation validates the Firestore order identity', async () => {
   const appSource = await readFile(new URL('../App.jsx', import.meta.url), 'utf8');
   assert.ok(
