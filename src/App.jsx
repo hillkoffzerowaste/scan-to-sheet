@@ -1860,6 +1860,12 @@ function App() {
       return { busy: false, ...progress, error: true };
     } finally {
       await recoveryLockRelease?.();
+      // A manual recovery can enqueue a failed order before the targeted scheduler has
+      // finished mounting or while its previous timer is being replaced. Re-arm the one-order
+      // retry here so a queued scan never waits for the broad ten-minute sweep by accident.
+      if (sheetRecoveryOrderIdsRef.current.size > 0) {
+        sheetRecoveryRetrySchedulerRef.current?.schedule();
+      }
       // Keep the ten-minute guard for background recovery only; manual recovery is allowed to
       // request the next bounded batch immediately after this one finishes.
       if (applyCooldown) {
