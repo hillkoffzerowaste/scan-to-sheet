@@ -298,6 +298,7 @@ test('both App fallback callbacks mirror recovered scans with their stored conte
       runWithGoogleRetry: (append) => append('test-token', {}),
       appendScanGoogle: async () => newResult,
       appendAdminScanGoogle: async () => newResult,
+      findMarketplaceOrderGoogle: async () => null,
       scanCourier: context.courier,
       validation: { code: newResult.code },
       scanEmail: context.user.email,

@@ -123,7 +123,7 @@ test('manual recovery keeps verified rows out of a batch while unsynced rows rem
   assert.deepEqual(result.candidates.map((order) => order.id), ['pending']);
 });
 
-test('primary scans confirm before their background Marketplace lookup', async () => {
+test('primary scans keep Marketplace lookup inside the background Sheet write', async () => {
   const [source, appSource] = await Promise.all([
     readFile(new URL('./firebaseScans.js', import.meta.url), 'utf8'),
     readFile(new URL('../App.jsx', import.meta.url), 'utf8'),
@@ -136,11 +136,24 @@ test('primary scans confirm before their background Marketplace lookup', async (
   assert.doesNotMatch(source, /findMarketplaceMetadataByTracking/);
   assert.doesNotMatch(source, /collection\(firestoreDb, 'marketplaceOrders'\)/);
   assert.doesNotMatch(appSource, /const \[firestoreUser, marketplaceOrder\] = await Promise\.all/);
-  assert.ok(
-    appSource.indexOf('const marketplaceOrderPromise = findMarketplaceOrderForScan(validation.code).catch(() => null);')
-      > appSource.indexOf('const firestorePrimary = firestoreUser'),
-    'Marketplace lookup must begin after Firestore primary confirmation starts',
+  assert.doesNotMatch(
+    appSource,
+    /const marketplaceOrderPromise = findMarketplaceOrderForScan\(validation\.code\)\.catch\(\(\) => null\);/,
+    'Marketplace lookup must not run outside the Sheet write lock',
   );
+  const sheetWrites = [...appSource.matchAll(/runWithGoogleRetry\(async \(accessToken, googleConfig\) => \{/g)]
+    .map((match) => match.index)
+    .filter((index) => index > appSource.indexOf('const firestorePrimary = firestoreUser'));
+  assert.ok(sheetWrites.length >= 2, 'primary Admin and Packer Sheet writes must use async locked callbacks');
+  for (const start of sheetWrites.slice(-2)) {
+    const end = appSource.indexOf('{ sheetWrite: true })', start);
+    const block = appSource.slice(start, end);
+    assert.ok(
+      block.indexOf('findMarketplaceOrderGoogle') < block.indexOf('appendScanGoogle')
+        || block.indexOf('findMarketplaceOrderGoogle') < block.indexOf('appendAdminScanGoogle'),
+      'Marketplace lookup must finish inside the locked callback before the Sheet write',
+    );
+  }
 });
 
 test('background Sheet confirmation validates the Firestore order identity', async () => {

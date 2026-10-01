@@ -1446,12 +1446,6 @@ function App() {
     }
   }
 
-  function findMarketplaceOrderForScan(trackingNo) {
-    return runWithGoogleRetry((accessToken, googleConfig) => (
-      findMarketplaceOrderGoogle({ token: accessToken, config: googleConfig, trackingNo })
-    ));
-  }
-
   async function signOut() {
     signingOutRef.current = true;
     googleSheetMaintenanceCancelRef.current?.();
@@ -1968,9 +1962,6 @@ function App() {
       const packerName = scanPacker === PACKER_UNASSIGNED ? '' : scanPacker;
       const scanUser = firebaseUser ?? user;
       const scanEmail = user.email;
-      // Sheet owns Marketplace metadata. Keep this network lookup off the Firestore-first
-      // confirmation path so a cold Sheet cache cannot delay scanner feedback.
-      const marketplaceOrderPromise = findMarketplaceOrderForScan(validation.code).catch(() => null);
       let result;
 
       if (firestorePrimary?.id) {
@@ -2012,7 +2003,6 @@ function App() {
               orderId: firestorePrimary.id,
               attemptId: firestorePrimary.sheetSyncAttemptId,
             }));
-            const marketplaceOrder = await marketplaceOrderPromise;
             // If admin scanned first, include admin K-M data so Sheet row gets admin columns
             const adminData = firestorePrimary?.admin?.scannedAt
               ? {
@@ -2042,8 +2032,13 @@ function App() {
             const packerScanEmail = existingPackerScan?.scannedAt
               ? (existingPackerScan.scannedBy?.email || existingPackerOrder?.user?.email || scanEmail)
               : scanEmail;
-            const sheetResult = await runWithGoogleRetry((accessToken, googleConfig) =>
-              appendScanGoogle({
+            const sheetResult = await runWithGoogleRetry(async (accessToken, googleConfig) => {
+              // Keep the metadata read behind the same distributed lock as the write. A cold
+              // lookup from every scanner otherwise competes with the writer for Sheets quota.
+              const marketplaceOrder = await findMarketplaceOrderGoogle({
+                token: accessToken, config: googleConfig, trackingNo: validation.code,
+              }).catch(() => null);
+              return appendScanGoogle({
                 token: accessToken,
                 config: googleConfig,
                 courier: scanCourier,
@@ -2055,7 +2050,8 @@ function App() {
                 scanDate: packerScanDate,
                 scanTime: packerScanTime,
                 ...adminData,
-              }),
+              });
+            },
             { sheetWrite: true });
             const expectedSheetOrder = {
               ...firestorePrimary,
@@ -2097,11 +2093,13 @@ function App() {
         });
       } else {
         try {
-          const marketplaceOrder = await marketplaceOrderPromise;
           result = await commitFallbackScan({
             context: { type: 'packer', courier: scanCourier, user: scanUser, packer: packerName, note: scanNote },
-            appendToSheet: () => runWithGoogleRetry((accessToken, googleConfig) =>
-              appendScanGoogle({
+            appendToSheet: () => runWithGoogleRetry(async (accessToken, googleConfig) => {
+              const marketplaceOrder = await findMarketplaceOrderGoogle({
+                token: accessToken, config: googleConfig, trackingNo: validation.code,
+              }).catch(() => null);
+              return appendScanGoogle({
                 token: accessToken,
                 config: googleConfig,
                 courier: scanCourier,
@@ -2110,8 +2108,8 @@ function App() {
                 packer: packerName,
                 note: scanNote,
                 marketplaceOrder,
-              }),
-            { sheetWrite: true }),
+              })
+            }, { sheetWrite: true }),
             mirrorToFirestore: (sheetResult, context) => mirrorScanToFirestore({ ...context, result: sheetResult }),
           });
         } catch (sheetError) {
@@ -2410,8 +2408,6 @@ function App() {
 
       const scanUser = firebaseUser ?? user;
       const scanEmail = user.email;
-      // See Packer flow: the Marketplace lookup is only needed by the background Sheet write.
-      const marketplaceOrderPromise = findMarketplaceOrderForScan(validation.code).catch(() => null);
       let result;
 
       if (firestorePrimary?.id) {
@@ -2446,15 +2442,17 @@ function App() {
               orderId: firestorePrimary.id,
               attemptId: firestorePrimary.sheetSyncAttemptId,
             }));
-            const marketplaceOrder = await marketplaceOrderPromise;
             const adminScanTiming = getAdminScanTiming(
               firestorePrimary?.existing ?? firestorePrimary,
               { fallbackDate: nowParts.date, fallbackTime: nowParts.time },
             );
             const existingPackerScan = firestorePrimary?.existing?.packerScan;
             const hasPackerScan = Boolean(existingPackerScan?.scannedAt);
-            const sheetResult = await runWithGoogleRetry((accessToken, googleConfig) =>
-              hasPackerScan
+            const sheetResult = await runWithGoogleRetry(async (accessToken, googleConfig) => {
+              const marketplaceOrder = await findMarketplaceOrderGoogle({
+                token: accessToken, config: googleConfig, trackingNo: validation.code,
+              }).catch(() => null);
+              return hasPackerScan
                 ? appendScanGoogle({
                     token: accessToken,
                     config: googleConfig,
@@ -2482,8 +2480,8 @@ function App() {
                     adminDate: adminScanTiming.adminDate,
                     adminTime: adminScanTiming.adminTime,
                     adminCode: firestorePrimary?.existing?.code || validation.code,
-                  }),
-            { sheetWrite: true });
+                  });
+            }, { sheetWrite: true });
             const expectedSheetOrder = {
               ...firestorePrimary,
               courier: firestorePrimary?.courier || firestorePrimary?.existing?.courier || scanCourier,
@@ -2524,19 +2522,21 @@ function App() {
         });
       } else {
         try {
-          const marketplaceOrder = await marketplaceOrderPromise;
           result = await commitFallbackScan({
             context: { type: 'admin', courier: scanCourier, user: scanUser, packer: '', note: '' },
-            appendToSheet: () => runWithGoogleRetry((accessToken, googleConfig) =>
-              appendAdminScanGoogle({
+            appendToSheet: () => runWithGoogleRetry(async (accessToken, googleConfig) => {
+              const marketplaceOrder = await findMarketplaceOrderGoogle({
+                token: accessToken, config: googleConfig, trackingNo: validation.code,
+              }).catch(() => null);
+              return appendAdminScanGoogle({
                 token: accessToken,
                 config: googleConfig,
                 courier: scanCourier,
                 code: validation.code,
                 email: scanEmail,
                 marketplaceOrder,
-              }),
-            { sheetWrite: true }),
+              })
+            }, { sheetWrite: true }),
             mirrorToFirestore: (sheetResult, context) => mirrorScanToFirestore({ ...context, result: sheetResult }),
           });
         } catch (sheetError) {
