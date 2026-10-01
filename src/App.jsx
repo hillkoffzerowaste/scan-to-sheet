@@ -137,7 +137,6 @@ import {
 import {
   runSheetRecovery,
   isSheetSyncVerified,
-  isRetryableSheetSyncError,
   requireSheetSyncAcknowledgement,
 } from './services/sheetSync.js';
 import {
@@ -1794,10 +1793,10 @@ function App() {
             sheetRecoveryOrderIdsRef.current.delete(order.id);
             removeSheetRecoveryOrderId(order.id);
           }
-          // Keep the broad sweep bounded, but move transient errors into the single-order
-          // queue so a lock collision does not leave today's scan waiting ten minutes.
-          // Permanent errors stay on the broad sweep for operator-visible diagnostics.
-          else if (targeted || isRetryableSheetSyncError(result?.error)) queueSheetRecoveryOrder(order.id);
+          // Every failed write is already durable in Firestore. Keep it in the single-order
+          // queue so generic gateway errors and Sheet locks cannot leave one scan waiting for
+          // the next broad sweep; the one-order/60-second limit still protects Sheet quota.
+          else if (targeted || result?.error) queueSheetRecoveryOrder(order.id);
         },
       });
       scheduleCountRefresh();

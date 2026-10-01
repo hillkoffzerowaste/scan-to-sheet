@@ -162,17 +162,17 @@ test('background Sheet recovery keeps sweeping the backlog when targeted retry i
   );
 });
 
-test('background Sheet lock failures enter the targeted queue and drain every queued order', async () => {
+test('background Sheet failures enter the targeted queue and drain every queued order', async () => {
   const appSource = await readFile(new URL('../App.jsx', import.meta.url), 'utf8');
   assert.match(
     appSource,
-    /isRetryableSheetSyncError\(result\?\.error\)/,
-    'transient background Sheet failures must be retried instead of waiting for the ten-minute sweep',
+    /result\?\.error/,
+    'background Sheet failures must be retried instead of waiting for the ten-minute sweep',
   );
   assert.match(
     appSource,
-    /targeted \|\| isRetryableSheetSyncError\(result\?\.error\)\) queueSheetRecoveryOrder\(order\.id\)/,
-    'only targeted retries or retryable background failures may enter the targeted queue',
+    /targeted \|\| result\?\.error\) queueSheetRecoveryOrder\(order\.id\)/,
+    'background failures must enter the targeted queue per order',
   );
   assert.match(
     appSource,
