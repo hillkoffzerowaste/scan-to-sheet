@@ -1,10 +1,22 @@
 import React from 'react';
 
 // แถบสถานะล่างจอ: ตัวเลขที่ต้องเห็นตลอดเวลาโดยไม่ต้องเลื่อนหา
-function StatusBar({ activeTab, isSignedIn, totalTodayCount, scanQueueSnapshot, selectedPacker, remoteControlHint }) {
+function StatusBar({
+  activeTab,
+  isSheetConnected,
+  totalTodayCount,
+  scanQueueSnapshot,
+  selectedPacker,
+  remoteControlHint,
+  sheetSyncSummary,
+}) {
   // pending เป็น array ของงานที่รอ ส่วน processing เป็นงานที่กำลังเขียนอยู่ (หรือ null)
-  const pending = (scanQueueSnapshot?.pending?.length ?? 0) + (scanQueueSnapshot?.processing ? 1 : 0);
-  const failed = scanQueueSnapshot?.failed ?? 0;
+  const localPending = (scanQueueSnapshot?.pending?.length ?? 0) + (scanQueueSnapshot?.processing ? 1 : 0);
+  const pending = Math.max(localPending, Number(sheetSyncSummary?.pendingCount) || 0);
+  const failed = Math.max(
+    Number(scanQueueSnapshot?.failed) || 0,
+    Number(sheetSyncSummary?.failedCount) || 0,
+  );
   const queueTone = failed > 0 ? 'failed' : pending > 0 ? 'pending' : 'ready';
   // การเปลี่ยนที่สั่งมาจากรีโมทบนมือถือบอกที่นี่เท่านั้น เพื่อไม่ให้ไปขัดจังหวะคนที่กำลังสแกน
   const remoteAt = remoteControlHint
@@ -37,7 +49,7 @@ function StatusBar({ activeTab, isSignedIn, totalTodayCount, scanQueueSnapshot, 
       )}
       <span className="win-statusbar-right">
         <span className="win-statusbar-item">Packer: <b>{selectedPacker}</b></span>
-        <span className={`win-statusbar-item win-statusbar-connection ${isSignedIn ? 'online' : 'offline'}`}>Google Sheet: <b>{isSignedIn ? 'เชื่อมต่อแล้ว' : 'ยังไม่เชื่อม'}</b></span>
+        <span className={`win-statusbar-item win-statusbar-connection ${isSheetConnected ? 'online' : 'offline'}`}>Google Sheet: <b>{isSheetConnected ? 'เชื่อมต่อแล้ว' : 'ยังไม่เชื่อม'}</b></span>
       </span>
     </div>
   );

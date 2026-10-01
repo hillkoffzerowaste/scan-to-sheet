@@ -3768,11 +3768,12 @@ function App() {
       </div>
       <StatusBar
         activeTab={activeTab}
-        isSignedIn={isSignedIn}
+        isSheetConnected={isSheetConnected}
         totalTodayCount={totalTodayCount}
         scanQueueSnapshot={scanQueueSnapshot}
         selectedPacker={selectedPacker}
         remoteControlHint={remoteControlHint}
+        sheetSyncSummary={sheetSyncSummary}
       />
     </div>
     </>
