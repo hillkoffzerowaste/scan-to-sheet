@@ -133,6 +133,15 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+function getBangkokDate() {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Bangkok',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+}
+
 function newSheetSyncAttemptId() {
   return `sheet_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
 }
@@ -1002,6 +1011,25 @@ export async function getSheetRecoveryCandidates({
         .map((order) => order.id),
     };
   }
+
+  // Historical backlog can be much larger than one recovery batch. Read today's bounded
+  // order set first so old `writing` documents cannot hide a fresh scan from the ten-minute
+  // sweep. Once today's queue is clear, fall through to the historical status queues.
+  const todayCandidates = (await getOrdersByDate(getBangkokDate()))
+    .filter((order) => ['failed', 'pending', 'writing'].includes(order.sheetSyncStatus))
+    .filter((order) => isSheetSyncClaimable(order))
+    .sort((left, right) => {
+      const priority = { failed: 0, pending: 1, writing: 2 };
+      return (priority[left.sheetSyncStatus] ?? 9) - (priority[right.sheetSyncStatus] ?? 9)
+        || String(right.updatedAtIso ?? '').localeCompare(String(left.updatedAtIso ?? ''));
+    });
+  if (todayCandidates.length) {
+    return {
+      candidates: todayCandidates.slice(0, maxRows),
+      limited: todayCandidates.length > maxRows,
+    };
+  }
+
   const statuses = ['failed', 'pending', 'writing'];
   const snapshots = await Promise.all(statuses.map((status) => getDocs(query(
     collection(firestoreDb, 'orders'), where('sheetSyncStatus', '==', status), limit(maxRows),

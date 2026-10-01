@@ -123,6 +123,16 @@ test('manual recovery keeps verified rows out of a batch while unsynced rows rem
   assert.deepEqual(result.candidates.map((order) => order.id), ['pending']);
 });
 
+test('background Sheet recovery checks today before the historical backlog', async () => {
+  const source = await readFile(new URL('./firebaseScans.js', import.meta.url), 'utf8');
+  const recoveryStart = source.indexOf('export async function getSheetRecoveryCandidates');
+  const todayRead = source.indexOf('getOrdersByDate(getBangkokDate())', recoveryStart);
+  const historicalRead = source.indexOf("const statuses = ['failed', 'pending', 'writing'];", recoveryStart);
+
+  assert.ok(recoveryStart >= 0, 'Sheet recovery candidate query missing');
+  assert.ok(todayRead >= 0 && todayRead < historicalRead, 'today must be checked before historical status queues');
+});
+
 test('primary scans keep Marketplace lookup inside the background Sheet write', async () => {
   const [source, appSource] = await Promise.all([
     readFile(new URL('./firebaseScans.js', import.meta.url), 'utf8'),
