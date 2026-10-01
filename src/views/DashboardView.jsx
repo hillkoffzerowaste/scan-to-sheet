@@ -75,6 +75,7 @@ function DashboardView({
   recentRows,
   refreshAllCounts,
   scanQueueSnapshot,
+  sheetSyncSummary,
   selectedCourier,
   summary,
   switchTab,
@@ -102,9 +103,15 @@ function DashboardView({
       .slice(0, 80);
   }, [activityFilter, driveRecentRows, query, recentRows]);
 
-  const pendingQueue = (scanQueueSnapshot?.pending?.length || 0)
+  const localPendingQueue = (scanQueueSnapshot?.pending?.length || 0)
     + (scanQueueSnapshot?.processing ? 1 : 0);
-  const failedQueue = scanQueueSnapshot?.failed || 0;
+  const pendingQueue = sheetSyncSummary
+    ? Math.max(localPendingQueue, Number(sheetSyncSummary.pendingCount) || 0)
+    : localPendingQueue;
+  const failedQueue = Math.max(
+    scanQueueSnapshot?.failed || 0,
+    Number(sheetSyncSummary?.failedCount) || 0,
+  );
   const missingCount = dashboardSummary?.pendingTotalCount ?? missingAlertBadge ?? 0;
   const courierMax = Math.max(...(summary || []).map((item) => item.count || 0), 1);
   const packerMax = Math.max(...(packerCounts || []).map((item) => item.count || 0), 1);

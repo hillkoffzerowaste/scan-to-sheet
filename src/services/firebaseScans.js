@@ -24,6 +24,7 @@ import {
   shouldIncludeInManualSheetRecovery,
   shouldReconcileSheetOnRescan,
   isSheetSyncVerified,
+  summarizeSheetSyncOrders,
   shouldKeepTargetedSheetRecovery,
 } from './sheetSync.js';
 import { SHEET_RECOVERY_MAX_ROWS } from './sheetSyncPolicy.js';
@@ -1215,6 +1216,7 @@ export async function backfillOrdersFromSheetRows({ rows, user }) {
 
 export async function fetchTodaySummaryFirestore({ couriers = [], date }) {
   const orders = await getPackerOrdersByScanDate(date);
+  const sheetSyncSummary = summarizeSheetSyncOrders(orders);
   const courierCounts = couriers.map((courier) => ({
     courier,
     count: orders.filter((order) => order.courier === courier && order.packerScan?.scannedAt && !isCancelledOrder(order)).length,
@@ -1233,6 +1235,7 @@ export async function fetchTodaySummaryFirestore({ couriers = [], date }) {
     packerCounts: [...packerMap.entries()]
       .sort((a, b) => b[1] - a[1])
       .map(([packer, count]) => ({ packer, count })),
+    sheetSyncSummary,
   };
 }
 

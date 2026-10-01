@@ -368,6 +368,7 @@ function App() {
   const [staffModuleId, setStaffModuleId] = useState('directory');
   const [driveRecentRows, setDriveRecentRows] = useState([]);
   const [driveTotalCount, setDriveTotalCount] = useState(0);
+  const [sheetSyncSummary, setSheetSyncSummary] = useState(null);
   const [driveSyncBusy, setDriveSyncBusy] = useState(false);
   const [sheetRecoveryBusy, setSheetRecoveryBusy] = useState(false);
   const [sheetRecoveryStartDate, setSheetRecoveryStartDate] = useState(() => getBangkokParts().date);
@@ -1483,6 +1484,7 @@ function App() {
     setMissingResults(null);
     setMissingAlertBadge(0);
     setDriveTotalCount(0);
+    setSheetSyncSummary(null);
     setStatus({
       type: 'idle',
       title: 'ออกจากระบบแล้ว',
@@ -1510,6 +1512,11 @@ function App() {
     if (data) {
       setSummary(data.courierCounts);
       setPackerCounts(data.packerCounts);
+      if (canUseFirestorePrimary() && data.sheetSyncSummary) {
+        setSheetSyncSummary(data.sheetSyncSummary);
+      } else if (!canUseFirestorePrimary()) {
+        setSheetSyncSummary(null);
+      }
     }
 
     if (activeTab === 'dashboard') {
@@ -1527,6 +1534,21 @@ function App() {
       setRecentRows(courierRows);
       setDriveRecentRows(driveRows);
       setDriveTotalCount(driveRows.length);
+      if (canUseFirestorePrimary()) {
+        const pendingIds = new Set(data?.sheetSyncSummary?.pendingOrderIds ?? []);
+        const failedIds = new Set(data?.sheetSyncSummary?.failedOrderIds ?? []);
+        driveRows.forEach((row) => {
+          const id = row.id || row.no;
+          if (row.sheetSyncStatus && !isSheetSyncVerified(row)) pendingIds.add(id);
+          if (row.sheetSyncStatus === 'failed') failedIds.add(id);
+        });
+        setSheetSyncSummary({
+          pendingCount: pendingIds.size,
+          failedCount: failedIds.size,
+          pendingOrderIds: [...pendingIds],
+          failedOrderIds: [...failedIds],
+        });
+      }
       return;
     }
 
@@ -3537,6 +3559,7 @@ function App() {
           recentRows={recentRows}
           refreshAllCounts={refreshAllCounts}
           scanQueueSnapshot={scanQueueSnapshot}
+          sheetSyncSummary={sheetSyncSummary}
           selectedCourier={selectedCourier}
           summary={summary}
           switchTab={switchTab}

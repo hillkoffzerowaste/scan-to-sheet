@@ -7,6 +7,7 @@ import { getScanEventDate } from './scanRow.js';
 import {
   SHEET_SYNC_STALE_MS,
   isSheetSyncVerified,
+  summarizeSheetSyncOrders,
   isSheetSyncClaimable,
   collectManualSheetRecoveryCandidates,
   prioritizeSheetSyncCandidates,
@@ -36,6 +37,21 @@ test('verified is the current terminal Sheet state while synced remains readable
   assert.equal(isSheetSyncVerified({ sheetSyncStatus: 'verified' }), true);
   assert.equal(isSheetSyncVerified({ sheetSyncStatus: 'synced' }), true);
   assert.equal(isSheetSyncVerified({ sheetSyncStatus: 'writing' }), false);
+});
+
+test('Sheet queue summary includes Firestore outbox rows, not only failed browser jobs', () => {
+  assert.deepEqual(summarizeSheetSyncOrders([
+    { id: 'pending', sheetSyncStatus: 'pending' },
+    { id: 'failed', sheetSyncStatus: 'failed' },
+    { id: 'writing', sheetSyncStatus: 'writing' },
+    { id: 'verified', sheetSyncStatus: 'verified' },
+    { id: 'legacy', sheetSyncStatus: 'synced' },
+  ]), {
+    pendingCount: 3,
+    failedCount: 1,
+    pendingOrderIds: ['pending', 'failed', 'writing'],
+    failedOrderIds: ['failed'],
+  });
 });
 
 test('scan row date follows the primary scan event across days', () => {

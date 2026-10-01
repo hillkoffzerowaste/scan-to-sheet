@@ -37,6 +37,17 @@ export function isSheetSyncVerified(order) {
   return ['verified', 'synced'].includes(order?.sheetSyncStatus);
 }
 
+export function summarizeSheetSyncOrders(orders = []) {
+  const unsynced = orders.filter((order) => !isSheetSyncVerified(order));
+  const failed = unsynced.filter((order) => order?.sheetSyncStatus === 'failed');
+  return {
+    pendingCount: unsynced.length,
+    failedCount: failed.length,
+    pendingOrderIds: unsynced.map((order) => order?.id).filter(Boolean),
+    failedOrderIds: failed.map((order) => order?.id).filter(Boolean),
+  };
+}
+
 export function requireSheetSyncAcknowledgement(acknowledged) {
   if (acknowledged !== true) {
     throw Object.assign(new Error('ยังยืนยันสถานะซิงก์ใน Firestore ไม่ได้ กรุณาตรวจและกู้คืนอีกครั้ง'), {
