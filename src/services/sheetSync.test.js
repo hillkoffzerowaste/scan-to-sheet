@@ -30,6 +30,33 @@ test('targeted recovery keeps a live writing lease queued for the next retry', (
   assert.equal(shouldKeepTargetedSheetRecovery({ sheetSyncStatus: 'verified' }, now), false);
 });
 
+test('background recovery reserves a bounded slot for historical backlog while today has work', () => {
+  const today = Array.from({ length: 10 }, (_, index) => ({ id: `today-${index}`, date: '2026-10-01' }));
+  const historical = Array.from({ length: 10 }, (_, index) => ({ id: `old-${index}`, date: '2026-09-30' }));
+
+  const selected = sheetSync.selectBackgroundSheetRecoveryCandidates({
+    todayCandidates: today,
+    historicalCandidates: historical,
+    maxRows: 10,
+  });
+
+  assert.equal(selected.length, 10);
+  assert.equal(selected.filter((order) => order.date === '2026-10-01').length, 5);
+  assert.equal(selected.filter((order) => order.date === '2026-09-30').length, 5);
+});
+
+test('background recovery uses the full batch for today when no historical backlog exists', () => {
+  const today = Array.from({ length: 10 }, (_, index) => ({ id: `today-${index}`, date: '2026-10-01' }));
+
+  const selected = sheetSync.selectBackgroundSheetRecoveryCandidates({
+    todayCandidates: today,
+    historicalCandidates: [],
+    maxRows: 10,
+  });
+
+  assert.deepEqual(selected.map((order) => order.id), today.map((order) => order.id));
+});
+
 test('a late failure cannot downgrade an already verified attempt', () => {
   assert.equal(typeof sheetSync.canApplySheetSyncResult, 'function');
   const verified = { sheetSyncAttemptId: 'attempt-1', sheetSyncStatus: 'verified' };

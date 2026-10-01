@@ -126,11 +126,17 @@ test('manual recovery keeps verified rows out of a batch while unsynced rows rem
 test('background Sheet recovery checks today before the historical backlog', async () => {
   const source = await readFile(new URL('./firebaseScans.js', import.meta.url), 'utf8');
   const recoveryStart = source.indexOf('export async function getSheetRecoveryCandidates');
-  const todayRead = source.indexOf('getOrdersByDate(getBangkokDate())', recoveryStart);
+  const todayRead = source.indexOf('getOrdersByDate(todayDate)', recoveryStart);
   const historicalRead = source.indexOf("const statuses = ['failed', 'pending', 'writing'];", recoveryStart);
+  const recoveryBlock = source.slice(recoveryStart, source.indexOf('export async function claimSheetRecoveryOrder', recoveryStart));
 
   assert.ok(recoveryStart >= 0, 'Sheet recovery candidate query missing');
   assert.ok(todayRead >= 0 && todayRead < historicalRead, 'today must be checked before historical status queues');
+  assert.match(
+    recoveryBlock,
+    /selectBackgroundSheetRecoveryCandidates/,
+    'background recovery must reserve work for historical candidates instead of returning early',
+  );
 });
 
 test('Sheet gateway timeouts keep scans in the retryable path', async () => {

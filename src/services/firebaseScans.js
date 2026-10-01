@@ -24,6 +24,7 @@ import {
   shouldIncludeInManualSheetRecovery,
   shouldReconcileSheetOnRescan,
   isSheetSyncVerified,
+  selectBackgroundSheetRecoveryCandidates,
   summarizeSheetSyncOrders,
   shouldKeepTargetedSheetRecovery,
 } from './sheetSync.js';
@@ -1030,8 +1031,9 @@ export async function getSheetRecoveryCandidates({
 
   // Historical backlog can be much larger than one recovery batch. Read today's bounded
   // order set first so old `writing` documents cannot hide a fresh scan from the ten-minute
-  // sweep. Once today's queue is clear, fall through to the historical status queues.
-  const todayCandidates = (await getOrdersByDate(getBangkokDate()))
+  // sweep, while reserving part of every batch so old work cannot starve indefinitely.
+  const todayDate = getBangkokDate();
+  const todayCandidates = (await getOrdersByDate(todayDate))
     .filter((order) => ['failed', 'pending', 'writing'].includes(order.sheetSyncStatus))
     .filter((order) => isSheetSyncClaimable(order))
     .sort((left, right) => {
@@ -1039,20 +1041,25 @@ export async function getSheetRecoveryCandidates({
       return (priority[left.sheetSyncStatus] ?? 9) - (priority[right.sheetSyncStatus] ?? 9)
         || String(right.updatedAtIso ?? '').localeCompare(String(left.updatedAtIso ?? ''));
     });
-  if (todayCandidates.length) {
-    return {
-      candidates: todayCandidates.slice(0, maxRows),
-      limited: todayCandidates.length > maxRows,
-    };
-  }
 
   const statuses = ['failed', 'pending', 'writing'];
   const snapshots = await Promise.all(statuses.map((status) => getDocs(query(
     collection(firestoreDb, 'orders'), where('sheetSyncStatus', '==', status), limit(maxRows),
   ))));
-  const candidates = snapshots.flatMap((snap) => snap.docs.map((item) => ({ id: item.id, ...item.data() })))
-    .filter((order) => isSheetSyncClaimable(order)).slice(0, maxRows);
-  return { candidates, limited: snapshots.some((snap) => snap.size >= maxRows) };
+  const historicalCandidates = snapshots.flatMap((snap) => snap.docs.map((item) => ({ id: item.id, ...item.data() })))
+    .filter((order) => order.date !== todayDate)
+    .filter((order) => isSheetSyncClaimable(order));
+  const candidates = selectBackgroundSheetRecoveryCandidates({
+    todayCandidates,
+    historicalCandidates,
+    maxRows,
+  });
+  return {
+    candidates,
+    limited: todayCandidates.length > candidates.filter((order) => order.date === todayDate).length
+      || historicalCandidates.length > candidates.filter((order) => order.date !== todayDate).length
+      || snapshots.some((snap) => snap.size >= maxRows),
+  };
 }
 
 export async function claimSheetRecoveryOrder({ candidate, includeSynced = false, role = 'both', recordAudit = true }) {

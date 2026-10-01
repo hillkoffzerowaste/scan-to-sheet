@@ -84,6 +84,23 @@ export function prioritizeSheetSyncCandidates({ failed = [], pending = [], maxRo
   return [...failed, ...pending].slice(0, Math.max(0, maxRows));
 }
 
+// Keep a bounded share of every background batch moving the historical queue. Without this,
+// a steady stream of today's scans can keep the older outbox permanently behind the daily queue.
+export function selectBackgroundSheetRecoveryCandidates({
+  todayCandidates = [],
+  historicalCandidates = [],
+  maxRows = SHEET_RECOVERY_MAX_ROWS,
+}) {
+  const limit = Math.max(0, Number.isFinite(maxRows) ? Math.floor(maxRows) : 0);
+  if (!limit) return [];
+  const historicalSlots = historicalCandidates.length
+    ? Math.min(historicalCandidates.length, Math.max(1, Math.floor(limit / 2)))
+    : 0;
+  const todayRows = todayCandidates.slice(0, limit - historicalSlots);
+  const remaining = limit - todayRows.length;
+  return [...todayRows, ...historicalCandidates.slice(0, remaining)];
+}
+
 export function buildSheetSyncFailureUpdates(orders = [], error = null) {
   const message = userErrorMessage(error, 'ซิงก์ Google Sheet ไม่สำเร็จ');
   return orders.map((order) => ({
