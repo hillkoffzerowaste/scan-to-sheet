@@ -214,7 +214,12 @@ async function apiJson(url, options = {}) {
     return data;
   } catch (error) {
     clearTimeout(t);
-    if (error.name === 'AbortError') throw new Error('เชื่อมต่อนานเกินไป กรุณาลองใหม่');
+    if (error.name === 'AbortError') {
+      throw Object.assign(new Error('เชื่อมต่อนานเกินไป กรุณาลองใหม่'), {
+        code: 'GOOGLE_TIMEOUT',
+        status: 408,
+      });
+    }
     throw error;
   }
 }

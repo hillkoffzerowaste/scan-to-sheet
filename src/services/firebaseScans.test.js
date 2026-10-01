@@ -133,6 +133,15 @@ test('background Sheet recovery checks today before the historical backlog', asy
   assert.ok(todayRead >= 0 && todayRead < historicalRead, 'today must be checked before historical status queues');
 });
 
+test('Sheet gateway timeouts keep scans in the retryable path', async () => {
+  const appSource = await readFile(new URL('../App.jsx', import.meta.url), 'utf8');
+  assert.match(
+    appSource,
+    /code: 'GOOGLE_TIMEOUT',[\s\S]*status: 408/,
+    'Sheet gateway timeouts must carry a retryable error code',
+  );
+});
+
 test('primary scans keep Marketplace lookup inside the background Sheet write', async () => {
   const [source, appSource] = await Promise.all([
     readFile(new URL('./firebaseScans.js', import.meta.url), 'utf8'),

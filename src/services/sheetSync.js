@@ -30,7 +30,7 @@ export function isRetryableSheetSyncError(error) {
   const diagnostic = [error?.message, error?.detail, error?.cause]
     .map((value) => typeof value === 'string' ? value : JSON.stringify(value ?? ''))
     .join(' ');
-  return /Google Sheet กำลังถูกใช้งาน|Google ตอบสนองช้า|Google จำกัดการเรียกใช้|rateLimitExceeded|userRateLimitExceeded|quotaExceeded|resource_exhausted|backendError|temporarilyUnavailable/i.test(diagnostic);
+  return /เชื่อมต่อนานเกินไป|Google Sheet กำลังถูกใช้งาน|Google ตอบสนองช้า|Google จำกัดการเรียกใช้|rateLimitExceeded|userRateLimitExceeded|quotaExceeded|resource_exhausted|backendError|temporarilyUnavailable/i.test(diagnostic);
 }
 
 export function isSheetSyncVerified(order) {

@@ -204,6 +204,7 @@ test('HTTP 500 and readback failures are retryable Sheet errors', () => {
   assert.equal(isRetryableSheetSyncError(Object.assign(new Error('batch may have written before verification failed'), {
     code: 'SHEET_BATCH_INCOMPLETE',
   })), true);
+  assert.equal(isRetryableSheetSyncError(new Error('เชื่อมต่อนานเกินไป กรุณาลองใหม่')), true);
   assert.equal(isRetryableSheetSyncError(new Error('ช่วงวันที่ไม่ถูกต้อง')), false);
 });
 
