@@ -84,6 +84,21 @@ export function prioritizeSheetSyncCandidates({ failed = [], pending = [], maxRo
   return [...failed, ...pending].slice(0, Math.max(0, maxRows));
 }
 
+// Keep failed work first, then drain the oldest pending work before newer scans can
+// continually push an older retry to the back of the recovery queue.
+export function sortBackgroundSheetRecoveryCandidates(orders = []) {
+  const priority = { failed: 0, pending: 1, writing: 2 };
+  const timestamp = (order) => {
+    const value = Date.parse(String(order?.updatedAtIso ?? ''));
+    return Number.isFinite(value) ? value : Number.MAX_SAFE_INTEGER;
+  };
+  return [...orders].sort((left, right) => (
+    (priority[left?.sheetSyncStatus] ?? 9) - (priority[right?.sheetSyncStatus] ?? 9)
+    || timestamp(left) - timestamp(right)
+    || String(left?.id ?? '').localeCompare(String(right?.id ?? ''))
+  ));
+}
+
 // Keep a bounded share of every background batch moving the historical queue. Without this,
 // a steady stream of today's scans can keep the older outbox permanently behind the daily queue.
 export function selectBackgroundSheetRecoveryCandidates({

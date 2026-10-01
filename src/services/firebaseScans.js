@@ -25,6 +25,7 @@ import {
   shouldReconcileSheetOnRescan,
   isSheetSyncVerified,
   selectBackgroundSheetRecoveryCandidates,
+  sortBackgroundSheetRecoveryCandidates,
   summarizeSheetSyncOrders,
   shouldKeepTargetedSheetRecovery,
 } from './sheetSync.js';
@@ -1033,14 +1034,11 @@ export async function getSheetRecoveryCandidates({
   // order set first so old `writing` documents cannot hide a fresh scan from the ten-minute
   // sweep, while reserving part of every batch so old work cannot starve indefinitely.
   const todayDate = getBangkokDate();
-  const todayCandidates = (await getOrdersByDate(todayDate))
-    .filter((order) => ['failed', 'pending', 'writing'].includes(order.sheetSyncStatus))
-    .filter((order) => isSheetSyncClaimable(order))
-    .sort((left, right) => {
-      const priority = { failed: 0, pending: 1, writing: 2 };
-      return (priority[left.sheetSyncStatus] ?? 9) - (priority[right.sheetSyncStatus] ?? 9)
-        || String(right.updatedAtIso ?? '').localeCompare(String(left.updatedAtIso ?? ''));
-    });
+  const todayCandidates = sortBackgroundSheetRecoveryCandidates(
+    (await getOrdersByDate(todayDate))
+      .filter((order) => ['failed', 'pending', 'writing'].includes(order.sheetSyncStatus))
+      .filter((order) => isSheetSyncClaimable(order)),
+  );
 
   const statuses = ['failed', 'pending', 'writing'];
   const snapshots = await Promise.all(statuses.map((status) => getDocs(query(

@@ -57,6 +57,19 @@ test('background recovery uses the full batch for today when no historical backl
   assert.deepEqual(selected.map((order) => order.id), today.map((order) => order.id));
 });
 
+test('background recovery prioritizes the oldest retryable order within each status', () => {
+  const selected = sheetSync.sortBackgroundSheetRecoveryCandidates([
+    { id: 'pending-new', sheetSyncStatus: 'pending', updatedAtIso: '2026-10-01T04:05:00.000Z' },
+    { id: 'pending-old', sheetSyncStatus: 'pending', updatedAtIso: '2026-10-01T03:45:00.000Z' },
+    { id: 'failed-new', sheetSyncStatus: 'failed', updatedAtIso: '2026-10-01T04:04:00.000Z' },
+    { id: 'writing-old', sheetSyncStatus: 'writing', updatedAtIso: '2026-10-01T03:40:00.000Z' },
+  ]);
+
+  assert.deepEqual(selected.map((order) => order.id), [
+    'failed-new', 'pending-old', 'pending-new', 'writing-old',
+  ]);
+});
+
 test('a late failure cannot downgrade an already verified attempt', () => {
   assert.equal(typeof sheetSync.canApplySheetSyncResult, 'function');
   const verified = { sheetSyncAttemptId: 'attempt-1', sheetSyncStatus: 'verified' };
