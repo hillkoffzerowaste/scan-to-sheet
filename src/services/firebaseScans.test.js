@@ -127,11 +127,15 @@ test('background Sheet recovery checks today before the historical backlog', asy
   const source = await readFile(new URL('./firebaseScans.js', import.meta.url), 'utf8');
   const recoveryStart = source.indexOf('export async function getSheetRecoveryCandidates');
   const todayRead = source.indexOf('getOrdersByDate(todayDate)', recoveryStart);
+  const packerScanRead = source.indexOf('getPackerOrdersByScanDate(todayDate)', recoveryStart);
+  const adminScanRead = source.indexOf('getAdminOrdersByScanDate(todayDate)', recoveryStart);
   const historicalRead = source.indexOf("const statuses = ['failed', 'pending', 'writing'];", recoveryStart);
   const recoveryBlock = source.slice(recoveryStart, source.indexOf('export async function claimSheetRecoveryOrder', recoveryStart));
 
   assert.ok(recoveryStart >= 0, 'Sheet recovery candidate query missing');
   assert.ok(todayRead >= 0 && todayRead < historicalRead, 'today must be checked before historical status queues');
+  assert.ok(packerScanRead >= 0 && packerScanRead < historicalRead, 'today Packer scans must be checked before historical status queues');
+  assert.ok(adminScanRead >= 0 && adminScanRead < historicalRead, 'today Admin scans must be checked before historical status queues');
   assert.match(
     recoveryBlock,
     /selectBackgroundSheetRecoveryCandidates/,

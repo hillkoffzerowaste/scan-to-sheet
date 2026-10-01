@@ -1034,11 +1034,23 @@ export async function getSheetRecoveryCandidates({
   // order set first so old `writing` documents cannot hide a fresh scan from the ten-minute
   // sweep, while reserving part of every batch so old work cannot starve indefinitely.
   const todayDate = getBangkokDate();
+  // An order can be created yesterday and packed after midnight. Treat a scan made today as
+  // today's operational work so it is not hidden behind a large historical failure backlog.
+  const [dateOrders, packerScanOrders, adminScanOrders] = await Promise.all([
+    getOrdersByDate(todayDate),
+    getPackerOrdersByScanDate(todayDate),
+    getAdminOrdersByScanDate(todayDate),
+  ]);
+  const todayOrdersById = new Map();
+  for (const order of [...dateOrders, ...packerScanOrders, ...adminScanOrders]) {
+    if (order?.id) todayOrdersById.set(order.id, order);
+  }
   const todayCandidates = sortBackgroundSheetRecoveryCandidates(
-    (await getOrdersByDate(todayDate))
+    [...todayOrdersById.values()]
       .filter((order) => ['failed', 'pending', 'writing'].includes(order.sheetSyncStatus))
       .filter((order) => isSheetSyncClaimable(order)),
   );
+  const todayActivityIds = new Set(todayCandidates.map((order) => order.id));
 
   const statuses = ['failed', 'pending', 'writing'];
   const snapshots = await Promise.all(statuses.map((status) => getDocs(query(
@@ -1049,7 +1061,7 @@ export async function getSheetRecoveryCandidates({
   ))));
   const historicalCandidates = sortBackgroundSheetRecoveryCandidates(
     snapshots.flatMap((snap) => snap.docs.map((item) => ({ id: item.id, ...item.data() })))
-      .filter((order) => order.date !== todayDate)
+      .filter((order) => !todayActivityIds.has(order.id))
       .filter((order) => isSheetSyncClaimable(order)),
   );
   const candidates = selectBackgroundSheetRecoveryCandidates({
@@ -1059,8 +1071,8 @@ export async function getSheetRecoveryCandidates({
   });
   return {
     candidates,
-    limited: todayCandidates.length > candidates.filter((order) => order.date === todayDate).length
-      || historicalCandidates.length > candidates.filter((order) => order.date !== todayDate).length
+    limited: todayCandidates.length > candidates.filter((order) => todayActivityIds.has(order.id)).length
+      || historicalCandidates.length > candidates.filter((order) => !todayActivityIds.has(order.id)).length
       || snapshots.some((snap) => snap.size >= maxRows),
   };
 }
