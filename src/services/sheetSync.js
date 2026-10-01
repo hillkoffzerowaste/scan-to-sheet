@@ -181,8 +181,24 @@ export async function collectManualSheetRecoveryCandidates({ dates, role = 'both
     }
   }
   const priority = (order) => order.sheetSyncStatus === 'failed' ? 0 : isSheetSyncVerified(order) ? 2 : 1;
-  const candidates = [...byId.values()].sort((a, b) => priority(a) - priority(b)
-    || (priority(a) === 2 ? String(a.sheetVerifiedAtIso ?? '').localeCompare(String(b.sheetVerifiedAtIso ?? '')) : 0));
+  const recoveryTimestamp = (order) => {
+    const value = Date.parse(String(order.updatedAtIso ?? ''));
+    return Number.isFinite(value) ? value : Number.MAX_SAFE_INTEGER;
+  };
+  const candidates = [...byId.values()].sort((a, b) => {
+    const priorityDiff = priority(a) - priority(b);
+    if (priorityDiff) return priorityDiff;
+    if (priority(a) === 2) {
+      return String(a.sheetVerifiedAtIso ?? '').localeCompare(String(b.sheetVerifiedAtIso ?? ''));
+    }
+    const leftTimestamp = recoveryTimestamp(a);
+    const rightTimestamp = recoveryTimestamp(b);
+    if (leftTimestamp !== Number.MAX_SAFE_INTEGER || rightTimestamp !== Number.MAX_SAFE_INTEGER) {
+      return leftTimestamp - rightTimestamp;
+    }
+    // Preserve Firestore's stable order when legacy rows have no retry timestamp.
+    return 0;
+  });
   // Keep already verified rows out of a batch while there is actionable work. If a mixed
   // batch hits a transient Sheets error, claiming verified rows would unnecessarily turn
   // them back into pending work and multiply the quota load.

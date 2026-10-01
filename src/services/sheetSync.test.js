@@ -139,6 +139,28 @@ test('manual candidate read failures are not silently treated as a complete day'
   }), { code: 'unavailable' });
 });
 
+test('manual recovery prioritizes the oldest failed rows before newer failures', async () => {
+  const result = await sheetSync.collectManualSheetRecoveryCandidates({
+    dates: ['2026-09-28'], role: 'admin', cap: 3000,
+    readDate: async () => [
+      {
+        id: 'new-failed', code: 'THNEW', sheetSyncStatus: 'failed',
+        updatedAtIso: '2026-09-28T09:05:47.426Z',
+        admin: { scannedAt: '2026-09-28T16:05:47' },
+      },
+      {
+        id: 'old-failed', code: 'THOLD', sheetSyncStatus: 'failed',
+        updatedAtIso: '2026-09-28T07:16:55.906Z',
+        admin: { scannedAt: '2026-09-28T09:23:34' },
+      },
+    ],
+    readPacker: async () => [],
+    readAdmin: async () => [],
+  });
+
+  assert.deepEqual(result.candidates.map((order) => order.id), ['old-failed', 'new-failed']);
+});
+
 test('manual recovery drains all 45 candidates in three-row batches exactly once', async () => {
   assert.equal(typeof sheetSync.runSheetRecovery, 'function');
   const written = [];
