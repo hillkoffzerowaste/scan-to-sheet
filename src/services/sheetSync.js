@@ -48,6 +48,16 @@ export function summarizeSheetSyncOrders(orders = []) {
   };
 }
 
+export function mergeSheetSyncOrders(...orderSets) {
+  const byId = new Map();
+  for (const orders of orderSets) {
+    for (const order of orders ?? []) {
+      if (order?.id) byId.set(order.id, order);
+    }
+  }
+  return [...byId.values()];
+}
+
 export function requireSheetSyncAcknowledgement(acknowledged) {
   if (acknowledged !== true) {
     throw Object.assign(new Error('ยังยืนยันสถานะซิงก์ใน Firestore ไม่ได้ กรุณาตรวจและกู้คืนอีกครั้ง'), {

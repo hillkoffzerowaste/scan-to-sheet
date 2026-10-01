@@ -24,6 +24,7 @@ import {
   shouldIncludeInManualSheetRecovery,
   shouldReconcileSheetOnRescan,
   isSheetSyncVerified,
+  mergeSheetSyncOrders,
   selectBackgroundSheetRecoveryCandidates,
   sortBackgroundSheetRecoveryCandidates,
   summarizeSheetSyncOrders,
@@ -1069,8 +1070,16 @@ export async function getSheetRecoveryCandidates({
     historicalCandidates,
     maxRows,
   });
+  const selectedIds = new Set(candidates.map((order) => order.id));
+  // A broad sweep may reserve some slots for the historical backlog. Keep the remaining
+  // current-day rows in the single-order queue so a scan that failed on another browser does
+  // not wait for the next ten-minute sweep.
+  const deferredOrderIds = todayCandidates
+    .filter((order) => !selectedIds.has(order.id))
+    .map((order) => order.id);
   return {
     candidates,
+    deferredOrderIds,
     limited: todayCandidates.length > candidates.filter((order) => todayActivityIds.has(order.id)).length
       || historicalCandidates.length > candidates.filter((order) => !todayActivityIds.has(order.id)).length
       || snapshots.some((snap) => snap.size >= maxRows),
@@ -1281,8 +1290,11 @@ export async function backfillOrdersFromSheetRows({ rows, user }) {
 }
 
 export async function fetchTodaySummaryFirestore({ couriers = [], date }) {
-  const orders = await getPackerOrdersByScanDate(date);
-  const sheetSyncSummary = summarizeSheetSyncOrders(orders);
+  const [orders, adminOrders] = await Promise.all([
+    getPackerOrdersByScanDate(date),
+    getAdminOrdersByScanDate(date),
+  ]);
+  const sheetSyncSummary = summarizeSheetSyncOrders(mergeSheetSyncOrders(orders, adminOrders));
   const courierCounts = couriers.map((courier) => ({
     courier,
     count: orders.filter((order) => order.courier === courier && order.packerScan?.scannedAt && !isCancelledOrder(order)).length,

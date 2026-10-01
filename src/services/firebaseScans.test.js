@@ -10,6 +10,7 @@ import {
   summarizeSheetSyncOrders,
   isSheetSyncClaimable,
   collectManualSheetRecoveryCandidates,
+  mergeSheetSyncOrders,
   prioritizeSheetSyncCandidates,
   shouldIncludeInManualSheetRecovery,
   shouldReconcileSheetOnRescan,
@@ -52,6 +53,33 @@ test('Sheet queue summary includes Firestore outbox rows, not only failed browse
     pendingOrderIds: ['pending', 'failed', 'writing'],
     failedOrderIds: ['failed'],
   });
+});
+
+test('Sheet queue summary merges Admin and Packer scans without counting one order twice', async () => {
+  const merged = mergeSheetSyncOrders(
+    [
+      { id: 'shared', sheetSyncStatus: 'verified' },
+      { id: 'packer-pending', sheetSyncStatus: 'pending' },
+    ],
+    [
+      { id: 'shared', sheetSyncStatus: 'verified' },
+      { id: 'admin-pending', sheetSyncStatus: 'pending' },
+    ],
+  );
+
+  assert.deepEqual(merged.map((order) => order.id), ['shared', 'packer-pending', 'admin-pending']);
+  assert.deepEqual(summarizeSheetSyncOrders(merged), {
+    pendingCount: 2,
+    failedCount: 0,
+    pendingOrderIds: ['packer-pending', 'admin-pending'],
+    failedOrderIds: [],
+  });
+
+  const source = await readFile(new URL('./firebaseScans.js', import.meta.url), 'utf8');
+  const summaryStart = source.indexOf('export async function fetchTodaySummaryFirestore');
+  const summaryBlock = source.slice(summaryStart, source.indexOf('export async function getTodayRowsFirestore', summaryStart));
+  assert.match(summaryBlock, /getAdminOrdersByScanDate\(date\)/);
+  assert.match(summaryBlock, /mergeSheetSyncOrders\(orders, adminOrders\)/);
 });
 
 test('scan row date follows the primary scan event across days', () => {
@@ -141,6 +169,19 @@ test('background Sheet recovery checks today before the historical backlog', asy
     /selectBackgroundSheetRecoveryCandidates/,
     'background recovery must reserve work for historical candidates instead of returning early',
   );
+});
+
+test('background Sheet recovery queues unselected current-day rows for targeted retry', async () => {
+  const source = await readFile(new URL('./firebaseScans.js', import.meta.url), 'utf8');
+  const recoveryStart = source.indexOf('export async function getSheetRecoveryCandidates');
+  const recoveryBlock = source.slice(recoveryStart, source.indexOf('export async function claimSheetRecoveryOrder', recoveryStart));
+
+  assert.match(recoveryBlock, /const selectedIds = new Set\(candidates\.map\(\(order\) => order\.id\)\)/);
+  assert.match(
+    recoveryBlock,
+    /const deferredOrderIds = todayCandidates[\s\S]*?\.filter\(\(order\) => !selectedIds\.has\(order\.id\)\)/,
+  );
+  assert.match(recoveryBlock, /return \{\s*candidates,\s*deferredOrderIds,/);
 });
 
 test('background Sheet recovery keeps sweeping the backlog when targeted retry ids exist', async () => {
