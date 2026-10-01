@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { SHEET_RECOVERY_INTERVAL_MS } from './sheetSyncPolicy.js';
+import { SHEET_RECOVERY_INTERVAL_MS, SHEET_RECOVERY_TARGETED_RETRY_MS } from './sheetSyncPolicy.js';
 import { createSheetRecoveryRetryScheduler, createSheetRecoveryScheduler } from './sheetRecoveryScheduler.js';
 
 function fakeTimers() {
@@ -54,6 +54,30 @@ test('schedules the next recovery interval after the previous batch finishes', a
   await Promise.resolve();
   assert.equal(timers.size, 1);
   assert.equal(timers.get(2).delay, SHEET_RECOVERY_INTERVAL_MS);
+
+  scheduler();
+});
+
+test('retries a background batch soon when another recovery is already running', async () => {
+  const timers = fakeTimers();
+  let runs = 0;
+  const scheduler = createSheetRecoveryScheduler(async () => {
+    runs += 1;
+    return { busy: runs === 1 };
+  }, {
+    setTimeoutFn: timers.setTimeout,
+    clearTimeoutFn: timers.clearTimeout,
+  });
+
+  await timers.run(1);
+  await Promise.resolve();
+  assert.equal(runs, 1);
+  assert.equal(timers.get(2).delay, SHEET_RECOVERY_TARGETED_RETRY_MS);
+
+  await timers.run(2);
+  await Promise.resolve();
+  assert.equal(runs, 2);
+  assert.equal(timers.get(3).delay, SHEET_RECOVERY_INTERVAL_MS);
 
   scheduler();
 });

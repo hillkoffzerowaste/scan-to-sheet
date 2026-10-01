@@ -4,6 +4,7 @@ import { SHEET_RECOVERY_INTERVAL_MS, SHEET_RECOVERY_TARGETED_RETRY_MS } from './
 // enough that an interval tick lands inside the cooldown and silently skips the next batch.
 export function createSheetRecoveryScheduler(task, {
   delayMs = SHEET_RECOVERY_INTERVAL_MS,
+  busyDelayMs = SHEET_RECOVERY_TARGETED_RETRY_MS,
   runImmediately = false,
   setTimeoutFn = globalThis.setTimeout,
   clearTimeoutFn = globalThis.clearTimeout,
@@ -13,20 +14,23 @@ export function createSheetRecoveryScheduler(task, {
 
   const run = async () => {
     if (cancelled) return;
+    let result = null;
     try {
-      await task();
+      result = await task();
     } catch {
       // The recovery task reports its own errors. Always schedule the next attempt.
     }
-    schedule();
+    // A targeted retry can temporarily occupy the single recovery runner. Do not make
+    // the ten-minute sweep wait a full interval after it only observed that contention.
+    schedule(result?.busy ? busyDelayMs : delayMs);
   };
 
-  const schedule = () => {
+  const schedule = (nextDelayMs = delayMs) => {
     if (cancelled) return;
     timerId = setTimeoutFn(() => {
       timerId = null;
       void run();
-    }, delayMs);
+    }, nextDelayMs);
   };
 
   if (runImmediately) void run();
