@@ -112,6 +112,11 @@ function DashboardView({
     scanQueueSnapshot?.failed || 0,
     Number(sheetSyncSummary?.failedCount) || 0,
   );
+  const queueStatus = failedQueue > 0
+    ? `ไม่สำเร็จ ${formatNumber(failedQueue)} รายการ`
+    : pendingQueue > 0
+      ? (isSheetConnected ? 'กำลังดำเนินการ' : 'รอเชื่อม Google Sheet เพื่อกู้คืน')
+      : 'ไม่มีคิวค้าง';
   const missingCount = dashboardSummary?.pendingTotalCount ?? missingAlertBadge ?? 0;
   const courierMax = Math.max(...(summary || []).map((item) => item.count || 0), 1);
   const packerMax = Math.max(...(packerCounts || []).map((item) => item.count || 0), 1);
@@ -176,7 +181,7 @@ function DashboardView({
                 <span>คิวรอเขียน Sheet</span>
               </div>
               <strong>{formatNumber(pendingQueue)}</strong>
-              <small>{failedQueue > 0 ? `ไม่สำเร็จ ${formatNumber(failedQueue)} รายการ` : 'สถานะคิวปกติ'}</small>
+              <small>{queueStatus}</small>
             </article>
             <article className="wms-kpi-card">
               <div className="wms-kpi-label">
