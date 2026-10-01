@@ -57,6 +57,26 @@ test('background recovery uses the full batch for today when no historical backl
   assert.deepEqual(selected.map((order) => order.id), today.map((order) => order.id));
 });
 
+test('background recovery gives each historical status a chance within one batch', () => {
+  const selected = sheetSync.selectBackgroundSheetRecoveryCandidates({
+    todayCandidates: [],
+    historicalCandidates: [
+      { id: 'failed-oldest', sheetSyncStatus: 'failed', updatedAtIso: '2026-09-01T00:00:00.000Z' },
+      { id: 'failed-next', sheetSyncStatus: 'failed', updatedAtIso: '2026-09-02T00:00:00.000Z' },
+      { id: 'pending-oldest', sheetSyncStatus: 'pending', updatedAtIso: '2026-09-01T00:00:00.000Z' },
+      { id: 'pending-next', sheetSyncStatus: 'pending', updatedAtIso: '2026-09-02T00:00:00.000Z' },
+      { id: 'writing-oldest', sheetSyncStatus: 'writing', updatedAtIso: '2026-09-01T00:00:00.000Z' },
+    ],
+    maxRows: 3,
+  });
+
+  assert.deepEqual(selected.map((order) => order.id), [
+    'failed-oldest',
+    'pending-oldest',
+    'writing-oldest',
+  ]);
+});
+
 test('background recovery prioritizes the oldest retryable order within each status', () => {
   const selected = sheetSync.sortBackgroundSheetRecoveryCandidates([
     { id: 'pending-new', sheetSyncStatus: 'pending', updatedAtIso: '2026-10-01T04:05:00.000Z' },

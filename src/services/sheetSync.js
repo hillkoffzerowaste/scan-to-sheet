@@ -99,6 +99,34 @@ export function sortBackgroundSheetRecoveryCandidates(orders = []) {
   ));
 }
 
+// A large failed backlog must not hide stale pending/writing leases forever. The caller
+// already limits the number of rows read from each Firestore status, so take one oldest row
+// from each status first, then fill any remaining slots by the normal priority order.
+function selectFairHistoricalCandidates(orders, maxRows) {
+  const limit = Math.max(0, Number.isFinite(maxRows) ? Math.floor(maxRows) : 0);
+  if (!limit) return [];
+
+  const byStatus = new Map();
+  for (const order of orders) {
+    const status = order?.sheetSyncStatus;
+    if (!byStatus.has(status)) byStatus.set(status, []);
+    byStatus.get(status).push(order);
+  }
+
+  const selected = [];
+  for (const status of ['failed', 'pending', 'writing']) {
+    const candidate = byStatus.get(status)?.shift();
+    if (candidate) selected.push(candidate);
+    if (selected.length >= limit) return selected;
+  }
+
+  const selectedIds = new Set(selected.map((order) => order.id));
+  return [
+    ...selected,
+    ...orders.filter((order) => !selectedIds.has(order.id)),
+  ].slice(0, limit);
+}
+
 // Keep a bounded share of every background batch moving the historical queue. Without this,
 // a steady stream of today's scans can keep the older outbox permanently behind the daily queue.
 export function selectBackgroundSheetRecoveryCandidates({
@@ -113,7 +141,10 @@ export function selectBackgroundSheetRecoveryCandidates({
     : 0;
   const todayRows = todayCandidates.slice(0, limit - historicalSlots);
   const remaining = limit - todayRows.length;
-  return [...todayRows, ...historicalCandidates.slice(0, remaining)];
+  return [
+    ...todayRows,
+    ...selectFairHistoricalCandidates(historicalCandidates, remaining),
+  ];
 }
 
 export function buildSheetSyncFailureUpdates(orders = [], error = null) {
