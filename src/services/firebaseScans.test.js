@@ -158,6 +158,19 @@ test('background Sheet recovery keeps sweeping the backlog when targeted retry i
   );
 });
 
+test('background historical Sheet recovery reads the oldest retryable orders first', async () => {
+  const source = await readFile(new URL('./firebaseScans.js', import.meta.url), 'utf8');
+  const recoveryStart = source.indexOf('export async function getSheetRecoveryCandidates');
+  const historicalStart = source.indexOf('const statuses = [', recoveryStart);
+  const historicalBlock = source.slice(historicalStart, source.indexOf('const candidates = selectBackgroundSheetRecoveryCandidates', historicalStart));
+
+  assert.match(
+    historicalBlock,
+    /where\('sheetSyncStatus', '==', status\),\s*orderBy\('updatedAtIso', 'asc'\),\s*limit\(maxRows\)/,
+    'historical recovery must drain the oldest retryable orders before newer backlog entries',
+  );
+});
+
 test('Sheet gateway timeouts keep scans in the retryable path', async () => {
   const appSource = await readFile(new URL('../App.jsx', import.meta.url), 'utf8');
   assert.match(

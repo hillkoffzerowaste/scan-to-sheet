@@ -1042,7 +1042,10 @@ export async function getSheetRecoveryCandidates({
 
   const statuses = ['failed', 'pending', 'writing'];
   const snapshots = await Promise.all(statuses.map((status) => getDocs(query(
-    collection(firestoreDb, 'orders'), where('sheetSyncStatus', '==', status), limit(maxRows),
+    collection(firestoreDb, 'orders'),
+    where('sheetSyncStatus', '==', status),
+    orderBy('updatedAtIso', 'asc'),
+    limit(maxRows),
   ))));
   const historicalCandidates = snapshots.flatMap((snap) => snap.docs.map((item) => ({ id: item.id, ...item.data() })))
     .filter((order) => order.date !== todayDate)
