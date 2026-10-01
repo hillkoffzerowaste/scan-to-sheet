@@ -134,7 +134,12 @@ import {
   loadSheetRecoveryOrderIds,
   removeSheetRecoveryOrderId,
 } from './services/sheetRecoveryQueue.js';
-import { runSheetRecovery, isSheetSyncVerified, requireSheetSyncAcknowledgement } from './services/sheetSync.js';
+import {
+  runSheetRecovery,
+  isSheetSyncVerified,
+  isRetryableSheetSyncError,
+  requireSheetSyncAcknowledgement,
+} from './services/sheetSync.js';
 import {
   getAdminScanTiming,
   getPackerDuplicateMessage,
@@ -987,7 +992,13 @@ function App() {
       if (!orderIds.length) return { retry: false };
       const outcome = await recoverPendingSheetSyncs({ orderIds, targeted: true });
       return {
-        retry: Boolean(outcome.busy || outcome.error || outcome.failed > 0 || outcome.deferred > 0),
+        retry: Boolean(
+          outcome.busy
+          || outcome.error
+          || outcome.failed > 0
+          || outcome.deferred > 0
+          || sheetRecoveryOrderIdsRef.current.size > 0,
+        ),
       };
     }, { delayMs: SHEET_RECOVERY_TARGETED_RETRY_MS });
     sheetRecoveryRetrySchedulerRef.current = scheduler;
@@ -1783,10 +1794,10 @@ function App() {
             sheetRecoveryOrderIdsRef.current.delete(order.id);
             removeSheetRecoveryOrderId(order.id);
           }
-          // The broad ten-minute sweep is already the retry mechanism for historical
-          // failures. Only a targeted foreground retry may requeue its own order;
-          // otherwise one failed ten-row sweep would create a one-minute quota loop.
-          else if (targeted) queueSheetRecoveryOrder(order.id);
+          // Keep the broad sweep bounded, but move transient errors into the single-order
+          // queue so a lock collision does not leave today's scan waiting ten minutes.
+          // Permanent errors stay on the broad sweep for operator-visible diagnostics.
+          else if (targeted || isRetryableSheetSyncError(result?.error)) queueSheetRecoveryOrder(order.id);
         },
       });
       scheduleCountRefresh();

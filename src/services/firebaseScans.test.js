@@ -158,6 +158,25 @@ test('background Sheet recovery keeps sweeping the backlog when targeted retry i
   );
 });
 
+test('background Sheet lock failures enter the targeted queue and drain every queued order', async () => {
+  const appSource = await readFile(new URL('../App.jsx', import.meta.url), 'utf8');
+  assert.match(
+    appSource,
+    /isRetryableSheetSyncError\(result\?\.error\)/,
+    'transient background Sheet failures must be retried instead of waiting for the ten-minute sweep',
+  );
+  assert.match(
+    appSource,
+    /targeted \|\| isRetryableSheetSyncError\(result\?\.error\)\) queueSheetRecoveryOrder\(order\.id\)/,
+    'only targeted retries or retryable background failures may enter the targeted queue',
+  );
+  assert.match(
+    appSource,
+    /outcome\.deferred > 0[\s\S]*sheetRecoveryOrderIdsRef\.current\.size > 0/,
+    'a targeted batch must schedule another run while queued order ids remain',
+  );
+});
+
 test('background historical Sheet recovery reads the oldest retryable orders first', async () => {
   const source = await readFile(new URL('./firebaseScans.js', import.meta.url), 'utf8');
   const recoveryStart = source.indexOf('export async function getSheetRecoveryCandidates');
