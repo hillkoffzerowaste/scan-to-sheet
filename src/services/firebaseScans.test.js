@@ -166,8 +166,13 @@ test('background historical Sheet recovery reads the oldest retryable orders fir
 
   assert.match(
     historicalBlock,
-    /where\('sheetSyncStatus', '==', status\),\s*orderBy\('updatedAtIso', 'asc'\),\s*limit\(maxRows\)/,
-    'historical recovery must drain the oldest retryable orders before newer backlog entries',
+    /where\('sheetSyncStatus', '==', status\),\s*orderBy\(documentId\(\), 'asc'\),\s*limit\(maxRows\)/,
+    'historical recovery must use an index-safe deterministic order before local age sorting',
+  );
+  assert.match(
+    historicalBlock,
+    /const historicalCandidates = sortBackgroundSheetRecoveryCandidates\(/,
+    'historical recovery must sort retryable orders by age before selecting a batch',
   );
 });
 

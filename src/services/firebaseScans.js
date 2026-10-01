@@ -1044,12 +1044,14 @@ export async function getSheetRecoveryCandidates({
   const snapshots = await Promise.all(statuses.map((status) => getDocs(query(
     collection(firestoreDb, 'orders'),
     where('sheetSyncStatus', '==', status),
-    orderBy('updatedAtIso', 'asc'),
+    orderBy(documentId(), 'asc'),
     limit(maxRows),
   ))));
-  const historicalCandidates = snapshots.flatMap((snap) => snap.docs.map((item) => ({ id: item.id, ...item.data() })))
-    .filter((order) => order.date !== todayDate)
-    .filter((order) => isSheetSyncClaimable(order));
+  const historicalCandidates = sortBackgroundSheetRecoveryCandidates(
+    snapshots.flatMap((snap) => snap.docs.map((item) => ({ id: item.id, ...item.data() })))
+      .filter((order) => order.date !== todayDate)
+      .filter((order) => isSheetSyncClaimable(order)),
+  );
   const candidates = selectBackgroundSheetRecoveryCandidates({
     todayCandidates,
     historicalCandidates,
