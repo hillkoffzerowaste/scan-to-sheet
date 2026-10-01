@@ -1010,6 +1010,18 @@ function App() {
     };
   }, [firebaseUser, token, config]);
 
+  // Keep the retry timer alive when auth/session state changes while a recovery is running.
+  // This only nudges the existing timer; it performs no Firestore or Sheet request itself.
+  useEffect(() => {
+    if (!firebaseUser || !token || !config?.master?.id) return undefined;
+    const timer = setInterval(() => {
+      if (sheetRecoveryOrderIdsRef.current.size > 0) {
+        sheetRecoveryRetrySchedulerRef.current?.schedule();
+      }
+    }, 10_000);
+    return () => clearInterval(timer);
+  }, [firebaseUser, token, config]);
+
   // Auto-check for missing orders
   useEffect(() => {
     if (!shouldPollMissingOrders({ isSignedIn, activeTab })) {
