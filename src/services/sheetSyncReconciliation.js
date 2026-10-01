@@ -162,7 +162,9 @@ export function isSheetSyncResultConfirmed(result, expectedOrder = null) {
   const row = result.row;
   const isPacker = typeof result.isPacker === 'boolean'
     ? result.isPacker
-    : !['admin_scan', 'admin_matched'].includes(result.status);
+    : expectedOrder
+      ? Boolean(expectedOrder.packerScan?.scannedAt)
+      : !['admin_scan', 'admin_matched'].includes(result.status);
   const rowCode = isPacker ? row?.code : row?.adminCode;
   if (!row || !areTrackingCodesEquivalent(rowCode, result.code)) return false;
 

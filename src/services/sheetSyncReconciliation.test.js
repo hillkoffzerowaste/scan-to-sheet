@@ -270,6 +270,26 @@ test('does not confirm a Packer duplicate without the Packer row', () => {
   }), true);
 });
 
+test('confirms an Admin-only duplicate from the Firestore order role', () => {
+  assert.equal(isSheetSyncResultConfirmed({
+    status: 'duplicate',
+    code: 'TH014597AQWM9B',
+    row: {
+      courier: 'Flash',
+      code: '',
+      adminCode: 'TH014597AQWM9B',
+      status: 'รอแพ็ค',
+      adminDate: '2026-10-01',
+      adminTime: '08:51:56',
+      nativeDataTypesVerified: true,
+    },
+  }, {
+    code: 'TH014597AQWM9B',
+    courier: 'Flash',
+    admin: { scannedAt: '2026-10-01T08:51:56' },
+  }), true);
+});
+
 test('does not certify a successful Sheet write when the returned Status is corrupted', () => {
   assert.equal(isSheetSyncResultConfirmed({
     status: 'success',
