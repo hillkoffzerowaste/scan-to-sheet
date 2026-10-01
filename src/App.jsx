@@ -105,6 +105,7 @@ import { getScanQrAnnouncement, parseScanQrCommand, resolveScanQrCommand, resolv
 import { DEFAULT_SCAN_METHOD, getScanReadinessMessage, SCAN_READINESS } from './services/scanPreferences.js';
 import { isGoogleAuthError, scheduleDeferredGoogleSheetMaintenance } from './services/sessionMaintenance.js';
 import { createSheetRecoveryRetryScheduler, createSheetRecoveryScheduler } from './services/sheetRecoveryScheduler.js';
+import { getSheetLockRetryDelay, SHEET_LOCK_MAX_ATTEMPTS } from './services/sheetLockBackoff.js';
 import {
   DEFAULT_QR_LAYOUT_PREFERENCES,
   loadQrLayoutPreferences,
@@ -230,7 +231,7 @@ async function apiJson(url, options = {}) {
 
 async function acquireSheetWriteLock(resource) {
   const lockId = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
-  for (let attempt = 0; attempt < 80; attempt += 1) {
+  for (let attempt = 0; attempt < SHEET_LOCK_MAX_ATTEMPTS; attempt += 1) {
     const result = await apiJson('/api/sheet-lock', {
       method: 'POST',
       body: JSON.stringify({ action: 'acquire', resource, lockId }),
@@ -252,7 +253,10 @@ async function acquireSheetWriteLock(resource) {
       }).catch(() => {});
       };
     }
-    await new Promise((resolve) => setTimeout(resolve, result.retryAfterMs ?? 250));
+    await new Promise((resolve) => setTimeout(
+      resolve,
+      getSheetLockRetryDelay(attempt, result.retryAfterMs),
+    ));
   }
   throw Object.assign(new Error('Google Sheet กำลังถูกใช้งานอยู่ กรุณาลองอีกครั้ง'), {
     code: 'SHEET_LOCK_BUSY',
