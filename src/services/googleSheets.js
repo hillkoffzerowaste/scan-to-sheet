@@ -861,7 +861,17 @@ export async function findMarketplaceOrderGoogle({ token, config, trackingNo }) 
   const normalizedTrackingNo = normalizeMarketplaceTracking(trackingNo);
   if (!normalizedTrackingNo) return null;
   const catalog = await readMarketplaceOrdersGoogle({ token, spreadsheetId });
-  return catalog.byTracking.get(normalizedTrackingNo) ?? null;
+  const exactMatch = catalog.byTracking.get(normalizedTrackingNo);
+  if (exactMatch) return exactMatch;
+
+  // Marketplace exports can store the same parcel as a short numeric barcode while the
+  // scanner sends the carrier-prefixed form (or the reverse). Only use the alias fallback
+  // when it identifies exactly one catalog row; an ambiguous alias must stay unresolved.
+  const aliasMatches = new Map();
+  catalog.orders
+    .filter((order) => areTrackingCodesEquivalent(order.normalizedTrackingNo || order.trackingNo, normalizedTrackingNo))
+    .forEach((order) => aliasMatches.set(order.key || order.rowNumber, order));
+  return aliasMatches.size === 1 ? [...aliasMatches.values()][0] : null;
 }
 
 export async function upsertMarketplaceOrdersGoogle({ token, config, groups, max = Infinity }) {

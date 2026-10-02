@@ -736,6 +736,36 @@ test('Marketplace Orders lookup returns one exact normalized tracking match', as
   }
 });
 
+test('Marketplace Orders lookup resolves a unique short/full tracking alias', async () => {
+  const originalFetch = globalThis.fetch;
+  const spreadsheetId = 'marketplace-orders-alias-lookup-test';
+  const jsonResponse = (payload) => new Response(JSON.stringify(payload), {
+    status: 200, headers: { 'Content-Type': 'application/json' },
+  });
+  globalThis.fetch = async (url, options = {}) => {
+    const decodedUrl = decodeURIComponent(String(url));
+    const method = options.method ?? 'GET';
+    if (decodedUrl.includes(`/spreadsheets/${spreadsheetId}?fields=`)) {
+      return jsonResponse({ sheets: [{ properties: { sheetId: 703, title: 'Marketplace Orders', gridProperties: { rowCount: 1000, columnCount: 12 } } }] });
+    }
+    if (decodedUrl.includes("'Marketplace Orders'!A2:L") && method === 'GET') {
+      return jsonResponse({ values: [[
+        'shopee__ORDER-ALIAS', 'TH2602788293138', 'TH2602788293138', 'shopee', 'ORDER-ALIAS', '[]', '[]', '1', 'READY', '', '', '',
+      ]] });
+    }
+    throw new Error(`Unexpected request: ${method} ${decodedUrl}`);
+  };
+  try {
+    const order = await findMarketplaceOrderGoogle({
+      token: 'token', config: { master: { id: spreadsheetId } }, trackingNo: '2602788293138',
+    });
+    assert.equal(order.orderId, 'ORDER-ALIAS');
+    assert.equal(order.normalizedTrackingNo, 'TH2602788293138');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('Marketplace Orders shares one cold-cache request across concurrent scan lookups', async () => {
   const originalFetch = globalThis.fetch;
   const spreadsheetId = 'marketplace-orders-concurrent-lookup-test';
