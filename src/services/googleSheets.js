@@ -2114,6 +2114,7 @@ export async function appendScanGoogle({
     : null;
   const trackingAliasRow = !duplicate && !marketplaceAliasRow
     ? findTrackingAliasRow(parsedRows, { courier, code: normalizedCode })
+      ?? findTrackingAliasRow(parsedRows, { code: normalizedCode })
     : null;
   const aliasRow = marketplaceAliasRow ?? trackingAliasRow;
 
@@ -2788,7 +2789,8 @@ export async function appendAdminScanGoogle({
   const packerRow = reconciliation.action === 'merge-admin'
     ? reconciliation.row
     : (marketplaceOrder?.orderId ? findMarketplaceOrderRow(parsedRows, marketplaceOrder) : null)
-      ?? findTrackingAliasRow(parsedRows, { courier, code: normalizedCode });
+      ?? findTrackingAliasRow(parsedRows, { courier, code: normalizedCode })
+      ?? findTrackingAliasRow(parsedRows, { code: normalizedCode });
 
   if (packerRow) {
     // Merge: update existing row with admin fields
@@ -3465,6 +3467,7 @@ export async function batchAppendScanGoogle({ token, config, orders, repairExist
           : null;
         const trackingAliasMatch = exactReconciliation.action === 'create' && !marketplaceMatch
           ? findTrackingAliasRow(reconciliationRows, { courier, code: normalizedCode })
+            ?? findTrackingAliasRow(reconciliationRows, { code: normalizedCode })
           : null;
         const aliasMatch = marketplaceMatch ?? trackingAliasMatch;
         const reconciliation = aliasMatch
@@ -3518,6 +3521,9 @@ export async function batchAppendScanGoogle({ token, config, orders, repairExist
               || String(currentRow.packer ?? '').trim() !== String(repairedPacker ?? '').trim()
               || String(currentRow.note ?? '') !== String(repairedRow[9] ?? '')
               || [2, 3, 10, 11, 12].some((index) => (
+                String(dailyCellsFromParsedRow(currentRow)[index] ?? '') !== String(repairedRow[index] ?? '')
+              ))
+              || [13, 14, 15, 16, 17, 18, 19].some((index) => (
                 String(dailyCellsFromParsedRow(currentRow)[index] ?? '') !== String(repairedRow[index] ?? '')
               ))
               || (!isPlaceholderNo(currentRow.no) && !hasNativeDailyDateTimeValues(nativeValues, currentRow));
@@ -3640,7 +3646,9 @@ export async function batchAppendScanGoogle({ token, config, orders, repairExist
                 email,
                 packer || '',
                 issueMeta.sheetStatus,
-                note || '',
+                currentRow.courier !== courier
+                  ? [note, `แพ็คเกอร์เลือกขนส่งไม่ตรงกับแอดมิน (เลือก ${courier})`].filter(Boolean).join(' | ')
+                  : (note || currentRow.note || ''),
                 currentRow.adminDate || adminDate || '',
                 currentRow.adminTime || adminTime || '',
                 currentRow.adminCode || adminCode || '',

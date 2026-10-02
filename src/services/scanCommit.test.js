@@ -280,7 +280,7 @@ test('serializes overlapping fallback commits so neither failed scan is overwrit
 test('both App fallback callbacks mirror recovered scans with their stored context', async () => {
   const source = await readFile(new URL('../App.jsx', import.meta.url), 'utf8');
   // Execute the actual option factories with only the network boundaries substituted.
-  const factories = [...source.matchAll(/result = await commitFallbackScan\((\{[\s\S]*?\n\s*\})\);/g)];
+  const factories = [...source.matchAll(/result = await commitFallbackScan\((\{[\s\S]*?mirrorToFirestore:[\s\S]*?\n\s*\})\);/g)];
   assert.equal(factories.length, 2);
   for (const [index, match] of factories.entries()) {
     const context = index === 0 ? PACKER_CONTEXT : ADMIN_CONTEXT;

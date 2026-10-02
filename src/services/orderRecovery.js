@@ -1,3 +1,5 @@
+import { areTrackingCodesEquivalent } from './sheetSyncReconciliation.js';
+
 function normalizeCode(value) {
   return String(value ?? '').trim().toUpperCase();
 }
@@ -24,7 +26,7 @@ function orderScanTimestamp(order) {
 export function chooseCanonicalOrder(orders = [], normalizedCode = '') {
   const target = normalizeCode(normalizedCode);
   return orders
-    .filter((order) => !target || normalizeCode(order?.normalizedCode || order?.code) === target)
+    .filter((order) => !target || areTrackingCodesEquivalent(order?.normalizedCode || order?.code, target))
     .slice()
     .sort((left, right) => {
       const leftHasPacker = Boolean(left?.packerScan?.scannedAt);

@@ -2,7 +2,7 @@ function normalizeCode(value) {
   return String(value ?? '').trim().toUpperCase();
 }
 
-function trackingCodeForms(value) {
+export function trackingCodeForms(value) {
   const normalized = normalizeCode(value);
   if (/^TH\d{10,14}$/.test(normalized)) return [normalized, normalized.slice(2)];
   if (/^\d{10,14}$/.test(normalized)) return [normalized, `TH${normalized}`];

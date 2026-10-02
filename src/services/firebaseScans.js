@@ -34,6 +34,7 @@ import { SHEET_RECOVERY_MAX_ROWS } from './sheetSyncPolicy.js';
 import { collectFirestorePages } from './firestorePagination.js';
 import { buildRecoveredOrderFields, chooseCanonicalOrder, mergeExistingOrderWithCandidate, mergeScanEventIntoOrder } from './orderRecovery.js';
 import { getScanEventDate } from './scanRow.js';
+import { areTrackingCodesEquivalent, trackingCodeForms } from './sheetSyncReconciliation.js';
 import {
   getMissingOrderQueryFilters,
   getMissingOrderQueryWindow,
@@ -250,7 +251,7 @@ function findRecentOrder(orders, { courier, normalizedCode, days = 3, anyCourier
   return orders.find((order) => {
     const matchesCourier = anyCourier || order.courier === courier;
     const sameOrder = matchesCourier
-      && normalizeCode(order.normalizedCode || order.code) === normalizedCode;
+      && areTrackingCodesEquivalent(order.normalizedCode || order.code, normalizedCode);
     if (!sameOrder) return false;
     const updated = new Date(order.updatedAtIso ?? 0).getTime();
     const withinLookback = !Number.isFinite(updated) || now - updated <= lookbackMs;
@@ -264,7 +265,7 @@ function findRecentAdminOrderByCode(orders, { normalizedCode, days = 3 }) {
   const lookbackMs = (days + 1) * 24 * 60 * 60 * 1000;
   return orders.find((order) => {
     if (!order.admin?.scannedAt) return false;
-    if (normalizeCode(order.normalizedCode || order.code) !== normalizedCode) return false;
+    if (!areTrackingCodesEquivalent(order.normalizedCode || order.code, normalizedCode)) return false;
     const updated = new Date(order.updatedAtIso ?? 0).getTime();
     const withinLookback = !Number.isFinite(updated) || now - updated <= lookbackMs;
     return withinLookback || days >= 365;
@@ -273,13 +274,18 @@ function findRecentAdminOrderByCode(orders, { normalizedCode, days = 3 }) {
 
 async function getRecentOrdersByCode(normalizedCode, maxRows = 10) {
   if (!canWriteFirestore() || !normalizedCode) return [];
-  const snap = await getDocs(query(
+  const forms = trackingCodeForms(normalizedCode);
+  const snapshots = await Promise.all(forms.map((form) => getDocs(query(
     collection(firestoreDb, 'orders'),
-    where('normalizedCode', '==', normalizedCode),
+    where('normalizedCode', '==', form),
     orderBy('updatedAt', 'desc'),
     limit(maxRows),
-  ));
-  return snap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+  ))));
+  const orders = new Map();
+  snapshots.forEach((snap) => snap.docs.forEach((docSnap) => {
+    if (!orders.has(docSnap.id)) orders.set(docSnap.id, { id: docSnap.id, ...docSnap.data() });
+  }));
+  return [...orders.values()].slice(0, maxRows);
 }
 
 function reportDay(date) {
@@ -526,17 +532,19 @@ async function getOrdersForAllDaySearch(normalizedCode, maxRows) {
 async function getScanEventCandidates(normalizedCode, rawCode) {
   if (!canWriteFirestore() || !normalizedCode) return [];
 
+  const normalizedForms = trackingCodeForms(normalizedCode);
+  const rawForms = [...new Set([rawCode, ...trackingCodeForms(rawCode)])].filter(Boolean);
   const snapshots = await Promise.all([
-    getDocs(query(
+    ...normalizedForms.map((form) => getDocs(query(
       collection(firestoreDb, 'scanEvents'),
-      where('normalizedCode', '==', normalizedCode),
+      where('normalizedCode', '==', form),
       limit(50),
-    )),
-    getDocs(query(
+    ))),
+    ...rawForms.map((form) => getDocs(query(
       collection(firestoreDb, 'scanEvents'),
-      where('code', '==', rawCode),
+      where('code', '==', form),
       limit(50),
-    )),
+    ))),
   ]);
   const candidates = new Map();
 
@@ -653,7 +661,7 @@ export async function recordPackerScanPrimary({ code, courier, date, time, user,
 
   // If still not found, look for ANY order with this code regardless of courier/recency
   const fallbackByCode = !recent
-    ? allCandidates.find((order) => normalizeCode(order.normalizedCode || order.code) === normalizedCode)
+    ? allCandidates.find((order) => areTrackingCodesEquivalent(order.normalizedCode || order.code, normalizedCode))
     : null;
 
   // Always use existing document ID when found; otherwise generate ID using the original order's date

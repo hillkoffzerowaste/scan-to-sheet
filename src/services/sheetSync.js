@@ -24,13 +24,33 @@ const RETRYABLE_SHEET_SYNC_CODES = new Set([
 
 export function isRetryableSheetSyncError(error) {
   const code = String(error?.code ?? '');
+  if (code === 'SHEET_COURIER_MISMATCH') return false;
   if (RETRYABLE_SHEET_SYNC_CODES.has(code)) return true;
   if (error?.batchIncomplete === true) return true;
   if ([408, 409, 425, 429].includes(Number(error?.status)) || Number(error?.status) >= 500) return true;
   const diagnostic = [error?.message, error?.detail, error?.cause]
     .map((value) => typeof value === 'string' ? value : JSON.stringify(value ?? ''))
     .join(' ');
-  return /เชื่อมต่อนานเกินไป|Google Sheet กำลังถูกใช้งาน|Google ตอบสนองช้า|Google จำกัดการเรียกใช้|rateLimitExceeded|userRateLimitExceeded|quotaExceeded|resource_exhausted|backendError|temporarilyUnavailable/i.test(diagnostic);
+  return /เชื่อมต่อนานเกินไป|Google Sheet กำลังถูกใช้งาน|Google ตอบสนองช้า|Google จำกัดการเรียกใช้|Failed to fetch|NetworkError|Network error|fetch failed|connection reset|connection closed|socket hang up|ECONNRESET|ETIMEDOUT|EAI_AGAIN|rateLimitExceeded|userRateLimitExceeded|quotaExceeded|resource_exhausted|backendError|temporarilyUnavailable/i.test(diagnostic);
+}
+
+export function buildSheetSyncConfirmationError(result, expectedOrder = null) {
+  const expectedCourier = String(expectedOrder?.courier ?? '').trim();
+  const actualCourier = String(result?.row?.courier ?? '').trim();
+  if (expectedCourier && actualCourier && expectedCourier !== actualCourier) {
+    return Object.assign(
+      new Error(`ขนส่งใน Google Sheet เป็น ${actualCourier} แต่รายการระบุเป็น ${expectedCourier} กรุณาตรวจสอบการเลือกขนส่ง`),
+      {
+        code: 'SHEET_COURIER_MISMATCH',
+        expectedCourier,
+        actualCourier,
+      },
+    );
+  }
+  return Object.assign(
+    new Error('ยังยืนยันข้อมูลสแกนใน Google Sheet ไม่ได้ กรุณากู้คืนอีกครั้ง'),
+    { code: 'SHEET_RECOVERY_UNCONFIRMED' },
+  );
 }
 
 export function isSheetSyncVerified(order) {
@@ -252,7 +272,7 @@ export async function runSheetRecovery({
         writing.push(order);
       } catch (error) {
         state.failed += 1;
-        onOrderResult?.(candidate, { ok: false, error });
+        onOrderResult?.(candidate, { ok: false, error, retryable: true });
       }
     }
     let results = [];
@@ -275,27 +295,25 @@ export async function runSheetRecovery({
       const item = matches.length === 1 ? matches[0] : null;
       try {
         const ok = !batchError && !item?.error && isConfirmed(item?.result, order);
-        const error = batchError || item?.error || Object.assign(
-          new Error('ยังยืนยันข้อมูลสแกนใน Google Sheet ไม่ได้ กรุณากู้คืนอีกครั้ง'),
-          { code: 'SHEET_RECOVERY_UNCONFIRMED' },
-        );
+        const error = batchError || item?.error || buildSheetSyncConfirmationError(item?.result, order);
+        const retryable = !ok && isRetryableSheetSyncError(error);
         const acknowledged = await markResult(order, {
           ok: Boolean(ok),
           result: item?.result,
           error: ok ? null : error,
-          retryable: !ok && isRetryableSheetSyncError(error),
+          retryable,
         });
         if (ok && acknowledged === true) {
           state.synced += 1;
           onOrderResult?.(order, { ok: true, result: item?.result });
         } else {
           state.failed += 1;
-          onOrderResult?.(order, { ok: false, error });
+          onOrderResult?.(order, { ok: false, error, retryable });
         }
       } catch (error) {
         // A Sheet write alone is not a completed sync when Firestore rejects its ack.
         state.failed += 1;
-        onOrderResult?.(order, { ok: false, error });
+        onOrderResult?.(order, { ok: false, error, retryable: true });
       }
     }
     state.considered += batch.length;

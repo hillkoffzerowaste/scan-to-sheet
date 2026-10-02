@@ -6,6 +6,7 @@ import {
   buildConditionalFormatReconciliationRequests,
   buildStatusValidationRequest,
   appendScanGoogle,
+  appendAdminScanGoogle,
   batchAppendScanGoogle,
   buildDailyDataTypeFormattingRequests,
   buildDailyRowDataTypeFormattingRequests,
@@ -244,6 +245,109 @@ test('batch recovery merges Shopee short/full barcodes without marketplace catal
   assert.equal(sheet.rowsByDate.get(recoveryDate).length, 1);
 });
 
+test('batch recovery merges short/full barcodes even when the selected courier differs', async (t) => {
+  const sheet = recoverySheet(t, {
+    [recoveryDate]: [recoveryRow({
+      4: 'Thaimart',
+      5: '',
+      7: '',
+      8: 'รอแพ็ค',
+      10: 46259,
+      11: 9 / 24,
+      12: '2602788293138',
+      13: 'shopee',
+      14: '',
+      16: '',
+      17: '',
+      18: '',
+      20: 'รอแพ็ค',
+      21: 'ไม่ใช่',
+      22: '',
+    })],
+  });
+  const [item] = await sheet.run([recoveryOrder({
+    courier: 'Shopee',
+    code: 'TH2602788293138',
+    packer: 'มุก',
+  })]);
+
+  assert.equal(item.error, undefined);
+  assert.equal(item.result.merged, true);
+  assert.equal(item.result.row.code, 'TH2602788293138');
+  assert.equal(item.result.row.courier, 'Thaimart');
+  assert.match(item.result.row.note, /เลือก Shopee/);
+  assert.equal(sheet.rowsByDate.get(recoveryDate).length, 1);
+});
+
+test('foreground Packer scan merges short/full barcodes across couriers without marketplace data', async (t) => {
+  const sheet = recoverySheet(t, {
+    [recoveryDate]: [recoveryRow({
+      4: 'Thaimart',
+      5: '',
+      7: '',
+      8: 'รอแพ็ค',
+      10: 46259,
+      11: 9 / 24,
+      12: '2602788293138',
+      13: '',
+      14: '',
+      20: 'รอแพ็ค',
+      21: 'ไม่ใช่',
+      22: '',
+    })],
+  });
+  const result = await appendScanGoogle({
+    token: 'test-token',
+    config: { master: { id: `recovery-${t.name}`, webViewLink: 'https://example.test/sheet' } },
+    courier: 'Shopee',
+    code: 'TH2602788293138',
+    email: 'packer@example.test',
+    packer: 'มุก',
+    scanDate: recoveryDate,
+    scanTime: '12:00:00',
+  });
+
+  assert.equal(result.status, 'success');
+  assert.equal(result.merged, true);
+  assert.equal(result.wrongCourier, true);
+  assert.equal(result.row.courier, 'Thaimart');
+  assert.match(result.row.note, /เลือก Shopee/);
+  assert.equal(sheet.rowsByDate.get(recoveryDate).length, 1);
+});
+
+test('foreground Admin scan merges short/full barcodes across couriers without marketplace data', async (t) => {
+  const sheet = recoverySheet(t, {
+    [recoveryDate]: [recoveryRow({
+      4: 'Shopee',
+      5: 'TH2602788293138',
+      7: 'มุก',
+      8: 'Success',
+      10: '',
+      11: '',
+      12: '',
+      13: '',
+      14: '',
+      20: 'ส่งออกแล้ว',
+      21: 'ไม่ใช่',
+      22: '',
+    })],
+  });
+  const result = await appendAdminScanGoogle({
+    token: 'test-token',
+    config: { master: { id: `recovery-${t.name}`, webViewLink: 'https://example.test/sheet' } },
+    courier: 'Thaimart',
+    code: '2602788293138',
+    email: 'admin@example.test',
+    scanDate: recoveryDate,
+    scanTime: '13:00:00',
+  });
+
+  assert.equal(result.status, 'admin_matched');
+  assert.equal(result.row.courier, 'Shopee');
+  assert.equal(result.row.adminCode, '2602788293138');
+  assert.equal(sheet.rowsByDate.get(recoveryDate).length, 1);
+});
+
 test('batch recovery repairs Packer metadata when the tracking row already exists', async (t) => {
   const sheet = recoverySheet(t, { [recoveryDate]: [recoveryRow({ 9: '' })] });
   const note = 'แพ็คเกอร์เลือกขนส่งไม่ตรงกับแอดมิน (เลือก Shopee)';
@@ -257,6 +361,48 @@ test('batch recovery repairs Packer metadata when the tracking row already exist
     ...recoveryOrder({ note }),
     packerScan: { scannedAt: `${recoveryDate}T12:00:00`, packer: 'Ben', note },
   }), true);
+});
+
+test('batch recovery backfills Marketplace metadata on an existing Admin row', async (t) => {
+  const sheet = recoverySheet(t, {
+    [recoveryDate]: [recoveryRow({
+      5: '',
+      7: '',
+      8: 'รอแพ็ค',
+      10: 46259,
+      11: 9 / 24,
+      12: recoveryCode,
+      13: '',
+      14: '',
+      15: '',
+      16: '',
+      17: '',
+      18: '',
+      19: '',
+      20: 'รอแพ็ค',
+      21: 'ไม่ใช่',
+      22: '',
+    })],
+  });
+  const [item] = await sheet.run([recoveryOrder({
+    isPacker: false,
+    code: recoveryCode,
+    adminCode: recoveryCode,
+    packer: '',
+    marketplaceOrder: {
+      platform: 'shopee',
+      orderId: 'ORDER-RECOVERY-1',
+      buyerName: 'ผู้ซื้อทดสอบ',
+      items: [{ name: 'กาแฟ', sku: 'SKU-1', quantity: 2 }],
+      status: 'ส่งออกแล้ว',
+    },
+  })]);
+
+  assert.equal(item.error, undefined);
+  assert.equal(item.result.repaired, true);
+  assert.equal(item.result.row.marketplacePlatform, 'shopee');
+  assert.equal(item.result.row.marketplaceOrderId, 'ORDER-RECOVERY-1');
+  assert.equal(sheet.rowsByDate.get(recoveryDate)[0][14], 'ORDER-RECOVERY-1');
 });
 
 test('batch recovery repairs a later cancellation timestamp on an existing Packer row', async (t) => {

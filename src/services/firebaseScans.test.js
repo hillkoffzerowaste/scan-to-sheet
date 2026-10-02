@@ -207,13 +207,13 @@ test('background Sheet failures enter the targeted queue and drain every queued 
   const appSource = await readFile(new URL('../App.jsx', import.meta.url), 'utf8');
   assert.match(
     appSource,
-    /result\?\.error/,
-    'background Sheet failures must be retried instead of waiting for the ten-minute sweep',
+    /result\?\.retryable === true/,
+    'retryable background Sheet failures must be retried instead of waiting for the ten-minute sweep',
   );
   assert.match(
     appSource,
-    /targeted \|\| result\?\.error\) queueSheetRecoveryOrder\(order\.id\)/,
-    'background failures must enter the targeted queue per order',
+    /result\?\.skipped \|\| result\?\.retryable === true\) queueSheetRecoveryOrder\(order\.id\)/,
+    'only retryable background failures must enter the targeted queue per order',
   );
   assert.match(
     appSource,
@@ -249,6 +249,17 @@ test('Sheet gateway timeouts keep scans in the retryable path', async () => {
   );
 });
 
+test('foreground retryable Sheet failures persist the retryable outbox state', async () => {
+  const appSource = await readFile(new URL('../App.jsx', import.meta.url), 'utf8');
+  const failureBlocks = [...appSource.matchAll(/catch \(sheetError\) \{[\s\S]*?if \(retryable\) queueSheetRecoveryOrder/g)]
+    .map((match) => match[0]);
+
+  assert.equal(failureBlocks.length, 3, 'Admin, Packer and reclaim Sheet failure paths must all be covered');
+  failureBlocks.forEach((block) => {
+    assert.match(block, /markSheetSyncResult\([\s\S]*retryable/, 'retryable state must be persisted before targeted recovery');
+  });
+});
+
 test('primary scans keep Marketplace lookup inside the background Sheet write', async () => {
   const [source, appSource] = await Promise.all([
     readFile(new URL('./firebaseScans.js', import.meta.url), 'utf8'),
@@ -280,6 +291,51 @@ test('primary scans keep Marketplace lookup inside the background Sheet write', 
       'Marketplace lookup must finish inside the locked callback before the Sheet write',
     );
   }
+});
+
+test('Firestore primary scans search short/full tracking aliases before creating an order', async () => {
+  const source = await readFile(new URL('./firebaseScans.js', import.meta.url), 'utf8');
+  assert.match(
+    source,
+    /trackingCodeForms\(normalizedCode\)/,
+    'Firestore lookups must expand TH-prefixed and numeric tracking aliases',
+  );
+  assert.match(
+    source,
+    /where\('normalizedCode', '==', form\)/,
+    'orders must be queried for every equivalent normalized tracking form',
+  );
+  assert.match(
+    source,
+    /areTrackingCodesEquivalent\(order\.normalizedCode \|\| order\.code, normalizedCode\)/,
+    'candidate selection must retain an alias match after the indexed query',
+  );
+});
+
+test('reclaim Sheet retry uses the defined Marketplace lookup', async () => {
+  const appSource = await readFile(new URL('../App.jsx', import.meta.url), 'utf8');
+  assert.doesNotMatch(
+    appSource,
+    /\bfindMarketplaceOrderForScan\s*\(/,
+    'reclaim must not call a removed Marketplace lookup helper',
+  );
+  const reclaimStart = appSource.indexOf('// Background: re-sync to Sheet via appendAdminScanGoogle');
+  const reclaimEnd = appSource.indexOf('// This branch runs precisely because', reclaimStart);
+  assert.ok(reclaimStart >= 0 && reclaimEnd > reclaimStart, 'reclaim Sheet retry block missing');
+  assert.match(
+    appSource.slice(reclaimStart, reclaimEnd),
+    /findMarketplaceOrderGoogle\(/,
+    'reclaim must use the same defined lookup as the primary Sheet flow',
+  );
+});
+
+test('Sheet writes do not turn Marketplace lookup failures into blank metadata', async () => {
+  const appSource = await readFile(new URL('../App.jsx', import.meta.url), 'utf8');
+  assert.doesNotMatch(
+    appSource,
+    /findMarketplaceOrderGoogle\([\s\S]{0,260}?\)\.catch\(\(\) => null\)/,
+    'a temporary Marketplace read failure must fail the Sheet attempt and enter recovery instead of writing an unverified blank lookup',
+  );
 });
 
 test('primary Firestore scan results preserve the identity and scan role needed for Sheet confirmation', async () => {
@@ -333,6 +389,21 @@ test('Admin Sheet retry keeps the original Firestore scan date and time', async 
   assert.match(appSource, /const adminReclaimTiming = getAdminScanTiming\(order/);
   assert.match(writeBlock, /scanDate: adminReclaim\.sheetDate/);
   assert.match(writeBlock, /scanTime: adminReclaim\.sheetTime/);
+});
+
+test('Admin reclaim confirmation validates the stored courier identity', async () => {
+  const appSource = await readFile(new URL('../App.jsx', import.meta.url), 'utf8');
+  const reclaimStart = appSource.indexOf('const adminReclaim = {');
+  const writeStart = appSource.indexOf('appendAdminScanGoogle({', reclaimStart);
+  const writeEnd = appSource.indexOf('scheduleCountRefresh();', writeStart);
+  const reclaimBlock = appSource.slice(reclaimStart, writeEnd);
+
+  assert.ok(reclaimStart >= 0 && writeStart > reclaimStart && writeEnd > writeStart, 'Admin reclaim branch missing');
+  assert.match(
+    reclaimBlock,
+    /isSheetSyncResultConfirmed\(sheetResult, order\)/,
+    'Admin reclaim must reject a Sheet row stored under a different courier',
+  );
 });
 
 test('Packer Sheet retry keeps the original Firestore scan timestamp and actor', async () => {

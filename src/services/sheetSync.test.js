@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   buildSheetSyncFailureUpdates,
+  buildSheetSyncConfirmationError,
   isRetryableSheetSyncError,
   shouldKeepTargetedSheetRecovery,
 } from './sheetSync.js';
@@ -18,6 +19,23 @@ test('a rejected Firestore acknowledgement cannot be reported as a verified scan
   for (const value of [false, null, undefined]) {
     assert.throws(() => sheetSync.requireSheetSyncAcknowledgement(value), { code: 'SHEET_SYNC_NOT_ACKNOWLEDGED' });
   }
+});
+
+test('a courier mismatch produces a terminal, actionable Sheet error', () => {
+  const error = buildSheetSyncConfirmationError(
+    { status: 'success', row: { courier: 'Shopee', code: 'TH1234567890' } },
+    { courier: 'Thaimart' },
+  );
+
+  assert.equal(error.code, 'SHEET_COURIER_MISMATCH');
+  assert.match(error.message, /Shopee/);
+  assert.match(error.message, /Thaimart/);
+  assert.equal(isRetryableSheetSyncError(error), false);
+});
+
+test('network failures stay in the targeted Sheet recovery queue', () => {
+  assert.equal(isRetryableSheetSyncError(new TypeError('Failed to fetch')), true);
+  assert.equal(isRetryableSheetSyncError(Object.assign(new Error('socket hang up'), { code: 'ECONNRESET' })), true);
 });
 
 test('targeted recovery keeps a live writing lease queued for the next retry', () => {
@@ -305,6 +323,35 @@ test('recovery keeps transient Sheet contention pending instead of marking it fa
   assert.equal(isRetryableSheetSyncError(markedUpdate.error), true);
   assert.equal(markedUpdate.retryable, true);
   assert.equal(outcome.failed, 1);
+});
+
+test('recovery does not requeue a row already written under a different courier', async () => {
+  let markedUpdate = null;
+  let reportedResult = null;
+  const [candidate] = recoveryOrders(1);
+  const outcome = await sheetSync.runSheetRecovery({
+    candidates: [{ ...candidate, courier: 'Thaimart' }],
+    ...recoveryDependencies({
+      write: async ([order]) => [{
+        order,
+        result: {
+          status: 'success',
+          row: { courier: 'Shopee', code: order.code },
+        },
+      }],
+      isConfirmed: () => false,
+      markResult: async (_order, update) => {
+        markedUpdate = update;
+        return true;
+      },
+      onOrderResult: (_order, result) => { reportedResult = result; },
+    }),
+  });
+
+  assert.equal(outcome.failed, 1);
+  assert.equal(markedUpdate.error.code, 'SHEET_COURIER_MISMATCH');
+  assert.equal(markedUpdate.retryable, false);
+  assert.equal(reportedResult.retryable, false);
 });
 
 test('reports each recovery outcome so failed orders can stay targeted', async () => {

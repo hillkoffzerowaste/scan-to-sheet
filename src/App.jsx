@@ -141,6 +141,8 @@ import {
   removeSheetRecoveryOrderId,
 } from './services/sheetRecoveryQueue.js';
 import {
+  buildSheetSyncConfirmationError,
+  isRetryableSheetSyncError,
   runSheetRecovery,
   isSheetSyncVerified,
   requireSheetSyncAcknowledgement,
@@ -1805,7 +1807,7 @@ function App() {
               adminCode: hasAdmin ? code : '',
               marketplaceOrder: await findMarketplaceOrderGoogle({
                 token: accessToken, config: googleConfig, trackingNo: code,
-              }).catch(() => null),
+              }),
             };
           }));
           return batchAppendScanGoogle({
@@ -1834,10 +1836,9 @@ function App() {
             sheetRecoveryOrderIdsRef.current.delete(order.id);
             removeSheetRecoveryOrderId(order.id);
           }
-          // Every failed write is already durable in Firestore. Keep it in the single-order
-          // queue so generic gateway errors and Sheet locks cannot leave one scan waiting for
-          // the next broad sweep; the one-order/60-second limit still protects Sheet quota.
-          else if (targeted || result?.error) queueSheetRecoveryOrder(order.id);
+          // Every retryable failed write is already durable in Firestore. Keep only transient
+          // failures in the single-order queue; a courier mismatch needs operator correction.
+          else if (result?.skipped || result?.retryable === true) queueSheetRecoveryOrder(order.id);
         },
       });
       scheduleCountRefresh();
@@ -2098,7 +2099,7 @@ function App() {
               // lookup from every scanner otherwise competes with the writer for Sheets quota.
               const marketplaceOrder = await findMarketplaceOrderGoogle({
                 token: accessToken, config: googleConfig, trackingNo: validation.code,
-              }).catch(() => null);
+              });
               return appendScanGoogle({
                 token: accessToken,
                 config: googleConfig,
@@ -2119,22 +2120,22 @@ function App() {
               courier: firestorePrimary?.courier || existingPackerOrder?.courier || scanCourier,
             };
             if (!isSheetSyncResultConfirmed(sheetResult, expectedSheetOrder)) {
-              // This is the Packer commit path; the guard used to name the Admin row.
-              throw Object.assign(new Error('Google Sheet แจ้งว่าซ้ำ แต่ยืนยันแถว Packer ไม่ได้'), {
-                code: 'SHEET_RECOVERY_UNCONFIRMED',
-              });
+              throw buildSheetSyncConfirmationError(sheetResult, expectedSheetOrder);
             }
             requireSheetSyncAcknowledgement(await markSheetSyncResult({ orderId: firestorePrimary.id, attemptId: firestorePrimary.sheetSyncAttemptId, ok: true, result: sheetResult }));
             backgroundResult = { ...result, ...sheetResult, sheetSyncStatus: 'verified' };
           } catch (sheetError) {
-            await markSheetSyncResult({ orderId: firestorePrimary.id, attemptId: firestorePrimary.sheetSyncAttemptId, ok: false, error: sheetError }).catch(() => {});
-            queueSheetRecoveryOrder(firestorePrimary.id);
+            const retryable = isRetryableSheetSyncError(sheetError);
+            await markSheetSyncResult({ orderId: firestorePrimary.id, attemptId: firestorePrimary.sheetSyncAttemptId, ok: false, error: sheetError, retryable }).catch(() => {});
+            if (retryable) queueSheetRecoveryOrder(firestorePrimary.id);
             setStatus({
               type: 'warning',
               title: 'บันทึก Firestore แล้ว แต่ Sheet ยังไม่สำเร็จ',
-              message: `${validation.code} ถูกเก็บไว้ในคิวกู้คืนเฉพาะออเดอร์นี้อัตโนมัติ: ${userErrorMessage(sheetError, 'ซิงก์ Google Sheet ไม่สำเร็จ กรุณารอระบบลองใหม่')}`,
+              message: retryable
+                ? `${validation.code} ถูกเก็บไว้ในคิวกู้คืนเฉพาะออเดอร์นี้อัตโนมัติ: ${userErrorMessage(sheetError, 'ซิงก์ Google Sheet ไม่สำเร็จ กรุณารอระบบลองใหม่')}`
+                : `${validation.code}: ${userErrorMessage(sheetError, 'พบข้อมูลขนส่งไม่ตรงกัน กรุณาตรวจสอบการเลือกขนส่ง')}`,
             });
-            showCameraMessage(`${validation.code} รอซิงก์ Sheet`, 'warning');
+            showCameraMessage(`${validation.code} ${retryable ? 'รอซิงก์ Sheet' : 'ตรวจสอบ courier'}`, 'warning');
             backgroundResult = {
               ...result,
               sheetSyncStatus: 'failed',
@@ -2159,7 +2160,7 @@ function App() {
             appendToSheet: () => runWithGoogleRetry(async (accessToken, googleConfig) => {
               const marketplaceOrder = await findMarketplaceOrderGoogle({
                 token: accessToken, config: googleConfig, trackingNo: validation.code,
-              }).catch(() => null);
+              });
               return appendScanGoogle({
                 token: accessToken,
                 config: googleConfig,
@@ -2406,9 +2407,13 @@ function App() {
               orderId: order.id,
               attemptId: order.sheetSyncAttemptId || '',
             }));
-            const marketplaceOrder = await findMarketplaceOrderForScan(validation.code).catch(() => null);
-            const sheetResult = await runWithGoogleRetry((accessToken, googleConfig) =>
-              appendAdminScanGoogle({
+            const sheetResult = await runWithGoogleRetry(async (accessToken, googleConfig) => {
+              const marketplaceOrder = await findMarketplaceOrderGoogle({
+                token: accessToken,
+                config: googleConfig,
+                trackingNo: adminReclaim.adminCode,
+              });
+              return appendAdminScanGoogle({
                 token: accessToken,
                 config: googleConfig,
                 courier: scanCourier,
@@ -2420,16 +2425,14 @@ function App() {
                 adminDate: adminReclaim.adminDate,
                 adminTime: adminReclaim.adminTime,
                 adminCode: adminReclaim.adminCode,
-              }),
-            { sheetWrite: true });
+              });
+            }, { sheetWrite: true });
             // This branch runs precisely because the Sheet row was incomplete, and
             // appendAdminScanGoogle can return 'duplicate' without writing anything. Marking
             // it synced unconditionally would drop the order from the recovery queue while
             // the row stayed broken, so require the same confirmation every other site does.
-            if (!isSheetSyncResultConfirmed(sheetResult)) {
-              throw Object.assign(new Error('Google Sheet แจ้งว่าซ้ำ แต่ยืนยันแถว Admin ไม่ได้'), {
-                code: 'SHEET_RECOVERY_UNCONFIRMED',
-              });
+            if (!isSheetSyncResultConfirmed(sheetResult, order)) {
+              throw buildSheetSyncConfirmationError(sheetResult, order);
             }
             requireSheetSyncAcknowledgement(await markSheetSyncResult({
               orderId: order.id,
@@ -2439,19 +2442,23 @@ function App() {
               result: sheetResult,
             }));
           } catch (sheetError) {
+            const retryable = isRetryableSheetSyncError(sheetError);
             await markSheetSyncResult({
               orderId: order.id,
               attemptId: order.sheetSyncAttemptId || '',
               ok: false,
               error: sheetError,
+              retryable,
             }).catch(() => {});
-            queueSheetRecoveryOrder(order.id);
+            if (retryable) queueSheetRecoveryOrder(order.id);
             setStatus({
               type: 'warning',
               title: 'บันทึก Firestore แล้ว แต่ Sheet ยังไม่สำเร็จ',
-              message: `${validation.code} ถูกเก็บไว้ในคิวกู้คืนเฉพาะออเดอร์นี้อัตโนมัติ: ${userErrorMessage(sheetError, 'ซิงก์ Google Sheet ไม่สำเร็จ กรุณารอระบบลองใหม่')}`,
+              message: retryable
+                ? `${validation.code} ถูกเก็บไว้ในคิวกู้คืนเฉพาะออเดอร์นี้อัตโนมัติ: ${userErrorMessage(sheetError, 'ซิงก์ Google Sheet ไม่สำเร็จ กรุณารอระบบลองใหม่')}`
+                : `${validation.code}: ${userErrorMessage(sheetError, 'พบข้อมูลขนส่งไม่ตรงกัน กรุณาตรวจสอบการเลือกขนส่ง')}`,
             });
-            showCameraMessage(`${validation.code} รอซิงก์ Sheet`, 'warning');
+            showCameraMessage(`${validation.code} ${retryable ? 'รอซิงก์ Sheet' : 'ตรวจสอบ courier'}`, 'warning');
           }
           scheduleCountRefresh();
         });
@@ -2512,7 +2519,7 @@ function App() {
             const sheetResult = await runWithGoogleRetry(async (accessToken, googleConfig) => {
               const marketplaceOrder = await findMarketplaceOrderGoogle({
                 token: accessToken, config: googleConfig, trackingNo: validation.code,
-              }).catch(() => null);
+              });
               return hasPackerScan
                 ? appendScanGoogle({
                     token: accessToken,
@@ -2550,22 +2557,22 @@ function App() {
             if (!isSheetSyncResultConfirmed(sheetResult, expectedSheetOrder)) {
               // Name the row that was actually attempted: this path writes the Packer row
               // only when a Packer scan already exists, otherwise it writes the Admin row.
-              throw Object.assign(
-                new Error(`Google Sheet แจ้งว่าซ้ำ แต่ยืนยันแถว ${hasPackerScan ? 'Packer' : 'Admin'} ไม่ได้`),
-                { code: 'SHEET_RECOVERY_UNCONFIRMED' },
-              );
+              throw buildSheetSyncConfirmationError(sheetResult, expectedSheetOrder);
             }
             requireSheetSyncAcknowledgement(await markSheetSyncResult({ orderId: firestorePrimary.id, attemptId: firestorePrimary.sheetSyncAttemptId, ok: true, result: sheetResult }));
             backgroundResult = { ...result, ...sheetResult, sheetSyncStatus: 'verified' };
           } catch (sheetError) {
-            await markSheetSyncResult({ orderId: firestorePrimary.id, attemptId: firestorePrimary.sheetSyncAttemptId, ok: false, error: sheetError }).catch(() => {});
-            queueSheetRecoveryOrder(firestorePrimary.id);
+            const retryable = isRetryableSheetSyncError(sheetError);
+            await markSheetSyncResult({ orderId: firestorePrimary.id, attemptId: firestorePrimary.sheetSyncAttemptId, ok: false, error: sheetError, retryable }).catch(() => {});
+            if (retryable) queueSheetRecoveryOrder(firestorePrimary.id);
             setStatus({
               type: 'warning',
               title: 'บันทึก Firestore แล้ว แต่ Sheet ยังไม่สำเร็จ',
-              message: `${validation.code} ถูกเก็บไว้ในคิวกู้คืนเฉพาะออเดอร์นี้อัตโนมัติ: ${userErrorMessage(sheetError, 'ซิงก์ Google Sheet ไม่สำเร็จ กรุณารอระบบลองใหม่')}`,
+              message: retryable
+                ? `${validation.code} ถูกเก็บไว้ในคิวกู้คืนเฉพาะออเดอร์นี้อัตโนมัติ: ${userErrorMessage(sheetError, 'ซิงก์ Google Sheet ไม่สำเร็จ กรุณารอระบบลองใหม่')}`
+                : `${validation.code}: ${userErrorMessage(sheetError, 'พบข้อมูลขนส่งไม่ตรงกัน กรุณาตรวจสอบการเลือกขนส่ง')}`,
             });
-            showCameraMessage(`${validation.code} รอซิงก์ Sheet`, 'warning');
+            showCameraMessage(`${validation.code} ${retryable ? 'รอซิงก์ Sheet' : 'ตรวจสอบ courier'}`, 'warning');
             backgroundResult = {
               ...result,
               sheetSyncStatus: 'failed',
@@ -2588,7 +2595,7 @@ function App() {
             appendToSheet: () => runWithGoogleRetry(async (accessToken, googleConfig) => {
               const marketplaceOrder = await findMarketplaceOrderGoogle({
                 token: accessToken, config: googleConfig, trackingNo: validation.code,
-              }).catch(() => null);
+              });
               return appendAdminScanGoogle({
                 token: accessToken,
                 config: googleConfig,
