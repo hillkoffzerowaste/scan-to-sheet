@@ -114,7 +114,7 @@ export function resolveCrossDayPackerRow(row, { packerName = '' } = {}) {
  */
 export function shouldBlockPackerScan(rows, code) {
   const normalizedCode = normalizeCode(code);
-  return rows.some((row) => normalizeCode(row.code) === normalizedCode);
+  return rows.some((row) => areTrackingCodesEquivalent(row.code, normalizedCode));
 }
 
 export function getPackerDuplicateMessage(code) {

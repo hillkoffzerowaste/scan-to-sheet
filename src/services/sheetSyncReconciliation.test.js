@@ -171,6 +171,13 @@ test('blocks a Packer scan when the same tracking exists under another courier',
   );
 });
 
+test('blocks a Packer scan when the existing code is a Thaimart-truncated Shopee alias', () => {
+  assert.equal(
+    shouldBlockPackerScan([{ courier: 'Shopee', code: 'TH2683033557532', adminCode: '' }], '83033557532'),
+    true,
+  );
+});
+
 test('Packer duplicate status does not depend on Drive-only state', () => {
   assert.equal(
     getPackerDuplicateMessage('th123'),
