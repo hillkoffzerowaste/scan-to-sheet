@@ -115,6 +115,16 @@ test('matches a Thaimart-truncated Shopee barcode alias', () => {
   assert.equal(findTrackingAliasRow([row], { code: 'TH2683033557532' }), row);
 });
 
+test('prefers the exact barcode row when full and short aliases coexist', () => {
+  const fullRow = { courier: 'Shopee', code: '', adminCode: 'TH2683033557532' };
+  const shortRow = { courier: 'Shopee', code: '', adminCode: '83033557532' };
+
+  assert.equal(findTrackingAliasRow([fullRow, shortRow], {
+    courier: 'Shopee',
+    code: '83033557532',
+  }), shortRow);
+});
+
 test('does not certify a Sheet row stored under a different courier', () => {
   assert.equal(isSheetSyncResultConfirmed({
     status: 'admin_scan',

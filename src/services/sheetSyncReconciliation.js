@@ -81,7 +81,13 @@ export function findTrackingAliasRow(rows, { courier = '', code = '' } = {}) {
   const aliases = new Set(trackingCodeForms(normalizedCode));
   if (!aliases.size) return null;
 
-  return rows.find((row) => (
+  const courierRows = rows.filter((row) => !courier || row.courier === courier);
+  const exactRow = courierRows.find((row) => (
+    [row.code, row.adminCode].some((value) => normalizeCode(value) === normalizedCode)
+  ));
+  if (exactRow) return exactRow;
+
+  return courierRows.find((row) => (
     (!courier || row.courier === courier)
     && [row.code, row.adminCode]
       .flatMap((value) => trackingCodeForms(value))
