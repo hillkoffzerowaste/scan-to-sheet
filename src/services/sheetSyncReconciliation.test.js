@@ -108,6 +108,13 @@ test('confirms a full Packer order when the Sheet keeps the short Admin barcode'
   }), true);
 });
 
+test('matches a Thaimart-truncated Shopee barcode alias', () => {
+  const row = { courier: 'Thaimart', code: '', adminCode: '83033557532' };
+
+  assert.equal(areTrackingCodesEquivalent('TH2683033557532', '83033557532'), true);
+  assert.equal(findTrackingAliasRow([row], { code: 'TH2683033557532' }), row);
+});
+
 test('does not certify a Sheet row stored under a different courier', () => {
   assert.equal(isSheetSyncResultConfirmed({
     status: 'admin_scan',

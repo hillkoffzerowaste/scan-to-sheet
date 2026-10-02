@@ -4,9 +4,23 @@ function normalizeCode(value) {
 
 export function trackingCodeForms(value) {
   const normalized = normalizeCode(value);
-  if (/^TH\d{10,14}$/.test(normalized)) return [normalized, normalized.slice(2)];
-  if (/^\d{10,14}$/.test(normalized)) return [normalized, `TH${normalized}`];
-  return [normalized];
+  const forms = new Set(normalized ? [normalized] : []);
+  if (/^TH\d{10,14}$/.test(normalized)) {
+    forms.add(normalized.slice(2));
+  }
+  if (/^TH26\d{10,12}$/.test(normalized)) {
+    // Thaimart can strip the Shopee `TH26` prefix when the wrong courier is selected.
+    // Keep this alias narrow to the observed Shopee shape so ordinary numeric barcodes do
+    // not become interchangeable with unrelated TH26 shipments.
+    forms.add(normalized.slice(4));
+  }
+  if (/^\d{10,14}$/.test(normalized)) {
+    forms.add(`TH${normalized}`);
+  }
+  if (/^\d{10,12}$/.test(normalized)) {
+    forms.add(`TH26${normalized}`);
+  }
+  return [...forms];
 }
 
 export function areTrackingCodesEquivalent(left, right) {
@@ -64,14 +78,14 @@ export function findMarketplaceOrderRow(rows, { platform = '', orderId = '' } = 
 
 export function findTrackingAliasRow(rows, { courier = '', code = '' } = {}) {
   const normalizedCode = normalizeCode(code);
-  const aliases = [];
-  if (/^TH\d{10,14}$/.test(normalizedCode)) aliases.push(normalizedCode.slice(2));
-  if (/^\d{10,14}$/.test(normalizedCode)) aliases.push(`TH${normalizedCode}`);
-  if (!aliases.length) return null;
+  const aliases = new Set(trackingCodeForms(normalizedCode));
+  if (!aliases.size) return null;
 
   return rows.find((row) => (
     (!courier || row.courier === courier)
-    && (aliases.includes(normalizeCode(row.code)) || aliases.includes(normalizeCode(row.adminCode)))
+    && [row.code, row.adminCode]
+      .flatMap((value) => trackingCodeForms(value))
+      .some((form) => aliases.has(form))
   )) ?? null;
 }
 
