@@ -52,6 +52,32 @@ test('courier and Packer QR clicks select, keep the popup open and return focus 
   }
 });
 
+test('Thai keyboard-layout Packer QR still selects the Packer when physical key codes are unavailable', async ({ page }) => {
+  await openSignedInApp(page);
+  await page.locator('.workspace-qr-panel').getByRole('button', { name: 'เลือก Flash', exact: true }).click();
+
+  await page.evaluate(() => {
+    const input = document.querySelector('#popup-scan-input');
+    const form = input?.closest('form');
+    const thaiQr = 'ฆฉฤ์๘ธฯ๘ฆ็ฎฎธซๅซญฤฉษฎฑซฆธฤโโซๆพขฟ';
+    input?.focus();
+    for (const key of thaiQr) {
+      input?.dispatchEvent(new KeyboardEvent('keydown', {
+        bubbles: true,
+        cancelable: true,
+        code: 'Unidentified',
+        isComposing: true,
+        key,
+      }));
+    }
+    form?.requestSubmit();
+  });
+
+  await expect(page.locator('.popup-packer select')).toHaveValue('คนแพ็ค A');
+  await expect(page.locator('#popup-scan-input')).toBeFocused();
+  expect(await page.evaluate(() => window.qrTestWrites)).toEqual([]);
+});
+
 test('Admin workspace QR click opens the Admin scanner', async ({ page }) => {
   await openSignedInApp(page);
   await page.getByTestId('drive-tab').click();
