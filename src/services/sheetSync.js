@@ -34,6 +34,15 @@ export function isRetryableSheetSyncError(error) {
   return /เชื่อมต่อนานเกินไป|Google Sheet กำลังถูกใช้งาน|Google ตอบสนองช้า|Google จำกัดการเรียกใช้|Failed to fetch|NetworkError|Network error|fetch failed|connection reset|connection closed|socket hang up|ECONNRESET|ETIMEDOUT|EAI_AGAIN|rateLimitExceeded|userRateLimitExceeded|quotaExceeded|resource_exhausted|backendError|temporarilyUnavailable/i.test(diagnostic);
 }
 
+// Background recovery must not keep retrying a terminal data mismatch. A failed row with
+// no diagnostic is kept recoverable for legacy documents; once the error is known to be
+// retryable, the existing queue can safely bring it back on the next sweep.
+export function shouldIncludeInBackgroundSheetRecovery(order) {
+  if (!order || order.sheetSyncStatus !== SHEET_SYNC_STATES.FAILED) return true;
+  const error = String(order.sheetSyncError ?? '').trim();
+  return !error || isRetryableSheetSyncError({ message: error });
+}
+
 export function buildSheetSyncConfirmationError(result, expectedOrder = null) {
   const expectedCourier = String(expectedOrder?.courier ?? '').trim();
   const actualCourier = String(result?.row?.courier ?? '').trim();

@@ -38,6 +38,22 @@ test('network failures stay in the targeted Sheet recovery queue', () => {
   assert.equal(isRetryableSheetSyncError(Object.assign(new Error('socket hang up'), { code: 'ECONNRESET' })), true);
 });
 
+test('background recovery skips terminal courier mismatches but keeps retryable failures', () => {
+  assert.equal(typeof sheetSync.shouldIncludeInBackgroundSheetRecovery, 'function');
+  assert.equal(sheetSync.shouldIncludeInBackgroundSheetRecovery({
+    sheetSyncStatus: 'failed',
+    sheetSyncError: 'ขนส่งใน Google Sheet เป็น Shopee แต่รายการระบุเป็น Thaimart กรุณาตรวจสอบการเลือกขนส่ง',
+  }), false);
+  assert.equal(sheetSync.shouldIncludeInBackgroundSheetRecovery({
+    sheetSyncStatus: 'failed',
+    sheetSyncError: 'Google Sheet กำลังถูกใช้งานอยู่ กรุณาลองอีกครั้ง',
+  }), true);
+  assert.equal(sheetSync.shouldIncludeInBackgroundSheetRecovery({
+    sheetSyncStatus: 'failed',
+    sheetSyncError: '',
+  }), true);
+});
+
 test('targeted recovery keeps a live writing lease queued for the next retry', () => {
   const now = Date.parse('2026-09-30T06:00:00.000Z');
   assert.equal(shouldKeepTargetedSheetRecovery({

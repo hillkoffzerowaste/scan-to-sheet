@@ -28,6 +28,7 @@ import {
   selectBackgroundSheetRecoveryCandidates,
   sortBackgroundSheetRecoveryCandidates,
   summarizeSheetSyncOrders,
+  shouldIncludeInBackgroundSheetRecovery,
   shouldKeepTargetedSheetRecovery,
 } from './sheetSync.js';
 import { SHEET_RECOVERY_MAX_ROWS } from './sheetSyncPolicy.js';
@@ -1056,9 +1057,10 @@ export async function getSheetRecoveryCandidates({
     if (order?.id) todayOrdersById.set(order.id, order);
   }
   const todayCandidates = sortBackgroundSheetRecoveryCandidates(
-    [...todayOrdersById.values()]
-      .filter((order) => ['failed', 'pending', 'writing'].includes(order.sheetSyncStatus))
-      .filter((order) => isSheetSyncClaimable(order)),
+      [...todayOrdersById.values()]
+        .filter((order) => ['failed', 'pending', 'writing'].includes(order.sheetSyncStatus))
+        .filter(shouldIncludeInBackgroundSheetRecovery)
+        .filter((order) => isSheetSyncClaimable(order)),
   );
   const todayActivityIds = new Set(todayCandidates.map((order) => order.id));
 
@@ -1072,6 +1074,7 @@ export async function getSheetRecoveryCandidates({
   const historicalCandidates = sortBackgroundSheetRecoveryCandidates(
     snapshots.flatMap((snap) => snap.docs.map((item) => ({ id: item.id, ...item.data() })))
       .filter((order) => !todayActivityIds.has(order.id))
+      .filter(shouldIncludeInBackgroundSheetRecovery)
       .filter((order) => isSheetSyncClaimable(order)),
   );
   const candidates = selectBackgroundSheetRecoveryCandidates({
