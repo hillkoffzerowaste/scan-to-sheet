@@ -1652,6 +1652,7 @@ test('a cross-day Admin merge records the courier the Packer actually picked', a
   const yesterday = '2026-08-24';
   const spreadsheetId = 'sheet-wrong-courier-test';
   const code = 'TH2695488345554';
+  const mismatchNote = 'แพ็คเกอร์เลือกขนส่งไม่ตรงกับแอดมิน (เลือก Flash)';
   const sheetProperties = {
     sheets: [
       { properties: { sheetId: 124, title: yesterday, gridProperties: { rowCount: 1000, columnCount: 23 } } },
@@ -1701,6 +1702,7 @@ test('a cross-day Admin merge records the courier the Packer actually picked', a
       code,
       email: 'packer@example.com',
       packer: 'เบ้น',
+      note: mismatchNote,
       scanDate: today,
       scanTime: '10:20:30',
     });
@@ -1710,9 +1712,9 @@ test('a cross-day Admin merge records the courier the Packer actually picked', a
     assert.equal(result.courier, 'Shopee');
     assert.equal(result.selectedCourier, 'Flash');
     assert.equal(rowsByDate.get(today).length, 0);
-    assert.ok(
-      String(rowsByDate.get(yesterday)[0][9]).includes('แพ็คเกอร์เลือกขนส่งไม่ตรงกับแอดมิน (เลือก Flash)'),
+    assert.equal(
       rowsByDate.get(yesterday)[0][9],
+      `${mismatchNote} | แพ็คข้ามวัน (สแกน ${today})`,
     );
   } finally {
     globalThis.fetch = originalFetch;

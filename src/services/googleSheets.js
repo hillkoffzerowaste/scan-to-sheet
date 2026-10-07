@@ -1,4 +1,5 @@
 import { buildSheetBackfillUpdates, classifyLateOrder, normalizeMarketplaceTracking } from './marketplaceImport.js';
+import { mergeScanNotes } from './scanNotes.js';
 import { hasMinimumTrackingLength, MIN_TRACKING_CODE_LENGTH } from './trackingValidation.js';
 import { areTrackingCodesEquivalent, findHistoricalIssueRow, findMarketplaceOrderRow, findScanReconciliation, findTrackingAliasRow, getScanIssueMeta, resolveCrossDayPackerRow } from './sheetSyncReconciliation.js';
 import { isSheetsApiRequest, scheduleSheetRequest } from './sheetRequestScheduler.js';
@@ -2143,7 +2144,7 @@ export async function appendScanGoogle({
       const currentRow = verifyParsed[targetIdx];
       const wrongCourier = currentRow.courier !== courier;
       const mergedNote = wrongCourier
-        ? `แพ็คเกอร์เลือกขนส่งไม่ตรงกับแอดมิน (เลือก ${courier})`
+        ? mergeScanNotes(note, `แพ็คเกอร์เลือกขนส่งไม่ตรงกับแอดมิน (เลือก ${courier})`)
         : currentRow.note || note;
       const mergedRow = withMarketplaceCells([
         currentRow.no,
@@ -2327,7 +2328,7 @@ export async function appendScanGoogle({
       // returned, so it never ran and the mismatch was never written down anywhere.
       const wrongCourier = currentRow.courier !== courier;
       const mergedNote = wrongCourier
-        ? [note, `แพ็คเกอร์เลือกขนส่งไม่ตรงกับแอดมิน (เลือก ${courier})`].filter(Boolean).join(' | ')
+        ? mergeScanNotes(note, `แพ็คเกอร์เลือกขนส่งไม่ตรงกับแอดมิน (เลือก ${courier})`)
         : note;
       // Keep the Packer event date even when the row remains on the Admin's earlier tab.
       // The physical tab is resolved separately when a later Issue update needs this row.
@@ -3497,7 +3498,7 @@ export async function batchAppendScanGoogle({ token, config, orders, repairExist
               ? (String(packer ?? '').trim() || currentRow.packer || '')
               : currentRow.packer;
             const repairedNote = isPacker
-              ? (String(note ?? '').trim() || currentRow.note || '')
+              ? mergeScanNotes(note, currentRow.note)
               : currentRow.note;
             // Firestore is the source of truth for a later issue scan (for example a
             // cancellation rescanned after the original Packer row was written). Keep the
@@ -3657,7 +3658,7 @@ export async function batchAppendScanGoogle({ token, config, orders, repairExist
                 packer || '',
                 issueMeta.sheetStatus,
                 currentRow.courier !== courier
-                  ? [note, `แพ็คเกอร์เลือกขนส่งไม่ตรงกับแอดมิน (เลือก ${courier})`].filter(Boolean).join(' | ')
+                  ? mergeScanNotes(note, `แพ็คเกอร์เลือกขนส่งไม่ตรงกับแอดมิน (เลือก ${courier})`)
                   : (note || currentRow.note || ''),
                 currentRow.adminDate || adminDate || '',
                 currentRow.adminTime || adminTime || '',

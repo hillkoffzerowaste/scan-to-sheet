@@ -34,6 +34,7 @@ import { SHEET_RECOVERY_MAX_ROWS } from './sheetSyncPolicy.js';
 import { collectFirestorePages } from './firestorePagination.js';
 import { buildRecoveredOrderFields, chooseCanonicalOrder, mergeExistingOrderWithCandidate, mergeScanEventIntoOrder } from './orderRecovery.js';
 import { getScanEventDate } from './scanRow.js';
+import { mergeScanNotes } from './scanNotes.js';
 import { areTrackingCodesEquivalent, trackingCodeForms } from './sheetSyncReconciliation.js';
 import {
   getMissingOrderQueryFilters,
@@ -708,7 +709,7 @@ export async function recordPackerScanPrimary({ code, courier, date, time, user,
 
     const wrongCourier = Boolean(effectiveExisting?.admin?.scannedAt && effectiveExisting.courier && effectiveExisting.courier !== courier);
     const correctedNote = wrongCourier
-      ? [note, `แพ็คเกอร์เลือกขนส่งไม่ตรงกับแอดมิน (เลือก ${courier})`].filter(Boolean).join(' | ')
+      ? mergeScanNotes(note, `แพ็คเกอร์เลือกขนส่งไม่ตรงกับแอดมิน (เลือก ${courier})`)
       : note;
     const nextStatus = effectiveExisting?.admin?.scannedAt ? 'matched' : note ? 'issue' : 'packer_scanned';
     const effectiveDate = effectiveExisting?.date ?? date;
