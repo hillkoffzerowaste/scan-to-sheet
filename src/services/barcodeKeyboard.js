@@ -52,3 +52,14 @@ export function barcodeCharacterFromKeyEvent(event) {
   if (punctuation) return punctuation[event.shiftKey ? 1 : 0];
   return NUMPAD_PUNCTUATION[event.code] ?? null;
 }
+
+export function chooseBarcodeSubmissionValue({
+  physicalValue = '',
+  rawValue = '',
+  isRecognizedSpecialValue = () => false,
+} = {}) {
+  const physical = String(physicalValue ?? '').trim();
+  const raw = String(rawValue ?? '').trim();
+  if (raw && raw !== physical && isRecognizedSpecialValue(raw)) return raw;
+  return physical || raw;
+}

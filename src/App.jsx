@@ -117,7 +117,7 @@ import {
   normalizeQrLayoutPreferences,
   saveQrLayoutPreferences,
 } from './services/qrLayoutPreferences.js';
-import { barcodeCharacterFromKeyEvent } from './services/barcodeKeyboard.js';
+import { barcodeCharacterFromKeyEvent, chooseBarcodeSubmissionValue } from './services/barcodeKeyboard.js';
 import {
   apiResponseErrorMessage,
   createFirebaseAuthRequiredError,
@@ -409,6 +409,7 @@ function App() {
   const lastAppliedRemoteSignatureRef = useRef(null);
   const remoteControlTabRef = useRef(null);
   const scanValueRef = useRef('');
+  const scanRawValueRef = useRef('');
   const audioContextRef = useRef(null);
   const cameraRef = useRef(null);
   const scanProcessorRef = useRef(null);
@@ -2764,6 +2765,7 @@ function App() {
       ? nextValue(scanValueRef.current)
       : String(nextValue ?? '');
     scanValueRef.current = next;
+    scanRawValueRef.current = next;
     setScanValue(next);
   }
 
@@ -2814,7 +2816,23 @@ function App() {
 
   function handleScanSubmit(event) {
     event.preventDefault();
-    const code = scanValueRef.current.trim();
+    const code = chooseBarcodeSubmissionValue({
+      physicalValue: scanValueRef.current,
+      rawValue: scanRawValueRef.current,
+      isRecognizedSpecialValue: (value) => {
+        const parsed = parseScanQrCommand(value);
+        return Boolean(parsed
+          ? resolveScanQrCommand(parsed, {
+              couriers,
+              packers: packerOptions,
+              staff: qrPackerMembers,
+            })
+          : resolveScanQrName(value, {
+              couriers,
+              packers: packerOptions.filter((packer) => packer !== PACKER_UNASSIGNED),
+            }));
+      },
+    });
     const activeInput = scanPopupOpen ? popupScanInputRef.current : mainScanInputRef.current;
     if (activeInput) activeInput.value = '';
     updateScanValue('');
@@ -2956,7 +2974,12 @@ function App() {
     // every subsequent character can make fast keyboard-wedge scanners drop part of a QR.
     if (event.target?.tagName === 'SELECT') focusScanInput({ force: true });
     const nextCode = `${scanValueRef.current}${character}`;
+    const rawCharacter = typeof event.key === 'string' && event.key.length === 1
+      ? event.key
+      : character;
+    const nextRawValue = `${scanRawValueRef.current}${rawCharacter}`;
     updateScanValue(nextCode);
+    scanRawValueRef.current = nextRawValue;
   }
 
   async function stopCamera() {
