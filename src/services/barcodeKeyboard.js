@@ -53,9 +53,24 @@ const THAI_KEYBOARD_TO_ASCII = new Map([
 
 const RECOVERED_SCANNER_VALUE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9:/%._-]{2,}$/;
 
+function thaiKeyboardCharacter(value) {
+  if (typeof value !== 'string' || !/[\u0E00-\u0E7F]/u.test(value)) return null;
+  return THAI_KEYBOARD_TO_ASCII.get(value) ?? null;
+}
+
 export function barcodeCharacterFromKeyEvent(event) {
   if (!event || event.ctrlKey || event.altKey || event.metaKey) return null;
   if (event.isComposing && !event.key) return null;
+
+  // On some Chrome/Windows combinations the scanner's Thai-layout key keeps its
+  // shifted character but loses `shiftKey`. Prefer the actual Thai character in
+  // that case; using only the physical code would turn QR command capitals into
+  // lowercase and make the Packer QR unresolvable.
+  const mappedThaiCharacter = thaiKeyboardCharacter(event.key);
+  if (mappedThaiCharacter && /^[A-Za-z]$/.test(mappedThaiCharacter)) {
+    return event.shiftKey ? mappedThaiCharacter.toUpperCase() : mappedThaiCharacter;
+  }
+  if (mappedThaiCharacter && !event.shiftKey) return mappedThaiCharacter;
 
   if (/^Key[A-Z]$/.test(event.code)) {
     // Keep the scanner's original case for case-sensitive QR payloads such as Firestore staff

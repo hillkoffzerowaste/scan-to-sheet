@@ -36,6 +36,12 @@ test('recovers Thai-layout scanner keys when the browser omits the physical key 
   assert.equal(barcodeCharacterFromKeyEvent({ code: 'Unidentified', key: '๔' }), '%');
 });
 
+test('trusts the Thai character mapping when Chrome loses the scanner shift flag', () => {
+  assert.equal(barcodeCharacterFromKeyEvent({ code: 'KeyS', key: 'ฆ', shiftKey: false }), 'S');
+  assert.equal(barcodeCharacterFromKeyEvent({ code: 'KeyA', key: 'ฤ', shiftKey: false }), 'A');
+  assert.equal(barcodeCharacterFromKeyEvent({ code: 'Digit5', key: '๔', shiftKey: false }), '%');
+});
+
 test('keeps a Thai-layout scanner key even when the browser marks it as composing', () => {
   assert.equal(barcodeCharacterFromKeyEvent({ code: 'KeyA', key: 'ฟ', isComposing: true }), 'a');
 });

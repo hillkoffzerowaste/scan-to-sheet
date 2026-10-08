@@ -78,6 +78,41 @@ test('Thai keyboard-layout Packer QR still selects the Packer when physical key 
   expect(await page.evaluate(() => window.qrTestWrites)).toEqual([]);
 });
 
+test('Thai keyboard-layout Packer QR still selects the Packer when Chrome loses shift state', async ({ page }) => {
+  await openSignedInApp(page);
+  await page.locator('.workspace-qr-panel').getByRole('button', { name: 'เลือก Flash', exact: true }).click();
+
+  await page.evaluate(() => {
+    const input = document.querySelector('#popup-scan-input');
+    const form = input?.closest('form');
+    const thaiQr = 'ฆฉฤ์๘ธฯ๘ฆ็ฎฎธซๅซญฤฉษฎฑซฆธฤโโซๆพขฟ';
+    const codeForAscii = (character) => {
+      if (/^[A-Z]$/.test(character)) return `Key${character}`;
+      if (/^[0-9]$/.test(character)) return `Digit${character}`;
+      return ({ ':': 'Semicolon', '/': 'Slash', '%': 'Digit5', '-': 'Minus' })[character] ?? 'Unidentified';
+    };
+    const command = 'SCAN_TO_SHEET:1:PACKER:STAFF:qr-a';
+    const physicalAscii = [...command];
+    input?.focus();
+    [...thaiQr].forEach((key, index) => {
+      const ascii = physicalAscii[index];
+      input?.dispatchEvent(new KeyboardEvent('keydown', {
+        bubbles: true,
+        cancelable: true,
+        code: codeForAscii(ascii),
+        isComposing: true,
+        key,
+        shiftKey: false,
+      }));
+    });
+    form?.requestSubmit();
+  });
+
+  await expect(page.locator('.popup-packer select')).toHaveValue('คนแพ็ค A');
+  await expect(page.locator('#popup-scan-input')).toBeFocused();
+  expect(await page.evaluate(() => window.qrTestWrites)).toEqual([]);
+});
+
 test('Admin workspace QR click opens the Admin scanner', async ({ page }) => {
   await openSignedInApp(page);
   await page.getByTestId('drive-tab').click();
