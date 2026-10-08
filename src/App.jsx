@@ -105,7 +105,11 @@ import { hasDeploymentUpdate } from './services/deploymentUpdate.js';
 import { getScanPopupCourierOptions, getScanPopupStatusMeta } from './services/scanPopup.js';
 import { getScanQrAnnouncement, parseScanQrCommand, resolveScanQrCommand, resolveScanQrName } from './services/scanQrCommand.js';
 import { DEFAULT_SCAN_METHOD, getScanReadinessMessage, SCAN_READINESS } from './services/scanPreferences.js';
-import { isGoogleAuthError, scheduleDeferredGoogleSheetMaintenance } from './services/sessionMaintenance.js';
+import {
+  createGoogleSessionExpiredError,
+  isGoogleAuthError,
+  scheduleDeferredGoogleSheetMaintenance,
+} from './services/sessionMaintenance.js';
 import { createSheetRecoveryRetryScheduler, createSheetRecoveryScheduler } from './services/sheetRecoveryScheduler.js';
 import {
   getSheetLockRetryDelay,
@@ -1481,10 +1485,17 @@ function App() {
           title: 'ต้องเข้าสู่ระบบใหม่',
           message: 'session Google หมดอายุหรือไม่มีสิทธิ์ใช้งาน กรุณาออกจากระบบ แล้วเข้าสู่ระบบใหม่ก่อนสแกนต่อ',
         });
-        throw error;
+        throw createGoogleSessionExpiredError(error);
       }
 
-      return action(session.accessToken, session.config);
+      try {
+        return await action(session.accessToken, session.config);
+      } catch (retryError) {
+        if (isGoogleAuthError(retryError)) {
+          throw createGoogleSessionExpiredError(retryError);
+        }
+        throw retryError;
+      }
     } finally {
       await releaseLock?.();
     }

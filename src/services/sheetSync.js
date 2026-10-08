@@ -1,4 +1,5 @@
 import { userErrorMessage } from './authErrors.js';
+import { GOOGLE_SESSION_EXPIRED } from './sessionMaintenance.js';
 import { SHEET_RECOVERY_MAX_ROWS } from './sheetSyncPolicy.js';
 
 export const SHEET_SYNC_STALE_MS = 2 * 60 * 1000;
@@ -20,6 +21,7 @@ const RETRYABLE_SHEET_SYNC_CODES = new Set([
   'SHEET_RATE_LIMIT_UNAVAILABLE',
   'SHEET_RECOVERY_UNCONFIRMED',
   'SHEET_BATCH_INCOMPLETE',
+  GOOGLE_SESSION_EXPIRED,
 ]);
 
 export function isRetryableSheetSyncError(error) {
@@ -31,7 +33,7 @@ export function isRetryableSheetSyncError(error) {
   const diagnostic = [error?.message, error?.detail, error?.cause]
     .map((value) => typeof value === 'string' ? value : JSON.stringify(value ?? ''))
     .join(' ');
-  return /เชื่อมต่อนานเกินไป|Google Sheet กำลังถูกใช้งาน|Google ตอบสนองช้า|Google จำกัดการเรียกใช้|Failed to fetch|NetworkError|Network error|fetch failed|connection reset|connection closed|socket hang up|ECONNRESET|ETIMEDOUT|EAI_AGAIN|rateLimitExceeded|userRateLimitExceeded|quotaExceeded|resource_exhausted|backendError|temporarilyUnavailable/i.test(diagnostic);
+  return /เซสชัน\s*Google\s*หมดอายุ|Google\s*session\s*(?:หมดอายุ|expired)|เชื่อมต่อนานเกินไป|Google Sheet กำลังถูกใช้งาน|Google ตอบสนองช้า|Google จำกัดการเรียกใช้|Failed to fetch|NetworkError|Network error|fetch failed|connection reset|connection closed|socket hang up|ECONNRESET|ETIMEDOUT|EAI_AGAIN|rateLimitExceeded|userRateLimitExceeded|quotaExceeded|resource_exhausted|backendError|temporarilyUnavailable/i.test(diagnostic);
 }
 
 // Background recovery must not keep retrying a terminal data mismatch. A failed row with

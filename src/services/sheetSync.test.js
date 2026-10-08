@@ -52,6 +52,15 @@ test('background recovery skips terminal courier mismatches but keeps retryable 
     sheetSyncStatus: 'failed',
     sheetSyncError: '',
   }), true);
+  assert.equal(isRetryableSheetSyncError({
+    message: 'เซสชัน Google หมดอายุ กรุณาเชื่อม Google ใหม่',
+    code: 'GOOGLE_SESSION_EXPIRED',
+    status: 401,
+  }), true);
+  assert.equal(sheetSync.shouldIncludeInBackgroundSheetRecovery({
+    sheetSyncStatus: 'failed',
+    sheetSyncError: 'เซสชัน Google หมดอายุ กรุณาเชื่อม Google ใหม่',
+  }), true);
 });
 
 test('targeted recovery keeps a live writing lease queued for the next retry', () => {
