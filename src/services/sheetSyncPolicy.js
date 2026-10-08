@@ -1,7 +1,8 @@
 // A recovery batch holds the distributed Sheet lock while its rows are read, written, and
-// verified. Keep the broad sweep small so concurrent scanners do not wait behind a long batch;
-// failed scans use the one-order targeted queue below instead of waiting for this sweep.
-export const SHEET_RECOVERY_MAX_ROWS = 3;
+// verified. The Sheet writer groups one date into a single batch request, so ten rows keeps
+// backlog recovery useful without turning one background pass into a long scanner outage.
+// The shared Firestore gate still caps all Sheets calls at 30 requests/minute.
+export const SHEET_RECOVERY_MAX_ROWS = 10;
 export const SHEET_RECOVERY_TARGETED_MAX_ROWS = 1;
 export const SHEET_RECOVERY_INTERVAL_MS = 10 * 60 * 1000;
 export const SHEET_RECOVERY_COOLDOWN_MS = 10 * 60 * 1000;
