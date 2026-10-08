@@ -7,7 +7,7 @@
 - Frontend: React 19 + Vite 6, `html5-qrcode` สำหรับสแกนด้วยกล้อง
 - Backend/API: Node HTTP server (`server.js`) เสิร์ฟเว็บแอพและเรียก API handlers ใน `api/`; เป้าหมาย production คือ Firebase App Hosting
 - ข้อมูล: Google Sheets (Master sheet และ `Marketplace Orders`) + Firebase/Firestore (สแกนล่าสุด, sync status)
-- Session/lock storage: Upstash Redis (REST API)
+- Session/lock storage: Firestore (server-side Admin SDK)
 - Mobile: Capacitor (Android)
 - Marketplace sync: Playwright worker (Node.js) สำหรับ TikTok Shop, Shopee, Lazada Seller Center
 - Label-address sync: Google Apps Script (แยกจากเว็บแอพ)
@@ -162,15 +162,13 @@ VITE_FIREBASE_STORAGE_BUCKET=...
 VITE_FIREBASE_MESSAGING_SENDER_ID=...
 VITE_FIREBASE_APP_ID=...
 VITE_FIREBASE_MEASUREMENT_ID=...
-KV_REST_API_URL=...
-KV_REST_API_TOKEN=...
 ```
 
-`VITE_FIREBASE_*` และ `VITE_GOOGLE_CLIENT_ID` ใช้ตอน build ส่วน `GOOGLE_CLIENT_SECRET`, `OAUTH_TRANSACTION_SECRET`, `KV_REST_API_URL` และ `KV_REST_API_TOKEN` เป็นค่า server-only ที่เก็บใน Secret Manager เมื่อ deploy ด้วย App Hosting
+`VITE_FIREBASE_*` และ `VITE_GOOGLE_CLIENT_ID` ใช้ตอน build ส่วน `GOOGLE_CLIENT_SECRET` และ `OAUTH_TRANSACTION_SECRET` เป็นค่า server-only ที่เก็บใน Secret Manager เมื่อ deploy ด้วย App Hosting
 
 ไม่ต้องตั้ง `GOOGLE_OAUTH_REDIRECT_URI` ใน App Hosting เพราะ backend ตรวจ origin จาก request เพื่อรองรับทั้งหน้า `/` และ `/remote`
 
-`KV_REST_API_URL` / `KV_REST_API_TOKEN` มาจาก Upstash Redis ใช้สำหรับเก็บ session และ sheet lock ฝั่ง API
+Session, sheet lock และ rate gate ฝั่ง API เก็บใน Firestore ผ่าน Firebase Admin SDK เพื่อให้ทำงานต่อเนื่องข้าม instance และไม่ผูกกับโควตา Redis ภายนอก
 
 ## Run locally
 
@@ -216,8 +214,6 @@ VITE_FIREBASE_PROJECT_ID=...
 VITE_FIREBASE_STORAGE_BUCKET=...
 VITE_FIREBASE_MESSAGING_SENDER_ID=...
 VITE_FIREBASE_APP_ID=...
-KV_REST_API_URL=...
-KV_REST_API_TOKEN=...
 ```
 
 หลังเพิ่มหรือแก้ environment variable ต้อง redeploy ใหม่
@@ -310,7 +306,7 @@ npm run marketplace:dashboard         # เปิด dashboard ที่ http://
 ## Security
 
 - ห้าม commit `.env`, `firebase-service-account.json`, `scripts/marketplace-sync/config.json`, browser profile, log, screenshot ของ marketplace worker และไฟล์สำรองข้อมูลใน `.codex-tmp` (อยู่ใน `.gitignore` แล้ว)
-- Session และ sheet lock เก็บผ่าน Upstash Redis ฝั่ง server เท่านั้น ไม่เก็บ token ฝั่ง client
+- Session, sheet lock และ rate gate เก็บผ่าน Firestore Admin SDK ฝั่ง server เท่านั้น ไม่เก็บ token ฝั่ง client
 - Firestore ควบคุมสิทธิ์ผ่าน `firestore.rules` และรูปพนักงานควบคุมสิทธิ์ผ่าน `storage.rules`
 - ข้อมูลติดต่อฉบับเต็มเก็บใน `staffPrivateContacts` ซึ่งอ่านได้เฉพาะ Admin ส่วน `staffMembers` เก็บเฉพาะค่าที่ปกปิดแล้ว
 - `firebase-service-account.json` และ credential อื่นต้องใช้งานฝั่ง server เท่านั้น ห้ามฝังใน frontend หรือ commit เข้า Git

@@ -68,13 +68,13 @@ test('redactSecrets strips credential values from anything heading for a log', (
 });
 
 test('redactSecrets keeps the non-credential part of the message readable', () => {
-  const redacted = redactSecrets('KV error 500: connection refused');
-  assert.equal(redacted, 'KV error 500: connection refused');
+  const redacted = redactSecrets('Firestore error 500: connection refused');
+  assert.equal(redacted, 'Firestore error 500: connection refused');
 });
 
 test('sendError answers with a Thai message and a stable code, never the raw cause', () => {
   const res = captureResponse();
-  const cause = new Error('Missing Vercel KV REST environment variables');
+  const cause = new Error('Firestore server store unavailable');
 
   captureConsoleError(() => {
     sendError(res, {
@@ -88,9 +88,9 @@ test('sendError answers with a Thai message and a stable code, never the raw cau
   assert.equal(res.statusCode, 500);
   assert.equal(res.body.code, 'SHEET_LOCK_FAILED');
   // The client puts `error` straight into the status banner, so it must stay Thai and
-  // must not mention KV, Google, spreadsheet ids, or env-var names.
+  // must not mention internal store details, Google, spreadsheet ids, or env-var names.
   assert.equal(res.body.error, 'จองสิทธิ์เขียน Google Sheet ไม่สำเร็จ กรุณาลองอีกครั้ง');
-  assert.ok(!JSON.stringify(res.body).includes('KV'));
+  assert.ok(!JSON.stringify(res.body).includes('Firestore'));
   assert.ok(!JSON.stringify(res.body).includes('environment variables'));
   assert.equal(res.body.detail, undefined);
   assert.equal(res.body.step, undefined);

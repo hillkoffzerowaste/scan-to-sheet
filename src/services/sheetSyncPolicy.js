@@ -13,6 +13,12 @@ export function getSheetRecoveryBatchSize({ targeted = false } = {}) {
   return targeted ? SHEET_RECOVERY_TARGETED_MAX_ROWS : SHEET_RECOVERY_MAX_ROWS;
 }
 
+export function getSheetRecoveryRetryDelay({ error = false, failed = 0, skipped = 0 } = {}) {
+  return error || Number(failed) > 0 || Number(skipped) > 0
+    ? SHEET_RECOVERY_TARGETED_RETRY_MS
+    : SHEET_RECOVERY_COOLDOWN_MS;
+}
+
 export function shouldApplySheetRecoveryCooldown({ showStatus = false, includeSynced = false, targeted = false } = {}) {
   // The ten-minute interval belongs to the background worker. A manual recovery must be able
   // to continue with the next bounded batch after a transient lock or quota failure.

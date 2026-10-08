@@ -7,6 +7,7 @@ import {
   SHEET_RECOVERY_MAX_ROWS,
   SHEET_RECOVERY_TARGETED_MAX_ROWS,
   getSheetRecoveryBatchSize,
+  getSheetRecoveryRetryDelay,
   shouldPreflightSheetRecoveryLock,
   shouldApplySheetRecoveryCooldown,
 } from './sheetSyncPolicy.js';
@@ -36,4 +37,10 @@ test('background recovery must acquire the shared Sheet lock before claiming row
   assert.equal(shouldPreflightSheetRecoveryLock({ showStatus: true }), false);
   assert.equal(shouldPreflightSheetRecoveryLock({ includeSynced: true }), false);
   assert.equal(shouldPreflightSheetRecoveryLock({ targeted: true }), false);
+});
+
+test('background recovery retries infrastructure failures promptly instead of applying the ten-minute cooldown', () => {
+  assert.equal(getSheetRecoveryRetryDelay({ error: true }), 60 * 1000);
+  assert.equal(getSheetRecoveryRetryDelay({ failed: 1 }), 60 * 1000);
+  assert.equal(getSheetRecoveryRetryDelay({}), SHEET_RECOVERY_COOLDOWN_MS);
 });

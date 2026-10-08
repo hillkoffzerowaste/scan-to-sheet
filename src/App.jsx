@@ -93,6 +93,7 @@ import {
   SHEET_RECOVERY_COOLDOWN_MS,
   SHEET_RECOVERY_TARGETED_RETRY_MS,
   getSheetRecoveryBatchSize,
+  getSheetRecoveryRetryDelay,
   shouldApplySheetRecoveryCooldown,
   shouldPreflightSheetRecoveryLock,
 } from './services/sheetSyncPolicy.js';
@@ -1391,7 +1392,7 @@ function App() {
         config: prepared,
       });
     } else {
-      // A KV outage means there is no revocable server session; keep the bearer token in memory only.
+      // A server-session store failure means there is no revocable server session; keep the bearer token in memory only.
       clearStoredGoogleSession();
     }
     if (shouldPersistConfig) await saveServerGoogleConfig(prepared).catch(() => {});
@@ -1749,6 +1750,7 @@ function App() {
     setSheetRecoveryBusy(true);
     if (showStatus) setDriveSyncBusy(true);
     let progress = { considered: 0, claimed: 0, synced: 0, failed: 0, skipped: 0 };
+    let retryAfterMs = 0;
     let recoveryLockRelease = null;
     try {
       const recoveryBatchSize = getSheetRecoveryBatchSize({ targeted: targetedOrderIds.length > 0 });
@@ -1842,6 +1844,7 @@ function App() {
           else if (result?.skipped || result?.retryable === true) queueSheetRecoveryOrder(order.id);
         },
       });
+      retryAfterMs = getSheetRecoveryRetryDelay(outcome);
       scheduleCountRefresh();
       if (showStatus) {
         if (role === 'packer') await refreshSelectedCourierRows().catch(() => {});
@@ -1853,13 +1856,14 @@ function App() {
           message: `ตรวจ ${outcome.considered} รายการ · ยืนยันสำเร็จ ${outcome.synced} · ไม่สำเร็จ ${outcome.failed} · ข้ามรายการที่กำลังเขียน ${outcome.skipped}${limited ? ' · พบขีดจำกัดการอ่านข้อมูล ผลตรวจยังไม่ครอบคลุมทั้งหมด' : ''}`,
         });
       }
-      return { busy: false, ...outcome, limited, deferred: deferredOrderIds.length };
+      return { busy: false, ...outcome, limited, deferred: deferredOrderIds.length, retryAfterMs };
     } catch (error) {
+      retryAfterMs = getSheetRecoveryRetryDelay({ error: true });
       if (showStatus) setStatus({
         type: 'error', title: 'ตรวจและกู้คืน Sheet ไม่สำเร็จ',
         message: userErrorMessage(error, 'อ่านข้อมูลสำหรับกู้คืนไม่สำเร็จ กรุณาลองใหม่'),
       });
-      return { busy: false, ...progress, error: true };
+      return { busy: false, ...progress, error: true, retryAfterMs };
     } finally {
       await recoveryLockRelease?.();
       // A manual recovery can enqueue a failed order before the targeted scheduler has
@@ -1870,7 +1874,7 @@ function App() {
       }
       // Keep the ten-minute guard for background recovery only; manual recovery is allowed to
       // request the next bounded batch immediately after this one finishes.
-      if (applyCooldown) {
+      if (applyCooldown && retryAfterMs >= SHEET_RECOVERY_COOLDOWN_MS) {
         sheetRecoveryNextAllowedAtRef.current = Date.now() + SHEET_RECOVERY_COOLDOWN_MS;
       }
       sheetRecoveryRunningRef.current = false;

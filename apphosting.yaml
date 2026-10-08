@@ -23,11 +23,3 @@ env:
     secret: OAUTH_TRANSACTION_SECRET
     availability:
       - RUNTIME
-  - variable: KV_REST_API_URL
-    secret: KV_REST_API_URL
-    availability:
-      - RUNTIME
-  - variable: KV_REST_API_TOKEN
-    secret: KV_REST_API_TOKEN
-    availability:
-      - RUNTIME

@@ -15,12 +15,12 @@ test('Sheet lock remains valid for a complete recovery batch', () => {
 test('Sheet lock exposes a renewal action for long-running writes', async () => {
   const source = await (await import('node:fs/promises')).readFile(new URL('./sheet-lock.js', import.meta.url), 'utf8');
   assert.match(source, /action === 'renew'/);
-  assert.match(source, /EXPIRE/);
+  assert.match(source, /store\.renewLock/);
 });
 
-test('Sheet API requests use a shared Redis minute bucket across devices', async () => {
+test('Sheet API requests use a shared Firestore minute bucket across devices', async () => {
   const source = await (await import('node:fs/promises')).readFile(new URL('./sheet-lock.js', import.meta.url), 'utf8');
   assert.match(source, /SHEET_REQUEST_LIMIT_PER_MINUTE/);
   assert.match(source, /action === 'throttle'/);
-  assert.match(source, /ZREMRANGEBYSCORE/);
+  assert.match(source, /getFirestoreStore\(\)\.throttle/);
 });

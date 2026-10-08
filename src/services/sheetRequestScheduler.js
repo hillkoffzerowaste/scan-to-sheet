@@ -2,7 +2,7 @@
 // Keep the browser-wide Sheets queue at half that rate so reads used for verification do
 // not consume the whole allowance while a burst of scans is still being drained. A small
 // token bucket lets one scan finish its first few dependent calls quickly, while the refill
-// rate keeps sustained traffic at the same ceiling. The shared Redis gate in /api/sheet-lock
+// rate keeps sustained traffic at the same ceiling. The shared Firestore gate in /api/sheet-lock
 // remains the final strict 30-request rolling-minute limit across every browser and sheet.
 export const SHEET_REQUEST_MIN_INTERVAL_MS = 2_000;
 export const SHEET_REQUEST_BURST_SIZE = 3;

@@ -79,7 +79,7 @@ export default async function handler(req, res) {
       setSessionCookie(res, sessionId);
       serverSession = true;
     } catch (error) {
-      console.warn('Google login continuing without KV session:', redactSecrets(error.message));
+      console.warn('Google login continuing without Firestore server session:', redactSecrets(error.message));
     }
 
     sendJson(res, 200, {

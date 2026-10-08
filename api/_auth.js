@@ -1,5 +1,7 @@
 import crypto from 'node:crypto';
 
+import { getFirestoreStore } from './firestoreStore.js';
+
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const GOOGLE_USERINFO_URL = 'https://www.googleapis.com/oauth2/v3/userinfo';
 const SESSION_COOKIE = 'scan_to_sheet_session';
@@ -23,12 +25,6 @@ export async function fetchWithTimeout(url, options = {}, timeoutMs = UPSTREAM_T
   }
 }
 
-function getRedisConfig() {
-  const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
-  return { url, token };
-}
-
 export function getRequiredGoogleEnv(postedClientId) {
   const allowedClientIds = [
     process.env.GOOGLE_CLIENT_ID,
@@ -48,35 +44,8 @@ export function getRequiredGoogleEnv(postedClientId) {
   return { clientId, clientSecret };
 }
 
-export async function redisCommand(command) {
-  const { url, token } = getRedisConfig();
-  if (!url || !token) {
-    throw new Error('Missing Upstash Redis REST environment variables');
-  }
-
-  const response = await fetchWithTimeout(`${url}/pipeline`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify([command]),
-  });
-
-  if (!response.ok) {
-    throw new Error(`KV error ${response.status}: ${await response.text()}`);
-  }
-
-  const data = await response.json();
-  const first = data?.[0];
-  if (first?.error) {
-    throw new Error(`KV error: ${first.error}`);
-  }
-  return first?.result ?? null;
-}
-
 export async function setSession(sessionId, session) {
-  await redisCommand(['SET', sessionKey(sessionId), JSON.stringify(session), 'EX', SESSION_TTL_SECONDS]);
+  await getFirestoreStore().setSession(sessionId, session);
 }
 
 export async function getSession(req) {
@@ -85,17 +54,12 @@ export async function getSession(req) {
     return { sessionId: null, session: null };
   }
 
-  const value = await redisCommand(['GET', sessionKey(sessionId)]);
-  if (!value) {
-    return { sessionId, session: null };
-  }
-
-  return { sessionId, session: JSON.parse(value) };
+  return { sessionId, session: await getFirestoreStore().getSession(sessionId) };
 }
 
 export async function deleteSession(sessionId) {
   if (sessionId) {
-    await redisCommand(['DEL', sessionKey(sessionId)]);
+    await getFirestoreStore().deleteSession(sessionId);
   }
 }
 
@@ -104,8 +68,7 @@ export async function getStoredSheetConfig(email) {
     return null;
   }
 
-  const value = await redisCommand(['GET', sheetConfigKey(email)]);
-  return value ? JSON.parse(value) : null;
+  return getFirestoreStore().getSheetConfig(email);
 }
 
 export async function setStoredSheetConfig(email, config) {
@@ -113,7 +76,7 @@ export async function setStoredSheetConfig(email, config) {
     return;
   }
 
-  await redisCommand(['SET', sheetConfigKey(email), JSON.stringify(config)]);
+  await getFirestoreStore().setSheetConfig(email, config);
 }
 
 export function createSessionId() {
@@ -243,7 +206,7 @@ const SECRET_PATTERNS = [
 
 /**
  * Strip credential-looking values before anything reaches a log line. Google's token
- * endpoint and the KV REST API both echo request context back in their error bodies.
+ * endpoint and the server-side data store can echo request context back in their error bodies.
  */
 export function redactSecrets(value) {
   return SECRET_PATTERNS.reduce(
@@ -257,7 +220,7 @@ export function redactSecrets(value) {
  *
  * App.jsx `apiJson` throws `new Error(data.error)` and that string lands directly in the
  * status banner, so `message` must be Thai and must never carry internals — a raw
- * `error.message` here leaks KV/Google response bodies and env-var names to anyone who
+ * `error.message` here leaks internal store/Google response bodies and env-var names to anyone who
  * calls the endpoint. `code` is the stable handle for tests and client branching;
  * `message` is display text and is expected to change with translation.
  */
@@ -272,14 +235,6 @@ export const API_ERRORS = {
   methodNotAllowed: { status: 405, code: 'METHOD_NOT_ALLOWED', message: 'คำขอนี้ไม่รองรับวิธีที่เรียกมา' },
   noSession: { status: 401, code: 'NO_GOOGLE_SESSION', message: 'เซสชัน Google หมดอายุ กรุณาเข้าสู่ระบบใหม่' },
 };
-
-function sessionKey(sessionId) {
-  return `scan-to-sheet:session:${sessionId}`;
-}
-
-function sheetConfigKey(email) {
-  return `scan-to-sheet:google-config:${String(email).trim().toLowerCase()}`;
-}
 
 function readCookie(req, name) {
   const cookie = req.headers.cookie || '';

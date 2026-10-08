@@ -6,7 +6,7 @@ export default async function handler(req, res) {
     return;
   }
 
-  // Always clear cookie first, then try to delete KV session.
+  // Always clear cookie first, then try to delete the Firestore server session.
   clearSessionCookie(res);
 
   try {
@@ -15,7 +15,7 @@ export default async function handler(req, res) {
       await deleteSession(sessionId);
     }
   } catch {
-    // KV may be unreachable; cookie is already cleared.
+    // The server store may be unreachable; cookie is already cleared.
   }
 
   sendJson(res, 200, { ok: true });
