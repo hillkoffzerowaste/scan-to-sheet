@@ -218,7 +218,7 @@ test('manual recovery prioritizes a pending Sheet-lock retry before the older br
   assert.deepEqual(result.candidates.map((order) => order.id), ['pending-lock', 'old-failed']);
 });
 
-test('manual recovery drains all 45 candidates in three-row batches exactly once', async () => {
+test('manual recovery drains all 45 candidates in ten-row batches exactly once', async () => {
   assert.equal(typeof sheetSync.runSheetRecovery, 'function');
   const written = [];
   const progress = [];
@@ -232,9 +232,9 @@ test('manual recovery drains all 45 candidates in three-row batches exactly once
     }),
     onProgress: (state) => progress.push(state.considered),
   });
-  assert.deepEqual(written.map((batch) => batch.length), Array(15).fill(3));
+  assert.deepEqual(written.map((batch) => batch.length), [10, 10, 10, 10, 5]);
   assert.equal(new Set(written.flat()).size, 45);
-  assert.deepEqual(progress, Array.from({ length: 15 }, (_, index) => (index + 1) * 3));
+  assert.deepEqual(progress, [10, 20, 30, 40, 45]);
   assert.deepEqual(outcome, { considered: 45, claimed: 45, synced: 45, failed: 0, skipped: 0 });
 });
 

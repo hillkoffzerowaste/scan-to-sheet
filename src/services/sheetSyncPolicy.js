@@ -6,6 +6,9 @@ export const SHEET_RECOVERY_MAX_ROWS = 10;
 export const SHEET_RECOVERY_TARGETED_MAX_ROWS = 1;
 export const SHEET_RECOVERY_INTERVAL_MS = 10 * 60 * 1000;
 export const SHEET_RECOVERY_COOLDOWN_MS = 10 * 60 * 1000;
+// Once a bounded sweep proves that more rows remain, drain the backlog on a shorter
+// completion-based cadence. The Sheets gate still enforces the hard 30 requests/minute cap.
+export const SHEET_RECOVERY_BACKLOG_RETRY_MS = 60 * 1000;
 // A failed scan gets a small, single-order retry path. The regular ten-minute sweep remains
 // the fallback for orders created while no app session was open.
 export const SHEET_RECOVERY_TARGETED_RETRY_MS = 60 * 1000;
@@ -14,9 +17,11 @@ export function getSheetRecoveryBatchSize({ targeted = false } = {}) {
   return targeted ? SHEET_RECOVERY_TARGETED_MAX_ROWS : SHEET_RECOVERY_MAX_ROWS;
 }
 
-export function getSheetRecoveryRetryDelay({ error = false, failed = 0, skipped = 0 } = {}) {
+export function getSheetRecoveryRetryDelay({ error = false, failed = 0, skipped = 0, limited = false } = {}) {
   return error || Number(failed) > 0 || Number(skipped) > 0
     ? SHEET_RECOVERY_TARGETED_RETRY_MS
+    : limited
+      ? SHEET_RECOVERY_BACKLOG_RETRY_MS
     : SHEET_RECOVERY_COOLDOWN_MS;
 }
 

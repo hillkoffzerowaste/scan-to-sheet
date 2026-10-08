@@ -1844,7 +1844,7 @@ function App() {
           else if (result?.skipped || result?.retryable === true) queueSheetRecoveryOrder(order.id);
         },
       });
-      retryAfterMs = getSheetRecoveryRetryDelay(outcome);
+      retryAfterMs = getSheetRecoveryRetryDelay({ ...outcome, limited });
       scheduleCountRefresh();
       if (showStatus) {
         if (role === 'packer') await refreshSelectedCourierRows().catch(() => {});

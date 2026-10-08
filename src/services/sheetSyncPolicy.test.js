@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  SHEET_RECOVERY_BACKLOG_RETRY_MS,
   SHEET_RECOVERY_COOLDOWN_MS,
   SHEET_RECOVERY_INTERVAL_MS,
   SHEET_RECOVERY_MAX_ROWS,
@@ -42,5 +43,6 @@ test('background recovery must acquire the shared Sheet lock before claiming row
 test('background recovery retries infrastructure failures promptly instead of applying the ten-minute cooldown', () => {
   assert.equal(getSheetRecoveryRetryDelay({ error: true }), 60 * 1000);
   assert.equal(getSheetRecoveryRetryDelay({ failed: 1 }), 60 * 1000);
+  assert.equal(getSheetRecoveryRetryDelay({ limited: true }), SHEET_RECOVERY_BACKLOG_RETRY_MS);
   assert.equal(getSheetRecoveryRetryDelay({}), SHEET_RECOVERY_COOLDOWN_MS);
 });
