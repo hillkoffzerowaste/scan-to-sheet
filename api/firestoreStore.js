@@ -47,7 +47,8 @@ export function createFirestoreStore(db, {
       if (!snapshot.exists) return null;
       const value = snapshot.data() ?? {};
       if (Number(value.expiresAtMs) <= now()) return null;
-      const { expiresAtMs, ...session } = value;
+      const session = { ...value };
+      delete session.expiresAtMs;
       return session;
     },
 
@@ -148,7 +149,11 @@ let defaultStore;
 
 export function getFirestoreStore() {
   if (!defaultStore) {
-    const app = getApps()[0] || initializeApp({ credential: applicationDefault() });
+    const projectId = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT;
+    const app = getApps()[0] || initializeApp({
+      credential: applicationDefault(),
+      ...(projectId ? { projectId } : {}),
+    });
     defaultStore = createFirestoreStore(getFirestore(app));
   }
   return defaultStore;
