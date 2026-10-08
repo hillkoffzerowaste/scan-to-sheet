@@ -9,6 +9,7 @@ outputFiles:
       - server.js
       - api
       - package.json
+      - node_modules
 
 env:
   - variable: VITE_PRIMARY_APP_URL
