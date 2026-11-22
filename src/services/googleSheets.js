@@ -3329,6 +3329,9 @@ async function preflightCountedScan({ token, config, code, scanDate, date, marke
 async function syncScanCountResult({ token, spreadsheetId, result, counts }) {
   if (!Number.isSafeInteger(counts?.scanCountRevision)) return result;
   const date = result.row?._sheetDate || result.date;
+  if (!formattedWorksheetKeys.has(`${spreadsheetId}:${date}`)) {
+    await ensureDailyWorksheet({ token, spreadsheetId, date });
+  }
   const tracking = normalizeScanCode(result.code || counts.code || counts.normalizedCode);
   const rows = (await readDailyRows({ token, spreadsheetId, date })).map(rowFromSheet);
   const matches = rows.filter((row) => row.courier === result.courier
@@ -4006,7 +4009,11 @@ export async function batchAppendScanGoogle({ token, config, orders, repairExist
       // verification or a later API call failed; treating this as a permanent failure makes
       // Firestore disagree with a row that is already physically present.
       const batchError = error instanceof Error ? error : new Error('Google Sheet batch ไม่สมบูรณ์ กรุณาลองใหม่');
-      batchError.batchIncomplete = true;
+      // A single-order preflight rejects the history before any Sheet mutation. Retrying
+      // cannot resolve this mismatch; it needs the operator to backfill the history.
+      if (dateOrders.length !== 1 || batchError.code !== 'SHEET_CANONICAL_REVIEW_REQUIRED') {
+        batchError.batchIncomplete = true;
+      }
       batchError.code ||= 'SHEET_BATCH_INCOMPLETE';
       for (let index = results.length - 1; index >= 0; index -= 1) {
         if (dateOrders.includes(results[index].order)) results.splice(index, 1);

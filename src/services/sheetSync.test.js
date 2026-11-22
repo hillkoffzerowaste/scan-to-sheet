@@ -285,6 +285,19 @@ test('recovery counts missing results and failed Firestore acknowledgements as f
   assert.equal(outcome.failed, 3);
 });
 
+test('requeues a verified Sheet write when Firestore rejects its stale acknowledgement', async () => {
+  const outcomes = [];
+  const result = await sheetSync.runSheetRecovery({
+    candidates: recoveryOrders(1),
+    ...recoveryDependencies({
+      markResult: async () => false,
+      onOrderResult: (order, update) => outcomes.push({ id: order.id, ...update }),
+    }),
+  });
+  assert.equal(result.failed, 1);
+  assert.equal(outcomes[0].retryable, true);
+});
+
 test('a failed batch stays recoverable while subsequent batches still run', async () => {
   assert.equal(typeof sheetSync.runSheetRecovery, 'function');
   const marked = [];

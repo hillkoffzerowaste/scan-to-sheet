@@ -22,6 +22,7 @@ import {
   syncLateOrdersGoogle,
 } from './googleSheets.js';
 import { isSheetSyncResultConfirmed } from './sheetSyncReconciliation.js';
+import { isRetryableSheetSyncError } from './sheetSync.js';
 
 // Only the HTTP boundary is replaced: keep reconciliation, RAW conversion and readback real.
 function recoverySheet(t, initialRows, hooks = {}) {
@@ -110,6 +111,7 @@ function recoverySheet(t, initialRows, hooks = {}) {
       return json({});
     }
     if (path.endsWith(':batchUpdate')) {
+      hooks.onBatchUpdate?.(body.requests || []);
       for (const request of body.requests || []) {
         if (!request.appendCells) continue;
         hooks.beforeAppend?.({ rowsByDate });
@@ -122,6 +124,7 @@ function recoverySheet(t, initialRows, hooks = {}) {
       return json({});
     }
     if (method === 'GET' && path.includes('/spreadsheets/')) {
+      hooks.onMetadataRead?.(parsed);
       return json({ sheets: titles.map((title, i) => ({ properties: {
         sheetId: 100 + i, title, gridProperties: { rowCount: 1000, columnCount: 23 },
       } })) });
@@ -1808,4 +1811,37 @@ test('counted Packer refuses exact Sheet-only history until Firestore backfill',
   const sheet = recoverySheet(t, { [recoveryDate]: [initial] });
   await assert.rejects(appendScanGoogle({ token: 'token', config: { master: { id: t.name } }, courier: 'Shopee', code: recoveryCode, scanDate: recoveryDate, scanTime: '12:00:00', scanCounts: { scanTotalAdmin: 0, scanTotalPacker: 1, scanCountRevision: 1, scanHistoryUnknown: false } }), { code: 'SHEET_CANONICAL_REVIEW_REQUIRED' });
   assert.equal(sheet.writes.length, 0);
+});
+
+test('targeted recovery does not retry an unsafe legacy history indefinitely', async (t) => {
+  const sheet = recoverySheet(t, { [recoveryDate]: [recoveryRow()] });
+  const [outcome] = await sheet.run([recoveryOrder({ scanTotalAdmin: 1, scanTotalPacker: 2, scanCountRevision: 3, scanHistoryUnknown: false })]);
+  assert.equal(outcome.error?.code, 'SHEET_CANONICAL_REVIEW_REQUIRED');
+  assert.equal(isRetryableSheetSyncError(outcome.error), false);
+  assert.equal(sheet.writes.length, 0);
+});
+
+test('cross-day count recovery prepares duplicate formatting on the physical sheet', async (t) => {
+  const previousDate = '2026-08-24';
+  const requests = [];
+  const sheet = recoverySheet(t, {
+    [recoveryDate]: [],
+    [previousDate]: [recoveryRow({ 2: 46258, 23: 0, 24: 1, 25: 0, 26: 0, 27: false, 28: 1 })],
+  }, { onBatchUpdate: (batch) => requests.push(...batch) });
+  const [outcome] = await sheet.run([recoveryOrder({ scanTotalAdmin: 0, scanTotalPacker: 2, scanCountRevision: 2, scanHistoryUnknown: false })]);
+  assert.equal(outcome.error, undefined);
+  assert.equal(sheet.rowsByDate.get(previousDate)[0][24], 2);
+  assert.ok(requests.some((request) => request.addConditionalFormatRule?.rule?.ranges?.[0]?.sheetId === 101
+    && request.addConditionalFormatRule.rule.booleanRule.condition.values[0].userEnteredValue === '=$Y2>1'));
+});
+
+test('count recovery does not reread metadata for an already prepared worksheet', async (t) => {
+  let metadataReads = 0;
+  const sheet = recoverySheet(t, { [recoveryDate]: [recoveryRow({ 23: 0, 24: 1, 25: 0, 26: 0, 27: false, 28: 1 })] }, {
+    onMetadataRead: (url) => { if (!url.searchParams.has('ranges')) metadataReads += 1; },
+  });
+  const [outcome] = await sheet.run([recoveryOrder({ scanTotalAdmin: 0, scanTotalPacker: 2, scanCountRevision: 2, scanHistoryUnknown: false })]);
+  assert.equal(outcome.error, undefined);
+  assert.equal(sheet.rowsByDate.get(recoveryDate)[0][24], 2);
+  assert.equal(metadataReads, 3);
 });

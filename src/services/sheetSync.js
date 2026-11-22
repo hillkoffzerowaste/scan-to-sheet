@@ -320,7 +320,7 @@ export async function runSheetRecovery({
           onOrderResult?.(order, { ok: true, result: item?.result });
         } else {
           state.failed += 1;
-          onOrderResult?.(order, { ok: false, error, retryable });
+          onOrderResult?.(order, { ok: false, error, retryable: acknowledged !== true || retryable });
         }
       } catch (error) {
         // A Sheet write alone is not a completed sync when Firestore rejects its ack.
