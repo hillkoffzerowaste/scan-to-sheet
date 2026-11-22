@@ -1,7 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createScanQueue } from './scanQueue.js';
+import { createScanQueue, processCapturedScanJob } from './scanQueue.js';
+
+test('unexpected processing failure always clears replay suppression and never processes another actor attempt', async () => {
+  const flags = [];
+  const job = { replay: true, context: { attempt: { actorUid: 'u1' } } };
+  await assert.rejects(() => processCapturedScanJob({ job, actorUid: 'u1', onReplayChange: value => flags.push(value), process: async () => { throw new Error('unexpected'); } }));
+  assert.deepEqual(flags, [true, false]);
+  let called = false;
+  await assert.rejects(() => processCapturedScanJob({ job, actorUid: 'u2', process: async () => { called = true; }, onReplayChange() {} }));
+  assert.equal(called, false);
+});
 
 function deferred() {
   let resolve;
@@ -44,16 +54,17 @@ test('accepts scans immediately and processes them in FIFO order', async () => {
   assert.equal(queue.getSnapshot().processing, null);
 });
 
-test('rejects a normalized duplicate while it is queued or processing', async () => {
+test('deduplicates attempt identity while accepting distinct physical scans of the same tracking', async () => {
   const gate = deferred();
   const queue = createScanQueue({ process: () => gate.promise });
 
   queue.enqueue({ id: '1', code: ' JT-123 ', context: {} });
-  const duplicate = queue.enqueue({ id: '2', code: 'jt-123', context: {} });
+  assert.equal(queue.enqueue({ id: '2', code: 'jt-123', context: {} }).accepted, true);
+  const duplicate = queue.enqueue({ id: '1', code: 'jt-123', context: {} });
 
   assert.deepEqual(duplicate, { accepted: false, reason: 'duplicate_pending', job: null });
   gate.resolve({ status: 'success' });
-  await waitFor(() => queue.getSnapshot().completed === 1);
+  await waitFor(() => queue.getSnapshot().completed === 2);
   assert.equal(queue.enqueue({ id: '3', code: 'JT-123', context: {} }).accepted, true);
 });
 

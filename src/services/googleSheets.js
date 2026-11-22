@@ -3,6 +3,7 @@ import { mergeScanNotes } from './scanNotes.js';
 import { hasMinimumTrackingLength, MIN_TRACKING_CODE_LENGTH } from './trackingValidation.js';
 import { areTrackingCodesEquivalent, findHistoricalIssueRow, findMarketplaceOrderRow, findScanReconciliation, findTrackingAliasRow, getScanIssueMeta, resolveCrossDayPackerRow } from './sheetSyncReconciliation.js';
 import { isSheetsApiRequest, scheduleSheetRequest } from './sheetRequestScheduler.js';
+import { getScanCountSummary } from './scanAttempts.js';
 
 const DRIVE_API = 'https://www.googleapis.com/drive/v3';
 export const SHEETS_API = 'https://sheets.googleapis.com/v4/spreadsheets';
@@ -56,9 +57,10 @@ export const MARKETPLACE_HEADERS = [
 
 export const SHEET_METADATA_HEADERS = ['Order Status', 'Cross-day', 'Sync Status'];
 
-export const ALL_HEADERS = [...SCAN_HEADERS, ...ADMIN_HEADERS, ...MARKETPLACE_HEADERS, ...SHEET_METADATA_HEADERS];
+export const SCAN_COUNT_HEADERS = ['Admin Scan Total', 'Packer Scan Total', 'Admin Duplicate', 'Packer Duplicate', 'Scan History Unknown', 'Scan Count Revision', 'Duplicate Risk'];
+export const ALL_HEADERS = [...SCAN_HEADERS, ...ADMIN_HEADERS, ...MARKETPLACE_HEADERS, ...SHEET_METADATA_HEADERS, ...SCAN_COUNT_HEADERS];
 
-export const TOTAL_COLUMNS = ALL_HEADERS.length; // 23
+export const TOTAL_COLUMNS = ALL_HEADERS.length; // 30
 
 export const COURIER_RULES = {
   Lazada: {
@@ -516,7 +518,7 @@ function withMarketplaceCells(row, marketplaceOrder = null) {
           ? isOverdue ? 'รอแพ็คเกิน 1 วัน' : 'รอแพ็ค'
           : status || '';
   const crossDay = hasAdmin && hasPacker && scanDate && adminDate && scanDate !== adminDate ? 'ใช่' : 'ไม่ใช่';
-  return [...baseRow, ...marketplaceCells(source), orderStatus, crossDay, ''].slice(0, TOTAL_COLUMNS);
+  return [...baseRow, ...marketplaceCells(source), orderStatus, crossDay, '', ...row.slice(23, TOTAL_COLUMNS)];
 }
 
 function dailyCellsFromParsedRow(row) {
@@ -537,6 +539,7 @@ function dailyCellsFromParsedRow(row) {
   ], marketplaceOrderFromRow(row));
   // Type repair must not clear the Firestore/Sheet sync marker that belongs to the existing row.
   cells[22] = row.syncStatus ?? cells[22];
+  if (Number.isInteger(row.scanCountRevision)) cells.push(...scanCountCells(row));
   return cells;
 }
 
@@ -1054,6 +1057,15 @@ async function ensureWorksheetReady({ token, spreadsheetId, date, sheetId }) {
     return;
   }
 
+  const spreadsheet = await getSpreadsheet(token, spreadsheetId);
+  const columnCount = spreadsheet.sheets?.find((sheet) => sheet.properties.sheetId === sheetId)?.properties.gridProperties?.columnCount ?? 0;
+  if (columnCount < TOTAL_COLUMNS) {
+    await apiFetch(`${SHEETS_API}/${spreadsheetId}:batchUpdate`, token, {
+      method: 'POST', body: JSON.stringify({ requests: [{ updateSheetProperties: {
+        properties: { sheetId, gridProperties: { columnCount: TOTAL_COLUMNS } }, fields: 'gridProperties.columnCount',
+      } }] }),
+    });
+  }
   await writeHeaders({ token, spreadsheetId, date });
   await formatDailyWorksheet({ token, spreadsheetId, date, sheetId });
   formattedWorksheetKeys.add(key);
@@ -1084,6 +1096,7 @@ async function formatDailyWorksheet({ token, spreadsheetId, date, sheetId }) {
   const managedConditionalFormats = [
     ...buildStatusFormattingRequests(sheetId),
     ...buildMarketplaceFormattingRequests(sheetId),
+    ...buildDuplicateRiskFormattingRequests(sheetId),
   ];
   await apiFetch(`${SHEETS_API}/${spreadsheetId}:batchUpdate`, token, {
     method: 'POST',
@@ -1095,10 +1108,9 @@ async function formatDailyWorksheet({ token, spreadsheetId, date, sheetId }) {
               sheetId,
               gridProperties: {
                 frozenRowCount: 1,
-                columnCount: TOTAL_COLUMNS,
               },
             },
-            fields: 'gridProperties(frozenRowCount,columnCount)',
+            fields: 'gridProperties.frozenRowCount',
           },
         },
         {
@@ -1281,6 +1293,19 @@ function conditionalFormatRuleKey(rule) {
     range.endColumnIndex ?? '',
     formula,
   ].join('|');
+}
+
+export function buildDuplicateRiskFormattingRequests(sheetId) {
+  return [5, 12].map((column) => ({ addConditionalFormatRule: {
+    index: 0,
+    rule: {
+      ranges: [{ sheetId, startRowIndex: 1, startColumnIndex: column, endColumnIndex: column + 1 }],
+      booleanRule: {
+        condition: { type: 'CUSTOM_FORMULA', values: [{ userEnteredValue: column === 5 ? '=$Y2>1' : '=$X2>1' }] },
+        format: { backgroundColor: { red: 0.98, green: 0.82, blue: 0.82 }, textFormat: { foregroundColor: { red: 0.65, green: 0.05, blue: 0.05 }, bold: true } },
+      },
+    },
+  } }));
 }
 
 /**
@@ -1575,8 +1600,8 @@ export function buildDailyRowUpdateData(date, rowNumber, row) {
       values: [normalizedRow.slice(0, 15)],
     },
     {
-      range: `${sheetName}!Q${rowNumber}:${sheetEndColumn()}${rowNumber}`,
-      values: [normalizedRow.slice(16, TOTAL_COLUMNS)],
+      range: `${sheetName}!Q${rowNumber}:W${rowNumber}`,
+      values: [normalizedRow.slice(16, 23)],
     },
   ];
 }
@@ -2075,7 +2100,13 @@ export function listDatesInMonth(yearMonth) {
  * If the tracking code already exists in the admin columns (K-M),
  * merge the packer data into that existing row instead of rejecting as duplicate.
  */
-export async function appendScanGoogle({
+export async function appendScanGoogle(options) {
+  await preflightCountedScan({ ...options, counts: options.scanCounts });
+  const result = await appendScanGoogleCore(options);
+  return syncScanCountResult({ token: options.token, spreadsheetId: options.config?.master?.id, result, counts: options.scanCounts });
+}
+
+async function appendScanGoogleCore({
   token,
   config,
   courier,
@@ -2725,7 +2756,13 @@ export async function appendScanGoogle({
  * Admin "down Drive" scan — saves tracking number into columns K, L, M.
  * If packer already scanned this code (column F), merge admin data into that row.
  */
-export async function appendAdminScanGoogle({
+export async function appendAdminScanGoogle(options) {
+  await preflightCountedScan({ ...options, counts: options.scanCounts });
+  const result = await appendAdminScanGoogleCore(options);
+  return syncScanCountResult({ token: options.token, spreadsheetId: options.config?.master?.id, result, counts: options.scanCounts });
+}
+
+async function appendAdminScanGoogleCore({
   token,
   config,
   courier,
@@ -3239,7 +3276,77 @@ function rowFromSheet(row, index = null) {
     orderStatus: row[20] ?? '',
     crossDay: row[21] ?? '',
     syncStatus: row[22] ?? '',
+    scanTotalAdmin: sheetCountNumber(row[23]),
+    scanTotalPacker: sheetCountNumber(row[24]),
+    scanDuplicateAdmin: sheetCountNumber(row[25]),
+    scanDuplicatePacker: sheetCountNumber(row[26]),
+    scanHistoryUnknown: row[27] === true || row[27] === 'TRUE' || row[27] === 'true',
+    scanCountRevision: sheetCountNumber(row[28]),
+    scanRiskText: row[29] ?? '',
   };
+}
+
+function sheetCountNumber(value) {
+  if (value === '' || value == null) return undefined;
+  const number = Number(value);
+  return Number.isSafeInteger(number) && number >= 0 ? number : undefined;
+}
+
+function scanCountCells(counts) {
+  const summary = getScanCountSummary(counts);
+  return [summary.scanTotalAdmin, summary.scanTotalPacker, summary.scanDuplicateAdmin,
+    summary.scanDuplicatePacker, summary.scanHistoryUnknown, summary.scanCountRevision,
+    summary.risk ? 'เสี่ยงทำออเดอร์ซ้ำ ต้องตรวจสอบ' : ''];
+}
+
+async function preflightCountedScan({ token, config, code, scanDate, date, marketplaceOrder, counts, spreadsheet = null, rowsCache = new Map() }) {
+  if (!Number.isSafeInteger(counts?.scanCountRevision)) return;
+  const tracking = normalizeScanCode(code);
+  const spreadsheetId = config?.master?.id;
+  const metadata = spreadsheet ?? await getSpreadsheet(token, spreadsheetId);
+  const availableDates = new Set((metadata.sheets ?? []).map((sheet) => sheet.properties.title));
+  const scanDay = scanDate || date || getBangkokParts().date;
+  for (const day of getLookbackDates(scanDay)) {
+    if (!availableDates.has(day)) continue;
+    if (!rowsCache.has(day)) rowsCache.set(day, (await readDailyRows({ token, spreadsheetId, date: day })).map(rowFromSheet));
+    const rows = rowsCache.get(day);
+    const marketplaceRow = marketplaceOrder ? findMarketplaceOrderRow(rows, marketplaceOrder) : null;
+    for (const row of rows) {
+      const codes = [row.code, row.adminCode].map(normalizeScanCode).filter(Boolean);
+      if (row !== marketplaceRow && !codes.some((value) => areTrackingCodesEquivalent(value, tracking))) continue;
+      const mixedIdentity = codes.some((value) => value !== tracking);
+      const missingRoleHistory = (normalizeScanCode(row.adminCode) && counts.scanTotalAdmin < 1)
+        || (normalizeScanCode(row.code) && counts.scanTotalPacker < 1);
+      const unprovenLegacyHistory = codes.length > 0 && !Number.isSafeInteger(row.scanCountRevision)
+        && counts.scanHistoryUnknown !== true;
+      if (mixedIdentity || missingRoleHistory || unprovenLegacyHistory) {
+        throw Object.assign(new Error('พบประวัติเลขพัสดุหรือยอดสแกนเดิมไม่ตรงกัน รายการนี้รอตรวจสอบ กรุณาให้ผู้ดูแล backfill ประวัติก่อน'), { code: 'SHEET_CANONICAL_REVIEW_REQUIRED' });
+      }
+    }
+  }
+}
+
+async function syncScanCountResult({ token, spreadsheetId, result, counts }) {
+  if (!Number.isSafeInteger(counts?.scanCountRevision)) return result;
+  const date = result.row?._sheetDate || result.date;
+  const tracking = normalizeScanCode(result.code || counts.code || counts.normalizedCode);
+  const rows = (await readDailyRows({ token, spreadsheetId, date })).map(rowFromSheet);
+  const matches = rows.filter((row) => row.courier === result.courier
+    && [row.code, row.adminCode].some((code) => normalizeScanCode(code) === tracking));
+  if (matches.length !== 1) throw Object.assign(new Error('ยังยืนยันแถวเลขพัสดุสำหรับยอดสแกนไม่ได้ กรุณาตรวจสอบ'), { code: 'SHEET_RECOVERY_UNCONFIRMED' });
+  const row = matches[0];
+  if (row.scanCountRevision > counts.scanCountRevision) throw Object.assign(new Error('ยอดสแกนใน Google Sheet ใหม่กว่ารายการนี้ กรุณากู้คืนอีกครั้ง'), { code: 'SHEET_RECOVERY_UNCONFIRMED' });
+  const expected = scanCountCells(counts);
+  await apiFetch(`${SHEETS_API}/${spreadsheetId}/values:batchUpdate`, token, {
+    method: 'POST', body: JSON.stringify({ valueInputOption: 'RAW', data: [{
+      range: `${escapeSheetName(date)}!X${row.sheetRowNumber}:AD${row.sheetRowNumber}`, values: [expected],
+    }] }),
+  });
+  const verified = await readDailyRow({ token, spreadsheetId, date, rowNumber: row.sheetRowNumber });
+  if (!verified || scanCountCells(verified).some((value, index) => value !== expected[index])) {
+    throw Object.assign(new Error('ยังยืนยันยอดสแกนใน Google Sheet ไม่ได้ กรุณากู้คืนอีกครั้ง'), { code: 'SHEET_RECOVERY_UNCONFIRMED' });
+  }
+  return { ...result, row: { ...verified, _sheetDate: date }, scanCountRevision: counts.scanCountRevision };
 }
 
 function parseDateOnly(date) {
@@ -3398,10 +3505,14 @@ export async function batchAppendScanGoogle({ token, config, orders, repairExist
   const results = [];
   const spreadsheet = await getSpreadsheet(token, sheet.id);
   const availableSheetTitles = new Set((spreadsheet.sheets ?? []).map((item) => item.properties.title));
+  const countPreflightRows = new Map();
 
   // 2. Process each date sheet
   for (const [date, dateOrders] of byDate) {
     try {
+      for (const order of dateOrders) {
+        await preflightCountedScan({ token, config, ...order, counts: order, spreadsheet, rowsCache: countPreflightRows });
+      }
       // a) Ensure the daily worksheet exists (1 read + optional create)
       const worksheet = await ensureDailyWorksheet({ token, spreadsheetId: sheet.id, date });
 
@@ -3820,6 +3931,11 @@ export async function batchAppendScanGoogle({ token, config, orders, repairExist
         );
         didWriteSheet = true;
 
+      }
+
+      for (const item of results) {
+        if (!dateOrders.includes(item.order) || !item.result?.row || !Number.isSafeInteger(item.order.scanCountRevision)) continue;
+        item.result = await syncScanCountResult({ token, spreadsheetId: sheet.id, result: item.result, counts: item.order });
       }
 
       // Read every physical tab again, including no-write duplicates. Reconciliation may

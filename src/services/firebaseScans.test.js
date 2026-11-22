@@ -266,8 +266,8 @@ test('primary scans keep Marketplace lookup inside the background Sheet write', 
     readFile(new URL('../App.jsx', import.meta.url), 'utf8'),
   ]);
 
-  assert.match(source, /recordPackerScanPrimary\(\{ code, courier, date, time, user, packer = '', note = '' \}\)/);
-  assert.match(source, /recordAdminScanPrimary\(\{ code, courier, date, time, user \}\)/);
+  assert.match(source, /recordPackerScanPrimary\(\{ code, courier, date, time, user, packer = '', note = '', attempt = null \}\)/);
+  assert.match(source, /recordAdminScanPrimary\(\{ code, courier, date, time, user, attempt = null \}\)/);
   assert.doesNotMatch(source, /marketplaceMetadata/);
   assert.doesNotMatch(source, /findMarketplaceOrderByTracking/);
   assert.doesNotMatch(source, /findMarketplaceMetadataByTracking/);

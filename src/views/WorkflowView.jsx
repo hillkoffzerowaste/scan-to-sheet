@@ -1,4 +1,5 @@
 import React from 'react';
+import { ScanTrackingCell } from './ScanTrackingCell.jsx';
 import { AlertTriangle, ArrowRightLeft, Camera, CheckCircle2, ClipboardCopy, Clock3, ExternalLink, FileSpreadsheet, MonitorCheck, PackageCheck, Play, Plus, RefreshCw, ScanLine, Search, ShieldAlert, Square, Truck, Upload } from 'lucide-react';
 import { CAMERA_REGION_ID, DEFAULT_LOOKBACK_HOURS, ISSUE_CUSTOMER_CANCELLED, ISSUE_DAMAGED, ISSUE_RETURNED, PACKER_UNASSIGNED } from '../constants.js';
 import { DeploymentUpdateBanner, StatusBanner } from './StatusBanner.jsx';
@@ -455,7 +456,7 @@ function WorkflowView({
                                 <td>{row.courier}</td>
                                 <td>{row.date}</td>
                                 <td>{row.time}</td>
-                                <td className="code-cell">{row.code}</td>
+                                <ScanTrackingCell row={row} tracking={row.code} />
                                 <td><span className={`status-badge ${(row.status || '').toLowerCase()}`}>{row.status}</span></td>
                                 <td>{row.note || '-'}</td>
                                 <td>{row.email}</td>
@@ -574,7 +575,7 @@ function WorkflowView({
                         <tr key={`${row.no}-${row.courierNo}-${row.code}-${row.time}`}>
                           <td>{row.courierNo}</td>
                           <td>{row.time}</td>
-                          <td className="code-cell">{row.code}</td>
+                          <ScanTrackingCell row={row} tracking={row.code} />
                           <td>{row.email}</td>
                           <td>
                             <span className={`status-badge ${(row.status || '').toLowerCase()}`}>{row.status}</span>
@@ -744,8 +745,8 @@ function WorkflowView({
                       driveRecentRows.slice(0, 10).map((row) => (
                         <tr key={`${row.no}-${row.adminCode}-${row.adminTime}`}>
                           <td>{row.adminTime || row.time}</td>
-                          <td className="code-cell">{row.adminCode || '-'}</td>
-                          <td className="code-cell">{row.code || 'รอแพ็ค'}</td>
+                          <ScanTrackingCell row={row} tracking={row.adminCode} role="admin" />
+                          <ScanTrackingCell row={row} tracking={row.code || 'รอแพ็ค'} role="packer" />
                           <td>
                             <span className={`status-badge ${(row.status || '').toLowerCase()}`}>{row.status || 'รอแพ็ค'}</span>
                             {row.date && row.adminDate && row.date !== row.adminDate && <span className="status-badge cross-day">ข้ามวัน</span>}

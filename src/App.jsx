@@ -100,7 +100,11 @@ import {
 import { parseXlsxArrayBuffer } from './services/xlsxImport.js';
 import { loadHtml5Qrcode } from './services/cameraLoader.js';
 import { commitFallbackScan } from './services/scanCommit.js';
-import { createScanQueue } from './services/scanQueue.js';
+import { createScanQueue, processCapturedScanJob } from './services/scanQueue.js';
+import { createPhysicalScanOutbox } from './services/physicalScanOutbox.js';
+import { createCameraScanGate } from './services/cameraScanGate.js';
+import { buildSheetRecoveryPayload } from './services/sheetRecoveryPayload.js';
+import { getScanCountSummary } from './services/scanAttempts.js';
 import { hasDeploymentUpdate } from './services/deploymentUpdate.js';
 import { getScanPopupCourierOptions, getScanPopupStatusMeta } from './services/scanPopup.js';
 import { getScanQrAnnouncement, parseScanQrCommand, resolveScanQrCommand, resolveScanQrName } from './services/scanQrCommand.js';
@@ -154,10 +158,8 @@ import {
 } from './services/sheetSync.js';
 import {
   getAdminScanTiming,
-  getPackerDuplicateMessage,
   getScanIssueMeta,
   isSheetSyncResultConfirmed,
-  shouldBlockPackerScan,
 } from './services/sheetSyncReconciliation.js';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
@@ -419,6 +421,10 @@ function App() {
   const cameraRef = useRef(null);
   const scanProcessorRef = useRef(null);
   const scanQueueRef = useRef(null);
+  const physicalOutboxRef = useRef(null);
+  const physicalRetryReadyRef = useRef(null);
+  const cameraScanGateRef = useRef(createCameraScanGate());
+  const replayingPhysicalScanRef = useRef(false);
   const lastCameraScanRef = useRef({ code: '', time: 0 });
   const cameraSavingRef = useRef(false);
   const refreshTimerRef = useRef(null);
@@ -540,7 +546,7 @@ function App() {
     : scanQueueSnapshot.processing
     ? `กำลังบันทึก ${scanQueueSnapshot.processing.code}${queuedScanCount ? ` • รอคิว ${queuedScanCount} รายการ` : ''}`
     : scanQueueSnapshot.lastResult?.status === 'error'
-      ? `${scanQueueSnapshot.lastResult.job.code} บันทึกไม่สำเร็จ — ยิงเลขเดิมอีกครั้งได้`
+      ? `${scanQueueSnapshot.lastResult.job.code} รอยืนยัน — ระบบเก็บรายการเดิมไว้ ลองเชื่อมต่อใหม่หรือเปิดหน้าอีกครั้ง`
       : 'พร้อมยิงบาร์โค้ดต่อเนื่อง — ระบบจะแยกและบันทึกทีละเลข';
   const scanPopupStatusMeta = getScanPopupStatusMeta(status.type);
   const ScanPopupStatusIcon = scanPopupStatusMeta.icon === 'check'
@@ -549,15 +555,14 @@ function App() {
       ? AlertTriangle
       : ScanLine;
 
-  scanProcessorRef.current = async (job) => {
-    const result = job.context.activeTab === 'drive'
-      ? await saveAdminScannedCode(job.code, 'queue', job.context)
-      : await saveScannedCode(job.code, 'queue', job.context);
-    if (result?.status === 'error') {
-      throw new Error(result.message || 'บันทึกรายการในคิวไม่สำเร็จ');
-    }
-    return result;
-  };
+  scanProcessorRef.current = (job) => processCapturedScanJob({
+    job,
+    actorUid: firebaseAuth?.currentUser?.uid,
+    onReplayChange: (replay) => { replayingPhysicalScanRef.current = replay; },
+    process: (captured) => captured.context.activeTab === 'drive'
+      ? saveAdminScannedCode(captured.code, 'queue', captured.context)
+      : saveScannedCode(captured.code, 'queue', captured.context),
+  });
 
   async function uploadMarketplaceFiles(event) {
     const files = [...(event.target.files ?? [])];
@@ -830,18 +835,62 @@ function App() {
     return () => window.clearTimeout(timer);
   }, [selectedCourier, selectedPacker, firebaseUser, activeTab]);
 
+  physicalRetryReadyRef.current = { isScanReady, uid: firebaseUser?.uid };
+
   useEffect(() => {
+    const retries = new Map();
+    let lastCompleted = 0;
+    let disposed = false;
+    const scheduleRetry = (job, failures) => {
+      const delay = Math.min(2000 * 2 ** Math.min(failures - 1, 5), 60000);
+      const timer = window.setTimeout(() => {
+        if (disposed) return;
+        const ready = physicalRetryReadyRef.current;
+        if (!ready?.isScanReady || ready.uid !== job.context.attempt.actorUid) {
+          scheduleRetry(job, failures);
+          return;
+        }
+        const result = scanQueueRef.current?.enqueue({ ...job, replay: true });
+        if (!result?.accepted && result?.reason !== 'duplicate_pending') scheduleRetry(job, failures);
+      }, delay);
+      retries.set(job.id, { timer, failures });
+    };
     const queue = createScanQueue({
       process: (job) => scanProcessorRef.current(job),
-      onStateChange: setScanQueueSnapshot,
+      onStateChange: (snapshot) => {
+        setScanQueueSnapshot(snapshot);
+        if (snapshot.completed === lastCompleted) return;
+        lastCompleted = snapshot.completed;
+        const result = snapshot.lastResult;
+        const job = result?.job;
+        if (!job?.context?.attempt) return;
+        const previous = retries.get(job.id);
+        if (previous) window.clearTimeout(previous.timer);
+        if (result.status === 'error') scheduleRetry(job, (previous?.failures ?? 0) + 1);
+        else retries.delete(job.id);
+      },
       maxSize: 100,
     });
     scanQueueRef.current = queue;
+    physicalOutboxRef.current = createPhysicalScanOutbox();
     return () => {
+      disposed = true;
+      for (const retry of retries.values()) window.clearTimeout(retry.timer);
       queue.dispose();
       scanQueueRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    if (!isScanReady || !firebaseUser?.uid || !scanQueueRef.current) return;
+    try {
+      for (const job of physicalOutboxRef.current.list(firebaseUser.uid)) {
+        scanQueueRef.current.enqueue({ ...job, replay: true });
+      }
+    } catch (error) {
+      setStatus({ type: 'error', title: 'มีรายการสแกนรอยืนยัน', message: error.message });
+    }
+  }, [isScanReady, firebaseUser?.uid]);
 
   useEffect(() => {
     if (isScanReady && scanMethod === 'manual') {
@@ -1111,6 +1160,7 @@ function App() {
   }
 
   async function playTone(type) {
+    if (replayingPhysicalScanRef.current) return;
     if (!soundEnabled) {
       return;
     }
@@ -1805,24 +1855,11 @@ function App() {
           // Acquire the write lock before the marketplace lookup. A busy Sheet must not spend
           // more Sheets quota loading metadata for a batch that cannot write yet.
           const batchOrders = await Promise.all(orders.map(async (order) => {
-            const isPacker = Boolean(order.packerScan?.scannedAt);
-            const timing = getAdminScanTiming(order);
-            const hasAdmin = Boolean(order.admin?.scannedAt);
             const code = order.code || order.normalizedCode;
-            return {
-              id: order.id, code, courier: order.courier,
-              date: timing.sheetDate, time: timing.sheetTime,
-              email: order.packerScan?.scannedBy?.email || order.admin?.scannedBy?.email || order.user?.email || user.email,
-              packer: order.packerScan?.packer ?? order.packer ?? '',
-              note: order.packerScan?.note ?? order.note ?? '',
-              isPacker,
-              adminDate: hasAdmin ? timing.adminDate : '',
-              adminTime: hasAdmin ? timing.adminTime : '',
-              adminCode: hasAdmin ? code : '',
-              marketplaceOrder: await findMarketplaceOrderGoogle({
-                token: accessToken, config: googleConfig, trackingNo: code,
-              }),
-            };
+            const marketplaceOrder = await findMarketplaceOrderGoogle({
+              token: accessToken, config: googleConfig, trackingNo: code,
+            });
+            return buildSheetRecoveryPayload(order, { userEmail: user.email, marketplaceOrder });
           }));
           return batchAppendScanGoogle({
             token: accessToken, config: googleConfig, orders: batchOrders, repairExisting: true,
@@ -1980,26 +2017,12 @@ function App() {
       updateScanValue('');
     }
 
-    // Prevent only a true duplicate Packer scan. An Admin-only row must still
-    // reach the backend so the Packer fields can be merged into that row.
-    if (!getScanIssueMeta(scanNote).isIssue) {
-      const alreadyInPacker = shouldBlockPackerScan(recentRows, validation.code);
-      if (alreadyInPacker) {
-        setStatus({
-          type: 'duplicate',
-          title: 'เลขซ้ำ — ลงแล้ว',
-          message: getPackerDuplicateMessage(validation.code),
-        });
-        showCameraMessage(`ลงแล้ว: ${validation.code}`, 'duplicate');
-        playTone('duplicate');
-        return { status: 'duplicate', code: validation.code };
-      }
-    }
-
     if (managesBusy) setBusy(true);
     try {
-      const nowParts = getBangkokParts();
+      const nowParts = context?.attempt ? { date: context.attempt.date, time: context.scanTime } : getBangkokParts();
       const firestoreUser = canUseFirestorePrimary() ? await getFirebaseUserForPrimary() : null;
+      if (context?.attempt && firestoreUser?.uid !== context.attempt.actorUid) throw Object.assign(new Error('บัญชีผู้ใช้เปลี่ยน รายการสแกนยังรอยืนยันด้วยบัญชีเดิม'), { code: 'SCAN_ACTOR_CHANGED' });
+      if (context?.attempt && !firestoreUser) throw new Error('รายการสแกนรอยืนยัน ต้องเข้าสู่ระบบ Firebase ก่อน');
       const firestorePrimary = firestoreUser
         ? await recordPackerScanPrimary({
             code: validation.code,
@@ -2007,10 +2030,44 @@ function App() {
             date: nowParts.date,
             time: nowParts.time,
             user: firestoreUser,
+            attempt: context?.attempt,
             packer: scanPacker === PACKER_UNASSIGNED ? '' : scanPacker,
             note: scanNote,
           })
         : null;
+
+      if (context?.attempt && firestorePrimary?.id) {
+        await physicalOutboxRef.current.acknowledge(context.attempt.id);
+      }
+      if (context?.attempt && firestorePrimary?.status === 'duplicate') {
+        const counts = getScanCountSummary(firestorePrimary);
+        const order = firestorePrimary.order ?? firestorePrimary;
+        const patch = (rows) => {
+          const matching = (row) => String(row.code || row.adminCode || '').trim().toUpperCase() === validation.code.trim().toUpperCase();
+          const previous = rows.find(matching);
+          const timing = getAdminScanTiming(order, { fallbackDate: nowParts.date, fallbackTime: nowParts.time });
+          const row = { ...order, ...previous, ...counts, no: previous?.no || order.id || firestorePrimary.id,
+            code: previous?.code || order.code || validation.code,
+            adminCode: previous?.adminCode || order.adminCode || (context.activeTab === 'drive' ? validation.code : ''),
+            adminTime: previous?.adminTime || (order.admin?.scannedAt ? timing.adminTime : ''),
+            adminDate: previous?.adminDate || (order.admin?.scannedAt ? timing.adminDate : ''),
+            packer: previous?.packer || order.packerScan?.packer || order.packer || '',
+            email: previous?.email || order.packerScan?.scannedBy?.email || order.user?.email || '',
+            courier: previous?.courier || order.courier || scanCourier,
+            date: previous?.date || timing.sheetDate, time: previous?.time || timing.sheetTime };
+
+          return [row, ...rows.filter(item => !matching(item))].slice(0, 50);
+        };
+        setRecentRows(patch);
+        setDriveRecentRows(patch);
+        queueSheetRecoveryOrder(firestorePrimary.id);
+        const duplicate = context.activeTab === 'drive' ? counts.scanTotalAdmin > 1 : counts.scanTotalPacker > 1;
+        const warning = counts.scanTotalAdmin > 1 && counts.scanTotalPacker > 1 ? ' เสี่ยงทำออเดอร์ซ้ำ ต้องตรวจสอบ' : '';
+        setStatus({ type: duplicate ? 'duplicate' : 'success', title: duplicate ? 'บันทึกการสแกนซ้ำแล้ว' : 'บันทึกการสแกนแล้ว',
+          message: `${validation.code} Admin ${counts.scanHistoryUnknown ? 'อย่างน้อย ' : ''}${counts.scanTotalAdmin} / Packer ${counts.scanHistoryUnknown ? 'อย่างน้อย ' : ''}${counts.scanTotalPacker}${warning}` });
+        if (!firestorePrimary.replayed) playTone(duplicate ? 'duplicate' : 'success');
+        return { ...firestorePrimary, ...counts, code: validation.code, date: nowParts.date, time: nowParts.time };
+      }
 
       if (firestorePrimary?.status === 'duplicate') {
         const syncPending = firestorePrimary.sheetSyncStatus === 'pending';
@@ -2050,6 +2107,7 @@ function App() {
             ? 'Damaged'
             : 'Success';
         const optimisticRow = {
+          ...getScanCountSummary(firestorePrimary),
           no: firestorePrimary.id,
           courierNo: '',
           date: nowParts.date,
@@ -2117,6 +2175,7 @@ function App() {
                 token: accessToken, config: googleConfig, trackingNo: validation.code,
               });
               return appendScanGoogle({
+                scanCounts: firestorePrimary ? getScanCountSummary(firestorePrimary) : undefined,
                 token: accessToken,
                 config: googleConfig,
                 courier: scanCourier,
@@ -2274,7 +2333,7 @@ function App() {
       const message = scanErrorMessage(error);
       setStatus({
         type: 'error',
-        title: 'บันทึกไม่สำเร็จ',
+        title: context?.attempt ? 'รายการสแกนรอยืนยัน' : 'บันทึกไม่สำเร็จ',
         message,
       });
       showCameraMessage(message, 'error');
@@ -2322,8 +2381,10 @@ function App() {
 
     if (managesBusy) setBusy(true);
     try {
-      const nowParts = getBangkokParts();
+      const nowParts = context?.attempt ? { date: context.attempt.date, time: context.scanTime } : getBangkokParts();
       const firestoreUser = canUseFirestorePrimary() ? await getFirebaseUserForPrimary() : null;
+      if (context?.attempt && firestoreUser?.uid !== context.attempt.actorUid) throw Object.assign(new Error('บัญชีผู้ใช้เปลี่ยน รายการสแกนยังรอยืนยันด้วยบัญชีเดิม'), { code: 'SCAN_ACTOR_CHANGED' });
+      if (context?.attempt && !firestoreUser) throw new Error('รายการสแกนรอยืนยัน ต้องเข้าสู่ระบบ Firebase ก่อน');
       const firestorePrimary = firestoreUser
         ? await recordAdminScanPrimary({
             code: validation.code,
@@ -2331,8 +2392,42 @@ function App() {
             date: nowParts.date,
             time: nowParts.time,
             user: firestoreUser,
+            attempt: context?.attempt,
           })
         : null;
+
+      if (context?.attempt && firestorePrimary?.id) {
+        await physicalOutboxRef.current.acknowledge(context.attempt.id);
+      }
+      if (context?.attempt && firestorePrimary?.status === 'duplicate') {
+        const counts = getScanCountSummary(firestorePrimary);
+        const order = firestorePrimary.order ?? firestorePrimary;
+        const patch = (rows) => {
+          const matching = (row) => String(row.code || row.adminCode || '').trim().toUpperCase() === validation.code.trim().toUpperCase();
+          const previous = rows.find(matching);
+          const timing = getAdminScanTiming(order, { fallbackDate: nowParts.date, fallbackTime: nowParts.time });
+          const row = { ...order, ...previous, ...counts, no: previous?.no || order.id || firestorePrimary.id,
+            code: previous?.code || order.code || validation.code,
+            adminCode: previous?.adminCode || order.adminCode || (context.activeTab === 'drive' ? validation.code : ''),
+            adminTime: previous?.adminTime || (order.admin?.scannedAt ? timing.adminTime : ''),
+            adminDate: previous?.adminDate || (order.admin?.scannedAt ? timing.adminDate : ''),
+            packer: previous?.packer || order.packerScan?.packer || order.packer || '',
+            email: previous?.email || order.packerScan?.scannedBy?.email || order.user?.email || '',
+            courier: previous?.courier || order.courier || scanCourier,
+            date: previous?.date || timing.sheetDate, time: previous?.time || timing.sheetTime };
+
+          return [row, ...rows.filter(item => !matching(item))].slice(0, 50);
+        };
+        setRecentRows(patch);
+        setDriveRecentRows(patch);
+        queueSheetRecoveryOrder(firestorePrimary.id);
+        const duplicate = context.activeTab === 'drive' ? counts.scanTotalAdmin > 1 : counts.scanTotalPacker > 1;
+        const warning = counts.scanTotalAdmin > 1 && counts.scanTotalPacker > 1 ? ' เสี่ยงทำออเดอร์ซ้ำ ต้องตรวจสอบ' : '';
+        setStatus({ type: duplicate ? 'duplicate' : 'success', title: duplicate ? 'บันทึกการสแกนซ้ำแล้ว' : 'บันทึกการสแกนแล้ว',
+          message: `${validation.code} Admin ${counts.scanHistoryUnknown ? 'อย่างน้อย ' : ''}${counts.scanTotalAdmin} / Packer ${counts.scanHistoryUnknown ? 'อย่างน้อย ' : ''}${counts.scanTotalPacker}${warning}` });
+        if (!firestorePrimary.replayed) playTone(duplicate ? 'duplicate' : 'success');
+        return { ...firestorePrimary, ...counts, code: validation.code, date: nowParts.date, time: nowParts.time };
+      }
 
       if (firestorePrimary?.status === 'duplicate') {
         const order = firestorePrimary;
@@ -2430,6 +2525,7 @@ function App() {
                 trackingNo: adminReclaim.adminCode,
               });
               return appendAdminScanGoogle({
+                scanCounts: firestorePrimary ? getScanCountSummary(firestorePrimary) : undefined,
                 token: accessToken,
                 config: googleConfig,
                 courier: scanCourier,
@@ -2496,6 +2592,7 @@ function App() {
 
       if (firestorePrimary?.id) {
         const optimisticRow = {
+          ...getScanCountSummary(firestorePrimary),
           no: firestorePrimary.id,
           date: nowParts.date,
           time: nowParts.time,
@@ -2538,6 +2635,7 @@ function App() {
               });
               return hasPackerScan
                 ? appendScanGoogle({
+                    scanCounts: getScanCountSummary(firestorePrimary),
                     token: accessToken,
                     config: googleConfig,
                     courier: scanCourier,
@@ -2553,6 +2651,7 @@ function App() {
                     adminCode: firestorePrimary?.existing?.code || validation.code,
                   })
                 : appendAdminScanGoogle({
+                    scanCounts: getScanCountSummary(firestorePrimary),
                     token: accessToken,
                     config: googleConfig,
                     courier: scanCourier,
@@ -2698,7 +2797,7 @@ function App() {
       const message = scanErrorMessage(error);
       setStatus({
         type: 'error',
-        title: 'ลง Drive ไม่สำเร็จ',
+        title: context?.attempt ? 'รายการสแกนรอยืนยัน' : 'ลง Drive ไม่สำเร็จ',
         message,
       });
       showCameraMessage(message, 'error');
@@ -2877,18 +2976,53 @@ function App() {
       return;
     }
 
+    void enqueuePhysicalScan(code, 'manual');
+  }
+
+  async function enqueuePhysicalScan(code, physicalSource) {
+    if (!isScanReady || (activeTab === 'packer' && !isPackerReady)) {
+      setStatus({ type: 'warning', title: 'ยังเริ่มสแกนไม่ได้', message: !isScanReady ? scanReadinessMessage : 'กรุณาเลือก Packer ก่อนสแกน' });
+      playTone('error');
+      return;
+    }
+    const validation = validateScanCode(selectedCourier, code, { allowAnyFormat: allowAnyTrackingFormat });
+    if (!validation.ok) {
+      setStatus({ type: 'warning', title: 'เลขสแกนไม่ถูกต้อง', message: validation.reason });
+      playTone('error');
+      return;
+    }
+    const actorUid = firebaseAuth?.currentUser?.uid;
+    if (!actorUid) {
+      setStatus({ type: 'warning', title: 'รายการสแกนยังไม่ถูกบันทึก', message: 'กรุณาเข้าสู่ระบบ Firebase ก่อนสแกน' });
+      playTone('error');
+      return;
+    }
+    const timing = getBangkokParts();
+    const id = crypto.randomUUID();
     const context = {
-      activeTab,
-      courier: selectedCourier,
-      packer: selectedPacker,
-      remark: scanRemark,
-      allowAnyTrackingFormat,
+      activeTab, courier: selectedCourier, packer: selectedPacker, remark: scanRemark, allowAnyTrackingFormat,
+      scanTime: timing.time,
+      attempt: getScanIssueMeta(scanRemark).isIssue ? null : {
+        id, role: activeTab === 'drive' ? 'admin' : 'packer', tracking: validation.code,
+        date: timing.date, courier: selectedCourier, actorUid, source: physicalSource,
+      },
     };
-    const queued = scanQueueRef.current?.enqueue({
-      id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-      code,
-      context,
-    });
+    const job = { id, code: validation.code, context };
+    let queued;
+    try {
+      const snapshot = scanQueueRef.current?.getSnapshot();
+      if (!snapshot || snapshot.pending.length + (snapshot.processing ? 1 : 0) >= 100) {
+        queued = { accepted: false, reason: 'queue_full' };
+      } else {
+        if (context.attempt) await physicalOutboxRef.current.add(job);
+        queued = scanQueueRef.current.enqueue(job);
+        if (!queued.accepted && context.attempt) await physicalOutboxRef.current.acknowledge(job.id);
+      }
+    } catch (error) {
+      setStatus({ type: 'error', title: 'รายการสแกนรอยืนยัน', message: error.message });
+      playTone('error');
+      return;
+    }
 
     if (!queued?.accepted) {
       const isFull = queued?.reason === 'queue_full';
@@ -3002,6 +3136,7 @@ function App() {
     cameraRef.current = null;
     cameraSavingRef.current = false;
     lastCameraScanRef.current = { code: '', time: 0 };
+    cameraScanGateRef.current.reset();
 
     if (scanner) {
       try {
@@ -3023,6 +3158,7 @@ function App() {
     }
 
     const now = Date.now();
+    if (!cameraScanGateRef.current.detect(code, now)) return;
     const lastScan = lastCameraScanRef.current;
     if (lastScan.code === code && now - lastScan.time < CAMERA_COOLDOWN_MS) {
       return;
@@ -3037,10 +3173,10 @@ function App() {
       return;
     }
 
-    if (activeTab === 'drive') {
-      await saveAdminScannedCode(code, 'camera');
-    } else {
-      await saveScannedCode(code, 'camera');
+    try {
+      await enqueuePhysicalScan(code, 'camera');
+    } finally {
+      cameraSavingRef.current = false;
     }
   }
 
@@ -3088,7 +3224,7 @@ function App() {
         disableFlip: true,
       };
 
-      await scanner.start({ facingMode: 'environment' }, scanConfig, handleCameraDetected, () => {});
+      await scanner.start({ facingMode: 'environment' }, scanConfig, handleCameraDetected, () => cameraScanGateRef.current.miss(Date.now()));
 
       await improveCameraFocus(scanner);
       setCameraActive(true);

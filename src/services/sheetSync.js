@@ -98,8 +98,9 @@ export function requireSheetSyncAcknowledgement(acknowledged) {
   return true;
 }
 
-export function canApplySheetSyncResult(current, { attemptId = '', ok }) {
+export function canApplySheetSyncResult(current, { attemptId = '', ok, scanCountRevision }) {
   if (!current || String(current.sheetSyncAttemptId ?? '') !== String(attemptId ?? '')) return false;
+  if (ok && Number.isSafeInteger(current.scanCountRevision) && scanCountRevision !== current.scanCountRevision) return false;
   return ok || !isSheetSyncVerified(current);
 }
 

@@ -445,3 +445,10 @@ test('keeps an actionable Thai Sheet error for recovery diagnostics', () => {
   );
   assert.equal(update.error.message, 'Google ตอบสนองช้าเกินกำหนด กรุณาลองใหม่');
 });
+
+test('Sheet acknowledgement cannot clear pending counts from a newer revision', () => {
+  const current = { sheetSyncStatus: 'pending', sheetSyncAttemptId: 'latest', scanCountRevision: 3 };
+  assert.equal(sheetSync.canApplySheetSyncResult(current, { attemptId: 'latest', ok: true, scanCountRevision: 2 }), false);
+  assert.equal(sheetSync.canApplySheetSyncResult(current, { attemptId: 'latest', ok: true, scanCountRevision: 3 }), true);
+  assert.equal(sheetSync.canApplySheetSyncResult(current, { attemptId: 'latest', ok: false }), true);
+});

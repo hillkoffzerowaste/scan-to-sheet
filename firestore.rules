@@ -367,9 +367,73 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    function validScanCounts(data) {
+      return data.scanTotalAdmin is int && data.scanTotalAdmin >= 0
+        && data.scanTotalPacker is int && data.scanTotalPacker >= 0
+        && data.scanDuplicateAdmin is int && data.scanDuplicateAdmin == (data.scanTotalAdmin > 0 ? data.scanTotalAdmin - 1 : 0)
+        && data.scanDuplicatePacker is int && data.scanDuplicatePacker == (data.scanTotalPacker > 0 ? data.scanTotalPacker - 1 : 0)
+        && data.scanCountRevision is int && data.scanCountRevision > 0
+        && data.scanHistoryUnknown is bool;
+    }
+
+    function legacyRoleCount(data, field) {
+      return data.get(field, null) is map && data[field].get('scannedAt', '') != '' ? 1 : 0;
+    }
+
+    function validScanCountTransition(orderId, previous, next) {
+      let receiptPath = /databases/$(database)/documents/scanAttemptReceipts/$(next.scanLastAttemptId);
+      let receipt = getAfter(receiptPath).data;
+      let oldAdmin = previous.get('scanTotalAdmin', legacyRoleCount(previous, 'admin'));
+      let oldPacker = previous.get('scanTotalPacker', legacyRoleCount(previous, 'packerScan'));
+      return validScanCounts(next)
+        && !exists(receiptPath)
+        && receipt.actorUid == request.auth.uid && receipt.orderId == orderId
+        && receipt.revision == next.scanCountRevision
+        && receipt.trackingKey == next.scanTrackingKey
+        && next.scanCountRevision == previous.get('scanCountRevision', 0) + 1
+        && next.scanTotalAdmin == oldAdmin + (receipt.role == 'admin' ? 1 : 0)
+        && next.scanTotalPacker == oldPacker + (receipt.role == 'packer' ? 1 : 0)
+        && next.scanHistoryUnknown == (previous.get('scanHistoryUnknown', false) || (previous.size() > 0 && !previous.keys().hasAll(['scanTotalAdmin', 'scanTotalPacker'])))
+        && getAfter(/databases/$(database)/documents/scanTrackingPointers/$(next.scanTrackingKey)).data.orderId == orderId;
+    }
+
+    match /scanTrackingPointers/{trackingKey} {
+      allow read: if isOperationalStaff();
+      allow create: if isOperationalStaff()
+        && request.resource.data.keys().hasOnly(['tracking', 'orderId'])
+        && request.resource.data.tracking is string
+        && request.resource.data.tracking == request.resource.data.tracking.trim().upper()
+        && trackingKey == request.resource.data.tracking.toUtf8().toHexString().lower()
+        && request.resource.data.orderId is string
+        && getAfter(/databases/$(database)/documents/orders/$(request.resource.data.orderId)).data.scanTrackingKey == trackingKey
+        && getAfter(/databases/$(database)/documents/orders/$(request.resource.data.orderId)).data.normalizedCode == request.resource.data.tracking;
+      allow update, delete: if false;
+    }
+
+    match /scanAttemptReceipts/{attemptId} {
+      allow read: if isOperationalStaff();
+      allow create: if isOperationalStaff()
+        && request.resource.data.keys().hasOnly(['id', 'role', 'tracking', 'date', 'courier', 'actorUid', 'source', 'orderId', 'trackingKey', 'revision', 'createdAt'])
+        && request.resource.data.id == attemptId
+        && request.resource.data.actorUid == request.auth.uid
+        && request.resource.data.role in ['admin', 'packer']
+        && request.resource.data.tracking is string && request.resource.data.tracking.size() >= 8
+        && request.resource.data.trackingKey == request.resource.data.tracking.toUtf8().toHexString().lower()
+        && request.resource.data.date is string && request.resource.data.date.size() == 10
+        && request.resource.data.courier is string
+        && request.resource.data.source is string && request.resource.data.source.size() > 0 && request.resource.data.source.size() <= 80
+        && request.resource.data.createdAt == request.time
+        && getAfter(/databases/$(database)/documents/orders/$(request.resource.data.orderId)).data.scanLastAttemptId == attemptId
+        && getAfter(/databases/$(database)/documents/orders/$(request.resource.data.orderId)).data.scanCountRevision == request.resource.data.revision
+        && getAfter(/databases/$(database)/documents/orders/$(request.resource.data.orderId)).data.normalizedCode == request.resource.data.tracking
+        && getAfter(/databases/$(database)/documents/scanTrackingPointers/$(request.resource.data.trackingKey)).data.orderId == request.resource.data.orderId;
+      allow update, delete: if false;
+    }
+
     match /orders/{orderId} {
       allow read: if isOperationalStaff();
       allow create: if isOperationalStaff()
+        && (!request.resource.data.keys().hasAny(['scanTotalAdmin', 'scanTotalPacker', 'scanDuplicateAdmin', 'scanDuplicatePacker', 'scanCountRevision', 'scanHistoryUnknown', 'scanLastAttemptId', 'scanTrackingKey']) || validScanCountTransition(orderId, {}, request.resource.data))
         && request.resource.data.code is string
         && request.resource.data.code.size() >= 8
         && request.resource.data.normalizedCode is string
@@ -400,8 +464,11 @@ service cloud.firestore {
           'sheetSyncedAt', 'sheetVerifiedAt', 'sheetVerifiedAtIso', 'sheetResultStatus',
           'sheetUrl', 'updatedAt', 'updatedAtIso', 'user',
           'marketplaceOrderId', 'marketplaceSkus', 'marketplaceItems',
-          'importedFromSheet', 'importedAt'
+          'importedFromSheet', 'importedAt',
+          'scanTotalAdmin', 'scanTotalPacker', 'scanDuplicateAdmin', 'scanDuplicatePacker',
+          'scanCountRevision', 'scanHistoryUnknown', 'scanLastAttemptId', 'scanTrackingKey'
         ])
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['scanTotalAdmin', 'scanTotalPacker', 'scanDuplicateAdmin', 'scanDuplicatePacker', 'scanCountRevision', 'scanHistoryUnknown', 'scanLastAttemptId', 'scanTrackingKey']) || validScanCountTransition(orderId, resource.data, request.resource.data))
         && request.resource.data.code == resource.data.code
         && request.resource.data.normalizedCode == resource.data.normalizedCode
         && request.resource.data.courier == resource.data.courier

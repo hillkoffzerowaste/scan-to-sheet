@@ -14,6 +14,8 @@ export async function openSignedInApp(page, {
   startTab = 'packer',
   externalToolsConfig = null,
   externalToolsReadError = false,
+  physicalScans = false,
+  cameraCallbacks = false,
 } = {}) {
   await page.route('**/*', (route) => {
     const url = new URL(route.request().url());
@@ -26,6 +28,15 @@ export async function openSignedInApp(page, {
     window.externalToolsReadError = readError;
     window.externalToolsWrites = [];
   }, { config: externalToolsConfig, readError: externalToolsReadError });
+  if (cameraCallbacks) await mockModule(page, '/src/services/cameraLoader.js', `
+    export async function loadHtml5Qrcode() {
+      return { Html5QrcodeSupportedFormats: {}, Html5Qrcode: class {
+        async start(_camera, _config, detected, missed) { window.cameraDetected = detected; window.cameraMissed = missed; this.isScanning = true; }
+        async stop() { this.isScanning = false; }
+        async clear() {}
+      } };
+    }
+  `);
   await mockModule(page, '/src/services/firebase.js', `
     export const isFirebaseConfigured = true;
     const user = { uid: 'qr-test-user', email: 'qr-test@example.invalid', getIdToken: async () => 'test-id-token' };
@@ -138,11 +149,35 @@ export async function openSignedInApp(page, {
     export const subscribeCouriers = ({ defaultCouriers, onChange }) => { onChange(defaultCouriers); return () => {}; };
     export const fetchTodaySummaryFirestore = async ({ couriers }) => ({ courierCounts: couriers.map(courier => ({ courier, count: 0 })), packerCounts: [] });
     export const getTodayRowsFirestore = async () => [];
-    export const getDriveRowsFirestore = async () => [];
+    export const getDriveRowsFirestore = async () => window.physicalTestOrder ? [window.physicalTestOrder] : [];
     export const getSheetRecoveryCandidates = async () => ({ candidates: [], limited: false });
     export const checkMissingOrdersFirestore = async () => null;
-    export const recordPackerScanPrimary = async (data) => { window.qrTestWrites.push(data); throw new Error('Unexpected scan write'); };
-    export const recordAdminScanPrimary = async (data) => { window.qrTestWrites.push(data); throw new Error('Unexpected scan write'); };
+    const recordPhysical = async (data, role) => {
+      window.qrTestWrites.push(data);
+      if (!${physicalScans}) throw new Error('Unexpected scan write');
+      if (!data.attempt?.id) throw new Error('Missing durable attempt');
+      const stored = JSON.parse(localStorage.getItem('scan-to-sheet:physical-scan-attempts:v1') || '[]');
+      if (!stored.some(item => item.id === data.attempt.id)) throw new Error('Attempt not durable before side effect');
+      if (window.physicalScanFailure === 'before') throw new Error('Offline before commit');
+      const ledger = JSON.parse(localStorage.getItem('physical-test-ledger') || '{"receipts":{},"admin":0,"packer":0}');
+      const replayed = Boolean(ledger.receipts[data.attempt.id]);
+      if (!replayed) {
+        ledger[role] += 1;
+        ledger.receipts[data.attempt.id] = true;
+        localStorage.setItem('physical-test-ledger', JSON.stringify(ledger));
+      }
+      if (window.physicalScanFailure === 'after') throw new Error('Lost response after commit');
+      const order = { id: 'physical-order', code: data.code, adminCode: ledger.admin > 0 ? data.code : '', courier: data.courier,
+        status: 'duplicate', date: data.date, time: data.time,
+        scanTotalPacker: ledger.packer, scanTotalAdmin: ledger.admin,
+        scanDuplicatePacker: Math.max(ledger.packer - 1, 0), scanDuplicateAdmin: Math.max(ledger.admin - 1, 0),
+        scanCountRevision: ledger.packer + ledger.admin, scanHistoryUnknown: false, replayed,
+        sheetSyncStatus: 'pending', sheetSyncAttemptId: data.attempt.id };
+      window.physicalTestOrder = order;
+      return order;
+    };
+    export const recordPackerScanPrimary = async (data) => recordPhysical(data, 'packer');
+    export const recordAdminScanPrimary = async (data) => recordPhysical(data, 'admin');
   `);
   await mockModule(page, '/src/services/googleSheets.js', `
     export const fetchGoogleProfile = async () => ({ email: 'qr-test@example.invalid' });

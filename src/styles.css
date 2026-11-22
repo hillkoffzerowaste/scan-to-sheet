@@ -7207,3 +7207,16 @@ tbody tr:hover {
 .wireframe-shell .external-tools-settings-notice.success {
   border-style: solid;
 }
+
+.enterprise-shell td.scan-tracking-duplicate {
+  color: var(--wire-danger);
+  background: var(--wire-danger-bg);
+}
+
+.scan-count-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-family: inherit;
+  font-size: var(--ui-xs);
+}

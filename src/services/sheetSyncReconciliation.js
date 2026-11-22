@@ -189,6 +189,12 @@ export function isSheetSyncResultConfirmed(result, expectedOrder = null) {
   if (!row || !areTrackingCodesEquivalent(rowCode, result.code)) return false;
 
   if (expectedOrder) {
+    if (Number.isSafeInteger(expectedOrder.scanCountRevision)) {
+      for (const key of ['scanTotalAdmin', 'scanTotalPacker', 'scanDuplicateAdmin', 'scanDuplicatePacker', 'scanCountRevision', 'scanHistoryUnknown']) {
+        if (row[key] !== expectedOrder[key]) return false;
+      }
+      if (result.scanCountRevision !== expectedOrder.scanCountRevision) return false;
+    }
     if (expectedOrder.courier && String(row.courier ?? '').trim() !== String(expectedOrder.courier).trim()) return false;
     const code = normalizeCode(expectedOrder.code || expectedOrder.normalizedCode);
     if (!code || !areTrackingCodesEquivalent(code, result.code)) return false;

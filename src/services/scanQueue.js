@@ -1,6 +1,23 @@
 const normalizePendingCode = (code) => String(code ?? '').trim().toUpperCase();
 
+export async function processCapturedScanJob({ job, actorUid, process, onReplayChange }) {
+  if (job.context.attempt && actorUid !== job.context.attempt.actorUid) {
+    throw new Error('รายการสแกนรอยืนยันเป็นของบัญชีอื่น กรุณาเข้าสู่ระบบด้วยบัญชีเดิม');
+  }
+  onReplayChange(Boolean(job.replay));
+  try {
+    const result = await process(job);
+    if (result?.status === 'error' || result?.status === 'firestore_unconfirmed') {
+      throw new Error(result.message || 'บันทึกรายการในคิวไม่สำเร็จ');
+    }
+    return result;
+  } finally {
+    onReplayChange(false);
+  }
+}
+
 function pendingKey(job) {
+  if (job?.id) return String(job.id);
   const code = normalizePendingCode(job?.code);
   const context = job?.context ?? {};
   const scope = [context.activeTab, context.courier].filter(Boolean).join('::');

@@ -1082,20 +1082,20 @@ test('appendScanGoogle returns the newly written Packer row after placeholder re
     const decodedUrl = decodeURIComponent(String(url));
     const method = options.method ?? 'GET';
     const body = options.body ? JSON.parse(options.body) : null;
-    if (new RegExp(`'${date}'!A2:W(?:\\?|$)`).test(decodedUrl) && method === 'GET') {
+    if (new RegExp(`'${date}'!A2:AD(?:\\?|$)`).test(decodedUrl) && method === 'GET') {
       fullDayReads += 1;
     }
 
-    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A1:W1') && method === 'PUT') {
+    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A1:AD1') && method === 'PUT') {
       return jsonResponse({});
     }
     if (decodedUrl.includes('/values/') && decodedUrl.includes('!A:A') && method === 'GET') {
       return jsonResponse({ values: [['No.']] });
     }
-    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A2:W') && method === 'GET') {
+    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A2:AD') && method === 'GET') {
       return jsonResponse({ values: storedRows });
     }
-    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A2') && !decodedUrl.includes('!A2:W') && method === 'GET') {
+    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A2') && !decodedUrl.includes('!A2:AD') && method === 'GET') {
       return jsonResponse({ values: [[storedRows[0]?.[0] ?? '']] });
     }
     if (decodedUrl.includes('/values/') && method === 'PUT') {
@@ -1167,13 +1167,13 @@ test('appendScanGoogle keeps a successful write when status coloring is rate-lim
     const decodedUrl = decodeURIComponent(String(url));
     const method = options.method ?? 'GET';
     const body = options.body ? JSON.parse(options.body) : null;
-    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A1:W1') && method === 'PUT') {
+    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A1:AD1') && method === 'PUT') {
       return jsonResponse({});
     }
     if (decodedUrl.includes('/values/') && decodedUrl.includes('!A:A') && method === 'GET') {
       return jsonResponse({ values: [['No.']] });
     }
-    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A2:W') && method === 'GET') {
+    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A2:AD') && method === 'GET') {
       return jsonResponse({ values: storedRows });
     }
     if (decodedUrl.includes('/values/') && decodedUrl.includes('!A2') && method === 'GET') {
@@ -1253,9 +1253,9 @@ test('appendScanGoogle merges a short Admin barcode into yesterday’s full Pack
     const body = options.body ? JSON.parse(options.body) : null;
     const date = [today, yesterday].find((value) => decodedUrl.includes(value));
 
-    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A1:W1') && method === 'PUT') return jsonResponse({});
+    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A1:AD1') && method === 'PUT') return jsonResponse({});
     if (decodedUrl.includes('/values/') && decodedUrl.includes('!A:A') && method === 'GET') return jsonResponse({ values: [['No.']] });
-    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A2:W') && method === 'GET') return jsonResponse({ values: rowsByDate.get(date) ?? [] });
+    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A2:AD') && method === 'GET') return jsonResponse({ values: rowsByDate.get(date) ?? [] });
     if (decodedUrl.includes('/values/') && decodedUrl.includes('!A2') && method === 'GET') return jsonResponse({ values: [rowsByDate.get(date)?.[0] ?? []] });
     if (decodedUrl.includes('/values:batchUpdate')) {
       const rowUpdate = body?.data?.find((item) => item.range.includes('!A2:O2'));
@@ -1323,7 +1323,7 @@ test('updateScanIssueGoogle finds a cross-day row on its physical prior tab', as
     const body = options.body ? JSON.parse(options.body) : null;
     const date = [today, yesterday].find((value) => decodedUrl.includes(value));
 
-    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A2:W') && method === 'GET') return jsonResponse({ values: rowsByDate.get(date) ?? [] });
+    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A2:AD') && method === 'GET') return jsonResponse({ values: rowsByDate.get(date) ?? [] });
     if (decodedUrl.includes('/values/') && decodedUrl.includes('!A2') && method === 'GET') return jsonResponse({ values: [rowsByDate.get(date)?.[0] ?? []] });
     if (decodedUrl.includes('/values:batchUpdate')) {
       const rowUpdate = body?.data?.find((item) => item.range.includes('!A2:O2'));
@@ -1378,8 +1378,8 @@ test('appendScanGoogle marks a successful row as cross-day when its saved Scan D
     const method = options.method ?? 'GET';
     const body = options.body ? JSON.parse(options.body) : null;
 
-    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A1:W1') && method === 'PUT') return jsonResponse({});
-    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A2:W') && method === 'GET') return jsonResponse({ values: storedRows });
+    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A1:AD1') && method === 'PUT') return jsonResponse({});
+    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A2:AD') && method === 'GET') return jsonResponse({ values: storedRows });
     if (decodedUrl.includes('/values/') && decodedUrl.includes('!A2') && method === 'GET') return jsonResponse({ values: [storedRows[0] ?? []] });
     if (decodedUrl.includes('/values:batchUpdate')) {
       const rowUpdate = body?.data?.find((item) => item.range.includes('!A2:O2'));
@@ -1432,8 +1432,8 @@ test('batch recovery repairs an existing row whose Status does not match Firesto
     const decodedUrl = decodeURIComponent(String(url));
     const method = options.method ?? 'GET';
     const body = options.body ? JSON.parse(options.body) : null;
-    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A1:W1') && method === 'PUT') return jsonResponse({});
-    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A2:W') && method === 'GET') return jsonResponse({ values: storedRows });
+    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A1:AD1') && method === 'PUT') return jsonResponse({});
+    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A2:AD') && method === 'GET') return jsonResponse({ values: storedRows });
     if (decodedUrl.includes('/values:batchUpdate')) {
       const rowUpdate = body?.data?.find((item) => item.range.includes('!A2:O2'));
       if (rowUpdate) storedRows = [rowUpdate.values[0]];
@@ -1491,8 +1491,8 @@ test('batch recovery read-verifies an existing duplicate before certifying it', 
   globalThis.fetch = async (url, options = {}) => {
     const decodedUrl = decodeURIComponent(String(url));
     const method = options.method ?? 'GET';
-    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A1:W1') && method === 'PUT') return jsonResponse({});
-    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A2:W') && method === 'GET') return jsonResponse({ values: storedRows });
+    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A1:AD1') && method === 'PUT') return jsonResponse({});
+    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A2:AD') && method === 'GET') return jsonResponse({ values: storedRows });
     if (decodedUrl.includes('includeGridData=true')) {
       const values = Array.from({ length: 10 }, (_, index) => (
         [0, 1, 8, 9].includes(index)
@@ -1569,8 +1569,8 @@ test('batch recovery removes a stale cross-day Remark even when the Status is al
     const decodedUrl = decodeURIComponent(String(url));
     const method = options.method ?? 'GET';
     const body = options.body ? JSON.parse(options.body) : null;
-    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A1:W1') && method === 'PUT') return jsonResponse({});
-    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A2:W') && method === 'GET') return jsonResponse({ values: storedRows });
+    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A1:AD1') && method === 'PUT') return jsonResponse({});
+    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A2:AD') && method === 'GET') return jsonResponse({ values: storedRows });
     if (decodedUrl.includes('/values:batchUpdate')) {
       const rowUpdate = body?.data?.find((item) => item.range.includes('!A2:O2'));
       if (rowUpdate) storedRows = [rowUpdate.values[0]];
@@ -1679,9 +1679,9 @@ test('a cross-day Admin merge records the courier the Packer actually picked', a
     const body = options.body ? JSON.parse(options.body) : null;
     const date = [today, yesterday].find((value) => decodedUrl.includes(value));
 
-    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A1:W1') && method === 'PUT') return jsonResponse({});
+    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A1:AD1') && method === 'PUT') return jsonResponse({});
     if (decodedUrl.includes('/values/') && decodedUrl.includes('!A:A') && method === 'GET') return jsonResponse({ values: [['No.']] });
-    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A2:W') && method === 'GET') return jsonResponse({ values: rowsByDate.get(date) ?? [] });
+    if (decodedUrl.includes('/values/') && decodedUrl.includes('!A2:AD') && method === 'GET') return jsonResponse({ values: rowsByDate.get(date) ?? [] });
     if (decodedUrl.includes('/values/') && decodedUrl.includes('!A2') && method === 'GET') return jsonResponse({ values: [rowsByDate.get(date)?.[0] ?? []] });
     if (decodedUrl.includes('/values:batchUpdate')) {
       const rowUpdate = body?.data?.find((item) => item.range.includes('!A2:O2'));
@@ -1719,4 +1719,93 @@ test('a cross-day Admin merge records the courier the Packer actually picked', a
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test('batch duplicate synchronizes absolute physical counts and revision without rewriting buyer name', async (t) => {
+  const counts = { scanTotalAdmin: 2, scanTotalPacker: 2, scanDuplicateAdmin: 1, scanDuplicatePacker: 1, scanHistoryUnknown: false, scanCountRevision: 4 };
+  const sheet = recoverySheet(t, { [recoveryDate]: [recoveryRow({ 15: 'Manual buyer', 23: 1, 24: 1, 25: 0, 26: 0, 27: false, 28: 2 })] });
+  const [outcome] = await sheet.run([recoveryOrder(counts)]);
+  assert.equal(outcome.error, undefined);
+  assert.equal(outcome.result.row.scanTotalAdmin, 2);
+  assert.equal(outcome.result.row.scanCountRevision, 4);
+  assert.equal(outcome.result.scanCountRevision, 4);
+  assert.deepEqual(sheet.rowsByDate.get(recoveryDate)[0].slice(23, 29), [2, 2, 1, 1, false, 4]);
+  assert.equal(sheet.rowsByDate.get(recoveryDate)[0][15], 'Manual buyer');
+});
+
+test('legacy row updates never clear count extension columns', () => {
+  const updates = buildDailyRowUpdateData(recoveryDate, 2, Array(23).fill(''));
+  assert.equal(updates[1].range, `'${recoveryDate}'!Q2:W2`);
+});
+
+test('duplicate risk formatting targets both tracking cells and preserves unrelated custom rules', async () => {
+  const sheets = await import('./googleSheets.js');
+  assert.equal(typeof sheets.buildDuplicateRiskFormattingRequests, 'function');
+  const requests = sheets.buildDuplicateRiskFormattingRequests(77);
+  assert.equal(requests.length, 2);
+  assert.deepEqual(requests.map((request) => request.addConditionalFormatRule.rule.ranges[0].startColumnIndex), [5, 12]);
+  assert.equal(requests[0].addConditionalFormatRule.rule.booleanRule.condition.values[0].userEnteredValue, '=$Y2>1');
+  assert.equal(requests[1].addConditionalFormatRule.rule.booleanRule.condition.values[0].userEnteredValue, '=$X2>1');
+  const custom = { ranges: [{ sheetId: 77, startRowIndex: 1, startColumnIndex: 4, endColumnIndex: 5 }], booleanRule: { condition: { type: 'CUSTOM_FORMULA', values: [{ userEnteredValue: '=$E2="custom"' }] } } };
+  const reconciled = buildConditionalFormatReconciliationRequests({ sheetId: 77, existingRules: [custom, requests[0].addConditionalFormatRule.rule], managedRequests: requests });
+  assert.deepEqual(reconciled[0], { deleteConditionalFormatRule: { sheetId: 77, index: 1 } });
+});
+
+test('foreground scan reads back zero counts and the same revision after appending', async (t) => {
+  const sheet = recoverySheet(t, { [recoveryDate]: [] });
+  const counts = { scanTotalAdmin: 0, scanTotalPacker: 1, scanDuplicateAdmin: 0, scanDuplicatePacker: 0, scanHistoryUnknown: false, scanCountRevision: 1 };
+  const result = await appendScanGoogle({ token: 'token', config: { master: { id: `foreground-${t.name}` } }, courier: 'Shopee', code: recoveryCode, email: 'packer@example.test', packer: 'Ben', scanDate: recoveryDate, scanTime: '12:00:00', scanCounts: counts });
+  assert.equal(result.row.scanTotalAdmin, 0);
+  assert.equal(result.row.scanCountRevision, 1);
+  assert.deepEqual(sheet.rowsByDate.get(recoveryDate)[0].slice(23, 29), [0, 1, 0, 0, false, 1]);
+});
+
+test('count recovery refuses an older revision and never overwrites newer physical counts', async (t) => {
+  const stored = recoveryRow({ 23: 3, 24: 2, 25: 2, 26: 1, 27: false, 28: 5 });
+  const sheet = recoverySheet(t, { [recoveryDate]: [stored] });
+  const [outcome] = await sheet.run([recoveryOrder({ scanTotalAdmin: 2, scanTotalPacker: 2, scanDuplicateAdmin: 1, scanDuplicatePacker: 1, scanHistoryUnknown: false, scanCountRevision: 4 })]);
+  assert.equal(outcome.error.code, 'SHEET_RECOVERY_UNCONFIRMED');
+  assert.equal(sheet.rowsByDate.get(recoveryDate)[0][28], 5);
+});
+
+test('count recovery cannot certify a counter write that Google silently drops', async (t) => {
+  const sheet = recoverySheet(t, { [recoveryDate]: [recoveryRow({ 12: '', 23: 0, 24: 1, 25: 0, 26: 0, 27: false, 28: 1 })] }, { dropUpdates: true });
+  const [outcome] = await sheet.run([recoveryOrder({ scanTotalAdmin: 0, scanTotalPacker: 2, scanDuplicateAdmin: 0, scanDuplicatePacker: 1, scanHistoryUnknown: false, scanCountRevision: 2 })]);
+  assert.equal(outcome.error?.code, 'SHEET_RECOVERY_UNCONFIRMED');
+  assert.equal(outcome.result, null);
+});
+
+for (const writer of ['packer', 'admin', 'batch']) {
+  test(`counted ${writer} refuses mixed canonical tracking before any row mutation`, async (t) => {
+    const short = '2602788293138';
+    const full = `TH${short}`;
+    const initial = recoveryRow({ 5: short, 12: full, 23: 2, 24: 2, 25: 1, 26: 1, 27: false, 28: 4 });
+    const sheet = recoverySheet(t, { [recoveryDate]: [initial] });
+    const counts = { scanTotalAdmin: 0, scanTotalPacker: 1, scanDuplicateAdmin: 0, scanDuplicatePacker: 0, scanHistoryUnknown: false, scanCountRevision: 5 };
+    if (writer === 'batch') {
+      const [outcome] = await sheet.run([recoveryOrder({ code: short, ...counts })]);
+      assert.equal(outcome.error?.code, 'SHEET_CANONICAL_REVIEW_REQUIRED');
+    } else {
+      const append = writer === 'packer' ? appendScanGoogle : appendAdminScanGoogle;
+      await assert.rejects(append({ token: 'token', config: { master: { id: t.name } }, courier: 'Shopee', code: short, scanDate: recoveryDate, scanTime: '12:00:00', scanCounts: counts }), { code: 'SHEET_CANONICAL_REVIEW_REQUIRED' });
+    }
+    assert.equal(sheet.writes.length, 0);
+    assert.deepEqual(sheet.rowsByDate.get(recoveryDate)[0], initial);
+  });
+}
+
+test('counted Packer refuses Admin-only alias history before adding its scan', async (t) => {
+  const short = '2602788293138';
+  const initial = recoveryRow({ 5: '', 12: short, 8: 'รอแพ็ค', 10: recoveryDate, 11: '09:00:00' });
+  const sheet = recoverySheet(t, { [recoveryDate]: [initial] });
+  await assert.rejects(appendScanGoogle({ token: 'token', config: { master: { id: t.name } }, courier: 'Shopee', code: `TH${short}`, scanDate: recoveryDate, scanTime: '12:00:00', scanCounts: { scanTotalAdmin: 0, scanTotalPacker: 1, scanCountRevision: 1, scanHistoryUnknown: false } }), { code: 'SHEET_CANONICAL_REVIEW_REQUIRED' });
+  assert.equal(sheet.writes.length, 0);
+  assert.deepEqual(sheet.rowsByDate.get(recoveryDate)[0], initial);
+});
+
+test('counted Packer refuses exact Sheet-only history until Firestore backfill', async (t) => {
+  const initial = recoveryRow();
+  const sheet = recoverySheet(t, { [recoveryDate]: [initial] });
+  await assert.rejects(appendScanGoogle({ token: 'token', config: { master: { id: t.name } }, courier: 'Shopee', code: recoveryCode, scanDate: recoveryDate, scanTime: '12:00:00', scanCounts: { scanTotalAdmin: 0, scanTotalPacker: 1, scanCountRevision: 1, scanHistoryUnknown: false } }), { code: 'SHEET_CANONICAL_REVIEW_REQUIRED' });
+  assert.equal(sheet.writes.length, 0);
 });

@@ -404,3 +404,13 @@ test('a named row is a duplicate even when a different packer rescans it', () =>
   const row = { courier: 'Flash', code: 'TH123', packer: 'มิว' };
   assert.equal(resolveCrossDayPackerRow(row, { packerName: 'ก้อย' }).action, 'duplicate');
 });
+
+test('confirmation rejects stale or missing physical count readback even with correct scan cells', () => {
+  const counts = { scanTotalAdmin: 0, scanTotalPacker: 2, scanDuplicateAdmin: 0, scanDuplicatePacker: 1, scanCountRevision: 2, scanHistoryUnknown: false };
+  const order = { code: 'AB123456', courier: 'A', packerScan: { scannedAt: '2026-09-22T10:00:00' }, ...counts };
+  const result = { status: 'success', code: order.code, isPacker: true, nativeDataTypesVerified: true, scanCountRevision: 2,
+    row: { code: order.code, courier: 'A', status: 'Success', date: '2026-09-22', time: '10:00:00', ...counts } };
+  assert.equal(isSheetSyncResultConfirmed(result, order), true);
+  assert.equal(isSheetSyncResultConfirmed({ ...result, row: { ...result.row, scanTotalAdmin: undefined } }, order), false);
+  assert.equal(isSheetSyncResultConfirmed({ ...result, row: { ...result.row, scanCountRevision: 1 } }, order), false);
+});

@@ -1,8 +1,10 @@
+import { commitScanAttemptTransaction, runScanAttemptWithContentionRetry, canVerifyScanRevision, validateScanAttempt, normalizeScanTracking, scanTrackingKey, getScanCountSummary } from './scanAttempts.js';
 import {
   addDoc,
   collection,
   doc,
   documentId,
+  getDoc,
   getDocs,
   limit,
   orderBy,
@@ -244,6 +246,7 @@ function orderToRow(order, id = '') {
     adminTime,
     sheetSyncStatus: order.sheetSyncStatus ?? 'pending',
     sheetSyncError: order.sheetSyncError ?? '',
+    ...getScanCountSummary(order),
   };
 }
 
@@ -628,7 +631,80 @@ export async function mirrorScanToFirestore({ type, result, courier, user, packe
   }, { merge: true });
 }
 
-export async function recordPackerScanPrimary({ code, courier, date, time, user, packer = '', note = '' }) {
+async function recordPhysicalScan({ role, code, courier, date, time, user, packer = '', note = '', attempt }) {
+  if (!canWriteFirestore()) throw Object.assign(new Error('Firebase ยังไม่พร้อมใช้งาน การสแกนยังรอบันทึก'), { code: 'FIREBASE_AUTH_REQUIRED' });
+  const tracking = normalizeScanTracking(code);
+  if (!hasMinimumTrackingLength(tracking) || tracking.length > 200) throw Object.assign(new Error('เลขพัสดุไม่ถูกต้อง'), { code: 'SCAN_TRACKING_INVALID' });
+  const validated = validateScanAttempt(attempt, { role, tracking, date, courier, actorUid: firebaseAuth?.currentUser?.uid });
+  if (user?.uid !== validated.actorUid) throw Object.assign(new Error('ผู้สแกนไม่ตรงกับผู้เข้าสู่ระบบ'), { code: 'SCAN_ATTEMPT_CONTEXT' });
+  const key = scanTrackingKey(tracking);
+  // Exact bounded fallback is only for legacy orders without a canonical pointer. The
+  // transaction always re-reads the pointer, so simultaneous first scans share one order.
+  const candidatesById = new Map();
+  for (const field of ['normalizedCode', 'code']) {
+    const snapshot = await getDocs(query(collection(firestoreDb, 'orders'), where(field, '==', tracking), limit(3)));
+    for (const item of snapshot.docs) candidatesById.set(item.id, { id: item.id, ...item.data() });
+    if (snapshot.size >= 3) throw Object.assign(new Error('พบประวัติเลขพัสดุหลายรายการ ต้องให้ผู้ดูแลตรวจสอบ'), { code: 'SCAN_CANONICAL_CONFLICT' });
+  }
+  const candidates = [...candidatesById.values()];
+  if (candidates.length > 1) throw Object.assign(new Error('พบประวัติเลขพัสดุหลายรายการ ต้องให้ผู้ดูแลตรวจสอบ'), { code: 'SCAN_CANONICAL_CONFLICT' });
+  if (!candidates.length) {
+    for (const field of ['normalizedCode', 'code']) {
+      const events = await getDocs(query(collection(firestoreDb, 'scanEvents'), where(field, '==', tracking), limit(1)));
+      // Event-only history needs an explicit migration; treating it as a fresh order would
+      // silently claim exact counts and could discard an earlier scan role or Sheet row.
+      if (events.size) throw Object.assign(new Error('พบประวัติเดิมที่ยังไม่ได้รวมเป็นออเดอร์ กรุณาให้ผู้ดูแลตรวจสอบ'), { code: 'SCAN_CANONICAL_CONFLICT' });
+    }
+  }
+  const syncAttemptId = newSheetSyncAttemptId();
+  const result = await runScanAttemptWithContentionRetry({
+    readCurrentRevision: async () => {
+      const pointer = await getDoc(doc(firestoreDb, 'scanTrackingPointers', key));
+      if (!pointer.exists()) return null;
+      const current = await getDoc(doc(firestoreDb, 'orders', pointer.data().orderId));
+      return current.exists() ? current.data().scanCountRevision ?? 0 : null;
+    },
+    commit: (onReadOrder) => runTransaction(firestoreDb, (transaction) => commitScanAttemptTransaction({
+      onReadOrder,
+      transaction, attempt: validated,
+      pointerRef: doc(firestoreDb, 'scanTrackingPointers', key),
+      receiptRef: doc(firestoreDb, 'scanAttemptReceipts', validated.id),
+      orderRef: (id) => doc(firestoreDb, 'orders', id),
+      candidate: candidates[0] ?? null, timestamp: serverTimestamp(),
+      makeOrder: (existing) => {
+        const scanField = role === 'admin' ? 'admin' : 'packerScan';
+        const wrongCourier = Boolean(role === 'packer' && existing?.admin?.scannedAt && existing.courier !== courier);
+        const correctedNote = wrongCourier ? mergeScanNotes(note, `Packer เลือกขนส่งไม่ตรงกับ Admin (เลือก ${courier})`) : note;
+        const scan = existing?.[scanField]?.scannedAt ? existing[scanField] : { scannedAt: `${date}T${time}`, scannedBy: userPayload(user), ...(role === 'packer' ? { packer, note: correctedNote } : {}) };
+        const payload = existing || { ...baseOrderPayload({ type: role, code: tracking, courier, date, time, user, packer, note }), createdAt: serverTimestamp(), createdAtIso: nowIso() };
+        const hasAdmin = role === 'admin' || Boolean(existing?.admin?.scannedAt);
+        const hasPacker = role === 'packer' || Boolean(existing?.packerScan?.scannedAt);
+        return {
+          ...payload, [scanField]: scan,
+          ...(role === 'packer' && !existing?.packerScan?.scannedAt ? { packer, note: correctedNote } : {}),
+          status: ['cancelled', 'returned', 'damaged', 'issue'].includes(existing?.status) ? existing.status : hasAdmin && hasPacker ? 'matched' : hasPacker ? 'packer_scanned' : 'pending',
+          ...pendingSheetSyncFields(syncAttemptId), updatedAt: serverTimestamp(), updatedAtIso: nowIso(), user: userPayload(user),
+        };
+      },
+    })),
+  });
+  const order = result.order;
+  const wasScanned = Boolean(result.existing?.[role === 'admin' ? 'admin' : 'packerScan']?.scannedAt);
+  return {
+    ...result, ...getScanCountSummary(order),
+    status: wasScanned ? 'duplicate' : order.admin?.scannedAt && order.packerScan?.scannedAt ? 'matched' : 'created',
+    code: order.code, normalizedCode: order.normalizedCode, courier: order.courier,
+    wrongCourier: Boolean(role === 'packer' && order.admin?.scannedAt && order.courier !== courier),
+    admin: order.admin ?? null, packerScan: order.packerScan ?? null,
+    adminDate: String(order.admin?.scannedAt || order.date).split('T')[0],
+    adminTime: String(order.admin?.scannedAt || '').split('T')[1] || '', adminCode: order.code,
+    sheetNote: order.note || '', sheetSyncStatus: order.sheetSyncStatus,
+    sheetSyncAttemptId: order.sheetSyncAttemptId, attemptId: validated.id,
+  };
+}
+
+export async function recordPackerScanPrimary({ code, courier, date, time, user, packer = '', note = '', attempt = null }) {
+  if (attempt) return recordPhysicalScan({ role: 'packer', code, courier, date, time, user, packer, note, attempt });
   if (!canWriteFirestore()) {
     return null;
   }
@@ -790,7 +866,8 @@ export async function recordPackerScanPrimary({ code, courier, date, time, user,
   return result;
 }
 
-export async function recordAdminScanPrimary({ code, courier, date, time, user }) {
+export async function recordAdminScanPrimary({ code, courier, date, time, user, attempt = null }) {
+  if (attempt) return recordPhysicalScan({ role: 'admin', code, courier, date, time, user, attempt });
   if (!canWriteFirestore()) {
     return null;
   }
@@ -952,7 +1029,8 @@ export async function markSheetSyncResult({ orderId: id, attemptId = '', ok, res
     const snap = await transaction.get(ref);
     if (!snap.exists()) return false;
     const current = snap.data();
-    if (!canApplySheetSyncResult(current, { attemptId, ok })) return false;
+    if (!canApplySheetSyncResult(current, { attemptId, ok, scanCountRevision: result?.scanCountRevision })) return false;
+    if (ok && !canVerifyScanRevision(current, result)) return false;
     const shouldRetry = !ok && (retryable || isRetryableSheetSyncError(error));
     const nextStatus = ok ? 'verified' : shouldRetry ? 'pending' : 'failed';
     const safeError = ok ? '' : userErrorMessage(error, 'ซิงก์ Google Sheet ไม่สำเร็จ');
