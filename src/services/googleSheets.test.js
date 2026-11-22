@@ -17,6 +17,8 @@ import {
   getDailySheetPropertiesForMarketplaceBackfill,
   upsertMarketplaceOrdersGoogle,
   updateScanIssueGoogle,
+  getScanReportGoogle,
+  checkMissingOrders,
   apiFetch,
   isInstantWithinLookback,
   syncLateOrdersGoogle,
@@ -78,6 +80,12 @@ function recoverySheet(t, initialRows, hooks = {}) {
         });
         return { startRow: start - 1, startColumn: col, rowData: [{ values }] };
       }) }] });
+    }
+    if (path.endsWith('/values:batchGet')) {
+      return json({ valueRanges: parsed.searchParams.getAll('ranges').map((range) => {
+        const { date } = parseRange(range);
+        return { values: (rowsByDate.get(date) ?? []).map((row) => row.map(formatted)) };
+      }) });
     }
     if (path.includes('/values/')) {
       const range = path.split('/values/')[1];
@@ -1736,6 +1744,35 @@ test('batch duplicate synchronizes absolute physical counts and revision without
   assert.equal(sheet.rowsByDate.get(recoveryDate)[0][15], 'Manual buyer');
 });
 
+test('duplicate count remark preserves existing notes and replaces its own marker on resync', async (t) => {
+  const sheet = recoverySheet(t, { [recoveryDate]: [recoveryRow({ 9: 'ผู้ใช้แก้ไข | แพ็คข้ามวัน (สแกน 2026-08-25)', 10: '2026-08-24', 12: recoveryCode, 23: 1, 24: 1, 28: 2 })] });
+  const first = recoveryOrder({ scanTotalAdmin: 2, scanTotalPacker: 2, scanHistoryUnknown: false, scanCountRevision: 4 });
+  assert.equal((await sheet.run([first]))[0].error, undefined);
+  assert.equal(sheet.rowsByDate.get(recoveryDate)[0][9], 'ผู้ใช้แก้ไข | แพ็คข้ามวัน (สแกน 2026-08-25) | [สแกนซ้ำ: Admin 2 ครั้ง, Packer 2 ครั้ง]');
+  const second = recoveryOrder({ scanTotalAdmin: 3, scanTotalPacker: 2, scanHistoryUnknown: true, scanCountRevision: 5 });
+  assert.equal((await sheet.run([second]))[0].error, undefined);
+  assert.equal(sheet.rowsByDate.get(recoveryDate)[0][9], 'ผู้ใช้แก้ไข | แพ็คข้ามวัน (สแกน 2026-08-25) | [สแกนซ้ำ: Admin อย่างน้อย 3 ครั้ง, Packer อย่างน้อย 2 ครั้ง]');
+});
+
+test('issue reports classify remarks containing duplicate count markers', async (t) => {
+  const date = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+  const marker = '[สแกนซ้ำ: Admin 2 ครั้ง, Packer 2 ครั้ง]';
+  const issues = ['ลูกค้ายกเลิก', 'สินค้าตีกลับ', 'สินค้าเสียหาย'];
+  recoverySheet(t, { [date]: issues.map((issue, index) => recoveryRow({ 0: index + 1, 2: date, 3: '12:00:00', 5: `TH0000000${index}`, 8: 'Issue', 9: `${issue} | ${marker}`, 10: date, 11: '12:00:00', 12: `TH0000000${index}` })) });
+  const config = { master: { id: t.name } };
+  const report = await getScanReportGoogle({ token: 'token', config, dates: [date], couriers: ['Shopee'] });
+  assert.deepEqual([report.cancelledTotal, report.returnedTotal, report.damagedTotal], [1, 1, 1]);
+  const missing = await checkMissingOrders({ token: 'token', config, hoursLookback: 72 });
+  assert.deepEqual([missing.cancelled.length, missing.returned.length, missing.damaged.length], [1, 1, 1]);
+});
+
+test('changing an issue retains the duplicate scan count marker', async (t) => {
+  const marker = '[สแกนซ้ำ: Admin 2 ครั้ง, Packer 2 ครั้ง]';
+  const sheet = recoverySheet(t, { [recoveryDate]: [recoveryRow({ 9: `สินค้าตีกลับ | ${marker}`, 23: 2, 24: 2, 28: 4 })] });
+  await updateScanIssueGoogle({ token: 'token', config: { master: { id: t.name } }, row: { code: recoveryCode, courier: 'Shopee', date: recoveryDate }, issue: 'สินค้าเสียหาย' });
+  assert.equal(sheet.rowsByDate.get(recoveryDate)[0][9], `สินค้าเสียหาย | ${marker}`);
+});
+
 test('legacy row updates never clear count extension columns', () => {
   const updates = buildDailyRowUpdateData(recoveryDate, 2, Array(23).fill(''));
   assert.equal(updates[1].range, `'${recoveryDate}'!Q2:W2`);
@@ -1774,6 +1811,17 @@ test('count recovery refuses an older revision and never overwrites newer physic
 test('count recovery cannot certify a counter write that Google silently drops', async (t) => {
   const sheet = recoverySheet(t, { [recoveryDate]: [recoveryRow({ 12: '', 23: 0, 24: 1, 25: 0, 26: 0, 27: false, 28: 1 })] }, { dropUpdates: true });
   const [outcome] = await sheet.run([recoveryOrder({ scanTotalAdmin: 0, scanTotalPacker: 2, scanDuplicateAdmin: 0, scanDuplicatePacker: 1, scanHistoryUnknown: false, scanCountRevision: 2 })]);
+  assert.equal(outcome.error?.code, 'SHEET_RECOVERY_UNCONFIRMED');
+  assert.equal(outcome.result, null);
+});
+
+test('count recovery cannot certify a remark write that Google silently drops', async (t) => {
+  const sheet = recoverySheet(t, { [recoveryDate]: [recoveryRow({ 9: 'หมายเหตุเดิม', 23: 0, 24: 1, 28: 1 })] }, {
+    afterUpdate: ({ rowsByDate, data }) => {
+      if (data.some(({ range }) => range.endsWith('!J2'))) rowsByDate.get(recoveryDate)[0][9] = 'หมายเหตุเดิม';
+    },
+  });
+  const [outcome] = await sheet.run([recoveryOrder({ scanTotalAdmin: 0, scanTotalPacker: 2, scanHistoryUnknown: false, scanCountRevision: 2 })]);
   assert.equal(outcome.error?.code, 'SHEET_RECOVERY_UNCONFIRMED');
   assert.equal(outcome.result, null);
 });

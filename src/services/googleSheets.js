@@ -1,5 +1,5 @@
 import { buildSheetBackfillUpdates, classifyLateOrder, normalizeMarketplaceTracking } from './marketplaceImport.js';
-import { mergeScanNotes } from './scanNotes.js';
+import { mergeScanNotes, scanCountRemarkParts, withoutScanCountRemark } from './scanNotes.js';
 import { hasMinimumTrackingLength, MIN_TRACKING_CODE_LENGTH } from './trackingValidation.js';
 import { areTrackingCodesEquivalent, findHistoricalIssueRow, findMarketplaceOrderRow, findScanReconciliation, findTrackingAliasRow, getScanIssueMeta, resolveCrossDayPackerRow } from './sheetSyncReconciliation.js';
 import { isSheetsApiRequest, scheduleSheetRequest } from './sheetRequestScheduler.js';
@@ -1930,21 +1930,22 @@ export async function getScanReportGoogle({ token, config, dates, couriers = COU
       const eventDate = row.status === 'Success' && row.code ? row.date : row.adminDate || row.date;
       const day = dayMap.get(eventDate);
       if (!day) continue;
-      const isCancelled = row.status === 'Cancelled' || row.note === 'ลูกค้ายกเลิก';
+      const issueNote = withoutScanCountRemark(row.note);
+      const isCancelled = row.status === 'Cancelled' || issueNote === 'ลูกค้ายกเลิก';
       if (isCancelled) {
         day.cancelledTotal += 1;
         cancelledRows.push(row);
         continue;
       }
 
-      const isReturned = row.status === 'Returned' || row.note === 'สินค้าตีกลับ';
+      const isReturned = row.status === 'Returned' || issueNote === 'สินค้าตีกลับ';
       if (isReturned) {
         day.returnedTotal += 1;
         returnedRows.push(row);
         continue;
       }
 
-      const isDamaged = row.status === 'Damaged' || row.note === 'สินค้าเสียหาย';
+      const isDamaged = row.status === 'Damaged' || issueNote === 'สินค้าเสียหาย';
       if (isDamaged) {
         day.damagedTotal += 1;
         damagedRows.push(row);
@@ -3113,7 +3114,7 @@ export async function updateScanIssueGoogle({ token, config, row, issue }) {
     currentRow.email,
     currentRow.packer,
     status,
-    issue,
+    mergeScanNotes(issue, ...scanCountRemarkParts(currentRow.note)),
     currentRow.adminDate || '',
     currentRow.adminTime || '',
     currentRow.adminCode || '',
@@ -3193,9 +3194,10 @@ export async function checkMissingOrders({
       // actual admin timestamp so old rows from the boundary tab and future rows are excluded.
       if (adminDateTime && !isInstantWithinLookback(adminDateTime, now, lookbackMs)) continue;
 
-      const isCancelled = row.status === 'Cancelled' || row.note === 'ลูกค้ายกเลิก';
-      const isReturned = row.status === 'Returned' || row.note === 'สินค้าตีกลับ';
-      const isDamaged = row.status === 'Damaged' || row.note === 'สินค้าเสียหาย';
+      const issueNote = withoutScanCountRemark(row.note);
+      const isCancelled = row.status === 'Cancelled' || issueNote === 'ลูกค้ายกเลิก';
+      const isReturned = row.status === 'Returned' || issueNote === 'สินค้าตีกลับ';
+      const isDamaged = row.status === 'Damaged' || issueNote === 'สินค้าเสียหาย';
 
       if (isCancelled) {
         cancelled.push({ ...row, _sheetDate: date });
@@ -3299,6 +3301,15 @@ function scanCountCells(counts) {
     summary.risk ? 'เสี่ยงทำออเดอร์ซ้ำ ต้องตรวจสอบ' : ''];
 }
 
+function scanCountRemark(note, counts) {
+  const summary = getScanCountSummary(counts);
+  const existing = withoutScanCountRemark(note);
+  if (summary.scanTotalAdmin <= 1 && summary.scanTotalPacker <= 1) return existing;
+  const qualifier = summary.scanHistoryUnknown ? 'อย่างน้อย ' : '';
+  const text = `[สแกนซ้ำ: Admin ${qualifier}${summary.scanTotalAdmin} ครั้ง, Packer ${qualifier}${summary.scanTotalPacker} ครั้ง]`;
+  return existing ? `${existing} | ${text}` : text;
+}
+
 async function preflightCountedScan({ token, config, code, scanDate, date, marketplaceOrder, counts, spreadsheet = null, rowsCache = new Map() }) {
   if (!Number.isSafeInteger(counts?.scanCountRevision)) return;
   const tracking = normalizeScanCode(code);
@@ -3340,13 +3351,18 @@ async function syncScanCountResult({ token, spreadsheetId, result, counts }) {
   const row = matches[0];
   if (row.scanCountRevision > counts.scanCountRevision) throw Object.assign(new Error('ยอดสแกนใน Google Sheet ใหม่กว่ารายการนี้ กรุณากู้คืนอีกครั้ง'), { code: 'SHEET_RECOVERY_UNCONFIRMED' });
   const expected = scanCountCells(counts);
+  const expectedNote = scanCountRemark(row.note, counts);
+  const data = [{
+    range: `${escapeSheetName(date)}!X${row.sheetRowNumber}:AD${row.sheetRowNumber}`, values: [expected],
+  }];
+  if (expectedNote !== row.note) data.push({
+    range: `${escapeSheetName(date)}!J${row.sheetRowNumber}`, values: [[expectedNote]],
+  });
   await apiFetch(`${SHEETS_API}/${spreadsheetId}/values:batchUpdate`, token, {
-    method: 'POST', body: JSON.stringify({ valueInputOption: 'RAW', data: [{
-      range: `${escapeSheetName(date)}!X${row.sheetRowNumber}:AD${row.sheetRowNumber}`, values: [expected],
-    }] }),
+    method: 'POST', body: JSON.stringify({ valueInputOption: 'RAW', data }),
   });
   const verified = await readDailyRow({ token, spreadsheetId, date, rowNumber: row.sheetRowNumber });
-  if (!verified || scanCountCells(verified).some((value, index) => value !== expected[index])) {
+  if (!verified || verified.note !== expectedNote || scanCountCells(verified).some((value, index) => value !== expected[index])) {
     throw Object.assign(new Error('ยังยืนยันยอดสแกนใน Google Sheet ไม่ได้ กรุณากู้คืนอีกครั้ง'), { code: 'SHEET_RECOVERY_UNCONFIRMED' });
   }
   return { ...result, row: { ...verified, _sheetDate: date }, scanCountRevision: counts.scanCountRevision };

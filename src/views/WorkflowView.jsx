@@ -4,6 +4,7 @@ import { AlertTriangle, ArrowRightLeft, Camera, CheckCircle2, ClipboardCopy, Clo
 import { CAMERA_REGION_ID, DEFAULT_LOOKBACK_HOURS, ISSUE_CUSTOMER_CANCELLED, ISSUE_DAMAGED, ISSUE_RETURNED, PACKER_UNASSIGNED } from '../constants.js';
 import { DeploymentUpdateBanner, StatusBanner } from './StatusBanner.jsx';
 import { CourierQrPanel } from './ScanQrPanels.jsx';
+import { getSearchIssueAction } from '../services/searchIssueAction.js';
 
 function WorkflowView({
   activeTab,
@@ -465,19 +466,9 @@ function WorkflowView({
                                     className="table-action-button"
                                     type="button"
                                     onClick={() => markSearchResultDamaged(row)}
-                                    disabled={
-                                      searchBusy ||
-                                      row.note === ISSUE_DAMAGED ||
-                                      row.status === 'Damaged' ||
-                                      row.note === ISSUE_CUSTOMER_CANCELLED ||
-                                      row.status === 'Cancelled'
-                                    }
+                                    disabled={searchBusy || getSearchIssueAction(row).disabled}
                                   >
-                                    {row.note === ISSUE_DAMAGED || row.status === 'Damaged'
-                                      ? 'บันทึกแล้ว'
-                                      : row.note === ISSUE_CUSTOMER_CANCELLED || row.status === 'Cancelled'
-                                        ? 'ยกเลิกแล้ว'
-                                        : ISSUE_DAMAGED}
+                                    {getSearchIssueAction(row).label}
                                   </button>
                                 </td>
                               </tr>
