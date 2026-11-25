@@ -133,7 +133,8 @@ export function createFirestoreStore(db, {
         const value = doc.data() ?? {};
         if (day && String(value.date || '') !== day) continue;
         total += 1;
-        const status = value.status || (value.packer?.scannedAt ? 'แพ็คแล้ว' : 'รอแพ็ค');
+        const rawStatus = String(value.status || '').toLowerCase();
+        const status = ({ matched: 'จับคู่แล้ว', success: 'จับคู่แล้ว', completed: 'เสร็จแล้ว', packer_scanned: 'แพ็คแล้ว', pending: 'รอแพ็ค', cancelled: 'ยกเลิก', returned: 'ตีกลับ' }[rawStatus] || (value.packer?.scannedAt ? 'แพ็คแล้ว' : 'รอแพ็ค'));
         summary[status] = (summary[status] || 0) + 1;
       }
       return { total, summary };
