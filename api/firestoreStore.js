@@ -122,6 +122,23 @@ export function createFirestoreStore(db, {
       return results;
     },
 
+    async summarizeLineToday(date, { limit = 3000 } = {}) {
+      const day = String(date || '').trim();
+      let snapshot;
+      try { snapshot = await db.collection('orders').where('date', '==', day).limit(limit).get(); }
+      catch { snapshot = await db.collection('orders').limit(limit).get(); }
+      const summary = {};
+      let total = 0;
+      for (const doc of snapshot.docs) {
+        const value = doc.data() ?? {};
+        if (day && String(value.date || '') !== day) continue;
+        total += 1;
+        const status = value.status || (value.packer?.scannedAt ? 'แพ็คแล้ว' : 'รอแพ็ค');
+        summary[status] = (summary[status] || 0) + 1;
+      }
+      return { total, summary };
+    },
+
     async acquireLock(resource, lockId) {
       const ref = lockRef(resource);
       return db.runTransaction(async (transaction) => {

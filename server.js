@@ -12,6 +12,7 @@ import googleToken from './api/google-token.js';
 import sheetLock from './api/sheet-lock.js';
 import lineEvents from './api/line-events.js';
 import lineSearch from './api/line-search.js';
+import lineSummary from './api/line-summary.js';
 
 const PROJECT_ROOT = path.dirname(fileURLToPath(import.meta.url));
 const API_BODY_LIMIT_BYTES = 1024 * 1024;
@@ -25,6 +26,7 @@ const API_HANDLERS = new Map([
   ['/api/sheet-lock', sheetLock],
   ['/api/line-events', lineEvents],
   ['/api/line-search', lineSearch],
+  ['/api/line-summary', lineSummary],
 ]);
 
 const CONTENT_TYPES = new Map([
