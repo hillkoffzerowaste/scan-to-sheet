@@ -130,17 +130,28 @@ export function createFirestoreStore(db, {
       const summary = {};
       const couriers = {};
       let total = 0;
+      let matchedBeforeBase = 0;
+      let matchedAfterBase = 0;
+      let matchedUnknownTime = 0;
       for (const doc of snapshot.docs) {
         const value = doc.data() ?? {};
         if (day && String(value.date || '') !== day) continue;
         total += 1;
         const rawStatus = String(value.status || '').toLowerCase();
+        const isMatched = ['matched', 'success'].includes(rawStatus);
         const status = ({ matched: 'จับคู่แล้ว', success: 'จับคู่แล้ว', completed: 'เสร็จแล้ว', packer_scanned: 'แพ็คแล้ว', pending: 'รอแพ็ค', cancelled: 'ยกเลิก', returned: 'ตีกลับ' }[rawStatus] || (value.packer?.scannedAt ? 'แพ็คแล้ว' : 'รอแพ็ค'));
         summary[status] = (summary[status] || 0) + 1;
+        if (isMatched) {
+          const matchedAt = String(value.packerScan?.scannedAt || value.updatedAtIso || '');
+          const time = matchedAt.match(/T(\d{2}):(\d{2})/);
+          if (!time) matchedUnknownTime += 1;
+          else if ((Number(time[1]) * 60) + Number(time[2]) > 14 * 60) matchedAfterBase += 1;
+          else matchedBeforeBase += 1;
+        }
         const courier = String(value.courier || 'ไม่ระบุขนส่ง').trim() || 'ไม่ระบุขนส่ง';
         couriers[courier] = (couriers[courier] || 0) + 1;
       }
-      return { total, summary, couriers };
+      return { total, summary, couriers, baseTime: '14:00', matchedBeforeBase, matchedAfterBase, matchedUnknownTime };
     },
 
     async acquireLock(resource, lockId) {
