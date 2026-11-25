@@ -11,6 +11,7 @@ import googleOAuthStart from './api/google-oauth-start.js';
 import googleToken from './api/google-token.js';
 import sheetLock from './api/sheet-lock.js';
 import lineEvents from './api/line-events.js';
+import lineSearch from './api/line-search.js';
 
 const PROJECT_ROOT = path.dirname(fileURLToPath(import.meta.url));
 const API_BODY_LIMIT_BYTES = 1024 * 1024;
@@ -23,6 +24,7 @@ const API_HANDLERS = new Map([
   ['/api/google-config', googleConfig],
   ['/api/sheet-lock', sheetLock],
   ['/api/line-events', lineEvents],
+  ['/api/line-search', lineSearch],
 ]);
 
 const CONTENT_TYPES = new Map([

@@ -90,6 +90,38 @@ export function createFirestoreStore(db, {
       });
     },
 
+    async searchLineTracking(query, { limit = 20 } = {}) {
+      const term = String(query ?? '').toLowerCase().replace(/[\s\-_.()/]/g, '');
+      if (!term) return [];
+      let snapshot;
+      try {
+        snapshot = await db.collection('orders').orderBy('date', 'desc').limit(3000).get();
+      } catch {
+        snapshot = await db.collection('orders').limit(3000).get();
+      }
+      const results = [];
+      for (const doc of snapshot.docs) {
+        const value = doc.data() ?? {};
+        const code = String(value.code ?? value.normalizedCode ?? '');
+        const adminCode = String(value.adminCode ?? '');
+        const matches = [code, adminCode].some((candidate) => candidate.toLowerCase().replace(/[\s\-_.()/]/g, '').includes(term));
+        if (!matches) continue;
+        results.push({
+          id: doc.id,
+          code,
+          adminCode,
+          courier: String(value.courier ?? ''),
+          date: String(value.date ?? ''),
+          status: String(value.status ?? ''),
+          adminScannedAt: String(value.admin?.scannedAt ?? ''),
+          packerScannedAt: String(value.packerScan?.scannedAt ?? ''),
+          note: String(value.note ?? ''),
+        });
+        if (results.length >= limit) break;
+      }
+      return results;
+    },
+
     async acquireLock(resource, lockId) {
       const ref = lockRef(resource);
       return db.runTransaction(async (transaction) => {
