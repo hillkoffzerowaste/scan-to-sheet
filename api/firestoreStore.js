@@ -124,22 +124,34 @@ export function createFirestoreStore(db, {
 
     async summarizeLineToday(date, { limit = 3000 } = {}) {
       const day = String(date || '').trim();
-      let snapshot;
-      try { snapshot = await db.collection('orders').where('date', '==', day).limit(limit).get(); }
-      catch { snapshot = await db.collection('orders').limit(limit).get(); }
+      const previousDay = day ? (() => {
+        const value = new Date(`${day}T00:00:00Z`);
+        value.setUTCDate(value.getUTCDate() - 1);
+        return value.toISOString().slice(0, 10);
+      })() : '';
+      let snapshots;
+      try {
+        snapshots = await Promise.all([day, previousDay].filter(Boolean).map((target) => db.collection('orders').where('date', '==', target).limit(limit).get()));
+      } catch {
+        snapshots = [await db.collection('orders').limit(limit).get()];
+      }
+      const documents = new Map();
+      for (const snapshot of snapshots) for (const doc of snapshot.docs) documents.set(doc.id, doc);
       const summary = {};
       const couriers = {};
       let total = 0;
       let matchedBeforeBase = 0;
       let matchedAfterBase = 0;
       let matchedUnknownTime = 0;
-      for (const doc of snapshot.docs) {
+      for (const doc of documents.values()) {
         const value = doc.data() ?? {};
-        if (day && String(value.date || '') !== day) continue;
+        const packerScannedAt = String(value.packerScan?.scannedAt || '');
+        const packerScanDate = packerScannedAt.match(/^(\d{4}-\d{2}-\d{2})T/)?.[1] || '';
+        if (day && String(value.date || '') !== day && packerScanDate !== day) continue;
         total += 1;
         const rawStatus = String(value.status || '').toLowerCase();
         const isMatched = ['matched', 'success'].includes(rawStatus);
-        const status = ({ matched: 'จับคู่แล้ว', success: 'จับคู่แล้ว', completed: 'เสร็จแล้ว', packer_scanned: 'แพ็คแล้ว', pending: 'รอแพ็ค', cancelled: 'ยกเลิก', returned: 'ตีกลับ' }[rawStatus] || (value.packer?.scannedAt ? 'แพ็คแล้ว' : 'รอแพ็ค'));
+        const status = ({ matched: 'จับคู่แล้ว', success: 'จับคู่แล้ว', completed: 'เสร็จแล้ว', packer_scanned: 'แพ็คแล้ว', pending: 'รอแพ็ค', cancelled: 'ยกเลิก', returned: 'ตีกลับ' }[rawStatus] || (packerScannedAt ? 'แพ็คแล้ว' : 'รอแพ็ค'));
         summary[status] = (summary[status] || 0) + 1;
         if (isMatched) {
           const matchedAt = String(value.packerScan?.scannedAt || value.updatedAtIso || '');
