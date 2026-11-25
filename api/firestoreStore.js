@@ -128,6 +128,8 @@ export function createFirestoreStore(db, {
       try { snapshot = await db.collection('orders').where('date', '==', day).limit(limit).get(); }
       catch { snapshot = await db.collection('orders').limit(limit).get(); }
       const summary = {};
+      const couriers = {};
+      const marketplaces = {};
       let total = 0;
       for (const doc of snapshot.docs) {
         const value = doc.data() ?? {};
@@ -136,8 +138,12 @@ export function createFirestoreStore(db, {
         const rawStatus = String(value.status || '').toLowerCase();
         const status = ({ matched: 'จับคู่แล้ว', success: 'จับคู่แล้ว', completed: 'เสร็จแล้ว', packer_scanned: 'แพ็คแล้ว', pending: 'รอแพ็ค', cancelled: 'ยกเลิก', returned: 'ตีกลับ' }[rawStatus] || (value.packer?.scannedAt ? 'แพ็คแล้ว' : 'รอแพ็ค'));
         summary[status] = (summary[status] || 0) + 1;
+        const courier = String(value.courier || 'ไม่ระบุขนส่ง').trim() || 'ไม่ระบุขนส่ง';
+        couriers[courier] = (couriers[courier] || 0) + 1;
+        const marketplace = String(value.marketplacePlatform || value.platform || value.marketplace?.platform || value.marketplaceMetadata?.platform || 'ไม่ระบุ Marketplace').trim() || 'ไม่ระบุ Marketplace';
+        marketplaces[marketplace] = (marketplaces[marketplace] || 0) + 1;
       }
-      return { total, summary };
+      return { total, summary, couriers, marketplaces };
     },
 
     async acquireLock(resource, lockId) {
