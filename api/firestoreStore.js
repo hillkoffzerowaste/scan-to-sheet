@@ -129,7 +129,6 @@ export function createFirestoreStore(db, {
       catch { snapshot = await db.collection('orders').limit(limit).get(); }
       const summary = {};
       const couriers = {};
-      const marketplaces = {};
       let total = 0;
       for (const doc of snapshot.docs) {
         const value = doc.data() ?? {};
@@ -140,10 +139,8 @@ export function createFirestoreStore(db, {
         summary[status] = (summary[status] || 0) + 1;
         const courier = String(value.courier || 'ไม่ระบุขนส่ง').trim() || 'ไม่ระบุขนส่ง';
         couriers[courier] = (couriers[courier] || 0) + 1;
-        const marketplace = String(value.marketplacePlatform || value.platform || value.marketplace?.platform || value.marketplaceMetadata?.platform || 'ไม่ระบุ Marketplace').trim() || 'ไม่ระบุ Marketplace';
-        marketplaces[marketplace] = (marketplaces[marketplace] || 0) + 1;
       }
-      return { total, summary, couriers, marketplaces };
+      return { total, summary, couriers };
     },
 
     async acquireLock(resource, lockId) {
