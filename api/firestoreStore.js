@@ -12,6 +12,15 @@ const SESSION_COLLECTION = 'serverSessions';
 const SHEET_CONFIG_COLLECTION = 'serverSheetConfigs';
 const LOCK_COLLECTION = 'systemLocks';
 const RATE_COLLECTION = 'systemRateLimits';
+const LINE_EVENT_COLLECTION = 'lineWebhookEvents';
+
+export function redactLineEvent(event) {
+  if (!event || typeof event !== 'object') return {};
+  const value = JSON.parse(JSON.stringify(event));
+  if (value.replyToken) delete value.replyToken;
+  if (value.source?.userId) delete value.source.userId;
+  return value;
+}
 
 function stableId(value) {
   return crypto.createHash('sha256').update(String(value)).digest('hex');
@@ -67,6 +76,18 @@ export function createFirestoreStore(db, {
       const normalized = normalizeEmail(email);
       if (!normalized || !config?.master?.id) return;
       await configRef(normalized).set({ config, updatedAtMs: now() });
+    },
+
+    async saveLineEvent(eventId, event) {
+      const id = String(eventId ?? '').trim();
+      if (!id || !event || typeof event !== 'object') return false;
+      const ref = db.collection(LINE_EVENT_COLLECTION).doc(id);
+      return db.runTransaction(async (transaction) => {
+        const existing = await transaction.get(ref);
+        if (existing.exists) return false;
+        transaction.create(ref, { ...event, receivedAtMs: now() });
+        return true;
+      });
     },
 
     async acquireLock(resource, lockId) {

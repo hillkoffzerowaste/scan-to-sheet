@@ -24,3 +24,7 @@ env:
     secret: OAUTH_TRANSACTION_SECRET
     availability:
       - RUNTIME
+  - variable: LINE_FORWARD_SECRET
+    secret: LINE_FORWARD_SECRET
+    availability:
+      - RUNTIME
