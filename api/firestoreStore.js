@@ -26,6 +26,64 @@ function stableId(value) {
   return crypto.createHash('sha256').update(String(value)).digest('hex');
 }
 
+function nextIsoDay(day) {
+  const value = new Date(`${day}T00:00:00Z`);
+  value.setUTCDate(value.getUTCDate() + 1);
+  return value.toISOString().slice(0, 10);
+}
+
+function scanMinute(value) {
+  const match = String(value || '').match(/T(\d{2}):(\d{2})/);
+  return match ? (Number(match[1]) * 60) + Number(match[2]) : null;
+}
+
+export function summarizeLineOrders(orders, day) {
+  const summary = {};
+  const couriers = {};
+  let cutoffOrders = 0;
+  let cutoffShippedOrders = 0;
+  let shippedAllOrders = 0;
+
+  for (const value of orders) {
+    const rawStatus = String(value?.status || '').toLowerCase();
+    const excluded = ['cancelled', 'returned', 'damaged'].includes(rawStatus);
+    const matched = ['matched', 'success'].includes(rawStatus);
+    const adminScannedAt = String(value?.admin?.scannedAt || '');
+    const packerScannedAt = String(value?.packerScan?.scannedAt || '');
+    const adminMinute = scanMinute(adminScannedAt);
+    const packerMinute = scanMinute(packerScannedAt);
+    const inCutoffCohort = !excluded && adminScannedAt.startsWith(`${day}T`) && adminMinute !== null && adminMinute <= 14 * 60;
+    const shippedOnDay = !excluded && matched && packerScannedAt.startsWith(`${day}T`) && packerMinute !== null && packerMinute <= 18 * 60;
+
+    if (inCutoffCohort) cutoffOrders += 1;
+    if (inCutoffCohort && shippedOnDay) cutoffShippedOrders += 1;
+    if (!shippedOnDay) continue;
+
+    shippedAllOrders += 1;
+    const courier = String(value?.courier || 'ไม่ระบุขนส่ง').trim() || 'ไม่ระบุขนส่ง';
+    couriers[courier] = (couriers[courier] || 0) + 1;
+  }
+
+  const outstandingOrders = Math.max(0, cutoffOrders - cutoffShippedOrders);
+  summary['ส่งออกทั้งหมด'] = shippedAllOrders;
+  summary['ค้างจากฐานก่อน 14:00'] = outstandingOrders;
+  return {
+    total: shippedAllOrders,
+    summary,
+    couriers,
+    baseTime: '14:00',
+    cutoffOrders,
+    cutoffShippedOrders,
+    shippedAllOrders,
+    outstandingOrders,
+    cutoffSla: cutoffOrders ? Math.round((cutoffShippedOrders / cutoffOrders) * 10000) / 100 : null,
+    outputRate: cutoffOrders ? Math.round((shippedAllOrders / cutoffOrders) * 10000) / 100 : null,
+    matchedBeforeBase: cutoffShippedOrders,
+    matchedAfterBase: Math.max(0, shippedAllOrders - cutoffShippedOrders),
+    matchedUnknownTime: 0,
+  };
+}
+
 function normalizeEmail(email) {
   return String(email ?? '').trim().toLowerCase();
 }
@@ -124,46 +182,19 @@ export function createFirestoreStore(db, {
 
     async summarizeLineToday(date, { limit = 3000 } = {}) {
       const day = String(date || '').trim();
-      const previousDay = day ? (() => {
-        const value = new Date(`${day}T00:00:00Z`);
-        value.setUTCDate(value.getUTCDate() - 1);
-        return value.toISOString().slice(0, 10);
-      })() : '';
+      const nextDay = nextIsoDay(day);
       let snapshots;
       try {
-        snapshots = await Promise.all([day, previousDay].filter(Boolean).map((target) => db.collection('orders').where('date', '==', target).limit(limit).get()));
+        snapshots = await Promise.all([
+          db.collection('orders').where('admin.scannedAt', '>=', `${day}T00:00:00`).where('admin.scannedAt', '<', `${nextDay}T00:00:00`).limit(limit).get(),
+          db.collection('orders').where('packerScan.scannedAt', '>=', `${day}T00:00:00`).where('packerScan.scannedAt', '<', `${nextDay}T00:00:00`).limit(limit).get(),
+        ]);
       } catch {
         snapshots = [await db.collection('orders').limit(limit).get()];
       }
       const documents = new Map();
       for (const snapshot of snapshots) for (const doc of snapshot.docs) documents.set(doc.id, doc);
-      const summary = {};
-      const couriers = {};
-      let total = 0;
-      let matchedBeforeBase = 0;
-      let matchedAfterBase = 0;
-      let matchedUnknownTime = 0;
-      for (const doc of documents.values()) {
-        const value = doc.data() ?? {};
-        const packerScannedAt = String(value.packerScan?.scannedAt || '');
-        const packerScanDate = packerScannedAt.match(/^(\d{4}-\d{2}-\d{2})T/)?.[1] || '';
-        if (day && String(value.date || '') !== day && packerScanDate !== day) continue;
-        total += 1;
-        const rawStatus = String(value.status || '').toLowerCase();
-        const isMatched = ['matched', 'success'].includes(rawStatus);
-        const status = ({ matched: 'จับคู่แล้ว', success: 'จับคู่แล้ว', completed: 'เสร็จแล้ว', packer_scanned: 'แพ็คแล้ว', pending: 'รอแพ็ค', cancelled: 'ยกเลิก', returned: 'ตีกลับ' }[rawStatus] || (packerScannedAt ? 'แพ็คแล้ว' : 'รอแพ็ค'));
-        summary[status] = (summary[status] || 0) + 1;
-        if (isMatched) {
-          const matchedAt = String(value.packerScan?.scannedAt || value.updatedAtIso || '');
-          const time = matchedAt.match(/T(\d{2}):(\d{2})/);
-          if (!time) matchedUnknownTime += 1;
-          else if ((Number(time[1]) * 60) + Number(time[2]) > 14 * 60) matchedAfterBase += 1;
-          else matchedBeforeBase += 1;
-        }
-        const courier = String(value.courier || 'ไม่ระบุขนส่ง').trim() || 'ไม่ระบุขนส่ง';
-        couriers[courier] = (couriers[courier] || 0) + 1;
-      }
-      return { total, summary, couriers, baseTime: '14:00', matchedBeforeBase, matchedAfterBase, matchedUnknownTime };
+      return summarizeLineOrders([...documents.values()].map((doc) => doc.data() ?? {}), day);
     },
 
     async acquireLock(resource, lockId) {
