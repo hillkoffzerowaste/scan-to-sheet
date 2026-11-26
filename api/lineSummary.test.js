@@ -19,3 +19,32 @@ test('line summary follows the dashboard 14:00 cohort and includes cross-day out
   assert.equal(result.outputRate, 133.33);
   assert.deepEqual(result.couriers, { Shopee: 2, Flash: 1, LEX: 1 });
 });
+
+test('line summary matches dashboard boundaries, statuses, and tracking de-duplication', () => {
+  const result = summarizeLineOrders([
+    {
+      status: 'สแกนแล้ว',
+      tracking: 'TH-001',
+      admin: { scannedAt: '2026-11-26T14:00:00' },
+      packerScan: { scannedAt: '2026-11-26T18:00:00' },
+      courier: 'Flash',
+    },
+    {
+      status: 'สแกนแล้ว',
+      tracking: 'TH-001',
+      courier: 'Flash',
+    },
+    {
+      status: 'shipped',
+      tracking: 'TH-002',
+      admin: { scannedAt: '2026-11-26T14:00:01' },
+      packerScan: { scannedAt: '2026-11-26T17:59:59' },
+      courier: 'J&T',
+    },
+  ], '2026-11-26');
+
+  assert.equal(result.cutoffOrders, 1);
+  assert.equal(result.cutoffShippedOrders, 1);
+  assert.equal(result.shippedAllOrders, 2);
+  assert.deepEqual(result.couriers, { Flash: 1, 'J&T': 1 });
+});

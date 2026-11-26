@@ -32,9 +32,65 @@ function nextIsoDay(day) {
   return value.toISOString().slice(0, 10);
 }
 
-function scanMinute(value) {
-  const match = String(value || '').match(/T(\d{2}):(\d{2})/);
-  return match ? (Number(match[1]) * 60) + Number(match[2]) : null;
+function scanSeconds(value) {
+  const match = String(value || '').match(/T(\d{2}):(\d{2})(?::(\d{2}))?/);
+  return match
+    ? (Number(match[1]) * 60 * 60) + (Number(match[2]) * 60) + Number(match[3] || 0)
+    : null;
+}
+
+function isShippedStatus(value) {
+  const status = String(value?.status || '').toLowerCase();
+  return [
+    'matched',
+    'success',
+    'ส่งออกแล้ว',
+    'สแกนแล้ว',
+    'shipped',
+    'handed over',
+  ].some((marker) => status.includes(marker));
+}
+
+function orderKey(value, index) {
+  const candidate = [
+    value?.tracking,
+    value?.trackingNumber,
+    value?.normalizedCode,
+    value?.code,
+    value?.adminCode,
+  ].find((item) => String(item || '').trim());
+  return candidate ? `tracking:${String(candidate).trim().toLowerCase()}` : `row:${index}`;
+}
+
+function mergeOrderRecords(orders) {
+  const merged = new Map();
+  orders.forEach((value, index) => {
+    const key = orderKey(value, index);
+    const current = merged.get(key);
+    if (!current) {
+      merged.set(key, value);
+      return;
+    }
+    const combined = {
+      ...current,
+      ...value,
+      admin: {
+        ...(current.admin || {}),
+        ...(value.admin || {}),
+        scannedAt: value.admin?.scannedAt || current.admin?.scannedAt || '',
+      },
+      packerScan: {
+        ...(current.packerScan || {}),
+        ...(value.packerScan || {}),
+        scannedAt: value.packerScan?.scannedAt || current.packerScan?.scannedAt || '',
+      },
+    };
+    if (isShippedStatus(current) || isShippedStatus(value)) {
+      combined.status = isShippedStatus(value) ? value.status : current.status;
+    }
+    merged.set(key, combined);
+  });
+  return [...merged.values()];
 }
 
 export function summarizeLineOrders(orders, day) {
@@ -44,16 +100,16 @@ export function summarizeLineOrders(orders, day) {
   let cutoffShippedOrders = 0;
   let shippedAllOrders = 0;
 
-  for (const value of orders) {
+  for (const value of mergeOrderRecords(orders)) {
     const rawStatus = String(value?.status || '').toLowerCase();
     const excluded = ['cancelled', 'returned', 'damaged'].includes(rawStatus);
-    const matched = ['matched', 'success'].includes(rawStatus);
+    const matched = isShippedStatus(value);
     const adminScannedAt = String(value?.admin?.scannedAt || '');
     const packerScannedAt = String(value?.packerScan?.scannedAt || '');
-    const adminMinute = scanMinute(adminScannedAt);
-    const packerMinute = scanMinute(packerScannedAt);
-    const inCutoffCohort = !excluded && adminScannedAt.startsWith(`${day}T`) && adminMinute !== null && adminMinute <= 14 * 60;
-    const shippedOnDay = !excluded && matched && packerScannedAt.startsWith(`${day}T`) && packerMinute !== null && packerMinute <= 18 * 60;
+    const adminSeconds = scanSeconds(adminScannedAt);
+    const packerSeconds = scanSeconds(packerScannedAt);
+    const inCutoffCohort = !excluded && adminScannedAt.startsWith(`${day}T`) && adminSeconds !== null && adminSeconds <= 14 * 60 * 60;
+    const shippedOnDay = !excluded && matched && packerScannedAt.startsWith(`${day}T`) && packerSeconds !== null && packerSeconds <= 18 * 60 * 60;
 
     if (inCutoffCohort) cutoffOrders += 1;
     if (inCutoffCohort && shippedOnDay) cutoffShippedOrders += 1;
